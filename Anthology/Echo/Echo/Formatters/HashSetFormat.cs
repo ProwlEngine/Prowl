@@ -13,36 +13,36 @@ internal sealed class HashSetFormat : ISerializationFormat
     public EchoObject Serialize(Type? targetType, object value, SerializationContext context)
     {
         // target type is the Array itself, we want the element type
-        var reference = CollectionReferences.TryWriteReference(value, context, out int id);
+        EchoObject? reference = CollectionReferences.TryWriteReference(value, context, out int id);
         if (reference != null) return reference;
 
-        var elementType = targetType!.GetGenericArguments()[0];
+        Type elementType = targetType!.GetGenericArguments()[0];
 
         var hashSet = (IEnumerable)value;
-        List<EchoObject> tags = new();
-        foreach (var item in hashSet)
+        List<EchoObject> tags = [];
+        foreach (object? item in hashSet)
             tags.Add(Serializer.Serialize(elementType, item, context));
 
-        var body = CollectionReferences.WrapListBody(new EchoObject(tags), id);
-        var comparerTag = ComparerSupport.Serialize(ComparerSupport.GetComparer(value), elementType, context);
+        EchoObject body = CollectionReferences.WrapListBody(new EchoObject(tags), id);
+        EchoObject? comparerTag = ComparerSupport.Serialize(ComparerSupport.GetComparer(value), elementType, context);
         if (comparerTag != null) body["$comparer"] = comparerTag;
         return body;
     }
 
     public object? Deserialize(EchoObject value, Type targetType, SerializationContext context)
     {
-        if (CollectionReferences.TryReadReference(value, context, out var existing))
+        if (CollectionReferences.TryReadReference(value, context, out object? existing))
             return existing;
 
         Type elementType = targetType.GetGenericArguments()[0];
-        var comparer = ComparerSupport.Deserialize(value.Get("$comparer"), context);
+        object? comparer = ComparerSupport.Deserialize(value.Get("$comparer"), context);
         dynamic hashSet = ComparerSupport.CreateCollection(targetType, comparer)
             ?? throw new InvalidOperationException($"Failed to create instance of type: {targetType}");
         CollectionReferences.Register(value, hashSet, context);
 
-        foreach (var tag in CollectionReferences.ListItems(value))
+        foreach (EchoObject tag in CollectionReferences.ListItems(value))
         {
-            var item = Serializer.Deserialize(tag, elementType, context);
+            object? item = Serializer.Deserialize(tag, elementType, context);
             hashSet.Add((dynamic?)item);
         }
         return hashSet;

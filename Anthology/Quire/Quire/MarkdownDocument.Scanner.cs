@@ -5,7 +5,7 @@ namespace Prowl.Quire;
 
 public sealed partial class MarkdownDocument
 {
-    private readonly List<int> _lineStarts = new();
+    private readonly List<int> _lineStarts = [];
 
     private int LineCount => _lineStarts.Count;
     private int LineStart(int line) => _lineStarts[line];
@@ -360,7 +360,7 @@ public sealed partial class MarkdownDocument
     private int ReadAlignments(int line, int indent, Span<TableAlign> alignment)
     {
         int count = 0;
-        foreach (var cell in SplitRow(line, indent))
+        foreach (TextSpan cell in SplitRow(line, indent))
         {
             if (count >= alignment.Length)
             {
@@ -382,11 +382,11 @@ public sealed partial class MarkdownDocument
 
     /// <summary>Split a table row into <see cref="_cells"/>. The buffer is reused, so a caller must
     /// finish with it before splitting another row.</summary>
-    private readonly List<TextSpan> _cells = new();
+    private readonly List<TextSpan> _cells = [];
 
     private List<TextSpan> SplitRow(int line, int indent)
     {
-        var cells = _cells;
+        List<TextSpan> cells = _cells;
         cells.Clear();
         int start = SkipSpaces(LineStart(line) + indent, LineEnd(line));
         int end = LineEnd(line);

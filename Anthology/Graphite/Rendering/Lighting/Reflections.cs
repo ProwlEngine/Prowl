@@ -139,8 +139,8 @@ internal readonly record struct ProbeCapture(int Index, int FirstFace, int EndFa
 public sealed partial class RenderWorld
 {
     private readonly HandleStore<ReflectionProbeDesc> _reflectionProbes = new();
-    private readonly List<int> _probeCaptureRequests = new();
-    private readonly List<(int Index, int Generation, Action<BakedReflectionProbe> Done)> _probeBakes = new();
+    private readonly List<int> _probeCaptureRequests = [];
+    private readonly List<(int Index, int Generation, Action<BakedReflectionProbe> Done)> _probeBakes = [];
 
     public ReflectionProbeHandle AddReflectionProbe(in ReflectionProbeDesc desc)
     {
@@ -317,15 +317,15 @@ internal sealed class WorldReflections : IDisposable
     private Texture?[] _baked = new Texture?[8];
     private uint[] _bakedSlot = new uint[8];
     private float[] _exposures = new float[8];
-    private readonly List<int> _bakedDirty = new();
-    private readonly List<Job> _jobs = new();
-    private readonly List<int> _joining = new();
-    private readonly List<int> _candidates = new();
-    private readonly List<(int Index, int Generation, Action<BakedReflectionProbe> Done)> _bakes = new();
-    private readonly Dictionary<uint, Stack<Scratch>> _scratch = new();
-    private readonly List<Scratch> _scratchUsed = new();
-    private readonly List<Scratch> _scratchAll = new();
-    private readonly List<PendingBake> _pendingBakes = new();
+    private readonly List<int> _bakedDirty = [];
+    private readonly List<Job> _jobs = [];
+    private readonly List<int> _joining = [];
+    private readonly List<int> _candidates = [];
+    private readonly List<(int Index, int Generation, Action<BakedReflectionProbe> Done)> _bakes = [];
+    private readonly Dictionary<uint, Stack<Scratch>> _scratch = [];
+    private readonly List<Scratch> _scratchUsed = [];
+    private readonly List<Scratch> _scratchAll = [];
+    private readonly List<PendingBake> _pendingBakes = [];
     private Double3[] _views = [];
     private int _viewCount;
     private int _frame;
@@ -378,7 +378,7 @@ internal sealed class WorldReflections : IDisposable
     public Scratch? SkyScratch { get; private set; }
 
     /// <summary>What this frame captures of probes.</summary>
-    public List<ProbeCapture> Captures { get; } = new();
+    public List<ProbeCapture> Captures { get; } = [];
 
     public static Float4x4 FaceView(int face) => s_faceViews[face];
 
@@ -405,7 +405,7 @@ internal sealed class WorldReflections : IDisposable
     /// <summary>The prefiltered cubes views sample through bindless: the sky's, then each probe's, in a stable order.</summary>
     public RenderTexture[] SampledCubes()
     {
-        List<RenderTexture> cubes = new();
+        List<RenderTexture> cubes = [];
         if (Sky?.Persistent.Texture is { } sky)
             cubes.Add(sky);
         foreach (Target? target in _targets)

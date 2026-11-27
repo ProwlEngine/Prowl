@@ -19,40 +19,39 @@ freely, subject to the following restrictions:
 
 using Prowl.Recast;
 
-namespace Prowl.Recast.Detour.Dynamic
-{
-    public class DtDynamicNavMeshConfig
-    {
-        public readonly bool useTiles;
-        public readonly int tileSizeX;
-        public readonly int tileSizeZ;
-        public readonly float cellSize;
-        public int partition = RcPartitionType.WATERSHED.Value;
-        public RcAreaModification walkableAreaModification = new RcAreaModification(1);
-        public float walkableHeight;
-        public float walkableSlopeAngle;
-        public float walkableRadius;
-        public float walkableClimb;
-        public float minRegionArea;
-        public float regionMergeArea;
-        public float maxEdgeLen;
-        public float maxSimplificationError;
-        public int vertsPerPoly;
-        public bool buildDetailMesh;
-        public float detailSampleDistance;
-        public float detailSampleMaxError;
-        public bool filterLowHangingObstacles = true;
-        public bool filterLedgeSpans = true;
-        public bool filterWalkableLowHeightSpans = true;
-        public bool enableCheckpoints = true;
-        public bool keepIntermediateResults = false;
+namespace Prowl.Recast.Detour.Dynamic;
 
-        public DtDynamicNavMeshConfig(bool useTiles, int tileSizeX, int tileSizeZ, float cellSize)
-        {
-            this.useTiles = useTiles;
-            this.tileSizeX = tileSizeX;
-            this.tileSizeZ = tileSizeZ;
-            this.cellSize = cellSize;
-        }
+public class DtDynamicNavMeshConfig
+{
+    public readonly bool useTiles;
+    public readonly int tileSizeX;
+    public readonly int tileSizeZ;
+    public readonly float cellSize;
+    public int partition = RcPartitionType.WATERSHED.Value;
+    public RcAreaModification walkableAreaModification = new RcAreaModification(1);
+    public float walkableHeight;
+    public float walkableSlopeAngle;
+    public float walkableRadius;
+    public float walkableClimb;
+    public float minRegionArea;
+    public float regionMergeArea;
+    public float maxEdgeLen;
+    public float maxSimplificationError;
+    public int vertsPerPoly;
+    public bool buildDetailMesh;
+    public float detailSampleDistance;
+    public float detailSampleMaxError;
+    public bool filterLowHangingObstacles = true;
+    public bool filterLedgeSpans = true;
+    public bool filterWalkableLowHeightSpans = true;
+    public bool enableCheckpoints = true;
+    public bool keepIntermediateResults = false;
+
+    public DtDynamicNavMeshConfig(bool useTiles, int tileSizeX, int tileSizeZ, float cellSize)
+    {
+        this.useTiles = useTiles;
+        this.tileSizeX = tileSizeX;
+        this.tileSizeZ = tileSizeZ;
+        this.cellSize = cellSize;
     }
 }

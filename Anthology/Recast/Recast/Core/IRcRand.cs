@@ -1,9 +1,8 @@
-namespace Prowl.Recast.Core
+namespace Prowl.Recast.Core;
+
+public interface IRcRand
 {
-    public interface IRcRand
-    {
-        float Next();
-        double NextDouble();
-        int NextInt32();
-    }
+    float Next();
+    double NextDouble();
+    int NextInt32();
 }

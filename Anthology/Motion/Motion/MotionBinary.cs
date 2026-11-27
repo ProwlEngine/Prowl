@@ -1,5 +1,6 @@
 using System.Collections.Generic;
 using System.IO;
+
 using Prowl.Vector;
 using Prowl.Vector.Spatial;
 
@@ -48,7 +49,7 @@ public static class MotionBinary
 
         int count = reader.ReadInt32();
         var ids = new StringID[count];
-        var parents = new int[count];
+        int[] parents = new int[count];
         var reference = new Transform3D[count];
         for (int b = 0; b < count; b++)
         {
@@ -207,7 +208,7 @@ public static class MotionBinary
         var channelIds = new StringID[channelCount];
         for (int c = 0; c < channelCount; c++)
             channelIds[c] = ReadId(reader);
-        var channels = new float[frameCount * channelCount];
+        float[] channels = new float[frameCount * channelCount];
 
         var frames = new HumanPose[frameCount];
         for (int f = 0; f < frameCount; f++)

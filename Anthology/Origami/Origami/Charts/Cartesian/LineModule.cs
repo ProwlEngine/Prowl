@@ -15,7 +15,7 @@ public sealed class LineModule<T> : CartesianModule<LineModule<T>, T>
     private bool _smooth;
     private double? _markerX;
     private System.Drawing.Color? _markerColor;
-    private readonly List<Float2> _pts = new();
+    private readonly List<Float2> _pts = [];
 
     private const int SmoothSteps = 12;
 

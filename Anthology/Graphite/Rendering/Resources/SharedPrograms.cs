@@ -11,8 +11,8 @@ namespace Prowl.Graphite.Rendering;
 public sealed class SharedPrograms : IDisposable
 {
     private readonly Renderer _renderer;
-    private readonly Dictionary<string, FullscreenProgram> _programs = new(StringComparer.Ordinal);
-    private readonly Dictionary<string, LazyCompute> _computes = new(StringComparer.Ordinal);
+    private readonly Dictionary<string, FullscreenProgram> _programs = [with(StringComparer.Ordinal)];
+    private readonly Dictionary<string, LazyCompute> _computes = [with(StringComparer.Ordinal)];
 
     internal SharedPrograms(Renderer renderer) => _renderer = renderer;
 

@@ -44,7 +44,7 @@ internal static class CollectionReferences
     public static bool TryReadReference(EchoObject value, SerializationContext ctx, out object? existing)
     {
         existing = null;
-        if (value.TagType != EchoType.Compound || !value.TryGet("$id", out var idTag))
+        if (value.TagType != EchoType.Compound || !value.TryGet("$id", out EchoObject? idTag))
             return false;
         if (HasBody(value))
             return false;
@@ -55,7 +55,7 @@ internal static class CollectionReferences
     // to it from inside itself resolves to this same instance.
     public static void Register(EchoObject value, object instance, SerializationContext ctx)
     {
-        if (value.TagType == EchoType.Compound && value.TryGet("$id", out var idTag))
+        if (value.TagType == EchoType.Compound && value.TryGet("$id", out EchoObject? idTag))
         {
             ctx.idToObject[idTag.IntValue] = instance;
             ctx.fullyDefinedIds.Add(idTag.IntValue);
@@ -66,14 +66,14 @@ internal static class CollectionReferences
     // pre-wrapper form is a bare list tag.
     public static List<EchoObject> ListItems(EchoObject value)
     {
-        if (value.TagType == EchoType.Compound && value.TryGet("$values", out var vals))
+        if (value.TagType == EchoType.Compound && value.TryGet("$values", out EchoObject? vals))
             return vals.List;
         return value.List;
     }
 
     private static bool HasBody(EchoObject compound)
     {
-        foreach (var tag in compound.Tags)
+        foreach (KeyValuePair<string, EchoObject> tag in compound.Tags)
             if (tag.Key != "$id" && tag.Key != "$type")
                 return true;
         return false;

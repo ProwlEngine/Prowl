@@ -186,7 +186,7 @@ internal static class ShaderSyntax
 
     private static string[] Concat(string[] a, string b)
     {
-        var r = new string[a.Length + 1];
+        string[] r = new string[a.Length + 1];
         a.CopyTo(r, 0);
         r[^1] = b;
         return r;
@@ -197,8 +197,8 @@ internal static class ShaderSyntax
     private static HashSet<string> BuildValues()
     {
         var set = new HashSet<string>(StringComparer.Ordinal) { "Disabled", "RGBA", "RGB", "A" };
-        foreach (var list in new[] { OnOff, CullModes, Comparisons, BlendFactors, BlendOps, StencilOps })
-            foreach (var v in list) set.Add(v);
+        foreach (string[]? list in new[] { OnOff, CullModes, Comparisons, BlendFactors, BlendOps, StencilOps })
+            foreach (string v in list) set.Add(v);
         return set;
     }
 

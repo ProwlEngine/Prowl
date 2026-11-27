@@ -25,7 +25,7 @@ public sealed class GlobalProfilerList : Collection<Func<IProfiler?>>
             CopyTo(factories, 0);
         }
 
-        List<IProfiler> profilers = new(factories.Length);
+        List<IProfiler> profilers = [with(factories.Length)];
         foreach (Func<IProfiler?> factory in factories)
         {
             if (factory() is { } profiler)

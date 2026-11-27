@@ -28,10 +28,10 @@ public class EmbeddedResourceProvider : ILocalizationProvider
 
     public IReadOnlyDictionary<string, string> Load(string locale)
     {
-        var resourceName = FindResource(locale)
+        string resourceName = FindResource(locale)
             ?? throw new FileNotFoundException($"No embedded resource found for locale '{locale}'.");
 
-        using var stream = _assembly.GetManifestResourceStream(resourceName)!;
+        using Stream stream = _assembly.GetManifestResourceStream(resourceName)!;
         var doc = JsonDocument.Parse(stream);
         var result = new Dictionary<string, string>();
         FlattenJson(doc.RootElement, "", result);
@@ -40,10 +40,10 @@ public class EmbeddedResourceProvider : ILocalizationProvider
 
     private string? FindResource(string locale)
     {
-        var names = _assembly.GetManifestResourceNames();
-        var suffix = $".{locale}.json";
+        string[] names = _assembly.GetManifestResourceNames();
+        string suffix = $".{locale}.json";
 
-        foreach (var name in names)
+        foreach (string name in names)
         {
             if (_resourcePrefix != null && !name.StartsWith(_resourcePrefix))
                 continue;
@@ -58,9 +58,9 @@ public class EmbeddedResourceProvider : ILocalizationProvider
         switch (element.ValueKind)
         {
             case JsonValueKind.Object:
-                foreach (var prop in element.EnumerateObject())
+                foreach (JsonProperty prop in element.EnumerateObject())
                 {
-                    var key = string.IsNullOrEmpty(prefix) ? prop.Name : $"{prefix}.{prop.Name}";
+                    string key = string.IsNullOrEmpty(prefix) ? prop.Name : $"{prefix}.{prop.Name}";
                     FlattenJson(prop.Value, key, result);
                 }
                 break;

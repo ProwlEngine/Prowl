@@ -1,7 +1,6 @@
-namespace Prowl.Recast.Detour
+namespace Prowl.Recast.Detour;
+
+public static class DtDetailTriEdgeFlags
 {
-    public static class DtDetailTriEdgeFlags
-    {
-        public const int DT_DETAIL_EDGE_BOUNDARY = 0x01;
-    }
+    public const int DT_DETAIL_EDGE_BOUNDARY = 0x01;
 }

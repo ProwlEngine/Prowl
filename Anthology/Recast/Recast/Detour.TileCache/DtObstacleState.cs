@@ -18,13 +18,12 @@ freely, subject to the following restrictions:
 3. This notice may not be removed or altered from any source distribution.
 */
 
-namespace Prowl.Recast.Detour.TileCache
+namespace Prowl.Recast.Detour.TileCache;
+
+public enum DtObstacleState
 {
-    public enum DtObstacleState
-    {
-        DT_OBSTACLE_EMPTY,
-        DT_OBSTACLE_PROCESSING,
-        DT_OBSTACLE_PROCESSED,
-        DT_OBSTACLE_REMOVING
-    }
+    DT_OBSTACLE_EMPTY,
+    DT_OBSTACLE_PROCESSING,
+    DT_OBSTACLE_PROCESSED,
+    DT_OBSTACLE_REMOVING
 }

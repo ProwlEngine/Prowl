@@ -26,7 +26,7 @@ internal sealed class ValidateDataStructureStep : IPostProcess
         ValidateSkins(scene, report);
         ValidateAnimations(scene, report);
 
-        foreach (var msg in report)
+        foreach (string msg in report)
             context.Log.Warning(msg, Name);
 
         if (report.Count > 0 && context.Settings.StrictValidation)
@@ -39,7 +39,7 @@ internal sealed class ValidateDataStructureStep : IPostProcess
     {
         for (int mi = 0; mi < scene.Meshes.Count; mi++)
         {
-            var mesh = scene.Meshes[mi];
+            IntermediateMesh mesh = scene.Meshes[mi];
             int vc = mesh.Positions.Count;
 
             if (mesh.Normals is { } n && n.Count != vc) r.Add($"Mesh {mi}: Normals count {n.Count} != vertex count {vc}.");
@@ -65,7 +65,7 @@ internal sealed class ValidateDataStructureStep : IPostProcess
             // Face indices in range.
             for (int fi = 0; fi < mesh.Faces.Count; fi++)
             {
-                var indices = mesh.Faces.IndicesOf(fi);
+                Span<int> indices = mesh.Faces.IndicesOf(fi);
                 for (int k = 0; k < indices.Length; k++)
                 {
                     int idx = indices[k];
@@ -85,7 +85,7 @@ internal sealed class ValidateDataStructureStep : IPostProcess
             // Faces may carry their own material, and each of those has to resolve too.
             for (int fi = 0; fi < mesh.Faces.Count; fi++)
             {
-                var face = mesh.Faces[fi];
+                IntermediateFace face = mesh.Faces[fi];
                 if (face.Material == IntermediateFace.InheritMaterial) continue;
                 if (face.Material < -1 || face.Material >= scene.Materials.Count)
                 {
@@ -97,7 +97,7 @@ internal sealed class ValidateDataStructureStep : IPostProcess
             // Blend shapes must match vertex count.
             for (int bs = 0; bs < mesh.BlendShapes.Count; bs++)
             {
-                foreach (var frame in mesh.BlendShapes[bs].Frames)
+                foreach (IntermediateBlendShapeFrame frame in mesh.BlendShapes[bs].Frames)
                 {
                     if (frame.DeltaPositions.Length != vc)
                         r.Add($"Mesh {mi}, blend shape {bs}: delta positions length {frame.DeltaPositions.Length} != vertex count {vc}.");
@@ -112,7 +112,7 @@ internal sealed class ValidateDataStructureStep : IPostProcess
     {
         for (int mi = 0; mi < scene.Materials.Count; mi++)
         {
-            var m = scene.Materials[mi];
+            IntermediateMaterial m = scene.Materials[mi];
             CheckSlot(m.BaseColorTexture, scene, mi, "BaseColor", r);
             CheckSlot(m.MetallicRoughnessTexture, scene, mi, "MetallicRoughness", r);
             CheckSlot(m.NormalTexture, scene, mi, "Normal", r);
@@ -132,7 +132,7 @@ internal sealed class ValidateDataStructureStep : IPostProcess
     {
         for (int si = 0; si < scene.Skins.Count; si++)
         {
-            var skin = scene.Skins[si];
+            IntermediateSkin skin = scene.Skins[si];
             if (skin.BoneNodes.Count != skin.InverseBindPoses.Count)
                 r.Add($"Skin {si}: BoneNodes count {skin.BoneNodes.Count} != InverseBindPoses count {skin.InverseBindPoses.Count}.");
         }
@@ -142,10 +142,10 @@ internal sealed class ValidateDataStructureStep : IPostProcess
     {
         for (int ai = 0; ai < scene.Animations.Count; ai++)
         {
-            var anim = scene.Animations[ai];
+            IntermediateAnimation anim = scene.Animations[ai];
             for (int bi = 0; bi < anim.Bindings.Count; bi++)
             {
-                var b = anim.Bindings[bi];
+                IntermediateAnimationBinding b = anim.Bindings[bi];
                 int valuesPerKey = b.ValuesPerKey;
                 if (b.Values.Count != b.Times.Count * valuesPerKey)
                     r.Add($"Animation {ai}, binding {bi}: values count {b.Values.Count} != times {b.Times.Count} * stride {valuesPerKey}.");

@@ -18,10 +18,9 @@ freely, subject to the following restrictions:
 3. This notice may not be removed or altered from any source distribution.
 */
 
-namespace Prowl.Recast.Detour.TileCache
+namespace Prowl.Recast.Detour.TileCache;
+
+public interface IDtTileCacheMeshProcess
 {
-    public interface IDtTileCacheMeshProcess
-    {
-        void Process(DtNavMeshCreateParams option);
-    }
+    void Process(DtNavMeshCreateParams option);
 }

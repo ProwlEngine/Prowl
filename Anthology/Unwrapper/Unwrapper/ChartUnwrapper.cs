@@ -55,12 +55,12 @@ public static class ChartUnwrapper
 
         int triangleCount = triangles.Length / 3;
         var perCorner = new Double2[triangles.Length];
-        var triangleCharts = new int[triangleCount];
+        int[] triangleCharts = new int[triangleCount];
         for (int i = 0; i < triangleCount; ++i) triangleCharts[i] = -1;
 
         // Triangles without area are left out, and so are the vertices only they use
         var keptTriangles = new List<int>(triangleCount);
-        var vertexSlot = new int[positions.Length];
+        int[] vertexSlot = new int[positions.Length];
         for (int i = 0; i < vertexSlot.Length; ++i) vertexSlot[i] = -1;
         var flatPositions = new List<double>(positions.Length * 3);
         var flatTriangles = new List<int>(triangles.Length);
@@ -111,7 +111,7 @@ public static class ChartUnwrapper
                 {
                     int source = slotSource[mesh.Vertices[meshVertex].SourceIndex];
                     if (pins.TryGetValue(source, out Double2 uv))
-                        (regionPins ??= new Dictionary<int, Double2>())[meshVertex] = uv;
+                        (regionPins ??= [])[meshVertex] = uv;
                 }
             }
             if (regionPins is { Count: >= 2 } && TryFlattenWhole(region, pinnedCharts, regionPins))

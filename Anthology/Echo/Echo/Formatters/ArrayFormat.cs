@@ -15,11 +15,11 @@ internal sealed class ArrayFormat : ISerializationFormat
 
     public EchoObject Serialize(Type? targetType, object value, SerializationContext context)
     {
-        var reference = CollectionReferences.TryWriteReference(value, context, out int id);
+        EchoObject? reference = CollectionReferences.TryWriteReference(value, context, out int id);
         if (reference != null) return reference;
 
         var array = (Array)value;
-        var elementType = targetType!.GetElementType() ?? typeof(object);
+        Type elementType = targetType!.GetElementType() ?? typeof(object);
         Type actualType = value.GetType();
 
         // Create a compound to store array data and type info
@@ -31,8 +31,8 @@ internal sealed class ArrayFormat : ISerializationFormat
             List<EchoObject>? tags = PrimitiveCollections.TryWrite(array, elementType);
             if (tags == null)
             {
-                tags = new(array.Length);
-                foreach (var item in array)
+                tags = [with(array.Length)];
+                foreach (object? item in array)
                     tags.Add(Serializer.Serialize(elementType, item, context));
             }
             arrCompound["array"] = new EchoObject(tags);
@@ -40,14 +40,14 @@ internal sealed class ArrayFormat : ISerializationFormat
         else
         {
             // Multi-dimensional array
-            var dimensions = new int[array.Rank];
+            int[] dimensions = new int[array.Rank];
             for (int i = 0; i < array.Rank; i++)
                 dimensions[i] = array.GetLength(i);
 
             arrCompound["dimensions"] = Serializer.Serialize(dimensions, context);
 
             // Store elements
-            List<EchoObject> elements = new();
+            List<EchoObject> elements = [];
             if (array.Length != 0)
                 SerializeMultiDimensionalArray(elementType, array, new int[array.Rank], 0, elements, context);
             arrCompound["elements"] = new EchoObject(elements);
@@ -82,16 +82,16 @@ internal sealed class ArrayFormat : ISerializationFormat
         Type elementType = targetType.GetElementType()
             ?? throw new InvalidOperationException("Array element type is null");
 
-        if (CollectionReferences.TryReadReference(value, context, out var existing))
+        if (CollectionReferences.TryReadReference(value, context, out object? existing))
             return existing;
 
         // If value is a compound with type info
         if (value.TagType == EchoType.Compound)
         {
             // Single dimensional array
-            if (value.TryGet("array", out var arrayTag) && arrayTag.TagType == EchoType.List)
+            if (value.TryGet("array", out EchoObject? arrayTag) && arrayTag.TagType == EchoType.List)
             {
-                var primitives = PrimitiveCollections.TryReadArray(arrayTag.List, elementType, context);
+                Array? primitives = PrimitiveCollections.TryReadArray(arrayTag.List, elementType, context);
                 if (primitives != null)
                 {
                     CollectionReferences.Register(value, primitives, context);
@@ -102,12 +102,12 @@ internal sealed class ArrayFormat : ISerializationFormat
                 CollectionReferences.Register(value, array, context);
                 for (int idx = 0; idx < array.Length; idx++)
                 {
-                    var item = arrayTag[idx];
+                    EchoObject item = arrayTag[idx];
                     try
                     {
                         // Object arrays may carry per element type info.
                         Type actual = elementType;
-                        if (elementType == typeof(object) && item.TagType == EchoType.Compound && item.TryGet("$type", out var typeTag))
+                        if (elementType == typeof(object) && item.TagType == EchoType.Compound && item.TryGet("$type", out EchoObject? typeTag))
                             actual = ReflectionUtils.FindTypeByName(typeTag.StringValue) ?? elementType;
 
                         array.SetValue(Serializer.Deserialize(item, actual, context), idx);
@@ -121,10 +121,10 @@ internal sealed class ArrayFormat : ISerializationFormat
                 return array;
             }
             // Multi-dimensional array
-            else if (value.TryGet("dimensions", out var dimensionsTag))
+            else if (value.TryGet("dimensions", out EchoObject? dimensionsTag))
             {
-                var dimensions = Serializer.Deserialize<int[]>(dimensionsTag, context);
-                var elementsTag = value.Get("elements")
+                int[]? dimensions = Serializer.Deserialize<int[]>(dimensionsTag, context);
+                EchoObject elementsTag = value.Get("elements")
                     ?? throw new InvalidDataException("Missing elements in multi-dimensional array");
 
                 if (dimensions == null || dimensions.Length != targetType.GetArrayRank() || elementsTag.TagType != EchoType.List)
@@ -154,7 +154,7 @@ internal sealed class ArrayFormat : ISerializationFormat
                 CollectionReferences.Register(value, array, context);
                 // Do not walk huge leading dimensions when a later axis is empty.
                 if (empty) return array;
-                var indices = new int[dimensions.Length];
+                int[] indices = new int[dimensions.Length];
                 int elementIndex = 0;
 
                 DeserializeMultiDimensionalArray(array, indices, 0, elementsTag.List, ref elementIndex, elementType, context);
@@ -176,12 +176,12 @@ internal sealed class ArrayFormat : ISerializationFormat
     {
         if (dimension == array.Rank)
         {
-            var item = elements[elementIndex];
+            EchoObject item = elements[elementIndex];
 
             // Special handling for object arrays - check if the element has its own type info
-            if (elementType == typeof(object) && item.TagType == EchoType.Compound && item.TryGet("$type", out var typeTag))
+            if (elementType == typeof(object) && item.TagType == EchoType.Compound && item.TryGet("$type", out EchoObject? typeTag))
             {
-                var actualType = ReflectionUtils.FindTypeByName(typeTag.StringValue);
+                Type? actualType = ReflectionUtils.FindTypeByName(typeTag.StringValue);
                 if (actualType != null)
                 {
                     // Deserialize using the specific type found in the element

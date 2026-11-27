@@ -271,7 +271,7 @@ public sealed partial class GlslShaderCompiler : IShaderCompiler, IDisposable
 
     private Dictionary<string, string> Defines(ShaderPass pass, ReadOnlySpan<Keyword> combo)
     {
-        Dictionary<string, string> defines = new(_options.Defines);
+        Dictionary<string, string> defines = [with(_options.Defines)];
         VariantSpace[] axes = Axes(pass);
         foreach (Keyword keyword in combo)
         {

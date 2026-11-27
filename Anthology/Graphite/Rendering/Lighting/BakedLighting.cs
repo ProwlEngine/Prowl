@@ -237,7 +237,7 @@ internal sealed class WorldProbes
     // A slot's object index when it belongs to an anchor rather than a renderable
     private const uint AnchorSlot = uint.MaxValue - 1;
     private bool[] _requested = new bool[64];
-    private readonly List<int> _requests = new();
+    private readonly List<int> _requests = [];
     private bool _requestAll;
     private Float4[] _requestScratch = new Float4[128];
     private LightProbeData? _pending;

@@ -1,6 +1,9 @@
 using System.Globalization;
+using System.Text;
+
 using Prowl.Prism.Glsl;
 using Prowl.Prism.SpirV;
+
 using Index = Prowl.Prism.Glsl.Index;
 
 namespace Prowl.Prism.Compiler;
@@ -258,10 +261,10 @@ public sealed partial class Lowerer
     // is declared); glslang puts it on the struct type as a member decoration. Plain structs are keyed by name,
     // blocks by their struct instance (an in and an out block may share a name).
     readonly Dictionary<string, bool[]> _structMemberRelaxed = [];
-    readonly Dictionary<StructType, bool[]> _blockMemberRelaxed = new(ReferenceEqualityComparer.Instance);
+    readonly Dictionary<StructType, bool[]> _blockMemberRelaxed = [with(ReferenceEqualityComparer.Instance)];
 
     bool[]? MemberFlags(StructType st) =>
-        _blockMemberRelaxed.TryGetValue(st, out var b) ? b : _structMemberRelaxed.GetValueOrDefault(st.Name);
+        _blockMemberRelaxed.TryGetValue(st, out bool[]? b) ? b : _structMemberRelaxed.GetValueOrDefault(st.Name);
 
     bool[] FieldFlags(IEnumerable<Field> fields) =>
         [.. fields.SelectMany(f => f.Declarators.Select(d => DeclRelaxed(ApplyArrayDims(ResolveTypeRef(f.Type), d.Array), f.Qualifiers)))];
@@ -289,7 +292,7 @@ public sealed partial class Lowerer
     readonly HashSet<string> _outParams = [];   // write-only params: reading one is not a trivial leaf
     readonly HashSet<string> _varyingNames = [];   // in/out globals: not trivial to read (checked without materializing)
     // Operations glslang's PropagateNoContraction marks (value: skip a 32-bit signed int result).
-    Dictionary<object, bool> _preciseOps = new(ReferenceEqualityComparer.Instance);
+    Dictionary<object, bool> _preciseOps = [with(ReferenceEqualityComparer.Instance)];
     readonly HashSet<string> _preciseVars = [];   // interface variables declared `precise`
     readonly Dictionary<string, (GlslType Type, uint VarId)> _builtinVars = [];
     readonly Dictionary<string, List<UserFunction>> _userFunctions = [];   // by name, allowing overloads
@@ -422,7 +425,7 @@ public sealed partial class Lowerer
     public void ReleaseCompileState()
     {
         Reset(stage, version, AutoMapLocations);
-        _preciseOps = new(ReferenceEqualityComparer.Instance);
+        _preciseOps = [with(ReferenceEqualityComparer.Instance)];
     }
 
     public Module Lower(TranslationUnit unit)
@@ -514,7 +517,7 @@ public sealed partial class Lowerer
         var allDefs = unit.Declarations.OfType<FunctionDef>().ToList();
         _unitFunctions = allDefs;
         _allBodies.AddRange(allDefs.Select(f => (Stmt)f.Body));
-        var mainDef = allDefs.FirstOrDefault(f => f.Name == "main")
+        FunctionDef mainDef = allDefs.FirstOrDefault(f => f.Name == "main")
             ?? throw new GlslParseException("shader has no entry point: a 'void main()' function is required");
         if (allDefs.Count(f => f.Name == "main") > 1)
             throw new GlslParseException("'main' is already defined");
@@ -525,7 +528,7 @@ public sealed partial class Lowerer
         // glslang validates every function body up front, uncalled ones included: a non-void function
         // must return a value (a bare `return;` errors at its own line) and must return at all.
         // Prism lowers bodies lazily on call, so an uncalled broken function would otherwise compile.
-        foreach (var f in allDefs)
+        foreach (FunctionDef? f in allDefs)
             if (f.ReturnType.Name != "void")
                 CheckFunctionReturns(f);
         uint mainId = _m.AllocId();
@@ -541,11 +544,11 @@ public sealed partial class Lowerer
         // (oracle-verified at vulkan1.0), as does NV ray tracing motion blur; the NV cooperative matrix 2
         // extensions need SPIR-V 1.6, above any target Prism has. Emitting the extension at a lower version would produce a module spirv-val
         // (and every driver) rejects.
-        foreach (var ext in exts)
+        foreach (string ext in exts)
             if (ext is "GL_NV_cooperative_matrix2" or "GL_NV_cooperative_matrix_decode_vector"
                 || (version < SpirVVersion.V1_4 && ext is "GL_EXT_ray_tracing" or "GL_EXT_mesh_shader" or "GL_NV_ray_tracing_motion_blur"))
                 throw new GlslParseException($"'{ext}' : not supported for current targeted SPIR-V version");
-        foreach (var ext in exts.OrderBy(e => e, StringComparer.Ordinal)) _m.AddSourceExtension(ext);
+        foreach (string? ext in exts.OrderBy(e => e, StringComparer.Ordinal)) _m.AddSourceExtension(ext);
         _requestedExts = exts;
         _glslVersion = unit.Version;
 
@@ -563,10 +566,10 @@ public sealed partial class Lowerer
                 new CAgg(UVec3, [.. _localSize.Select(d => (CVal)new CScalar(Scalar.UInt, 0, d.Value))]);
 
         // The built-in `const int gl_Max*` limits, at glslang's default resource values.
-        foreach (var (name, limit) in BuiltinLimits) _constValues[name] = new CScalar(Scalar.Int, 0, limit);
+        foreach ((string? name, int limit) in BuiltinLimits) _constValues[name] = new CScalar(Scalar.Int, 0, limit);
 
         _structs["gl_TextureFootprint2DNV"] = FootprintStruct;
-        foreach (var s in unit.Declarations.OfType<StructDef>())
+        foreach (StructDef s in unit.Declarations.OfType<StructDef>())
             AtDecl(s, () =>
             {
                 if (s.Members.Count == 0)
@@ -580,8 +583,8 @@ public sealed partial class Lowerer
                 _structMemberRelaxed[s.Name] = FieldFlags(s.Members);
                 // glslang reports a duplicate member at the DUPLICATE's line, not the struct's.
                 var seen = new HashSet<string>();
-                foreach (var f in s.Members)
-                    foreach (var d in f.Declarators)
+                foreach (Field f in s.Members)
+                    foreach (Declarator d in f.Declarators)
                         if (!seen.Add(d.Name))
                             throw new GlslParseException($"struct '{s.Name}' has duplicate member names", d.Line);
                 _structs[s.Name] = new StructType(s.Name, fields);
@@ -593,60 +596,60 @@ public sealed partial class Lowerer
         var mainInfo = new UserFunction(Types.Void, []) { Id = mainId };
         _userFunctions["main"] = [mainInfo];
 
-        foreach (var redecl in unit.Declarations.OfType<QualifierRedecl>())
+        foreach (QualifierRedecl redecl in unit.Declarations.OfType<QualifierRedecl>())
             ApplyQualifierRedecl(redecl);
-        foreach (var decl in unit.Declarations.OfType<GlobalVar>())
+        foreach (GlobalVar decl in unit.Declarations.OfType<GlobalVar>())
             AtDecl(decl, () => EmitGlobal(decl));
-        foreach (var block in unit.Declarations.OfType<InterfaceBlock>())
+        foreach (InterfaceBlock block in unit.Declarations.OfType<InterfaceBlock>())
             AtDecl(block, () => EmitBlock(block));
         // After the globals are registered: the checks resolve types, whose array sizes may name consts.
         ValidateDeclarations(unit);
 
         CheckFunctionDeclarations(unit);
         // Pruning needs the structs, globals and blocks in scope so a call's arguments can be typed.
-        var defs = ReachableFunctions(allDefs, mainDef, GlobalInitializers(unit));
+        List<FunctionDef> defs = ReachableFunctions(allDefs, mainDef, GlobalInitializers(unit));
         SkippedUncalledFunctions = defs.Count < allDefs.Count;
         var helperDefs = defs.Where(f => f != mainDef).ToList();
         var infos = new Dictionary<FunctionDef, UserFunction> { [mainDef] = mainInfo };
-        foreach (var f in helperDefs) infos[f] = RegisterFunction(f);   // signatures only; ids assigned when declared
+        foreach (FunctionDef? f in helperDefs) infos[f] = RegisterFunction(f);   // signatures only; ids assigned when declared
 
         // glslang declares the helper functions first (makeFunctions; main's id and entry label are
         // already reserved), then translates every body in SOURCE order - so a helper defined before
         // main is traversed first. The functions section still lists main first regardless.
         var declared = new Dictionary<FunctionDef, DeclaredFn>();
-        foreach (var f in helperDefs) declared[f] = DeclareFunction(f, infos[f]);
+        foreach (FunctionDef? f in helperDefs) declared[f] = DeclareFunction(f, infos[f]);
         declared[mainDef] = DeclareFunction(mainDef, mainInfo, mainLabel);
         EmitGlobalInitializers(unit);
         var bodies = defs.ToDictionary(f => f, f => EmitBody(declared[f]));
         _m.AddFunction(bodies[mainDef]);
-        foreach (var f in helperDefs) _m.AddFunction(bodies[f]);
-        foreach (var b in bodies.Values) ReturnBody(b);   // the module copied them; recycle the assembly lists
+        foreach (FunctionDef? f in helperDefs) _m.AddFunction(bodies[f]);
+        foreach (List<Instruction>? b in bodies.Values) ReturnBody(b);   // the module copied them; recycle the assembly lists
 
         // glslang keeps every declared global as a "linker object", even ones the body never references:
         // an unused in/out variable, an unreferenced interface block, a specialization constant nothing
         // reads, or a const that folded away entirely. They are all materialized after the bodies, in
         // declaration order, so their ids come last (a const array is the exception: it only ever exists
         // at its use sites).
-        foreach (var decl in unit.Declarations)
+        foreach (Decl decl in unit.Declarations)
             switch (decl)
             {
                 case GlobalVar g:
-                    foreach (var d in g.Declarators)
+                    foreach (Declarator d in g.Declarators)
                     {
                         if (_pendingGlobals.ContainsKey(d.Name))
                             ResolveGlobal(d.Name);
-                        else if (_pendingSpecConstants.TryGetValue(d.Name, out var sc))
+                        else if (_pendingSpecConstants.TryGetValue(d.Name, out (GlslType Type, Expr Init, int SpecId) sc))
                             MaterializeSpecConstant(d.Name, sc);
                         else if (_pendingSpecExprs.ContainsKey(d.Name))
                             SpecConstantExpr(new Ident(d.Name));
-                        else if (_constValues.TryGetValue(d.Name, out var cv) && !_constants.ContainsKey(d.Name))
+                        else if (_constValues.TryGetValue(d.Name, out CVal? cv) && !_constants.ContainsKey(d.Name))
                             _constants[d.Name] = Materialize(cv);
                     }
                     break;
                 case InterfaceBlock { InstanceName: { } instance } when _pendingGlobals.ContainsKey(instance):
                     ResolveGlobal(instance);
                     break;
-                case InterfaceBlock ib when _pendingBlockBuilds.TryGetValue(ib, out var build):
+                case InterfaceBlock ib when _pendingBlockBuilds.TryGetValue(ib, out Func<uint>? build):
                     _pendingBlockBuilds.Remove(ib);
                     build();
                     break;
@@ -711,8 +714,8 @@ public sealed partial class Lowerer
         }
         // A work-group size only means something in a stage that has work groups.
         if (stage is not (ShaderStage.Compute or ShaderStage.Mesh or ShaderStage.Task))
-            foreach (var ld in unit.Declarations.OfType<LayoutDecl>())
-                foreach (var it in ld.Qualifiers.Layout)
+            foreach (LayoutDecl ld in unit.Declarations.OfType<LayoutDecl>())
+                foreach (LayoutItem it in ld.Qualifiers.Layout)
                     if (it.Name.StartsWith("local_size_", StringComparison.Ordinal))
                         throw new GlslParseException($"'{it.Name}' is only valid in a compute, task, or mesh shader");
         if (stage is ShaderStage.Compute or ShaderStage.Mesh or ShaderStage.Task)
@@ -751,9 +754,9 @@ public sealed partial class Lowerer
         static string Storage(Param p) =>
             p.Qualifiers.Has("inout") ? "inout" : p.Qualifiers.Has("out") ? "out" : p.Qualifiers.Has("const") ? "const" : "in";
         var seen = new Dictionary<string, (GlslType Ret, IReadOnlyList<Param> Params, bool HasBody)>();
-        foreach (var decl in unit.Declarations)
+        foreach (Decl decl in unit.Declarations)
         {
-            var (ret, name, pars, isDef) = decl switch
+            (TypeRef? ret, string? name, IReadOnlyList<Param>? pars, bool isDef) = decl switch
             {
                 FunctionDef f => (f.ReturnType, f.Name, f.Parameters, true),
                 FunctionProto f => (f.ReturnType, f.Name, f.Parameters, false),
@@ -762,9 +765,9 @@ public sealed partial class Lowerer
             if (name is null) continue;
             AtDecl(decl, () =>
             {
-                var key = name + "(" + string.Join(";", pars.Select(p => ApplyArrayDims(ResolveTypeRef(p.Type), p.Array).ToString())) + ")";
-                var retType = ResolveTypeRef(ret);
-                if (!seen.TryGetValue(key, out var prev)) { seen[key] = (retType, pars, isDef); return; }
+                string key = name + "(" + string.Join(";", pars.Select(p => ApplyArrayDims(ResolveTypeRef(p.Type), p.Array).ToString())) + ")";
+                GlslType retType = ResolveTypeRef(ret);
+                if (!seen.TryGetValue(key, out (GlslType Ret, IReadOnlyList<Param> Params, bool HasBody) prev)) { seen[key] = (retType, pars, isDef); return; }
                 if (!prev.Ret.Equals(retType))
                     throw new GlslParseException($"'{Clip(name)}' : overloaded functions must have the same return type");
                 for (int i = 0; i < pars.Count; i++)
@@ -783,7 +786,7 @@ public sealed partial class Lowerer
     void ValidateDeclarations(TranslationUnit unit)
     {
         var specIds = new HashSet<int>();
-        var localSize = new int?[3];
+        int?[] localSize = new int?[3];
         string? inputPrimitive = stage == ShaderStage.Geometry
             ? unit.Declarations.OfType<LayoutDecl>().Where(l => l.Qualifiers.Has("in"))
                 .SelectMany(l => l.Qualifiers.Layout).Select(i => i.Name).LastOrDefault(n => InputPrimitiveVertices(n) is not null)
@@ -795,13 +798,13 @@ public sealed partial class Lowerer
         var declaredRefs = new HashSet<string>();
         void CheckRefTypes(IEnumerable<(TypeRef Type, int Line)> uses)
         {
-            foreach (var (t, line) in uses)
+            foreach ((TypeRef? t, int line) in uses)
                 if (_bufferRefs.ContainsKey(t.Name) && !declaredRefs.Contains(t.Name))
                     throw new GlslParseException("'' : syntax error, unexpected IDENTIFIER", line);
         }
         static IEnumerable<(TypeRef, int)> FieldTypes(IReadOnlyList<Field> fs) =>
             fs.Select(f => (f.Type, f.Declarators.Count > 0 ? f.Declarators[0].Line : 0));
-        foreach (var decl in unit.Declarations)
+        foreach (Decl decl in unit.Declarations)
             AtDecl(decl, () =>
             {
                 switch (decl)
@@ -811,17 +814,17 @@ public sealed partial class Lowerer
                     case StructDef sd: CheckRefTypes(FieldTypes(sd.Members)); break;
                     case GlobalVar gv: CheckRefTypes([(gv.Type, gv.Line)]); break;
                 }
-                var q = decl switch { GlobalVar g => g.Qualifiers, InterfaceBlock b => b.Qualifiers, LayoutDecl l => l.Qualifiers, _ => null };
+                Qualifiers? q = decl switch { GlobalVar g => g.Qualifiers, InterfaceBlock b => b.Qualifiers, LayoutDecl l => l.Qualifiers, _ => null };
                 if (q is not null) ValidateLayoutValues(q, specIds);
                 switch (decl)
                 {
                     case StructDef sd:
-                        foreach (var f in sd.Members)
+                        foreach (Field f in sd.Members)
                             if (f.Qualifiers.Layout.Count > 0 && f.Declarators.Count > 0)
                                 throw new GlslParseException($"'{Clip(f.Declarators[0].Name)}' : cannot use layout qualifiers on structure members", f.Declarators[0].Line);
                         break;
                     case GlobalVar g:
-                        foreach (var d in g.Declarators)
+                        foreach (Declarator d in g.Declarators)
                             ValidateGlobalDeclarator(g, d, inputPrimitive, verticesDeclared);
                         break;
                     case InterfaceBlock b:
@@ -829,7 +832,7 @@ public sealed partial class Lowerer
                         break;
                     case LayoutDecl l:
                         bool isIn = l.Qualifiers.Has("in");
-                        foreach (var item in l.Qualifiers.Layout)
+                        foreach (LayoutItem item in l.Qualifiers.Layout)
                         {
                             if (!isIn && item.Name is "early_fragment_tests" or "early_and_late_fragment_tests_amd"
                                     or "derivative_group_quadsNV" or "derivative_group_linearNV" or "derivative_group_quadsKHR" or "derivative_group_linearKHR")
@@ -854,7 +857,7 @@ public sealed partial class Lowerer
     // setLayoutQualifier's value checks: align is a power of two; a constant_id is below 2047 and unique.
     void ValidateLayoutValues(Qualifiers q, HashSet<int> specIds)
     {
-        foreach (var item in q.Layout)
+        foreach (LayoutItem item in q.Layout)
             if (item.Name == "align" && item.Value is Literal al && ParseIntLiteral(al.Text) is var a && (a <= 0 || (a & (a - 1)) != 0))
                 throw new GlslParseException("'align' : must be a power of 2");
         if (LayoutInt(q, "constant_id") is int id)
@@ -866,18 +869,18 @@ public sealed partial class Lowerer
 
     void ValidateGlobalDeclarator(GlobalVar g, Declarator d, string? inputPrimitive, bool verticesDeclared)
     {
-        var q = g.Qualifiers;
+        Qualifiers q = g.Qualifiers;
         if (q.Has("patch") && stage is not (ShaderStage.TessControl or ShaderStage.TessEvaluation))
             throw new GlslParseException($"'patch' : not supported in this stage: {StageName(stage)}");
         if (d.Name.StartsWith("gl_", StringComparison.Ordinal)) return;   // a built-in redeclaration
         GlslType type;
         try { type = ApplyArrayDims(ResolveTypeRef(g.Type), d.Array); }
         catch (GlslParseException) { return; }   // reported where the declaration is lowered
-        var elem = type;
+        GlslType elem = type;
         while (elem is ArrayType or RuntimeArrayType) elem = elem is ArrayType at ? at.Element : ((RuntimeArrayType)elem).Element;
 
         // Image format qualifiers (layoutTypeCheck).
-        var format = q.Layout.FirstOrDefault(i => ImageFormats.ContainsKey(i.Name))?.Name;
+        string? format = q.Layout.FirstOrDefault(i => ImageFormats.ContainsKey(i.Name))?.Name;
         if (format is not null)
         {
             if (elem is not ImageType img)
@@ -934,7 +937,7 @@ public sealed partial class Lowerer
                 switch (t)
                 {
                     case ArrayType at: Collect(at.Element); break;
-                    case StructType st: foreach (var f in st.Fields) Collect(f.Type); break;
+                    case StructType st: foreach ((string Name, GlslType Type) f in st.Fields) Collect(f.Type); break;
                     case ScalarType or VectorType or MatrixType: kinds.Add(BaseScalar(t)); break;
                 }
             }
@@ -981,7 +984,7 @@ public sealed partial class Lowerer
 
     void ValidateBlockDecl(InterfaceBlock b, TranslationUnit unit)
     {
-        var q = b.Qualifiers;
+        Qualifiers q = b.Qualifiers;
         if (q.Has("patch") && stage is not (ShaderStage.TessControl or ShaderStage.TessEvaluation))
             throw new GlslParseException($"'patch' : not supported in this stage: {StageName(stage)}");
         if (b.BlockName == "gl_PerVertex" || q.Layout.Any(i => i.Name == "buffer_reference")) return;
@@ -1001,12 +1004,12 @@ public sealed partial class Lowerer
         bool uniformOrBuffer = q.Has("uniform") || q.Has("buffer");
         if (uniformOrBuffer && LayoutInt(q, "location") is not null)
             throw new GlslParseException("'location' : cannot apply to uniform or buffer block");
-        foreach (var f in b.Members)
+        foreach (Field f in b.Members)
         {
             int line = f.Declarators.Count > 0 ? f.Declarators[0].Line : 0;
             if (LayoutInt(f.Qualifiers, "binding") is not null)
                 throw new GlslParseException("'binding' : requires block, or sampler/image, or atomic-counter type", line);
-            foreach (var item in f.Qualifiers.Layout)
+            foreach (LayoutItem item in f.Qualifiers.Layout)
                 if (item.Name == "align" && item.Value is Literal al && ParseIntLiteral(al.Text) is var a && (a <= 0 || (a & (a - 1)) != 0))
                     throw new GlslParseException("'align' : must be a power of 2", line);
         }
@@ -1015,10 +1018,10 @@ public sealed partial class Lowerer
         // check leaves to the layout pass.
         if (uniformOrBuffer)
         {
-            var layout = BlockRulesetOf(q) ?? (q.Has("buffer") || isPushConstant ? BlockLayout.Std430 : BlockLayout.Std140);
-            foreach (var f in b.Members)
+            BlockLayout layout = BlockRulesetOf(q) ?? (q.Has("buffer") || isPushConstant ? BlockLayout.Std430 : BlockLayout.Std140);
+            foreach (Field f in b.Members)
                 if (LayoutInt(f.Qualifiers, "offset") is int off)
-                    foreach (var d in f.Declarators)
+                    foreach (Declarator d in f.Declarators)
                     {
                         GlslType mt;
                         try { mt = ApplyArrayDims(ResolveTypeRef(f.Type), d.Array); }
@@ -1042,12 +1045,12 @@ public sealed partial class Lowerer
         var saved = new Dictionary<string, List<UserFunction>>(_userFunctions);
         var owner = new Dictionary<UserFunction, FunctionDef>();
         _userFunctions.Clear();
-        foreach (var f in defs) owner[RegisterFunction(f)] = f;
+        foreach (FunctionDef f in defs) owner[RegisterFunction(f)] = f;
 
         var reached = new HashSet<FunctionDef> { mainDef };
         var queue = new Queue<FunctionDef>([mainDef]);
         if (_validateAll)   // walk every body, so the call graph (and its recursion check) covers them all
-            foreach (var f in defs)
+            foreach (FunctionDef f in defs)
                 if (reached.Add(f)) queue.Enqueue(f);
         var callEdges = new Dictionary<FunctionDef, HashSet<FunctionDef>>();   // caller -> callees, for recursion detection
         // A global initializer's code goes into the entry point, so whatever it calls is reachable too.
@@ -1055,18 +1058,18 @@ public sealed partial class Lowerer
         Reach(mainDef, initializers.SelectMany(Calls));
         while (queue.Count > 0)
         {
-            var def = queue.Dequeue();
+            FunctionDef def = queue.Dequeue();
             ScopeOf(def);
             Reach(def, Calls(def.Body));
         }
 
         void Reach(FunctionDef caller, IEnumerable<Call> calls)
         {
-            foreach (var call in calls)
+            foreach (Call call in calls)
                 if (CallsUserFunction(call)
-                    && owner.TryGetValue(ResolveOverload(_userFunctions[call.Name], call.Args), out var callee))
+                    && owner.TryGetValue(ResolveOverload(_userFunctions[call.Name], call.Args), out FunctionDef? callee))
                 {
-                    (callEdges.TryGetValue(caller, out var s) ? s : callEdges[caller] = []).Add(callee);
+                    (callEdges.TryGetValue(caller, out HashSet<FunctionDef>? s) ? s : callEdges[caller] = []).Add(callee);
                     if (reached.Add(callee)) queue.Enqueue(callee);
                 }
         }
@@ -1076,20 +1079,20 @@ public sealed partial class Lowerer
         bool Cycle(FunctionDef n)
         {
             mark[n] = 1;
-            if (callEdges.TryGetValue(n, out var callees))
-                foreach (var c in callees)
+            if (callEdges.TryGetValue(n, out HashSet<FunctionDef>? callees))
+                foreach (FunctionDef c in callees)
                     if (mark.GetValueOrDefault(c) == 1 || (mark.GetValueOrDefault(c) == 0 && Cycle(c)))
                         return true;
             mark[n] = 2;
             return false;
         }
-        foreach (var def in reached)
+        foreach (FunctionDef def in reached)
             if (mark.GetValueOrDefault(def) == 0 && Cycle(def))
                 throw new GlslParseException("recursion is not allowed: a function calls itself directly or indirectly");
 
         _pendingLocals.Clear(); _pendingPrivates.Clear();
         _userFunctions.Clear();
-        foreach (var (name, list) in saved) _userFunctions[name] = list;
+        foreach ((string? name, List<UserFunction>? list) in saved) _userFunctions[name] = list;
         return _validateAll ? defs : [.. defs.Where(reached.Contains)];
     }
 
@@ -1124,11 +1127,11 @@ public sealed partial class Lowerer
             try { return ApplyArrayDims(ResolveTypeRef(t), array); }
             catch (GlslParseException) { return ResolveTypeRef(t); }
         }
-        foreach (var p in def.Parameters)
+        foreach (Param p in def.Parameters)
             if (p.Name is not null)
                 _pendingLocals[p.Name] = new(Typed(p.Type, p.Array), false);
-        foreach (var decl in LocalDecls(def.Body))
-            foreach (var d in decl.Declarators)
+        foreach (VarDeclStmt decl in LocalDecls(def.Body))
+            foreach (Declarator d in decl.Declarators)
             {
                 _pendingLocals[d.Name] = new(Typed(decl.Type, d.Array), false);
             }
@@ -1148,7 +1151,7 @@ public sealed partial class Lowerer
     {
         int? best = null;
         dynamic = false;
-        foreach (var f in _unitFunctions)
+        foreach (FunctionDef f in _unitFunctions)
         {
             if (f.Body is null) continue;
             if (MaxConstIndexOf(f.Body, isTarget, out bool dyn) is int m && (best is null || m > best)) best = m;
@@ -1181,8 +1184,8 @@ public sealed partial class Lowerer
                 case Binary bi: Walk(bi.Left); Walk(bi.Right); return;
                 case Unary u: Walk(u.Operand); return;
                 case Conditional t: Walk(t.Cond); Walk(t.Then); Walk(t.Else); return;
-                case Call cl: foreach (var a in cl.Args) Walk(a); return;
-                case Method me: Walk(me.Target); foreach (var a in me.Args) Walk(a); return;
+                case Call cl: foreach (Expr a in cl.Args) Walk(a); return;
+                case Method me: Walk(me.Target); foreach (Expr a in me.Args) Walk(a); return;
                 case Member m: Walk(m.Target); return;
                 default: return;
             }
@@ -1192,14 +1195,14 @@ public sealed partial class Lowerer
             switch (st)
             {
                 case null: return;
-                case Block b2: foreach (var x in b2.Statements) WalkStmt(x); return;
-                case VarDeclStmt v: foreach (var d in v.Declarators) Walk(d.Init); return;
+                case Block b2: foreach (Stmt x in b2.Statements) WalkStmt(x); return;
+                case VarDeclStmt v: foreach (Declarator d in v.Declarators) Walk(d.Init); return;
                 case ExprStmt ex: Walk(ex.Expression); return;
                 case IfStmt i: Walk(i.Cond); WalkStmt(i.Then); WalkStmt(i.Else); return;
                 case ForStmt f: WalkStmt(f.Init); Walk(f.Cond); Walk(f.Update); WalkStmt(f.Body); return;
                 case WhileStmt w: Walk(w.Cond); WalkStmt(w.Body); return;
                 case DoWhileStmt d2: WalkStmt(d2.Body); Walk(d2.Cond); return;
-                case SwitchStmt sw: Walk(sw.Value); foreach (var cse in sw.Cases) { Walk(cse.Label); foreach (var x in cse.Body) WalkStmt(x); } return;
+                case SwitchStmt sw: Walk(sw.Value); foreach (SwitchCase cse in sw.Cases) { Walk(cse.Label); foreach (Stmt x in cse.Body) WalkStmt(x); } return;
                 case ReturnStmt r: Walk(r.Value); return;
                 default: return;
             }
@@ -1284,8 +1287,8 @@ public sealed partial class Lowerer
 
     void ComputeVertexCounts(TranslationUnit unit)
     {
-        foreach (var l in unit.Declarations.OfType<LayoutDecl>())
-            foreach (var item in l.Qualifiers.Layout)
+        foreach (LayoutDecl l in unit.Declarations.OfType<LayoutDecl>())
+            foreach (LayoutItem item in l.Qualifiers.Layout)
             {
                 if ((item.Name is "max_vertices" or "vertices") && item.Value is Literal n) _outVertexCount = (int)ParseIntLiteral(n.Text);
                 if (stage == ShaderStage.Geometry && l.Qualifiers.Has("in") && InputPrimitiveVertices(item.Name) is int c) _inVertexCount = c;
@@ -1298,7 +1301,7 @@ public sealed partial class Lowerer
     // current `layout(stream=N) out;` default, initially 0). Each buffer's stride is its explicit xfb_stride,
     // else the extent of its captured outputs rounded to their widest component (TIntermediate::finalCheck).
     readonly record struct OutLayout(int? XfbBuffer, int Stream, int?[]? MemberXfbOffsets);
-    readonly Dictionary<Decl, OutLayout> _outLayouts = new(ReferenceEqualityComparer.Instance);
+    readonly Dictionary<Decl, OutLayout> _outLayouts = [with(ReferenceEqualityComparer.Instance)];
     OutLayout _perVertexOutLayout;   // the gl_PerVertex output block (built-in, or as redeclared)
 
     OutLayout DefaultOutLayout => new(XfbStage ? 0 : null, 0, null);
@@ -1334,10 +1337,10 @@ public sealed partial class Lowerer
         {
             bool c64 = false, c32 = false, c16 = false;
             int size = XfbSize(type, ref c64, ref c32, ref c16);
-            var cur = implicitStride.GetValueOrDefault(buffer);
+            (int Stride, bool C64, bool C32, bool C16) cur = implicitStride.GetValueOrDefault(buffer);
             implicitStride[buffer] = (Math.Max(cur.Stride, offset + size), cur.C64 || c64, cur.C32 || c32, cur.C16 || c16);
         }
-        foreach (var decl in unit.Declarations)
+        foreach (Decl decl in unit.Declarations)
             switch (decl)
             {
                 case LayoutDecl l when l.Qualifiers.Has("out"):
@@ -1350,7 +1353,7 @@ public sealed partial class Lowerer
                     int buffer = LayoutInt(g.Qualifiers, "xfb_buffer") ?? defaultBuffer;
                     if (xfbStage && LayoutInt(g.Qualifiers, "xfb_stride") is int st) explicitStride[buffer] = st;
                     if (xfbStage && LayoutInt(g.Qualifiers, "xfb_offset") is int off)
-                        foreach (var d in g.Declarators) Capture(buffer, off, ApplyArrayDims(ResolveTypeRef(g.Type), d.Array));
+                        foreach (Declarator d in g.Declarators) Capture(buffer, off, ApplyArrayDims(ResolveTypeRef(g.Type), d.Array));
                     _outLayouts[g] = new(xfbStage ? buffer : null, LayoutInt(g.Qualifiers, "stream") ?? defaultStream, null);
                     break;
                 }
@@ -1360,7 +1363,7 @@ public sealed partial class Lowerer
                     int stream = LayoutInt(b.Qualifiers, "stream") ?? defaultStream;
                     if (xfbStage && LayoutInt(b.Qualifiers, "xfb_stride") is int st) explicitStride[buffer] = st;
                     var members = b.Members.SelectMany(f => f.Declarators.Select(d => (f, d))).ToList();
-                    var offsets = new int?[members.Count];
+                        int?[] offsets = new int?[members.Count];
                     if (xfbStage)
                     {
                         // fixXfbOffsets: an xfb_offset on the block assigns every member an offset, each aligned
@@ -1368,10 +1371,10 @@ public sealed partial class Lowerer
                         int? next = LayoutInt(b.Qualifiers, "xfb_offset");
                         for (int i = 0; i < members.Count; i++)
                         {
-                            var (f, d) = members[i];
+                            (Field? f, Declarator? d) = members[i];
                             int? own = LayoutInt(f.Qualifiers, "xfb_offset");
                             if (own is null && next is null) continue;
-                            var type = ApplyArrayDims(ResolveTypeRef(f.Type), d.Array);
+                                GlslType type = ApplyArrayDims(ResolveTypeRef(f.Type), d.Array);
                             bool c64 = false, c32 = false, c16 = false;
                             int size = XfbSize(type, ref c64, ref c32, ref c16);
                             int off;
@@ -1394,7 +1397,7 @@ public sealed partial class Lowerer
         if (!_xfbMode) return;
         foreach (int buffer in explicitStride.Keys.Concat(implicitStride.Keys).Append(0).Distinct())
         {
-            var (stride, c64, c32, c16) = implicitStride.GetValueOrDefault(buffer);
+            (int stride, bool c64, bool c32, bool c16) = implicitStride.GetValueOrDefault(buffer);
             _xfbStrides[buffer] = explicitStride.TryGetValue(buffer, out int e) ? e : RoundUp(stride, c64 ? 8 : c32 ? 4 : c16 ? 2 : 1);
         }
     }
@@ -1409,7 +1412,7 @@ public sealed partial class Lowerer
             case StructType s:
             {
                 int size = 0; bool s64 = false, s32 = false, s16 = false;
-                foreach (var f in s.Fields)
+                foreach ((string Name, GlslType Type) f in s.Fields)
                 {
                     bool m64 = false, m32 = false, m16 = false;
                     int ms = XfbSize(f.Type, ref m64, ref m32, ref m16);
@@ -1460,10 +1463,10 @@ public sealed partial class Lowerer
     // The per-vertex output arrays (gl_MeshVerticesEXT and user out arrays) are sized to max_vertices.
     void ParseMeshOutput(TranslationUnit unit)
     {
-        var q = MergedLayoutDecl(unit, "out") ?? Qualifiers.None;
+        Qualifiers q = MergedLayoutDecl(unit, "out") ?? Qualifiers.None;
         _meshMaxVertices = LayoutInt(q, "max_vertices") ?? 0;
         _meshMaxPrimitives = LayoutInt(q, "max_primitives") ?? 0;
-        foreach (var item in q.Layout)
+        foreach (LayoutItem item in q.Layout)
             if (item.Name is "triangles" or "lines" or "points") _meshPrimitive = item.Name;
         _outVertexCount = _meshMaxVertices;   // user `out T x[];` arrays size to max_vertices
     }
@@ -1482,8 +1485,8 @@ public sealed partial class Lowerer
 
     void EmitStageModes(TranslationUnit unit, uint mainId)
     {
-        var inLayout = MergedLayoutDecl(unit, "in");
-        var outLayout = MergedLayoutDecl(unit, "out");
+        Qualifiers? inLayout = MergedLayoutDecl(unit, "in");
+        Qualifiers? outLayout = MergedLayoutDecl(unit, "out");
 
         if (_xfbMode)
         {
@@ -1496,7 +1499,7 @@ public sealed partial class Lowerer
             var inItems = (inLayout?.Layout ?? []).Select(i => i.Name).ToList();
             if (!inItems.Any(n => n is "points" or "lines" or "lines_adjacency" or "triangles" or "triangles_adjacency"))
                 throw new GlslParseException("a geometry shader requires an input primitive layout (points, lines, lines_adjacency, triangles, or triangles_adjacency)");
-            foreach (var item in inLayout!.Layout)
+            foreach (LayoutItem item in inLayout!.Layout)
                 if (InputPrimitiveMode(item.Name) is ExecutionMode m) _m.AddExecutionMode(mainId, m);
             _m.AddExecutionMode(mainId, ExecutionMode.Invocations, (uint)(LayoutInt(inLayout, "invocations") ?? 1));
             // NV geometry passthrough with no explicit output layout derives the output primitive and
@@ -1510,7 +1513,7 @@ public sealed partial class Lowerer
             if (outModes.Count == 0 && passthrough && DerivedPassthroughOutput() is ExecutionMode derived)
                 _m.AddExecutionMode(mainId, derived);
             else
-                foreach (var m in outModes) _m.AddExecutionMode(mainId, m!.Value);
+                foreach (ExecutionMode? m in outModes) _m.AddExecutionMode(mainId, m!.Value);
             _m.AddExecutionMode(mainId, ExecutionMode.OutputVertices, (uint)(passthrough && _outVertexCount == 0 ? _inVertexCount : _outVertexCount));
         }
         else if (stage == ShaderStage.TessControl)
@@ -1523,10 +1526,10 @@ public sealed partial class Lowerer
             // mode) and always emits a spacing and a winding: TIntermediate::finalCheck defaults them to
             // equal_spacing and counter-clockwise.
             var items = (inLayout?.Layout ?? []).Select(i => i.Name).ToList();
-            foreach (var name in items)
+            foreach (string? name in items)
                 if (name is "triangles" or "quads" or "isolines" && InputPrimitiveMode(name) is ExecutionMode m) _m.AddExecutionMode(mainId, m);
             string[] spacings = ["equal_spacing", "fractional_even_spacing", "fractional_odd_spacing"];
-            foreach (var name in items)
+            foreach (string? name in items)
                 if (spacings.Contains(name)) _m.AddExecutionMode(mainId, InputPrimitiveMode(name)!.Value);
             if (!items.Any(spacings.Contains)) _m.AddExecutionMode(mainId, ExecutionMode.SpacingEqual);
             _m.AddExecutionMode(mainId, items.Contains("cw") ? ExecutionMode.VertexOrderCw : ExecutionMode.VertexOrderCcw);
@@ -1671,15 +1674,15 @@ public sealed partial class Lowerer
     UserFunction RegisterFunction(FunctionDef f)
     {
         RejectReservedName(f.Name);
-        foreach (var p in f.Parameters) RejectReservedName(p.Name ?? "");
+        foreach (Param p in f.Parameters) RejectReservedName(p.Name ?? "");
         // glslang's parameter_declarator runs arraySizeRequiredCheck: a parameter array must be sized.
-        foreach (var p in f.Parameters)
+        foreach (Param p in f.Parameters)
             if (p.Array.Any(d => d is null) || p.Type.Array?.Any(d => d is null) == true)
                 throw new GlslParseException("'' : array size required", f.Line);
         UseDefaultPrecision(f);
         var pars = f.Parameters.Select(p =>
         {
-            var type = ApplyArrayDims(ResolveTypeRef(p.Type), p.Array);
+            GlslType type = ApplyArrayDims(ResolveTypeRef(p.Type), p.Array);
             return new FnParam(
                 p.Name ?? "",
                 type,
@@ -1696,9 +1699,9 @@ public sealed partial class Lowerer
                 ? protos.Any(proto => proto.Params.Zip(pars).All(t => t.First.Equals(t.Second.Type)))
                 : _isEs && BuiltinFunctionNames.Contains(f.Name) && !pars.Any(p => ContainsUserStruct(p.Type)))
             throw new GlslParseException($"'{f.Name}' : cannot redefine or overload a built-in function");
-        var returnType = ResolveTypeRef(f.ReturnType);
+        GlslType returnType = ResolveTypeRef(f.ReturnType);
         var info = new UserFunction(returnType, pars, DeclRelaxed(returnType, f.Qualifiers));   // id assigned when emitted
-        if (!_userFunctions.TryGetValue(f.Name, out var list)) _userFunctions[f.Name] = list = [];
+        if (!_userFunctions.TryGetValue(f.Name, out List<UserFunction>? list)) _userFunctions[f.Name] = list = [];
         list.Add(info);
         return info;
     }
@@ -1706,8 +1709,8 @@ public sealed partial class Lowerer
     // glslang's mangled function name: name '(' then, per parameter, its type mangle and ';'.
     static string MangleFunction(string name, IReadOnlyList<FnParam> pars)
     {
-        var sb = new System.Text.StringBuilder(name).Append('(');
-        foreach (var p in pars) { MangleType(sb, p.Type); sb.Append(';'); }
+        StringBuilder sb = new System.Text.StringBuilder(name).Append('(');
+        foreach (FnParam p in pars) { MangleType(sb, p.Type); sb.Append(';'); }
         return sb.ToString();
     }
 
@@ -1724,7 +1727,7 @@ public sealed partial class Lowerer
             case ArrayType a: MangleType(sb, a.Element); sb.Append('[').Append(a.Length).Append(']'); break;
             case StructType st:
                 sb.Append("struct-").Append(st.Name);
-                foreach (var fld in st.Fields) { sb.Append('-'); MangleType(sb, fld.Type); }
+                foreach ((string Name, GlslType Type) fld in st.Fields) { sb.Append('-'); MangleType(sb, fld.Type); }
                 sb.Append('1');   // a struct's vector size
                 break;
             // An opaque type mangles as its sampled type, then its class, its arrayed/shadow flags, its
@@ -1835,12 +1838,12 @@ public sealed partial class Lowerer
     {
         _code.Clear();
         _vars.Clear();
-        foreach (var (decl, name, init) in InitializedGlobals(unit))
+        foreach ((GlobalVar? decl, string? name, Expr? init) in InitializedGlobals(unit))
             if (GlobalType(name) is { } type)
             {
                 UseDefaultPrecision(decl);
-                var target = BuildAccess(new Ident(name));
-                var value = LowerCoerced(init, type, $"initializing '{name}'");
+                Chain target = BuildAccess(new Ident(name));
+                Value value = LowerCoerced(init, type, $"initializing '{name}'");
                 AssignPrecision(target, value);
                 MultiTypeStore(target, value);
             }
@@ -1885,7 +1888,7 @@ public sealed partial class Lowerer
 
         for (int i = 0; i < d.Info.Params.Count; i++)
         {
-            var p = d.Info.Params[i];
+            FnParam p = d.Info.Params[i];
             // A `const in` parameter IS its value, so it binds directly; the rest are pointers to load.
             if (p.ByValue) _valueParams[p.Name] = new Value(d.ParamIds[i], p.Type, false, p.Relaxed);
             else _locals[p.Name] = (p.Type, d.ParamIds[i]);
@@ -1895,7 +1898,7 @@ public sealed partial class Lowerer
         }
 
         bool isVoid = d.Info.ReturnType is ScalarType { Kind: Scalar.Void };
-        var prevBody = _currentBody;
+        Block? prevBody = _currentBody;
         _currentBody = d.Def.Body;
         var savedConstants = new Dictionary<string, Value>(_constants);
         var savedConstValues = new Dictionary<string, CVal>(_constValues);
@@ -1917,7 +1920,7 @@ public sealed partial class Lowerer
 
         RewriteDeadMergesAndContinues(_code, d.EntryLabel);
 
-        var body = RentBody();   // pooled across functions/compiles (returned once appended to the module)
+        List<Instruction> body = RentBody();   // pooled across functions/compiles (returned once appended to the module)
         body.AddRange(d.Header);
         body.AddRange(_vars);
         body.AddRange(_code);
@@ -1991,7 +1994,7 @@ public sealed partial class Lowerer
             else if (why == 2) deadMerges.Add(label);
             visited.Add(label);
 
-            var (merge, succ) = Shape(label);
+            (Instruction? merge, List<uint>? succ) = Shape(label);
             uint mergeL = 0, contL = 0;
             if (merge is not null)
             {
@@ -2035,7 +2038,7 @@ public sealed partial class Lowerer
 
     // A per-thread pool of function-body assembly lists, reused across functions and compiles.
     [ThreadStatic] static Stack<List<Instruction>>? _bodyPool;
-    static List<Instruction> RentBody() { var p = _bodyPool ??= new(); return p.Count > 0 ? p.Pop() : []; }
+    static List<Instruction> RentBody() { Stack<List<Instruction>> p = _bodyPool ??= new(); return p.Count > 0 ? p.Pop() : []; }
     static void ReturnBody(List<Instruction> b) { b.Clear(); (_bodyPool ??= new()).Push(b); }
 
     // Records an interface variable's location/component footprint and rejects any overlap with one already
@@ -2049,8 +2052,8 @@ public sealed partial class Lowerer
         int component = LayoutInt(quals, "component") ?? 0;
         int span = LocationSpan(type);
         int compLo = component, compHi = component + LocationComponents(type);
-        var key = (storage, index);
-        if (!_locationUse.TryGetValue(key, out var list)) _locationUse[key] = list = [];
+        (StorageClass storage, int index) key = (storage, index);
+        if (!_locationUse.TryGetValue(key, out List<(int Lo, int Hi, int CompLo, int CompHi, string Alias)>? list)) _locationUse[key] = list = [];
         // glslang's checkLocationRange: variables sharing a location in different components must agree on
         // the basic type (signedness aside) and on the interpolation/auxiliary qualifiers.
         static string Kind(GlslType t) => t switch
@@ -2060,7 +2063,7 @@ public sealed partial class Lowerer
             _ => t.GetType().Name,
         };
         string alias = Kind(type) + string.Concat(s_interpolationQualifiers.Where(quals.Has).Select(w => " " + w));
-        foreach (var u in list)
+        foreach ((int Lo, int Hi, int CompLo, int CompHi, string Alias) u in list)
         {
             if (location < u.Hi && u.Lo < location + span && compLo < u.CompHi && u.CompLo < compHi)
                 throw new GlslParseException($"'{name}': layout location {location} overlaps another {(storage == StorageClass.Output ? "output" : "input")}");
@@ -2102,12 +2105,12 @@ public sealed partial class Lowerer
         int component = LayoutInt(quals, "component") ?? 0;
         int span = LocationSpanVI(type, vertexInput);
         int compLo = component, compHi = component + LocationComponents(type);
-        _locationUse.TryGetValue((storage, index), out var list);
+        _locationUse.TryGetValue((storage, index), out List<(int Lo, int Hi, int CompLo, int CompHi, string Alias)>? list);
         for (int loc = 0; ; loc++)
         {
             bool overlaps = false;
             if (list is not null)
-                foreach (var u in list)
+                foreach ((int Lo, int Hi, int CompLo, int CompHi, string Alias) u in list)
                     if (loc < u.Hi && u.Lo < loc + span && compLo < u.CompHi && u.CompLo < compHi) { overlaps = true; break; }
             if (!overlaps) return loc;
         }
@@ -2128,8 +2131,8 @@ public sealed partial class Lowerer
     // Materializes a global's SPIR-V on first real use (emitting path); returns null if unknown.
     Global? ResolveGlobal(string name)
     {
-        if (_globals.TryGetValue(name, out var g)) return g;
-        if (_pendingGlobals.TryGetValue(name, out var pending))
+        if (_globals.TryGetValue(name, out Global? g)) return g;
+        if (_pendingGlobals.TryGetValue(name, out (GlslType Type, Func<Global> Build) pending))
         {
             _pendingGlobals.Remove(name);
             return _globals[name] = pending.Build();
@@ -2141,8 +2144,8 @@ public sealed partial class Lowerer
 
     // The declared type of a global WITHOUT materializing it (used by non-emitting type inference).
     GlslType? GlobalType(string name) =>
-        _globals.TryGetValue(name, out var g) ? g.Type :
-        _pendingGlobals.TryGetValue(name, out var p) ? p.Type : null;
+        _globals.TryGetValue(name, out Global? g) ? g.Type :
+        _pendingGlobals.TryGetValue(name, out (GlslType Type, Func<Global> Build) p) ? p.Type : null;
 
     // A qualifier applied to an already-declared name, e.g. `invariant gl_Position;`. Only the built-in
     // gl_PerVertex members can be re-qualified this way; a user variable must carry its qualifiers on
@@ -2164,7 +2167,7 @@ public sealed partial class Lowerer
     {
         if (Types.Resolve(decl.Type.Name) is ScalarType { Kind: Scalar.Void })
             throw new GlslParseException("a variable cannot have type 'void'");
-        foreach (var d in decl.Declarators)
+        foreach (Declarator d in decl.Declarators)
         {
             RejectReservedName(d.Name);
             if (!_globalDeclNames.Add(d.Name) && !(_unsizedGlobals.Remove(d.Name) && d.Array.Count > 0 && d.Array[0] is not null))
@@ -2179,9 +2182,9 @@ public sealed partial class Lowerer
             throw new GlslParseException("cannot initialize this type of qualifier");
         if (decl.Qualifiers.Has("const"))
         {
-            var baseType = ResolveTypeRef(decl.Type);
+            GlslType baseType = ResolveTypeRef(decl.Type);
             int? specId = LayoutInt(decl.Qualifiers, "constant_id");
-            foreach (var d in decl.Declarators)
+            foreach (Declarator d in decl.Declarators)
             {
                 if (specId is int id)
                 {
@@ -2207,8 +2210,8 @@ public sealed partial class Lowerer
                 // A const initializer must be a compile-time constant expression: fold it fully to a
                 // single OpConstant / OpConstantComposite (scalar arithmetic, constructors, swizzles,
                 // indexing, and const-of-const references all included).
-                var type = ApplyArrayDims(baseType, d.Array);
-                var cval = EvalConst(ResolveInitializer(d.Init!, type))
+                GlslType type = ApplyArrayDims(baseType, d.Array);
+                CVal cval = EvalConst(ResolveInitializer(d.Init!, type))
                     ?? throw new GlslParseException($"const initializer for '{d.Name}' must be a constant expression");
             // GLSL implicit sizing for an unsized local with NO initializer (an initialized one is already
             // sized from it): the size is the largest constant index used on the variable, plus one. A
@@ -2231,10 +2234,10 @@ public sealed partial class Lowerer
 
         if (decl.Qualifiers.Has("taskPayloadSharedEXT"))
         {
-            var baseType = ResolveTypeRef(decl.Type);
-            foreach (var d in decl.Declarators)
+            GlslType baseType = ResolveTypeRef(decl.Type);
+            foreach (Declarator d in decl.Declarators)
             {
-                var type = ApplyArrayDims(baseType, d.Array);
+                GlslType type = ApplyArrayDims(baseType, d.Array);
             // GLSL implicit sizing for an unsized local with NO initializer (an initialized one is already
             // sized from it): the size is the largest constant index used on the variable, plus one. A
             // runtime array cannot be instantiated as an OpVariable, so leaving it unsized is invalid.
@@ -2260,10 +2263,10 @@ public sealed partial class Lowerer
             // invalid ("Workgroup Storage Class is limited to MeshEXT, TaskEXT, MeshNV, TaskNV, GLCompute").
             if (stage is not (ShaderStage.Compute or ShaderStage.Mesh or ShaderStage.Task))
                 throw new GlslParseException("'shared' is only available in a compute, task, or mesh shader");
-            var baseType = ResolveTypeRef(decl.Type);
-            foreach (var d in decl.Declarators)
+            GlslType baseType = ResolveTypeRef(decl.Type);
+            foreach (Declarator d in decl.Declarators)
             {
-                var type = ApplyArrayDims(baseType, d.Array);
+                GlslType type = ApplyArrayDims(baseType, d.Array);
             // GLSL implicit sizing for an unsized local with NO initializer (an initialized one is already
             // sized from it): the size is the largest constant index used on the variable, plus one. A
             // runtime array cannot be instantiated as an OpVariable, so leaving it unsized is invalid.
@@ -2285,11 +2288,11 @@ public sealed partial class Lowerer
 
         if (decl.Qualifiers.Has("uniform") && IsOpaque(ResolveTypeRef(decl.Type)))
         {
-            var baseType = ResolveTypeRef(decl.Type) is ImageType img ? img with { Format = ResolveImageFormat(decl.Qualifiers) } : ResolveTypeRef(decl.Type);
-            var quals = decl.Qualifiers;
-            foreach (var d in decl.Declarators)
+            GlslType baseType = ResolveTypeRef(decl.Type) is ImageType img ? img with { Format = ResolveImageFormat(decl.Qualifiers) } : ResolveTypeRef(decl.Type);
+            Qualifiers quals = decl.Qualifiers;
+            foreach (Declarator d in decl.Declarators)
             {
-                var type = ApplyArrayDims(baseType, d.Array);
+                GlslType type = ApplyArrayDims(baseType, d.Array);
                 // An unsized descriptor array indexed only with constants is implicitly sized from the
                 // largest index; a non-constant index keeps it a runtime descriptor array.
                 if (type is RuntimeArrayType ura && MaxConstIndexInUnit(d.Name, out bool dynamicIndex) is int umx && !dynamicIndex)
@@ -2319,7 +2322,7 @@ public sealed partial class Lowerer
                         _m.Decorate(var, Decoration.InputAttachmentIndex, (uint)ai);
                     // Under the Vulkan memory model coherent/volatile are not decorations (spirv-val bans them)
                     // but per-access texel operands; see ImageMemOperands.
-                    foreach (var (word, decoration) in MemoryQualifiers)
+                    foreach ((string? word, Decoration decoration) in MemoryQualifiers)
                         if (quals.Has(word) && !(_vmmPragma && decoration is Decoration.Coherent or Decoration.Volatile))
                             _m.Decorate(var, decoration);
                     // ES samplers carry a precision: mediump/lowp declared, or the lowp default of
@@ -2336,11 +2339,11 @@ public sealed partial class Lowerer
         // it) and carries no decoration; GL_NV_ray_tracing instead decorates the variable with that Location.
         if (RayTracingStorage(decl.Qualifiers) is StorageClass rtStorage)
         {
-            var rtBase = ResolveTypeRef(decl.Type);
+            GlslType rtBase = ResolveTypeRef(decl.Type);
             int? locLayout = LayoutInt(decl.Qualifiers, "location");
-            foreach (var d in decl.Declarators)
+            foreach (Declarator d in decl.Declarators)
             {
-                var type = ApplyArrayDims(rtBase, d.Array);
+                GlslType type = ApplyArrayDims(rtBase, d.Array);
                 string name = d.Name;
                 if (locLayout is int loc) _rtByLoc[(rtStorage, loc)] = name;
                 _pendingGlobals[name] = (type, () =>
@@ -2367,13 +2370,13 @@ public sealed partial class Lowerer
             if (decl.Qualifiers.Has("uniform"))
                 throw new GlslParseException($"a non-opaque uniform must be declared inside a uniform block in Vulkan GLSL");
             // A plain module-scope global (no in/out/uniform/const/...) is a Private-storage variable.
-            var globalBase = ResolveTypeRef(decl.Type);
-            var quals = decl.Qualifiers;
+            GlslType globalBase = ResolveTypeRef(decl.Type);
+            Qualifiers quals = decl.Qualifiers;
             if (IsOpaque(globalBase))
                 throw new GlslParseException($"'{decl.Type.Name}' is opaque and must be declared 'uniform'");
-            foreach (var d in decl.Declarators)
+            foreach (Declarator d in decl.Declarators)
             {
-                var t = ApplyArrayDims(globalBase, d.Array);
+                GlslType t = ApplyArrayDims(globalBase, d.Array);
                 // An unsized global is implicitly sized from the largest constant index used on it; a later
                 // redeclaration with an explicit size (`float g[]; float g[4];`) replaces it.
                 if (t is RuntimeArrayType gra && d.Init is null)
@@ -2397,7 +2400,7 @@ public sealed partial class Lowerer
             return;
         }
 
-        foreach (var d in decl.Declarators)
+        foreach (Declarator d in decl.Declarators)
         {
             if (d.Name != "gl_FragDepth" && DepthConditionOf(decl.Qualifiers) is not null)
                 throw new GlslParseException("'layout qualifier' : can only apply depth layout to gl_FragDepth", decl.Line);
@@ -2427,7 +2430,7 @@ public sealed partial class Lowerer
             // Geometry/tessellation/mesh per-vertex I/O is declared unsized ("[]"); size it to the
             // stage's vertex count. A mesh perprimitiveEXT output is per primitive, so it sizes to
             // max_primitives instead.
-            var type = ApplyArrayDims(ResolveTypeRef(decl.Type), decl.Qualifiers.Has("perviewNV") ? MeshViewDims(d.Array, 1, d.Line) : d.Array);
+            GlslType type = ApplyArrayDims(ResolveTypeRef(decl.Type), decl.Qualifiers.Has("perviewNV") ? MeshViewDims(d.Array, 1, d.Line) : d.Array);
             // A per-vertex/per-patch interface is declared unsized ("[]"); its outer dimension is the
             // vertex index, so it sizes to the stage's vertex count and does NOT consume extra locations.
             // glslang (isArrayedIo) strips that outer dimension whether it is implicit or explicitly sized.
@@ -2468,9 +2471,9 @@ public sealed partial class Lowerer
                 location = FreeLocation(storage.Value, decl.Qualifiers, locType, storage == StorageClass.Input && stage == ShaderStage.Vertex);
             }
             ReserveLocations(storage.Value, decl.Qualifiers, location, locType, d.Name);
-            var storageValue = storage.Value;
-            var quals = decl.Qualifiers;
-            var outLayout = _outLayouts.GetValueOrDefault(decl, DefaultOutLayout);
+            StorageClass storageValue = storage.Value;
+            Qualifiers quals = decl.Qualifiers;
+            OutLayout outLayout = _outLayouts.GetValueOrDefault(decl, DefaultOutLayout);
             string name = d.Name;
             if (quals.Has("precise")) _preciseVars.Add(name);
             bool relaxedByDefault = !IsRelaxed(quals) && !quals.Has("highp") && RelaxByDefault(type);
@@ -2649,8 +2652,8 @@ public sealed partial class Lowerer
             case Unary u:
                 return Floating(u.Operand) || FloatSpecOperation(u.Operand);
             case Call c when Types.IsTypeName(c.Name) && !c.IsArray && Types.Resolve(c.Name) is ScalarType or VectorType:
-                var to = BaseScalar(Types.Resolve(c.Name)!);
-                foreach (var a in c.Args)
+                Scalar to = BaseScalar(Types.Resolve(c.Name)!);
+                foreach (Expr a in c.Args)
                     if (UsesSpecConstant(a) && InferType(a) is ScalarType or VectorType && !IsSpecConversion(BaseScalar(InferType(a)), to))
                         return true;
                 return c.Args.Any(FloatSpecOperation);
@@ -2687,19 +2690,19 @@ public sealed partial class Lowerer
     {
         switch (e)
         {
-            case Ident id when _pendingSpecConstants.TryGetValue(id.Name, out var sc):
+            case Ident id when _pendingSpecConstants.TryGetValue(id.Name, out (GlslType Type, Expr Init, int SpecId) sc):
                 return MaterializeSpecConstant(id.Name, sc);
-            case Ident id when _pendingSpecExprs.TryGetValue(id.Name, out var pending):
+            case Ident id when _pendingSpecExprs.TryGetValue(id.Name, out Expr? pending):
                 _pendingSpecExprs.Remove(id.Name);
-                var built = SpecConstantExpr(pending);
+                Value built = SpecConstantExpr(pending);
                 _m.AddName(built.Id, id.Name);   // glslang names a derived specialization constant too
                 return _constants[id.Name] = built;
-            case Ident id when _constants.TryGetValue(id.Name, out var known):
+            case Ident id when _constants.TryGetValue(id.Name, out Value known):
                 return known;
             case Unary u when u.Op is "-" or "~" or "!":
             {
-                var operand = SpecConstantExpr(u.Operand);
-                var op = u.Op switch
+                    Value operand = SpecConstantExpr(u.Operand);
+                    Op op = u.Op switch
                 {
                     "-" => IsFloating(BaseScalar(operand.Type)) ? Op.FNegate : Op.SNegate,
                     "~" => Op.Not,
@@ -2713,14 +2716,14 @@ public sealed partial class Lowerer
             {
                 bool isAnd = b.Op == "&&";
                 uint boolType = SpvType(Types.Bool);
-                var left = SpecConstantExpr(b.Left);
+                    Value left = SpecConstantExpr(b.Left);
                 uint leftBlock = _currentBlock;
                 uint cond = isAnd ? left.Id : TrackSpec(_m.SpecConstantOp(boolType, Op.LogicalNot, left.Id), Types.Bool).Id;
                 uint rhsBlock = _m.AllocId(), merge = _m.AllocId();
                 SelectionMerge(merge);
                 BranchConditional(cond, rhsBlock, merge);
                 Label(rhsBlock);
-                var right = SpecConstantExpr(b.Right);
+                    Value right = SpecConstantExpr(b.Right);
                 uint rhsEnd = _currentBlock;
                 Branch(merge);
                 Label(merge);
@@ -2730,16 +2733,16 @@ public sealed partial class Lowerer
             }
             case Binary b when b.Op is not ("=" or ","):
             {
-                var l = SpecConstantExpr(b.Left);
-                var r = SpecConstantExpr(b.Right);
+                    Value l = SpecConstantExpr(b.Left);
+                    Value r = SpecConstantExpr(b.Right);
                 // A scalar operand of a vector operation is widened to the vector (glslang's front end
                 // turns a constant one into a constant composite, a specialization one into a spec composite).
                 if (l.Type is VectorType lv && r.Type is ScalarType && !IsComparison(b.Op) && b.Op is not ("<<" or ">>")) r = SpecSmear(r, lv);
                 else if (r.Type is VectorType rv && l.Type is ScalarType && !IsComparison(b.Op) && b.Op is not ("<<" or ">>")) l = SpecSmear(l, rv);
-                // A shift's result (and arithmetic-shift flavor) follows the LEFT operand, not the
-                // common type: `intVal << 2u` stays int.
-                var common = b.Op is "<<" or ">>" ? l.Type : CommonType(l.Type, r.Type);
-                var (opcode, type) = SpecBinaryOp(b.Op, common);
+                    // A shift's result (and arithmetic-shift flavor) follows the LEFT operand, not the
+                    // common type: `intVal << 2u` stays int.
+                    GlslType common = b.Op is "<<" or ">>" ? l.Type : CommonType(l.Type, r.Type);
+                (Op opcode, GlslType? type) = SpecBinaryOp(b.Op, common);
                 return TrackSpec(_m.SpecConstantOp(SpvType(type), opcode, l.Id, r.Id), type);
             }
             case Call c when Types.Resolve(c.Name) is ScalarType target:
@@ -2750,7 +2753,7 @@ public sealed partial class Lowerer
             {
                 if (EvalConst(c) is { } plain) return Materialize(plain);
                 var parts = new List<uint>();
-                foreach (var a in c.Args)
+                foreach (Expr a in c.Args)
                     parts.Add(SpecConstantConvert(SpecConstantExpr(a), new ScalarType(vt.Component)).Id);
                 if (parts.Count == 1) parts = [.. Enumerable.Repeat(parts[0], vt.Size)];
                 return TrackSpec(_m.SpecConstantComposite(SpvType(vt), [.. parts]), vt);
@@ -2761,7 +2764,7 @@ public sealed partial class Lowerer
             // CompositeExtract (its unsigned index constant is created first), several a VectorShuffle.
             case Member m when IsSwizzleName(m.Name) && InferType(m.Target) is VectorType sv:
             {
-                var vec = SpecConstantExpr(m.Target);
+                    Value vec = SpecConstantExpr(m.Target);
                 int[] sel = [.. m.Name.Select(SwizzleIndex)];
                 if (sel.Length == 1)
                 {
@@ -2774,10 +2777,10 @@ public sealed partial class Lowerer
             }
             case Conditional t:
             {
-                var cond = SpecConstantExpr(t.Cond);
-                var thenV = SpecConstantExpr(t.Then);
-                var elseV = SpecConstantExpr(t.Else);
-                var type = CommonType(thenV.Type, elseV.Type);
+                    Value cond = SpecConstantExpr(t.Cond);
+                    Value thenV = SpecConstantExpr(t.Then);
+                    Value elseV = SpecConstantExpr(t.Else);
+                    GlslType type = CommonType(thenV.Type, elseV.Type);
                 return TrackSpec(_m.SpecConstantOp(SpvType(type), Op.Select, cond.Id, thenV.Id, elseV.Id), type);
             }
             default:
@@ -2803,7 +2806,7 @@ public sealed partial class Lowerer
     // change is the ordinary conversion opcode.
     Value SpecConstantConvert(Value operand, ScalarType target)
     {
-        var from = BaseScalar(operand.Type);
+        Scalar from = BaseScalar(operand.Type);
         if (from == target.Kind) return operand;
         // An integer to bool compares against an UNSIGNED zero whatever the source's signedness.
         if (target.Kind == Scalar.Bool && IsIntegral(from))
@@ -2855,7 +2858,7 @@ public sealed partial class Lowerer
     Value MaterializeSpecConstant(string name, (GlslType Type, Expr Init, int SpecId) sc)
     {
         _pendingSpecConstants.Remove(name);
-        var value = SpecConstant(sc.Type, sc.Init, sc.SpecId);
+        Value value = SpecConstant(sc.Type, sc.Init, sc.SpecId);
         _m.AddName(value.Id, name);
         return _constants[name] = value;
     }
@@ -2883,7 +2886,7 @@ public sealed partial class Lowerer
             return new Value(foldedId, scalar, IsConstant: false);
         }
 
-        var (valueExpr, negate) = init is Unary { Op: "-", Operand: Literal } u ? (u.Operand, true) : (init, false);
+        (Expr? valueExpr, bool negate) = init is Unary { Op: "-", Operand: Literal } u ? (u.Operand, true) : (init, false);
         if (valueExpr is not Literal lit)
             throw new GlslParseException("a specialization constant needs a literal default value");
 
@@ -2932,7 +2935,7 @@ public sealed partial class Lowerer
         Literal lit => FoldLiteral(lit),
         Ident id when ShadingRateFlags.TryGetValue(id.Name, out int flag) => new CScalar(Scalar.Int, 0, flag),
         Ident id when RayFlags.TryGetValue(id.Name, out int rf) => RequireRayFlagExtension(id.Name) ?? new CScalar(Scalar.UInt, 0, rf),
-        Ident id => _constValues.TryGetValue(id.Name, out var v) ? v : null,
+        Ident id => _constValues.TryGetValue(id.Name, out CVal? v) ? v : null,
         Unary u => EvalConstUnary(u),
         // The sequence operator never makes a constant expression (glslang's addComma), nor does assignment.
         Binary b when b.Op is "," or "=" || IsCompoundAssign(b.Op) => null,
@@ -2942,7 +2945,7 @@ public sealed partial class Lowerer
             && ConvertConstTo(es, Enumerable.Repeat(elem, es.Count).ToList()) is { } converted
             ? new CAgg(new ArrayType(elem, es.Count), converted) : null,
         Call c when Types.IsTypeName(c.Name) => EvalConstConstructor(c),
-        Call c when _structs.TryGetValue(c.Name, out var st) => EvalConstAll(c.Args) is { } fs && fs.Count == st.Fields.Count
+        Call c when _structs.TryGetValue(c.Name, out StructType? st) => EvalConstAll(c.Args) is { } fs && fs.Count == st.Fields.Count
             && ConvertConstTo(fs, [.. st.Fields.Select(f => f.Type)]) is { } converted ? new CAgg(st, converted) : null,
         Call c => EvalConstBuiltin(c),
         Member m => EvalConstMember(m),
@@ -2964,8 +2967,8 @@ public sealed partial class Lowerer
         var parts = new List<CVal>(fields.Count);
         for (int i = 0; i < fields.Count; i++)
         {
-            var want = st.Fields[i].Type;
-            var have = CValType(fields[i]);
+            GlslType want = st.Fields[i].Type;
+            GlslType have = CValType(fields[i]);
             if (have.Equals(want)) parts.Add(fields[i]);
             else if (CanImplicitlyConvert(have, want) && FoldConversion(fields[i], want) is { } converted) parts.Add(converted);
             else return null;
@@ -3067,15 +3070,15 @@ public sealed partial class Lowerer
     {
         // Only the floating built-ins fold through double; a bool selector (mix) is not among them.
         if (args.Any(a => !IsFloating(BaseScalar(CValType(a))))) return null;
-        double Lane(CVal a, int i) => a is CAgg { Parts: var p } ? ((CScalar)p[Math.Min(i, p.Count - 1)]).F : ((CScalar)a).F;
+        static double Lane(CVal a, int i) => a is CAgg { Parts: var p } ? ((CScalar)p[Math.Min(i, p.Count - 1)]).F : ((CScalar)a).F;
 
         if (args.FirstOrDefault(a => a is CAgg { Type: VectorType }) is CAgg { Type: VectorType vt })
         {
-            var parts = Enumerable.Range(0, vt.Size)
+            IEnumerable<CVal> parts = Enumerable.Range(0, vt.Size)
                 .Select(i => (CVal)new CScalar(vt.Component, fold([.. args.Select(a => Lane(a, i))]), 0));
             return new CAgg(vt, [.. parts]);
         }
-        var kind = ((CScalar)args[0]).Kind;
+        Scalar kind = ((CScalar)args[0]).Kind;
         return new CScalar(kind, fold([.. args.Select(a => ((CScalar)a).F)]), 0);
     }
 
@@ -3218,7 +3221,7 @@ public sealed partial class Lowerer
     List<CVal>? EvalConstAll(IReadOnlyList<Expr> args)
     {
         var result = new List<CVal>(args.Count);
-        foreach (var a in args) { if (EvalConst(a) is not CVal v) return null; result.Add(v); }
+        foreach (Expr a in args) { if (EvalConst(a) is not CVal v) return null; result.Add(v); }
         return result;
     }
 
@@ -3401,7 +3404,7 @@ public sealed partial class Lowerer
             if (anyFloat) return Bool(CompareD(op, AsF(l), AsF(r)));
             // The operands are first converted to their common type (a negative int compared with a uint
             // is a huge uint), and an unsigned type compares unsigned.
-            var ck = Wider(l.Kind, r.Kind);
+            Scalar ck = Wider(l.Kind, r.Kind);
             long cl = ConvertConst(l, ck).I, cr = ConvertConst(r, ck).I;
             return Bool(IsUnsigned(ck) ? CompareU(op, unchecked((ulong)cl), unchecked((ulong)cr)) : CompareL(op, cl, cr));
         }
@@ -3412,7 +3415,7 @@ public sealed partial class Lowerer
             double a = AsF(l), c = AsF(r);
             // The result keeps the wider operand's floating kind: hardcoding Float here made a folded
             // double/half vector materialize float components, which is invalid SPIR-V.
-            var fkind = Wider(l.Kind, r.Kind);
+            Scalar fkind = Wider(l.Kind, r.Kind);
             // A division by (either signed) zero is not IEEE in glslang's folder: the dividend's sign alone
             // picks +Inf/-Inf, and anything else (0/0, NaN/0) is the positive quiet NaN.
             static double Div(double x, double y) => y != 0.0 ? x / y : x > 0.0 ? double.PositiveInfinity
@@ -3425,7 +3428,7 @@ public sealed partial class Lowerer
         // its type's width, a shift count is masked to the operand width (5 bits, 6 for 64-bit), and
         // division by zero / MIN / -1 take glslang's fixed answers.
         bool shift = op is "<<" or ">>";
-        var kind = shift ? l.Kind : Wider(l.Kind, r.Kind);
+        Scalar kind = shift ? l.Kind : Wider(l.Kind, r.Kind);
         if (!IsIntegral(kind) || (!shift && !IsIntegral(r.Kind))) return null;
         bool unsigned = IsUnsigned(kind);
         int width = IntWidth(kind);
@@ -3477,7 +3480,7 @@ public sealed partial class Lowerer
     static CAgg? MapScalars(CAgg vec, Func<CScalar, CScalar?> f)
     {
         var parts = new List<CVal>(vec.Parts.Count);
-        foreach (var p in vec.Parts) { if (f((CScalar)p) is not CScalar s) return null; parts.Add(s); }
+        foreach (CVal p in vec.Parts) { if (f((CScalar)p) is not CScalar s) return null; parts.Add(s); }
         return new CAgg(vec.Type, parts);
     }
 
@@ -3496,7 +3499,7 @@ public sealed partial class Lowerer
     static CAgg? MapColumns(CAgg matrix, Func<CScalar, CScalar?> f)
     {
         var columns = new List<CVal>(matrix.Parts.Count);
-        foreach (var col in matrix.Parts) { if (MapScalars((CAgg)col, f) is not CAgg c) return null; columns.Add(c); }
+        foreach (CVal col in matrix.Parts) { if (MapScalars((CAgg)col, f) is not CAgg c) return null; columns.Add(c); }
         return new CAgg(matrix.Type, columns);
     }
 
@@ -3529,7 +3532,7 @@ public sealed partial class Lowerer
 
     CVal? EvalConstConstructor(Call c)
     {
-        var type = Resolve(c.Name);
+        GlslType type = Resolve(c.Name);
         if (EvalConstAll(c.Args) is not { } args) return null;
         return type switch
         {
@@ -3547,7 +3550,7 @@ public sealed partial class Lowerer
     {
         var comps = new List<CScalar>();
         int lastCount = 0;
-        foreach (var a in args)
+        foreach (CVal a in args)
         {
             int before = comps.Count;
             if (a is CScalar s) comps.Add(s);
@@ -3576,7 +3579,7 @@ public sealed partial class Lowerer
             return Columns((c, r) => c < sm.Columns && r < sm.Rows
                 ? ConvertConst((CScalar)((CAgg)src.Parts[c]).Parts[r], mt.Component) : c == r ? one : zero);
         var scalars = new List<CScalar>();
-        foreach (var a in args)
+        foreach (CVal a in args)
         {
             if (a is CScalar s) scalars.Add(s);
             else if (a is CAgg { Type: VectorType } v) scalars.AddRange(v.Parts.Cast<CScalar>());
@@ -3648,7 +3651,7 @@ public sealed partial class Lowerer
     // glslang's voidErrorCheck on a struct or block member: "'v' : illegal use of type 'void'".
     static void RejectVoidMembers(IReadOnlyList<Field> members)
     {
-        foreach (var f in members)
+        foreach (Field f in members)
             if (f.Type.Name == "void" && f.Declarators.Count > 0)
                 throw new GlslParseException($"'{Clip(f.Declarators[0].Name)}' : illegal use of type 'void'", f.Declarators[0].Line);
     }
@@ -3692,8 +3695,8 @@ public sealed partial class Lowerer
         if (block.BlockName == "gl_MeshPerPrimitiveEXT" && block.Qualifiers.Has("out"))
         {
             var redecl = new List<(string Name, GlslType Type)>();
-            foreach (var member in block.Members)
-                foreach (var d in member.Declarators)
+            foreach (Field member in block.Members)
+                foreach (Declarator d in member.Declarators)
                 {
                     if (MeshPrimitiveBuiltIn(d.Name) is null)
                         throw new GlslParseException($"'{d.Name}' : not a member of gl_MeshPerPrimitiveEXT");
@@ -3752,8 +3755,8 @@ public sealed partial class Lowerer
             .ToList();
         // glslang reports a duplicate member at the DUPLICATE's line, not the block's.
         var seenMembers = new HashSet<string>();
-        foreach (var f in block.Members)
-            foreach (var d in f.Declarators)
+        foreach (Field f in block.Members)
+            foreach (Declarator d in f.Declarators)
                 if (!seenMembers.Add(d.Name))
                     throw new GlslParseException($"interface block '{block.BlockName}' has duplicate member names", d.Line);
         // Only the FINAL member of a storage buffer may be a runtime array. glslang implicitly sizes any
@@ -3774,7 +3777,7 @@ public sealed partial class Lowerer
             }
         // Samplers/images/acceleration structures are descriptors, not data, so they cannot live inside a
         // uniform or buffer block (the resulting OpTypeStruct is invalid in Vulkan).
-        foreach (var fl in fields)
+        foreach ((string Name, GlslType) fl in fields)
             if (ContainsOpaque(fl.Item2))
                 throw new GlslParseException($"member '{fl.Name}' of block '{block.BlockName}' contains an opaque type, which is not allowed in a block");
         // A member may pin its own byte offset with layout(offset=N) instead of taking the packed one.
@@ -3790,7 +3793,7 @@ public sealed partial class Lowerer
             aligns = [.. aligns.Select(a => a ?? blockAlign)];
         // A row_major/column_major qualifier is per member; the block's (else the storage's global default,
         // `layout(row_major) uniform;`) applies to the rest.
-        var (defaultPacking, defaultRowMajor) = _blockDefaults.GetValueOrDefault(block);
+        (BlockLayout? defaultPacking, bool defaultRowMajor) = _blockDefaults.GetValueOrDefault(block);
         bool blockRowMajor = MatrixLayoutOf(block.Qualifiers) ?? defaultRowMajor;
         var rowMajor = block.Members
             .SelectMany(f => f.Declarators.Select(_ => MatrixLayoutOf(f.Qualifiers) ?? blockRowMajor))
@@ -3800,7 +3803,7 @@ public sealed partial class Lowerer
             .SelectMany(f => f.Declarators.Select(_ => MemoryDecorationsOf(f.Qualifiers)))
             .ToList();
         var st = new StructType(block.BlockName, fields);
-        var memberRelaxed = FieldFlags(block.Members);
+        bool[] memberRelaxed = FieldFlags(block.Members);
         _blockMemberRelaxed[st] = memberRelaxed;
         _blockStructs.Add(st);   // its bool members are stored as uint; see BlockStored
         if (isBuffer) _bufferBlockStructs.Add(st);
@@ -3810,7 +3813,7 @@ public sealed partial class Lowerer
         // SPV_KHR_storage_buffer_storage_class below 1.3.
         bool nativeStorageBuffer = isBuffer && (version >= SpirVVersion.V1_3 || _bufferRefs.Count > 0);
         if (nativeStorageBuffer) AddIncorporatedExtension("SPV_KHR_storage_buffer_storage_class", SpirVVersion.V1_3);
-        var storage = isShaderRecord ? StorageClass.ShaderRecordBufferKHR
+        StorageClass storage = isShaderRecord ? StorageClass.ShaderRecordBufferKHR
                     : isTaskNV ? (block.Qualifiers.Has("out") ? StorageClass.Output : StorageClass.Input)
                     : isShared ? StorageClass.Workgroup
                     : isPushConstant ? StorageClass.PushConstant
@@ -3818,18 +3821,18 @@ public sealed partial class Lowerer
                     : StorageClass.Uniform;
         // An explicit packing wins; a push-constant/shader-record block defaults to std430 regardless of the
         // global uniform default; anything else takes its storage's default (`layout(std140) buffer;`).
-        var layout = BlockRulesetOf(block.Qualifiers)
+        BlockLayout layout = BlockRulesetOf(block.Qualifiers)
             ?? (isPushConstant || isShaderRecord || isTaskNV ? BlockLayout.Std430
                 : defaultPacking ?? (isBuffer || isShared ? BlockLayout.Std430 : BlockLayout.Std140));
         _blockLayout[st] = layout;
-        var blockMem = _vmmPragma ? BlockMemQual(block.Qualifiers) : MemQual.None;
+        MemQual blockMem = _vmmPragma ? BlockMemQual(block.Qualifiers) : MemQual.None;
         if (_vmmPragma)
         {
             int mi = 0;
-            foreach (var f in block.Members)
-                foreach (var _ in f.Declarators)
+            foreach (Field f in block.Members)
+                foreach (Declarator _ in f.Declarators)
                 {
-                    var own = BlockMemQual(f.Qualifiers);
+                    MemQual own = BlockMemQual(f.Qualifiers);
                     _blockMemberMem[(st, mi++)] = own > blockMem ? own : blockMem;
                 }
         }
@@ -3870,21 +3873,21 @@ public sealed partial class Lowerer
             }
             uint structType = _m.TypeStructUnique(memberIds);
             _typeParts[structType] = memberIds;
-            var refMembers = st.Fields.Where(f => f.Type is BufferReferenceType).Select(f => ((BufferReferenceType)f.Type).Name).ToArray();
+            string[] refMembers = st.Fields.Where(f => f.Type is BufferReferenceType).Select(f => ((BufferReferenceType)f.Type).Name).ToArray();
             // A reference member forward-declares its pointer above; glslang defines the pointee struct
             // and the pointer right after this enclosing struct, its names after this struct's names,
             // and its decorations after this struct's decorations.
             var definedRefs = refMembers.SelectMany(BufferRefTypes).ToList();
             _m.AddName(structType, block.BlockName);
             for (int i = 0; i < st.Fields.Count; i++) _m.AddMemberName(structType, i, st.Fields[i].Name);
-            foreach (var r in definedRefs) BufferRefNames(r);
+            foreach (string? r in definedRefs) BufferRefNames(r);
             // Per-member memory qualifiers (glslang emits these before the member's Offset).
             var memberQuals = new List<Decoration>();
             if (isBuffer && block.Qualifiers.Has("readonly")) memberQuals.Add(Decoration.NonWritable);
             if (isBuffer && block.Qualifiers.Has("writeonly")) memberQuals.Add(Decoration.NonReadable);
             // Under the Vulkan memory model, coherent/volatile are per-access memory operands, not member
             // decorations, so they are dropped here and applied on each load/store instead.
-            foreach (var (word, decoration) in MemoryQualifiers)
+            foreach ((string? word, Decoration decoration) in MemoryQualifiers)
                 if (block.Qualifiers.Has(word) && !(_vmmPragma && decoration is Decoration.Coherent or Decoration.Volatile))
                     memberQuals.Add(decoration);
             if (isTaskNV) memberQuals.Add(Decoration.PerTaskNV);
@@ -3897,7 +3900,7 @@ public sealed partial class Lowerer
                 _m.AddCapability(Capability.WorkgroupMemoryExplicitLayoutKHR);
                 _m.AddExtension("SPV_KHR_workgroup_memory_explicit_layout");
             }
-            foreach (var r in definedRefs) BufferRefDecorate(r);
+            foreach (string? r in definedRefs) BufferRefDecorate(r);
 
             uint varType = structType;
             // An instance array (of arrays) wraps the block struct innermost-first.
@@ -3949,7 +3952,7 @@ public sealed partial class Lowerer
             if (block.Qualifiers.Has("writeonly")) { _m.Decorate(var, Decoration.NonReadable); _writeOnlyVars.Add(var); }
             for (int mi = 0; mi < memberMemory.Count; mi++)
                 if (memberMemory[mi].Contains(Decoration.NonReadable)) _writeOnlyMembers.Add((var, mi));
-            foreach (var (word, decoration) in MemoryQualifiers)
+            foreach ((string? word, Decoration decoration) in MemoryQualifiers)
                 if (block.Qualifiers.Has(word) && !(_vmmPragma && decoration is Decoration.Coherent or Decoration.Volatile))
                     _m.Decorate(var, decoration);
             return new Global(globalType, storage, var, blockMem);
@@ -3983,7 +3986,7 @@ public sealed partial class Lowerer
     // Members of an anonymous block are addressable by their bare names (`uniform M { mat4 m; };` -> `m`).
     void RegisterAnonymousMembers(StructType st, Func<uint> var, StorageClass storage, bool trivialSymbol = false, MemQual mem = MemQual.None)
     {
-        var blockMem = mem;
+        MemQual blockMem = mem;
         for (int i = 0; i < st.Fields.Count; i++)
         {
             if (_blockMembers.ContainsKey(st.Fields[i].Name) || GlobalExists(st.Fields[i].Name))
@@ -4029,11 +4032,11 @@ public sealed partial class Lowerer
             .SelectMany(f => f.Declarators.Select(d => (Field: f, d.Name, Type: ApplyArrayDims(ResolveTypeRef(f.Type), d.Array))))
             .ToList();
         var st = new StructType(block.BlockName, members.Select(m => (m.Name, m.Type)).ToList());
-        var memberRelaxed = FieldFlags(block.Members);
+        bool[] memberRelaxed = FieldFlags(block.Members);
         _blockMemberRelaxed[st] = memberRelaxed;
 
         // An integer fragment input cannot be interpolated: reject it whether or not the block is used.
-        foreach (var m in members)
+        foreach ((Field Field, string Name, GlslType Type) m in members)
             if (storage == StorageClass.Input && stage == ShaderStage.Fragment && !m.Field.Qualifiers.Has("flat")
                 && BaseScalar(m.Type) is Scalar.Int or Scalar.UInt)
                 throw new GlslParseException($"integer fragment input '{block.BlockName}.{m.Name}' must be declared 'flat'");
@@ -4054,13 +4057,13 @@ public sealed partial class Lowerer
         // from the block's location, or from the previous member) and the block variable itself keeps none.
         int? blockLocation = LayoutInt(block.Qualifiers, "location");
         bool memberWithLocation = members.Any(m => LayoutInt(m.Field.Qualifiers, "location") is not null);
-        var memberLocations = new int?[members.Count];
-        var memberComponents = new int?[members.Count];
+        int?[] memberLocations = new int?[members.Count];
+        int?[] memberComponents = new int?[members.Count];
         {
             int next = blockLocation ?? 0;
             for (int i = 0; i < members.Count; i++)
             {
-                var q = members[i].Field.Qualifiers;
+                Qualifiers q = members[i].Field.Qualifiers;
                 memberComponents[i] = LayoutInt(q, "component");
                 if (!memberWithLocation) continue;
                 if (LayoutInt(q, "location") is int own) memberLocations[i] = own;
@@ -4070,7 +4073,7 @@ public sealed partial class Lowerer
         }
         // Member locations are dropped on an instance array that is not the stage's per-vertex arrayed I/O.
         bool memberLocationInvalid = block.InstanceArray.Count > 1 || (block.InstanceArray.Count == 1 && !IsArrayedIo(storage, block.Qualifiers));
-        var outLayout = storage == StorageClass.Output ? _outLayouts.GetValueOrDefault(block, DefaultOutLayout) : default;
+        OutLayout outLayout = storage == StorageClass.Output ? _outLayouts.GetValueOrDefault(block, DefaultOutLayout) : default;
 
         // As with a uniform block, glslang materializes the struct + variable lazily, at first reference.
         Global BuildBlock()
@@ -4082,7 +4085,7 @@ public sealed partial class Lowerer
             {
                 // A member inherits the block's interpolation/auxiliary qualifiers (GlslangToSpv InheritQualifiers);
                 // SPIR-V takes one interpolation and one auxiliary-storage decoration per member.
-                var mq = members[i].Field.Qualifiers;
+                Qualifiers mq = members[i].Field.Qualifiers;
                 bool Has(string w) => mq.Has(w) || block.Qualifiers.Has(w);
                 if (memberRelaxed[i]) _m.MemberDecorate(structType, i, Decoration.RelaxedPrecision);
                 if (!mq.Has("smooth"))
@@ -4147,17 +4150,17 @@ public sealed partial class Lowerer
         // A member or swizzle of a constant folds to a constant (glslang folds it in the AST), so e.g.
         // `gl_WorkGroupSize.x` is a literal rather than an extract from the composite.
         if (EvalConst(m) is { } folded) return Materialize(folded);
-        if (IsPerVertexPosition(m)) { var pc = BuildAccess(m); var a = AccessOf(pc); return WithChainPrecision(Load(a.Type, a.Pointer, a.Layout), pc); }
+        if (IsPerVertexPosition(m)) { Chain pc = BuildAccess(m); Access a = AccessOf(pc); return WithChainPrecision(Load(a.Type, a.Pointer, a.Layout), pc); }
         // A run of member/single-component-swizzle accesses over an r-value (e.g. `P(...).a.x`) is ONE
         // OpCompositeExtract with a flat index path, not an access chain.
         if (RValueChain(m) is (Expr baseE, var idxs))
         {
-            var extracted = RValueExtract(baseE, idxs, InferType(m));
+            Value extracted = RValueExtract(baseE, idxs, InferType(m));
             return RValueMemberRelaxed(m) && CarriesPrecision(extracted.Type) ? extracted with { Id = Relax(extracted.Id), Relaxed = true } : extracted;
         }
         if (InferType(m.Target) is StructType or BufferReferenceType)
         {
-            var c = BuildAccess(m);
+            Chain c = BuildAccess(m);
             return FromStored(WithChainPrecision(LoadFrom(AccessOf(c)), c), InferType(m));   // a block's bool member loads as uint
         }
         if (IsSwizzleName(m.Name) && m.Name.Length == 1 && m.Target is Index cix && EvalConst(cix.Idx) is null
@@ -4204,11 +4207,11 @@ public sealed partial class Lowerer
     // (as a side effect of building its access chain) before emitting the extract with literal indices.
     Value RValueExtract(Expr baseE, List<(int Idx, bool Unsigned)> indices, GlslType resultType)
     {
-        var baseVal = LowerExpr(baseE);
-        foreach (var (idx, unsigned) in indices)
+        Value baseVal = LowerExpr(baseE);
+        foreach ((int idx, bool unsigned) in indices)
             if (unsigned) _m.ConstantInt(_m.TypeInt(32, signed: false), (uint)idx); else MemberIndexConst(idx);
-        var inst = InstrPool.Rent(Op.CompositeExtract, SpvType(resultType), _m.AllocId()).Add(baseVal.Id);
-        foreach (var (idx, _) in indices) inst.Add((uint)idx);
+        Instruction inst = InstrPool.Rent(Op.CompositeExtract, SpvType(resultType), _m.AllocId()).Add(baseVal.Id);
+        foreach ((int idx, bool _) in indices) inst.Add((uint)idx);
         _code.Add(inst);
         return new Value(inst.ResultId, resultType, false);
     }
@@ -4259,7 +4262,7 @@ public sealed partial class Lowerer
     // do not; we mirror that by lowering the statement, then truncating the instructions it appended.
     void LowerStatements(IReadOnlyList<Stmt> statements)
     {
-        foreach (var s in statements)
+        foreach (Stmt s in statements)
         {
             if (!_terminated) { LowerStatement(s); continue; }
             int mark = _code.Count;
@@ -4288,7 +4291,7 @@ public sealed partial class Lowerer
     // Lowers an if/loop/ternary condition, which must be a scalar boolean.
     Value LowerCondition(Expr e)
     {
-        var v = LowerExpr(e);
+        Value v = LowerExpr(e);
         if (v.Type is not ScalarType { Kind: Scalar.Bool })
             throw new GlslParseException($"a condition must be a boolean expression, not '{Types.Name(v.Type)}'");
         return v;
@@ -4337,15 +4340,15 @@ public sealed partial class Lowerer
             {
                 case ReturnStmt { Value: null } r: voidReturnLine ??= r.Line; break;
                 case ReturnStmt: sawValueReturn = true; break;
-                case Block b: foreach (var st in b.Statements) Walk(st); break;
+                case Block b: foreach (Stmt st in b.Statements) Walk(st); break;
                 case IfStmt i: Walk(i.Then); if (i.Else is { } e) Walk(e); break;
                 case ForStmt fo: Walk(fo.Body); break;
                 case WhileStmt w: Walk(w.Body); break;
                 case DoWhileStmt d: Walk(d.Body); break;
-                case SwitchStmt sw: foreach (var c in sw.Cases) foreach (var st in c.Body) Walk(st); break;
+                case SwitchStmt sw: foreach (SwitchCase c in sw.Cases) foreach (Stmt st in c.Body) Walk(st); break;
             }
         }
-        foreach (var st in f.Body.Statements) Walk(st);
+        foreach (Stmt st in f.Body.Statements) Walk(st);
         if (voidReturnLine is int line)
             throw new GlslParseException("a non-void function must return a value", line);
         if (!sawValueReturn)
@@ -4361,7 +4364,7 @@ public sealed partial class Lowerer
         if (s.Value is null) _code.Add(InstrPool.Rent(Op.Return));
         else
         {
-            var value = LowerCoerced(s.Value, _currentReturnType, "return");
+            Value value = LowerCoerced(s.Value, _currentReturnType, "return");
             // TIntermBranch::updatePrecision: a returned value with no precision takes the function's.
             if (CarriesPrecision(value.Type) && IsNone(value))
             {
@@ -4423,7 +4426,7 @@ public sealed partial class Lowerer
         // Mirror glslang's Builder::If: allocate the then and merge blocks up front, but allocate the
         // else block only after the then-body is emitted, and insert the OpBranchConditional back into
         // the header (after OpSelectionMerge) at the end. This reproduces glslang's exact id order.
-        var cond = LowerCondition(s.Cond);
+        Value cond = LowerCondition(s.Cond);
         uint thenL = _m.AllocId();
         uint mergeL = _m.AllocId();
 
@@ -4460,11 +4463,11 @@ public sealed partial class Lowerer
         var savedPendingPrivates = new Dictionary<string, GlslType>(_pendingPrivates);
         var savedConstants = new Dictionary<string, Value>(_constants);
         var savedConstValues = new Dictionary<string, CVal>(_constValues);
-        var savedPrecision = (_defaultFloatMediump, _defaultIntMediump);
+        (bool _defaultFloatMediump, bool _defaultIntMediump) savedPrecision = (_defaultFloatMediump, _defaultIntMediump);
         _scopeNames.Push([]);
         body();
         (_defaultFloatMediump, _defaultIntMediump) = savedPrecision;
-        var declaredHere = _scopeNames.Pop();
+        HashSet<string> declaredHere = _scopeNames.Pop();
         // A local declared in an OUTER scope but first materialized inside this one (e.g. `vec3 c;` at
         // function scope, assigned inside an if-branch) must keep its materialization - it is the same
         // variable, so it must not be re-created in a sibling scope. A same-named local declared in this
@@ -4475,8 +4478,8 @@ public sealed partial class Lowerer
         Restore(_locals, savedLocals);
         Restore(_pendingLocals, savedPendingLocals);
         Restore(_pendingPrivates, savedPendingPrivates);
-        foreach (var kv in keepMaterialized) { _locals[kv.Key] = kv.Value; _pendingPrivates.Remove(kv.Key); }
-        foreach (var (name, pending) in savedPendingLocals)
+        foreach (KeyValuePair<string, (GlslType Type, uint VarId)> kv in keepMaterialized) { _locals[kv.Key] = kv.Value; _pendingPrivates.Remove(kv.Key); }
+        foreach ((string? name, PendingLocal? pending) in savedPendingLocals)
             if (pending.VarId != 0) { _locals[name] = (pending.Type, pending.VarId); _pendingLocals.Remove(name); }
 
         RestoreConstScope(savedConstants, savedConstValues, declaredHere);
@@ -4493,13 +4496,13 @@ public sealed partial class Lowerer
             .ToDictionary(kv => kv.Key, kv => kv.Value);
         Restore(_constants, savedConstants);
         Restore(_constValues, savedConstValues);
-        foreach (var kv in keepConstants) _constants[kv.Key] = kv.Value;
+        foreach (KeyValuePair<string, Value> kv in keepConstants) _constants[kv.Key] = kv.Value;
     }
 
     static void Restore<T>(Dictionary<string, T> dict, Dictionary<string, T> saved)
     {
         dict.Clear();
-        foreach (var kv in saved) dict[kv.Key] = kv.Value;
+        foreach (KeyValuePair<string, T> kv in saved) dict[kv.Key] = kv.Value;
     }
 
     void LowerFor(ForStmt s) => InScope(() => LowerForScoped(s));   // the init variable is scoped to the loop
@@ -4590,14 +4593,14 @@ public sealed partial class Lowerer
         // A switch with no cases at all is not a construct in glslang's AST: only the selector's side
         // effects survive, exactly as for a bare expression statement.
         if (s.Cases.Count == 0) { LowerDiscardedExpr(s.Value); return; }
-        var selector = LowerExpr(s.Value);
+        Value selector = LowerExpr(s.Value);
         if (selector.Type is not ScalarType { Kind: Scalar.Int or Scalar.UInt })
             throw new GlslParseException($"a switch selector must be an integer, not '{Types.Name(selector.Type)}'");
         var defaults = s.Cases.Where(c => c.Label is null).ToList();
         if (defaults.Count > 1)
             throw new GlslParseException("a switch statement can have at most one default label", defaults[1].Line);
         var seenLabels = new HashSet<uint>();
-        foreach (var sc in s.Cases)
+        foreach (SwitchCase sc in s.Cases)
             if (sc.Label is not null && !seenLabels.Add(CaseValue(sc.Label)))
                 throw new GlslParseException("duplicate case label in switch statement", sc.Label.Line);
 
@@ -4687,7 +4690,7 @@ public sealed partial class Lowerer
         // MinIterations, MaxIterations, IterationMultiple, PeelCount and PartialCount exist from SPIR-V 1.4 on;
         // glslang drops them (and their operands) for an older target.
         if (version < SpirVVersion.V1_4) control &= 0xF;
-        var instr = InstrPool.Rent(Op.LoopMerge).Add(merge, cont, control);
+        Instruction instr = InstrPool.Rent(Op.LoopMerge).Add(merge, cont, control);
         if ((control & 8) != 0) instr.Add(depLength);   // DependencyLength carries an operand
         if ((control & ~0xFu) != 0 && loopParams is not null)
             foreach (uint p in loopParams) instr.Add(p);
@@ -4696,8 +4699,8 @@ public sealed partial class Lowerer
 
     void LowerLocalDecl(VarDeclStmt decl)
     {
-        foreach (var d in decl.Declarators) RejectReservedName(d.Name);
-        var baseType = ResolveTypeRef(decl.Type);
+        foreach (Declarator d in decl.Declarators) RejectReservedName(d.Name);
+        GlslType baseType = ResolveTypeRef(decl.Type);
         if (baseType is ScalarType { Kind: Scalar.Void })
             throw new GlslParseException("a variable cannot have type 'void'");
         // A rayQueryEXT object is lowered by glslang to a Private module-scope variable (in the entry-point
@@ -4707,7 +4710,7 @@ public sealed partial class Lowerer
         // uninitialized locals (ResolveLocalVar), with a Private-storage declaration on materialization.
         if (ContainsRayQuery(baseType))
         {
-            foreach (var d in decl.Declarators)
+            foreach (Declarator d in decl.Declarators)
                 _pendingPrivates[d.Name] = ApplyArrayDims(baseType, d.Array);
             return;
         }
@@ -4716,7 +4719,7 @@ public sealed partial class Lowerer
         if (IsOpaque(baseType))
             throw new GlslParseException($"'{decl.Type.Name}' is an opaque type and cannot be a local variable");
         bool isConst = decl.Qualifiers.Has("const");
-        foreach (var d in decl.Declarators)
+        foreach (Declarator d in decl.Declarators)
         {
             if (_scopeNames.Count > 0 && !_scopeNames.Peek().Add(d.Name))
                 throw new GlslParseException($"'{d.Name}' is already declared in this scope");
@@ -4737,7 +4740,7 @@ public sealed partial class Lowerer
                 _constValues[d.Name] = cval;
                 continue;
             }
-            var type = ApplyArrayDims(baseType, d.Array);
+            GlslType type = ApplyArrayDims(baseType, d.Array);
             // GLSL implicit sizing for an unsized local with NO initializer (an initialized one is already
             // sized from it): the size is the largest constant index used on the variable, plus one. A
             // runtime array cannot be instantiated as an OpVariable, so leaving it unsized is invalid.
@@ -4763,10 +4766,10 @@ public sealed partial class Lowerer
             }
             // The initializer was parsed before the name was declared, so it still sees whatever the name
             // meant outside (`float x = x + 1.0;` reads the outer x).
-            bool hadOuter = _locals.TryGetValue(d.Name, out var outer);
+            bool hadOuter = _locals.TryGetValue(d.Name, out (GlslType Type, uint VarId) outer);
             uint varId = DeclareLocal(d.Name, type, DeclRelaxed(type, decl.Qualifiers));
             if (hadOuter) _locals[d.Name] = outer; else _locals.Remove(d.Name);
-            var init = LowerCoerced(d.Init, type, $"initializing '{d.Name}'");
+            Value init = LowerCoerced(d.Init, type, $"initializing '{d.Name}'");
             _locals[d.Name] = (type, varId);
             _pendingLocals.Remove(d.Name);
             var target = new Chain(varId, [], type, StorageClass.Function);
@@ -4778,14 +4781,14 @@ public sealed partial class Lowerer
     // Materializes an uninitialized local's OpVariable on first reference; returns null if unknown.
     (GlslType Type, uint VarId)? ResolveLocalVar(string name)
     {
-        if (_locals.TryGetValue(name, out var local)) return local;
-        if (_pendingLocals.TryGetValue(name, out var pending))
+        if (_locals.TryGetValue(name, out (GlslType Type, uint VarId) local)) return local;
+        if (_pendingLocals.TryGetValue(name, out PendingLocal? pending))
         {
             _pendingLocals.Remove(name);
             pending.VarId = DeclareLocal(name, pending.Type, pending.Relaxed);   // DeclareLocal records into _locals
             return (pending.Type, pending.VarId);
         }
-        if (_pendingPrivates.TryGetValue(name, out var privateType))
+        if (_pendingPrivates.TryGetValue(name, out GlslType? privateType))
         {
             // glslang materializes a rayQuery local on first reference, at module scope in Private,
             // listed in the entry-point interface.
@@ -4804,7 +4807,7 @@ public sealed partial class Lowerer
 
     GlslType ApplyArrayDims(GlslType baseType, IReadOnlyList<Expr?> dims)
     {
-        var type = baseType;
+        GlslType type = baseType;
         for (int i = dims.Count - 1; i >= 0; i--)
             type = dims[i] switch
             {
@@ -4818,7 +4821,7 @@ public sealed partial class Lowerer
                 // Its nominal length (layout size, outer array size) is the constant_id's default for a bare
                 // specialization constant and 1 for anything else, as glslang's arraySizeCheck records it.
                 Expr e when UsesSpecConstant(e) && IsSpecConstExpr(e) =>
-                    new ArrayType(type, e is Ident sid && _specDefaults.TryGetValue(sid.Name, out var dv) ? (int)dv : 1, e),
+                    new ArrayType(type, e is Ident sid && _specDefaults.TryGetValue(sid.Name, out long dv) ? (int)dv : 1, e),
                 _ => throw new GlslParseException("array length must be a constant integer expression"),
             };
         return type;
@@ -4837,7 +4840,7 @@ public sealed partial class Lowerer
         // glslang defines the pointee struct with its names and decorations before the variable's own.
         // So does one inside a struct; glslang's post-pass marks any local holding one AliasedPointer.
         var references = ReferencesIn(type).ToList();
-        foreach (var r in references) BufferRefDefine(r);
+        foreach (string? r in references) BufferRefDefine(r);
         uint ptrType = _m.TypePointer(StorageClass.Function, SpvType(type));
         uint varId = _m.AllocId();
         _vars.Add(InstrPool.Rent(Op.Variable, ptrType, varId).AddEnum(StorageClass.Function));
@@ -4977,15 +4980,15 @@ public sealed partial class Lowerer
 
     // Built-ins whose arguments must be a numeric scalar or vector. Integer arguments are allowed because
     // GLSL implicitly converts them to floating-point; only bool, matrix, struct, etc. are rejected.
-    static readonly HashSet<string> RequireNumericArgs = new()
-    {
+    static readonly HashSet<string> RequireNumericArgs =
+    [
         "radians", "degrees", "sin", "cos", "tan", "asin", "acos", "atan", "sinh", "cosh", "tanh",
         "asinh", "acosh", "atanh", "exp", "log", "exp2", "log2", "sqrt", "inversesqrt", "mod",
         "floor", "ceil", "trunc", "round", "roundEven", "fract", "pow", "step", "smoothstep",
         "normalize", "length", "distance", "dot", "cross", "reflect", "refract", "faceforward",
         "dFdx", "dFdy", "fwidth", "dFdxCoarse", "dFdyCoarse", "dFdxFine", "dFdyFine", "fwidthCoarse", "fwidthFine",
         "isnan", "isinf",
-    };
+    ];
 
     // Validates a built-in call's argument count and, for the numeric families, its argument types. Unknown
     // built-ins are left permissive. Uses the (non-emitting) inferred argument types.
@@ -4998,7 +5001,7 @@ public sealed partial class Lowerer
         if (RequireNumericArgs.Contains(call.Name))
             for (int i = 0; i < n; i++)
             {
-                var t = InferType(call.Args[i]);
+                GlslType t = InferType(call.Args[i]);
                 if (t is not (ScalarType or VectorType) || BaseScalar(t) is Scalar.Bool or Scalar.Void)
                     throw new GlslParseException($"'{call.Name}' cannot be applied to '{Types.Name(t)}'");
             }
@@ -5019,7 +5022,7 @@ public sealed partial class Lowerer
         if (call.Name is "texture" or "textureLod" or "textureGrad" or "textureProj" or "textureGather"
             && n >= 2 && InferType(call.Args[0]) is SamplerType samp)
         {
-            var coord = InferType(call.Args[1]);
+            GlslType coord = InferType(call.Args[1]);
             int need = SamplerSpatialDim(samp);
             if (coord is not (ScalarType or VectorType) || BaseScalar(coord) is Scalar.Bool or Scalar.Void || VecOrScalarSize(coord) < need)
                 throw new GlslParseException($"the coordinate for '{call.Name}' on this sampler needs at least {need} numeric component{(need == 1 ? "" : "s")}, not '{Types.Name(coord)}'");
@@ -5068,7 +5071,7 @@ public sealed partial class Lowerer
 
     Value LowerBuiltinCallCore(Call call)
     {
-        var sparseTexel = _sparsePending;
+        (Expr Arg, int Slot)? sparseTexel = _sparsePending;
         _sparsePending = null;
         CheckBuiltinArgs(call);
         if (stage != ShaderStage.Geometry && call.Name is "EmitVertex" or "EndPrimitive" or "EmitStreamVertex" or "EndStreamPrimitive")
@@ -5089,7 +5092,7 @@ public sealed partial class Lowerer
         if (call.Name == "writePackedPrimitiveIndices4x8NV") return WritePackedPrimitiveIndices(call);
         if (call.Name is "SetMeshOutputsEXT" or "EmitMeshTasksEXT")
         {
-            var counts = call.Args.Select(a => LowerCoerced(a, Types.UInt, call.Name)).ToArray();
+            Value[] counts = call.Args.Select(a => LowerCoerced(a, Types.UInt, call.Name)).ToArray();
             return call.Name == "SetMeshOutputsEXT"
                 ? VoidOp(Op.SetMeshOutputsEXT, counts[0].Id, counts[1].Id)
                 : EmitMeshTasks(counts);
@@ -5136,9 +5139,9 @@ public sealed partial class Lowerer
         if (call.Name is "ignoreIntersectionNV") return VoidOp(Op.IgnoreIntersectionNV);
         if (call.Name is "terminateRayNV") return VoidOp(Op.TerminateRayNV);
 
-        var args = LowerBuiltinArgs(call, sparseTexel);
+        Value[] args = LowerBuiltinArgs(call, sparseTexel);
         _sparseArmed = sparseTexel is not null;
-        var builtinResult = call.Name switch
+        Value builtinResult = call.Name switch
         {
             _ when IsGenericSample(call.Name) && args.Length > 1 && args[0].Type is SamplerType => SampleGeneric(call.Name, args),
             "texture" => Texture(args),
@@ -5262,7 +5265,7 @@ public sealed partial class Lowerer
             "min" => Ext(Fsu(Widest(args), GLSLstd450.FMin, GLSLstd450.SMin, GLSLstd450.UMin), args),
             "max" => Ext(Fsu(Widest(args), GLSLstd450.FMax, GLSLstd450.SMax, GLSLstd450.UMax), args),
             "clamp" => Ext(Fsu(Widest(args), GLSLstd450.FClamp, GLSLstd450.SClamp, GLSLstd450.UClamp), args),
-            _ when ComponentwiseExt.TryGetValue(call.Name, out var g) => Ext(g, args),
+            _ when ComponentwiseExt.TryGetValue(call.Name, out GLSLstd450 g) => Ext(g, args),
             _ when ExplicitPackType(call.Name, args[0].Type) is { } packed => Reinterpret(args[0], packed),
             _ => throw new GlslParseException($"call to unknown function '{call.Name}'"),
         };
@@ -5297,7 +5300,7 @@ public sealed partial class Lowerer
     // caller stores the argument into a temp, passes the temp, and copies back for out/inout.
     Value LowerUserCall(Call call)
     {
-        var fn = ResolveOverload(_userFunctions[call.Name], call.Args);
+        UserFunction fn = ResolveOverload(_userFunctions[call.Name], call.Args);
         int n = fn.Params.Count;
         // An out/inout argument must also accept the parameter's value back (findFunction400).
         for (int i = 0; i < n; i++)
@@ -5316,7 +5319,7 @@ public sealed partial class Lowerer
         // is replaced by a "tempArg" of the parameter's type, assigned (converting) back to the argument after
         // the call; a non-void result then goes through a "tempReturn" so it is read after those assignments.
         // The temp's own symbol is visited first (as the call's assignment target), before any argument.
-        var tempArgs = new uint[n];
+        uint[] tempArgs = new uint[n];
         bool outConversions = false;
         for (int i = 0; i < n; i++)
             if (fn.Params[i].IsOut && !PassedByPointer(fn.Params[i].Type) && !InferType(call.Args[i]).Equals(fn.Params[i].Type))
@@ -5332,14 +5335,14 @@ public sealed partial class Lowerer
         var savedExtract = new (Value Base, uint Index)?[n];
         for (int i = 0; i < n; i++)
         {
-            var p = fn.Params[i];
+            FnParam p = fn.Params[i];
             // Opaque types (samplers/images/textures) cannot be copied into a Function-storage local;
             // they are passed by their UniformConstant pointer directly. The pointee types must match
             // exactly, so a mismatch throws rather than emitting a call with the wrong argument type.
             // Only the chain's indices are evaluated here, its access chain waits for step 2.
             if (PassedByPointer(p.Type))
             {
-                var opaque = BuildAccess(call.Args[i]);
+                Chain opaque = BuildAccess(call.Args[i]);
                 if (!opaque.Type.Equals(p.Type))
                     throw new GlslParseException($"argument '{p.Name}': an opaque argument must match the parameter type exactly (samplers/images, including image format)");
                 opaqueChain[i] = opaque;
@@ -5356,7 +5359,7 @@ public sealed partial class Lowerer
             // A dynamic index into a const array is a chain over the constant. Nothing is copied while
             // it is built, so only the index is evaluated here and the "indexable" temp waits for step 2.
             else if (!p.ByValue && p.IsIn && !p.IsOut && call.Args[i] is Index cix && cix.Target is Ident cid
-                     && _constValues.TryGetValue(cid.Name, out var carr) && carr is CAgg { Type: ArrayType cat }
+                     && _constValues.TryGetValue(cid.Name, out CVal? carr) && carr is CAgg { Type: ArrayType cat }
                      && EvalConst(cix.Idx) is null && cat.Element.Equals(p.Type))
                 savedIndexable[i] = (Materialize(carr).Id, LowerExpr(cix.Idx), cat);
             // A single component of an addressable vector is an access chain of its own, handled below;
@@ -5372,14 +5375,14 @@ public sealed partial class Lowerer
                     throw new GlslParseException("'assign' : l-value of swizzle cannot have duplicate components");
                 if (IsAddressable(sw.Target))
                 {
-                    var baseChain = BuildAccess(sw.Target);
+                    Chain baseChain = BuildAccess(sw.Target);
                     savedChain[i] = identity ? baseChain : baseChain with { Swizzle = sel };
                 }
                 else if (p.IsOut)
                     throw new GlslParseException($"argument '{p.Name}': an out/inout argument must be assignable");
                 else
                 {
-                    var baseVal = LowerExpr(sw.Target);
+                    Value baseVal = LowerExpr(sw.Target);
                     if (identity) savedRValue[i] = baseVal;
                     else savedSwizzle[i] = (baseVal, sel);
                 }
@@ -5389,7 +5392,7 @@ public sealed partial class Lowerer
                      && EvalConst(call.Args[i]) is null && EvalConst(rix.Idx) is CScalar { I: var ri }
                      && InferType(rix.Target) is MatrixType or VectorType && InferType(call.Args[i]).Equals(p.Type))
             {
-                var baseVal = LowerExpr(rix.Target);
+                Value baseVal = LowerExpr(rix.Target);
                 if (baseVal.Type is VectorType) _m.ConstantInt(_m.TypeInt(32, signed: false), (uint)ri);
                 else MemberIndexConst((int)ri);
                 savedExtract[i] = (baseVal, (uint)ri);
@@ -5397,7 +5400,7 @@ public sealed partial class Lowerer
             // A branching ternary leaves its temporary as the argument's l-value (copied in step 2).
             else if (!p.ByValue && p.IsIn && !p.IsOut && call.Args[i] is Conditional cnd && InferType(cnd).Equals(p.Type))
             {
-                var v = LowerConditional(cnd, keepTemp: true, out var tc);
+                Value v = LowerConditional(cnd, keepTemp: true, out Chain? tc);
                 if (tc is { } c) savedChain[i] = c; else savedRValue[i] = v;
             }
             // An argument needing an implicit conversion is a conversion node in glslang's AST, so it is
@@ -5414,7 +5417,7 @@ public sealed partial class Lowerer
         var copyBack = new List<(uint Temp, Chain Target, GlslType Type)>();
         for (int i = 0; i < n; i++)
         {
-            var p = fn.Params[i];
+            FnParam p = fn.Params[i];
             if (opaqueChain[i] is { } opaque) { argPtrs[i] = Collapse(opaque, lValueOnly: true); continue; }
             // Nothing can write a `const in` parameter, so it needs no copy: pass the value itself.
             if (p.ByValue) { argPtrs[i] = savedRValue[i]!.Value.Id; continue; }
@@ -5429,7 +5432,7 @@ public sealed partial class Lowerer
             // stored form differs from the plain param, so copy it through MultiTypeStore.
             if (p.IsIn)
             {
-                var inValue = savedChain[i] is { } chain ? LoadChain(chain)
+                Value inValue = savedChain[i] is { } chain ? LoadChain(chain)
                             : savedSwizzle[i] is { } sz ? Shuffle(sz.Base, sz.Select)
                             : savedIndexable[i] is { } ixa ? IndexableLoad(ixa.ConstId, ixa.Index, ixa.Type)
                             : savedExtract[i] is { } ex ? new Value(Emit(Op.CompositeExtract, SpvType(p.Type), ex.Base.Id, ex.Index), p.Type, false)
@@ -5447,9 +5450,9 @@ public sealed partial class Lowerer
         // Step 4: copy out/inout results back into their saved l-values.
         // glslang's multiTypeStore: a block member target (laid-out struct, bools stored as uint) is copied
         // member by member, converting bool leaves into the uint the block holds.
-        foreach (var (temp, target, type) in copyBack)
+        foreach ((uint temp, Chain target, GlslType? type) in copyBack)
         {
-            var copy = Load(type, temp);
+            Value copy = Load(type, temp);
             if (target.Swizzle is not null) { StoreThroughChain(target, copy); continue; }
             RejectInputWrite(target.Storage);
             RejectReadOnlyWrite(target);
@@ -5463,11 +5466,11 @@ public sealed partial class Lowerer
         for (int i = 0; i < n; i++)
         {
             if (tempArgs[i] == 0) continue;
-            var lhs = BuildAccess(call.Args[i]);
+            Chain lhs = BuildAccess(call.Args[i]);
             RejectInputWrite(lhs.Storage);
             RejectReadOnlyWrite(lhs);
-            var declared = lhs.Layout is null ? lhs.Type : InferType(call.Args[i]);
-            var value = CoerceOrThrow(Load(fn.Params[i].Type, tempArgs[i]), declared, $"argument '{fn.Params[i].Name}'");
+            GlslType declared = lhs.Layout is null ? lhs.Type : InferType(call.Args[i]);
+            Value value = CoerceOrThrow(Load(fn.Params[i].Type, tempArgs[i]), declared, $"argument '{fn.Params[i].Name}'");
             if (lhs.Swizzle is not null) StoreThroughChain(lhs, value);
             else MultiTypeStore(lhs, ToStored(value, lhs.Type));
         }
@@ -5507,7 +5510,7 @@ public sealed partial class Lowerer
     // among the user's overloads alone, which hide the built-in ones of the same name.
     bool CallsUserFunction(Call c)
     {
-        if (!_userFunctions.TryGetValue(c.Name, out var overloads)) return false;
+        if (!_userFunctions.TryGetValue(c.Name, out List<UserFunction>? overloads)) return false;
         if (!BuiltinFunctionNames.Contains(c.Name) && !BuiltinProtos.ContainsKey(c.Name)) return true;
         List<GlslType> argTypes;
         try { argTypes = [.. c.Args.Select(InferType)]; }
@@ -5606,13 +5609,13 @@ public sealed partial class Lowerer
 
     Value Reinterpret(Value v, Scalar target)   // bit-preserving reinterpret (floatBitsToInt etc.)
     {
-        var type = ReplaceComponent(v.Type, target);
+        GlslType type = ReplaceComponent(v.Type, target);
         return new Value(Emit(Op.Bitcast, SpvType(type), v.Id), type, false);
     }
 
     Value WithComponent(Op op, Value v, Scalar component)   // op whose result swaps the component type
     {
-        var type = ReplaceComponent(v.Type, component);
+        GlslType type = ReplaceComponent(v.Type, component);
         return new Value(Emit(op, SpvType(type), v.Id), type, false);
     }
 
@@ -5663,7 +5666,7 @@ public sealed partial class Lowerer
             uint dref = separateDref ? args[2].Id : Emit(Op.CompositeExtract, SpvType(Types.Float), args[1].Id, (uint)(coord.Size - 1));
             if (ImplicitLodAllowed)
             {
-                var inst = InstrPool.Rent(Op.ImageSampleDrefImplicitLod, SpvType(Types.Float), _m.AllocId()).Add(args[0].Id, args[1].Id, dref);
+                Instruction inst = InstrPool.Rent(Op.ImageSampleDrefImplicitLod, SpvType(Types.Float), _m.AllocId()).Add(args[0].Id, args[1].Id, dref);
                 if (args.Length > biasIndex) inst.Add((uint)ImageOperands.Bias).Add(args[biasIndex].Id);
                 _code.Add(inst);
                 return new Value(inst.ResultId, Types.Float, false);
@@ -5681,7 +5684,7 @@ public sealed partial class Lowerer
             SpvType(SampleResult((SamplerType)args[0].Type));
             return SampleExplicit(args, ImageOperands.Lod, [new Value(_m.ConstantFloat(SpvType(Types.Float), 0f), Types.Float, true)]);
         }
-        var result = SampleResult((SamplerType)args[0].Type);   // vec4 / ivec4 / uvec4
+        VectorType result = SampleResult((SamplerType)args[0].Type);   // vec4 / ivec4 / uvec4
         if (args.Length == 3)   // texture(sampler, coord, bias)
         {
             _code.Add(InstrPool.Rent(Op.ImageSampleImplicitLod, SpvType(result), _m.AllocId())
@@ -5727,14 +5730,14 @@ public sealed partial class Lowerer
         if (args[0].Type is SamplerType { Shadow: true } && args[1].Type is VectorType coord)
         {
             uint dref = Emit(Op.CompositeExtract, SpvType(Types.Float), args[1].Id, (uint)(coord.Size - 1));
-            var shadow = InstrPool.Rent(Op.ImageSampleDrefExplicitLod, SpvType(Types.Float), _m.AllocId()).Add(args[0].Id, args[1].Id, dref).Add((uint)mask);
-            foreach (var e in extra) shadow.Add(e.Id);
+            Instruction shadow = InstrPool.Rent(Op.ImageSampleDrefExplicitLod, SpvType(Types.Float), _m.AllocId()).Add(args[0].Id, args[1].Id, dref).Add((uint)mask);
+            foreach (Value e in extra) shadow.Add(e.Id);
             _code.Add(shadow);
             return new Value(shadow.ResultId, Types.Float, false);
         }
-        var result = SampleResult((SamplerType)args[0].Type);   // vec4 / ivec4 / uvec4
-        var instr = InstrPool.Rent(Op.ImageSampleExplicitLod, SpvType(result), _m.AllocId()).Add(args[0].Id, args[1].Id).Add((uint)mask);
-        foreach (var e in extra) instr.Add(e.Id);
+        VectorType result = SampleResult((SamplerType)args[0].Type);   // vec4 / ivec4 / uvec4
+        Instruction instr = InstrPool.Rent(Op.ImageSampleExplicitLod, SpvType(result), _m.AllocId()).Add(args[0].Id, args[1].Id).Add((uint)mask);
+        foreach (Value e in extra) instr.Add(e.Id);
         _code.Add(instr);
         return new Value(instr.ResultId, result, false);
     }
@@ -5754,7 +5757,7 @@ public sealed partial class Lowerer
                 .Add(args[0].Id, args[1].Id, dref).Add((uint)ImageOperands.ConstOffset).Add(args[2].Id));
             return new Value(_code[^1].ResultId, Types.Float, false);
         }
-        var result = SampleResult(sampler);
+        VectorType result = SampleResult(sampler);
         _code.Add(InstrPool.Rent(Op.ImageSampleImplicitLod, SpvType(result), _m.AllocId())
             .Add(args[0].Id, args[1].Id).Add((uint)ImageOperands.ConstOffset).Add(args[2].Id));
         return new Value(_code[^1].ResultId, result, false);
@@ -5777,8 +5780,8 @@ public sealed partial class Lowerer
     Value TextureSize(Value[] args)
     {
         _m.AddCapability(Capability.ImageQuery);
-        var (image, sampler) = QueryImage(args[0]);
-        var resultType = CoordType(sampler);
+        (uint image, SamplerType? sampler) = QueryImage(args[0]);
+        GlslType resultType = CoordType(sampler);
         // Buffer, Rect, and multisampled images have no mip levels, so there is no LOD argument and
         // glslang uses the LOD-less query.
         bool noLod = sampler.Dim is Dim.Buffer or Dim.Rect || sampler.Multisampled;
@@ -5790,19 +5793,19 @@ public sealed partial class Lowerer
 
     Value TexelFetch(Value[] args, Value? offset)
     {
-        var (image, sampler) = QueryImage(args[0]);
-        var result = SampleResult(sampler);
+        (uint image, SamplerType? sampler) = QueryImage(args[0]);
+        VectorType result = SampleResult(sampler);
         // Buffer and Rect images have no mip levels, so texelFetch takes no LOD and emits no operand.
         if (sampler.Dim is Dim.Buffer or Dim.Rect)
         {
-            var (rectOp, rectType) = SampleForm(Op.ImageFetch, SpvType(result), result);
+            (Op rectOp, uint rectType) = SampleForm(Op.ImageFetch, SpvType(result), result);
             return new Value(Emit(rectOp, rectType, image, args[1].Id), result, false);
         }
         // For a multisample sampler the third argument is the sample index (Sample operand), else the LOD.
-        var mask = sampler.Multisampled ? ImageOperands.Sample : ImageOperands.Lod;
+        ImageOperands mask = sampler.Multisampled ? ImageOperands.Sample : ImageOperands.Lod;
         if (offset is not null) mask |= ImageOperands.ConstOffset;
-        var (fetchOp, fetchType) = SampleForm(Op.ImageFetch, SpvType(result), result);
-        var instr = InstrPool.Rent(fetchOp, fetchType, _m.AllocId()).Add(image, args[1].Id).Add((uint)mask).Add(args[2].Id);
+        (Op fetchOp, uint fetchType) = SampleForm(Op.ImageFetch, SpvType(result), result);
+        Instruction instr = InstrPool.Rent(fetchOp, fetchType, _m.AllocId()).Add(image, args[1].Id).Add((uint)mask).Add(args[2].Id);
         if (offset is Value o) instr.Add(o.Id);
         _code.Add(instr);
         return new Value(instr.ResultId, result, false);
@@ -5821,7 +5824,7 @@ public sealed partial class Lowerer
             uint pc = Emit(Op.CompositeInsert, SpvType(pv), div, args[1].Id, (uint)spatial);
             return new Value(Emit(Op.ImageSampleProjDrefImplicitLod, SpvType(Types.Float), args[0].Id, pc, dref), Types.Float, false);
         }
-        var result = SampleResult((SamplerType)args[0].Type);
+        VectorType result = SampleResult((SamplerType)args[0].Type);
         if (!ImplicitLodAllowed)
             return new Value(SampleProjExplicit(args, new Value(_m.ConstantFloat(SpvType(Types.Float), 0f), Types.Float, true)), result, false);
         return new Value(Emit(Op.ImageSampleProjImplicitLod, SpvType(result), args[0].Id, ProjCoord(args[0], args[1])), result, false);
@@ -5855,10 +5858,10 @@ public sealed partial class Lowerer
     {
         _m.AddCapability(Capability.MinLod);
         (mask, extra, explicitLod) = DefaultLod(mask, extra, explicitLod);
-        var result = SampleResult((SamplerType)args[0].Type);
+        VectorType result = SampleResult((SamplerType)args[0].Type);
         Op op = explicitLod ? Op.ImageSampleExplicitLod : Op.ImageSampleImplicitLod;
-        var instr = InstrPool.Rent(op, SpvType(result), _m.AllocId()).Add(args[0].Id, args[1].Id).Add((uint)mask);
-        foreach (var e in extra) instr.Add(e.Id);
+        Instruction instr = InstrPool.Rent(op, SpvType(result), _m.AllocId()).Add(args[0].Id, args[1].Id).Add((uint)mask);
+        foreach (Value e in extra) instr.Add(e.Id);
         _code.Add(instr);
         return new Value(instr.ResultId, result, false);
     }
@@ -5866,12 +5869,12 @@ public sealed partial class Lowerer
     // Projective sample with extra image operands (offset/grad/lod), the textureProj*Offset/Grad family.
     Value SampleProj(Value[] args, ImageOperands mask, Value[] extra, bool explicitLod)
     {
-        var result = SampleResult((SamplerType)args[0].Type);
+        VectorType result = SampleResult((SamplerType)args[0].Type);
         uint coord = ProjCoord(args[0], args[1]);   // before allocating the sample's result id
         (mask, extra, explicitLod) = DefaultLod(mask, extra, explicitLod);
         Op op = explicitLod ? Op.ImageSampleProjExplicitLod : Op.ImageSampleProjImplicitLod;
-        var instr = InstrPool.Rent(op, SpvType(result), _m.AllocId()).Add(args[0].Id, coord).Add((uint)mask);
-        foreach (var e in extra) instr.Add(e.Id);
+        Instruction instr = InstrPool.Rent(op, SpvType(result), _m.AllocId()).Add(args[0].Id, coord).Add((uint)mask);
+        foreach (Value e in extra) instr.Add(e.Id);
         _code.Add(instr);
         return new Value(instr.ResultId, result, false);
     }
@@ -5909,7 +5912,7 @@ public sealed partial class Lowerer
 
     Value TextureQueryLod(Value[] args)   // returns (mip level of detail, clamped LOD)
     {
-        var sampler = QueriedSampler(args[0], "textureQueryLod");
+        SamplerType sampler = QueriedSampler(args[0], "textureQueryLod");
         int coords = sampler.Dim switch { Dim.D1 => 1, Dim.D2 => 2, Dim.D3 or Dim.Cube => 3, _ => 0 };
         if (coords == 0 || sampler.Multisampled || args[0].Type is not SamplerType || args[1].Type is not (ScalarType or VectorType) || !IsFloating(BaseScalar(args[1].Type))
             || (args[1].Type is VectorType cv ? cv.Size : 1) != coords)
@@ -5942,10 +5945,10 @@ public sealed partial class Lowerer
     // as a fourth operand. It terminates the task shader (glslang emits nothing after it).
     Value EmitMeshTasks(Value[] args)
     {
-        var op = InstrPool.Rent(Op.EmitMeshTasksEXT).Add(args[0].Id, args[1].Id, args[2].Id);
+        Instruction op = InstrPool.Rent(Op.EmitMeshTasksEXT).Add(args[0].Id, args[1].Id, args[2].Id);
         // glslang passes the payload only once its symbol has been visited (materialized) in translation
         // order; a helper translated before any reference to it emits the bare form.
-        if (_taskPayloadName is not null && _globals.TryGetValue(_taskPayloadName, out var payload)) op.Add(payload.VarId);
+        if (_taskPayloadName is not null && _globals.TryGetValue(_taskPayloadName, out Global? payload)) op.Add(payload.VarId);
         _code.Add(op);
         _terminated = true;
         _m.AllocId();   // glslang opens an unreachable block after this terminator, consuming an id
@@ -6046,7 +6049,7 @@ public sealed partial class Lowerer
     Value RayQueryCall(Call call)
     {
         if (call.Name == "rayQueryGetIntersectionTriangleVertexPositionsEXT") return RayQueryTriangleVertexPositions(call);
-        if (!RayQueryOps.TryGetValue(call.Name, out var spec))
+        if (!RayQueryOps.TryGetValue(call.Name, out (Op Op, GlslType? Ret, GlslType[] Args) spec))
             throw new GlslParseException($"'{call.Name}' is not a supported ray-query function");
         if (call.Args.Count != 1 + spec.Args.Length)
             throw new GlslParseException($"{call.Name} takes {1 + spec.Args.Length} arguments");
@@ -6071,7 +6074,7 @@ public sealed partial class Lowerer
             throw new GlslParseException($"'{call.Name}' : no matching overloaded function found");
         uint rq = ResolveAccess(call.Args[0]).Pointer;
         uint committed = CommittedInt(call.Args[1]);
-        var outArg = ResolveAccess(call.Args[2]);
+        Access outArg = ResolveAccess(call.Args[2]);
         if (!outArg.Type.Equals(TriangleVertexPositions))
             throw new GlslParseException($"'{call.Name}' : no matching overloaded function found");
         _m.AddExtension("SPV_KHR_ray_tracing_position_fetch");
@@ -6097,8 +6100,8 @@ public sealed partial class Lowerer
         if (EvalConst(locExpr) is not CScalar loc)
             throw new GlslParseException("a ray payload / callable data argument must be a constant location");
         LowerExpr(locExpr);   // glslang still materializes the literal location constant, then uses the variable
-        foreach (var sc in storages)
-            if (_rtByLoc.TryGetValue((sc, (int)loc.I), out var name)) return ResolveGlobal(name)!.VarId;
+        foreach (StorageClass sc in storages)
+            if (_rtByLoc.TryGetValue((sc, (int)loc.I), out string? name)) return ResolveGlobal(name)!.VarId;
         throw new GlslParseException($"no ray payload or callable data declared at location {loc.I}");
     }
 
@@ -6165,12 +6168,12 @@ public sealed partial class Lowerer
     {
         _m.AddCapability(Capability.GroupNonUniform);
         _m.AddCapability(SubgroupOp(call.Name)!.Value);
-        var a = call.Args.Select(LowerExpr).ToArray();
-        var argType = a.Length > 0 ? a[0].Type : Types.UInt;
+        Value[] a = call.Args.Select(LowerExpr).ToArray();
+        GlslType argType = a.Length > 0 ? a[0].Type : Types.UInt;
 
         if (ArithmeticSubgroupOp(call.Name) is (string baseOp, uint scan))
         {
-            var scalar = BaseScalar(argType);
+            Scalar scalar = BaseScalar(argType);
             Op op = baseOp switch
             {
                 "Add" => IsFloating(scalar) ? Op.GroupNonUniformFAdd : Op.GroupNonUniformIAdd,
@@ -6190,7 +6193,7 @@ public sealed partial class Lowerer
         }
 
         // Non-arithmetic ops: result type per function, then scope, then operands.
-        var (opcode, result, extraLiteral) = call.Name switch
+        (Op opcode, GlslType? result, uint? extraLiteral) = call.Name switch
         {
             "subgroupAll" or "subgroupAny" or "subgroupAllEqual" =>
                 (call.Name == "subgroupAll" ? Op.GroupNonUniformAll : call.Name == "subgroupAny" ? Op.GroupNonUniformAny : Op.GroupNonUniformAllEqual, (GlslType)Types.Bool, (uint?)null),
@@ -6230,7 +6233,7 @@ public sealed partial class Lowerer
     {
         _m.AddCapability(Capability.GroupNonUniformPartitionedNV);
         _m.AddExtension("SPV_NV_shader_subgroup_partitioned");
-        var v = LowerExpr(call.Args[0]);
+        Value v = LowerExpr(call.Args[0]);
         var uvec4 = new VectorType(Scalar.UInt, 4);
         return new Value(Emit(Op.GroupNonUniformPartitionNV, SpvType(uvec4), v.Id), uvec4, false);
     }
@@ -6241,9 +6244,9 @@ public sealed partial class Lowerer
     {
         _m.AddCapability(Capability.GroupNonUniformPartitionedNV);
         _m.AddExtension("SPV_NV_shader_subgroup_partitioned");
-        var value = LowerExpr(call.Args[0]);
-        var ballot = LowerExpr(call.Args[1]);
-        var scalar = BaseScalar(value.Type);
+        Value value = LowerExpr(call.Args[0]);
+        Value ballot = LowerExpr(call.Args[1]);
+        Scalar scalar = BaseScalar(value.Type);
         string rest = call.Name["subgroupPartitioned".Length..];
         if (rest.EndsWith("NV", StringComparison.Ordinal)) rest = rest[..^2];
         uint groupOp = 6;   // PartitionedReduceNV
@@ -6269,7 +6272,7 @@ public sealed partial class Lowerer
     {
         _m.AddCapability(Capability.GroupNonUniformRotateKHR);
         _m.AddExtension("SPV_KHR_subgroup_rotate");
-        var a = call.Args.Select(LowerExpr).ToArray();
+        Value[] a = call.Args.Select(LowerExpr).ToArray();
         var operands = new List<uint> { ScopeConst(), a[0].Id, a[1].Id };
         if (a.Length > 2) operands.Add(a[2].Id);
         return new Value(Emit(Op.GroupNonUniformRotateKHR, SpvType(a[0].Type), [.. operands]), a[0].Type, RelaxedResult(a[0]));
@@ -6283,7 +6286,7 @@ public sealed partial class Lowerer
         _m.AddCapability(Capability.GroupNonUniformVote);
         _m.AddCapability(Capability.QuadControlKHR);
         _m.AddExtension("SPV_KHR_quad_control");
-        var a = LowerExpr(call.Args[0]);
+        Value a = LowerExpr(call.Args[0]);
         ScopeConst();   // glslang materialises the Subgroup scope constant even though QuadAll/Any omit it
         Op op = call.Name == "subgroupQuadAll" ? Op.GroupNonUniformQuadAllKHR : Op.GroupNonUniformQuadAnyKHR;
         return new Value(Emit(op, SpvType(Types.Bool), a.Id), Types.Bool, false);
@@ -6293,7 +6296,7 @@ public sealed partial class Lowerer
     // operand. ballotARB returns a uint64 assembled from the low two lanes of an OpSubgroupBallotKHR.
     Value LowerArbInvocation(Call call)
     {
-        var a = call.Args.Select(LowerExpr).ToArray();
+        Value[] a = call.Args.Select(LowerExpr).ToArray();
         switch (call.Name)
         {
             case "anyInvocationARB":
@@ -6328,7 +6331,7 @@ public sealed partial class Lowerer
     {
         if (v.Type is not VectorType vt) return new Value(scalarOp(v.Id), v.Type, false);
         uint scalarType = SpvType(new ScalarType(vt.Component));
-        var parts = new uint[vt.Size];
+        uint[] parts = new uint[vt.Size];
         for (int c = 0; c < vt.Size; c++) parts[c] = scalarOp(Emit(Op.CompositeExtract, scalarType, v.Id, (uint)c));
         return new Value(Emit(Op.CompositeConstruct, SpvType(v.Type), parts), v.Type, false);
     }
@@ -6346,7 +6349,7 @@ public sealed partial class Lowerer
             throw new GlslParseException($"'{call.Name}' : no matching overloaded function found");
         if (!_requestedExts.Contains("GL_AMD_shader_ballot"))
             throw new GlslParseException($"'{call.Name}' : required extension not requested: GL_AMD_shader_ballot");
-        var a = call.Args.Select(LowerExpr).ToArray();
+        Value[] a = call.Args.Select(LowerExpr).ToArray();
         GlslType Arg(int i) => i < a.Length ? a[i].Type : Types.Void;
         bool Is(int i, Scalar component, int size) => Arg(i).Equals(size == 1 ? new ScalarType(component) : new VectorType(component, size));
         Scalar scalar = BaseScalar(Arg(0));
@@ -6419,14 +6422,14 @@ public sealed partial class Lowerer
         int texelIndex = call.Args.Count > 0 ? SparseTexelIndex(plain, InferType(call.Args[0])) : 0;
         if (texelIndex >= call.Args.Count)
             throw new GlslParseException($"'{call.Name}' : no matching overloaded function found");
-        var sibling = call with { Name = plain, Args = [.. call.Args.Where((_, i) => i != texelIndex)] };
+        Call sibling = call with { Name = plain, Args = [.. call.Args.Where((_, i) => i != texelIndex)] };
 
         _sparsePending = (call.Args[texelIndex], texelIndex);
         _sparseEmitted = false;
-        var result = LowerBuiltinCall(sibling);
+        Value result = LowerBuiltinCall(sibling);
         _sparseArmed = false;
         if (!_sparseEmitted) throw new GlslParseException($"'{call.Name}' : no matching overloaded function found");
-        var texel = _sparseTexelAccess;
+        Access texel = _sparseTexelAccess;
         Store(texel.Pointer, Emit(Op.CompositeExtract, SpvType(result.Type), result.Id, 1));
         return new Value(Emit(Op.CompositeExtract, SpvType(Types.Int), result.Id, 0), Types.Int, false);
     }
@@ -6438,7 +6441,7 @@ public sealed partial class Lowerer
         if (call.Args.Count != 1) throw new GlslParseException("'coopmat' constructor takes exactly one argument");
         if (InferType(call.Args[0]) is CoopMatType source)
             return source.Equals(type) ? LowerExpr(call.Args[0]) : throw new GlslParseException("'coopmat' : converting between cooperative matrix types is not supported");
-        var fill = LowerCoerced(call.Args[0], new ScalarType(type.Component), "coopmat constructor");
+        Value fill = LowerCoerced(call.Args[0], new ScalarType(type.Component), "coopmat constructor");
         if (fill.IsConstant) return new Value(_m.ConstantComposite(SpvType(type), fill.Id), type, true);
         return new Value(Emit(Op.CompositeConstruct, SpvType(type), fill.Id), type, false);
     }
@@ -6449,7 +6452,7 @@ public sealed partial class Lowerer
     {
         var destType = (CoopMatType)InferType(call.Args[0]);
         uint coopType = SpvType(destType);
-        var destAccess = BuildAccess(call.Args[0]);   // glslang materialises the destination matrix before the buffer access
+        Chain destAccess = BuildAccess(call.Args[0]);   // glslang materialises the destination matrix before the buffer access
         uint bufPtr = CoopMatBufPtr(call.Args[1], call.Args[2]);
         uint layout = LowerExpr(call.Args[4]).Id;
         uint stride = LowerCoerced(call.Args[3], Types.UInt, "coopmat stride").Id;
@@ -6461,7 +6464,7 @@ public sealed partial class Lowerer
     // coopMatStore(m, buf, index, stride, layout): OpCooperativeMatrixStoreKHR writes m to &buf[index].
     Value CoopMatStore(Call call)
     {
-        var obj = LowerExpr(call.Args[0]);
+        Value obj = LowerExpr(call.Args[0]);
         uint bufPtr = CoopMatBufPtr(call.Args[1], call.Args[2]);
         uint layout = LowerExpr(call.Args[4]).Id;
         uint stride = LowerCoerced(call.Args[3], Types.UInt, "coopmat stride").Id;
@@ -6472,8 +6475,8 @@ public sealed partial class Lowerer
     // The pointer to buf[index] a coopmat load/store addresses; the element index is unsigned.
     uint CoopMatBufPtr(Expr buffer, Expr index)
     {
-        var chain = BuildAccess(buffer);
-        var element = chain.Type switch
+        Chain chain = BuildAccess(buffer);
+        GlslType element = chain.Type switch
         {
             RuntimeArrayType r => r.Element,
             ArrayType a => a.Element,
@@ -6486,9 +6489,9 @@ public sealed partial class Lowerer
     // coopMatMulAdd(a, b, c): a*b + c, yielding the accumulator's type.
     Value CoopMatMulAdd(Call call)
     {
-        var a = LowerExpr(call.Args[0]);
-        var b = LowerExpr(call.Args[1]);
-        var c = LowerExpr(call.Args[2]);
+        Value a = LowerExpr(call.Args[0]);
+        Value b = LowerExpr(call.Args[1]);
+        Value c = LowerExpr(call.Args[2]);
         return new Value(Emit(Op.CooperativeMatrixMulAddKHR, SpvType(c.Type), a.Id, b.Id, c.Id), c.Type, false);
     }
 
@@ -6509,17 +6512,17 @@ public sealed partial class Lowerer
     {
         _m.AddCapability(Capability.ImageFootprintNV);
         _m.AddExtension("SPV_NV_shader_image_footprint");
-        var s = LowerExpr(call.Args[0]);
-        var coord = LowerExpr(call.Args[1]);
+        Value s = LowerExpr(call.Args[0]);
+        Value coord = LowerExpr(call.Args[1]);
         uint granularity = LowerExpr(call.Args[2]).Id;
         uint coarse = LowerExpr(call.Args[3]).Id;
-        var outArg = ResolveAccess(call.Args[4]);
+        Access outArg = ResolveAccess(call.Args[4]);
         uint resType = _m.TypeStruct([.. new[] { SpvType(Types.Bool) }.Concat(FootprintStruct.Fields.Select(f => SpvType(f.Type)))]);
         if (_resTypeNamed.Add(resType)) _m.AddName(resType, "ResType");
         uint res = Emit(Op.ImageSampleFootprintNV, resType, s.Id, coord.Id, granularity, coarse);
         for (int i = 0; i < FootprintStruct.Fields.Count; i++)
         {
-            var ft = FootprintStruct.Fields[i].Type;
+            GlslType ft = FootprintStruct.Fields[i].Type;
             uint idx = MemberIndexConst(i);   // glslang builds the target index before extracting the value
             uint extracted = Emit(Op.CompositeExtract, SpvType(ft), res, (uint)(i + 1));
             uint ptr = Emit(Op.AccessChain, _m.TypePointer(StorageClass.Function, SpvType(ft)), outArg.Pointer, idx);
@@ -6532,7 +6535,7 @@ public sealed partial class Lowerer
     // copy NonUniform; the taint then propagates through access chains and loads (see Collapse/Load).
     Value NonUniform(Call call)
     {
-        var arg = LowerExpr(call.Args[0]);
+        Value arg = LowerExpr(call.Args[0]);
         _m.AddCapability(Capability.ShaderNonUniform);
         AddIncorporatedExtension("SPV_EXT_descriptor_indexing", SpirVVersion.V1_5);
         uint id = Emit(Op.CopyObject, SpvType(arg.Type), arg.Id);
@@ -6546,11 +6549,11 @@ public sealed partial class Lowerer
         if (call.Args[0] is not Literal { Kind: TokenKind.StringConst } fmt)
             throw new NotSupportedException("debugPrintfEXT requires a string literal format");
         uint strId = _m.StringConstant(fmt.Text);
-        var argVals = call.Args.Skip(1).Select(LowerExpr).ToArray();
+        Value[] argVals = call.Args.Skip(1).Select(LowerExpr).ToArray();
         _m.AddExtension("SPV_KHR_non_semantic_info");
         uint set = _m.ImportExtInstSet("NonSemantic.DebugPrintf");
-        var instr = InstrPool.Rent(Op.ExtInst, SpvType(Types.Void), _m.AllocId()).Add(set).Add(1u).Add(strId);
-        foreach (var a in argVals) instr.Add(a.Id);
+        Instruction instr = InstrPool.Rent(Op.ExtInst, SpvType(Types.Void), _m.AllocId()).Add(set).Add(1u).Add(strId);
+        foreach (Value a in argVals) instr.Add(a.Id);
         _code.Add(instr);
         return new Value(0, Types.Void, false);
     }
@@ -6659,7 +6662,7 @@ public sealed partial class Lowerer
     // the uint operands, exactly like the extended atomics.
     Value ControlBarrierExplicit(Call call)
     {
-        foreach (var arg in call.Args) Materialize(RequiredConst(arg));
+        foreach (Expr arg in call.Args) Materialize(RequiredConst(arg));
         int memScope = ConstInt(call.Args[1]);
         int sem = ConstInt(call.Args[2]) | ConstInt(call.Args[3]);
         MaybeEnableVmm(memScope, sem);
@@ -6672,7 +6675,7 @@ public sealed partial class Lowerer
 
     Value MemoryBarrierExplicit(Call call)
     {
-        foreach (var arg in call.Args) Materialize(RequiredConst(arg));
+        foreach (Expr arg in call.Args) Materialize(RequiredConst(arg));
         int scopeVal = ConstInt(call.Args[0]);
         int sem = ConstInt(call.Args[1]) | ConstInt(call.Args[2]);
         MaybeEnableVmm(scopeVal, sem);
@@ -6781,31 +6784,31 @@ public sealed partial class Lowerer
 
     Value LowerAtomicLoad(Call call)
     {
-        var target = ResolveAccess(call.Args[0]);
-        var (scope, semantics) = AtomicExtendedScope(call.Args[1], call.Args[2], call.Args[3], call.Name);
+        Access target = ResolveAccess(call.Args[0]);
+        (uint scope, uint semantics) = AtomicExtendedScope(call.Args[1], call.Args[2], call.Args[3], call.Name);
         return new Value(Emit(Op.AtomicLoad, SpvType(target.Type), target.Pointer, scope, semantics), target.Type, false);
     }
 
     Value LowerAtomicStore(Call call)
     {
-        var target = ResolveAccess(call.Args[0]);
-        var value = LowerExpr(call.Args[1]);
-        var (scope, semantics) = AtomicExtendedScope(call.Args[2], call.Args[3], call.Args[4], call.Name, isStore: true);
+        Access target = ResolveAccess(call.Args[0]);
+        Value value = LowerExpr(call.Args[1]);
+        (uint scope, uint semantics) = AtomicExtendedScope(call.Args[2], call.Args[3], call.Args[4], call.Name, isStore: true);
         _code.Add(InstrPool.Rent(Op.AtomicStore).Add(target.Pointer, scope, semantics, value.Id));
         return new Value(0, Types.Void, false);
     }
 
     Value LowerAtomic(Call call)
     {
-        var target = ResolveAccess(call.Args[0]);
+        Access target = ResolveAccess(call.Args[0]);
         // Vulkan permits atomics only on Uniform/StorageBuffer/Workgroup/Image/PhysicalStorageBuffer/
         // TaskPayloadWorkgroupEXT storage; a function-local or private target is invalid.
         if (target.Storage is StorageClass.Function or StorageClass.Private)
             throw new GlslParseException($"'{call.Name}' requires a buffer or shared variable, not a local one");
         RejectReadOnlyWrite(target.Root);
         // The data argument converts to the memory's type (atomicAdd(uint, 1) adds a uint 1).
-        var value = LowerArgAs(call.Args[1], target.Type, $"argument 2 of '{call.Name}'");
-        var scalar = BaseScalar(target.Type);
+        Value value = LowerArgAs(call.Args[1], target.Type, $"argument 2 of '{call.Name}'");
+        Scalar scalar = BaseScalar(target.Type);
         bool unsigned = IsUnsigned(scalar);
         if (Is64Bit(scalar)) _m.AddCapability(Capability.Int64Atomics);
         Op op = IsFloating(scalar) ? FloatAtomicOp(call.Name, scalar) : call.Name switch
@@ -6855,9 +6858,9 @@ public sealed partial class Lowerer
 
     Value LowerAtomicCompSwap(Call call)
     {
-        var target = ResolveAccess(call.Args[0]);
-        var compare = LowerArgAs(call.Args[1], target.Type, "argument 2 of 'atomicCompSwap'");
-        var data = LowerArgAs(call.Args[2], target.Type, "argument 3 of 'atomicCompSwap'");
+        Access target = ResolveAccess(call.Args[0]);
+        Value compare = LowerArgAs(call.Args[1], target.Type, "argument 2 of 'atomicCompSwap'");
+        Value data = LowerArgAs(call.Args[2], target.Type, "argument 3 of 'atomicCompSwap'");
         uint scope, eqSem, unSem;
         if (call.Args.Count >= 8)
         {
@@ -6909,8 +6912,8 @@ public sealed partial class Lowerer
         if (image.Multisampled)   // imageLoad(img, coord, sample): the sample index is a Sample image operand
         {
             _m.AddCapability(Capability.StorageImageMultisample);
-            var (msOp, msType) = SampleForm(Op.ImageRead, SpvType(texel), texel);
-            var msRead = InstrPool.Rent(msOp, msType, _m.AllocId()).Add(args[0].Id, args[1].Id);
+            (Op msOp, uint msType) = SampleForm(Op.ImageRead, SpvType(texel), texel);
+            Instruction msRead = InstrPool.Rent(msOp, msType, _m.AllocId()).Add(args[0].Id, args[1].Id);
             if (ImageMemOperands(mem, store: false) is (uint msMask, uint msScope))
                 msRead.Add((uint)ImageOperands.Sample | msMask).Add(args[2].Id, msScope);
             else msRead.Add((uint)ImageOperands.Sample).Add(args[2].Id);
@@ -6919,12 +6922,12 @@ public sealed partial class Lowerer
         }
         if (ImageMemOperands(mem, store: false) is (uint mask, uint scope))
         {
-            var (memOp, memType) = SampleForm(Op.ImageRead, SpvType(texel), texel);
-            var read = InstrPool.Rent(memOp, memType, _m.AllocId()).Add(args[0].Id, args[1].Id).Add(mask, scope);
+            (Op memOp, uint memType) = SampleForm(Op.ImageRead, SpvType(texel), texel);
+            Instruction read = InstrPool.Rent(memOp, memType, _m.AllocId()).Add(args[0].Id, args[1].Id).Add(mask, scope);
             _code.Add(read);
             return new Value(read.ResultId, texel, false);
         }
-        var (readOp, readType) = SampleForm(Op.ImageRead, SpvType(texel), texel);
+        (Op readOp, uint readType) = SampleForm(Op.ImageRead, SpvType(texel), texel);
         return new Value(Emit(readOp, readType, args[0].Id, args[1].Id), texel, false);
     }
 
@@ -6951,14 +6954,14 @@ public sealed partial class Lowerer
         if (image.Multisampled)   // imageStore(img, coord, sample, texel): texel, then the Sample operand
         {
             _m.AddCapability(Capability.StorageImageMultisample);
-            var msWrite = InstrPool.Rent(Op.ImageWrite).Add(args[0].Id, args[1].Id, args[3].Id);
+            Instruction msWrite = InstrPool.Rent(Op.ImageWrite).Add(args[0].Id, args[1].Id, args[3].Id);
             if (ImageMemOperands(mem, store: true) is (uint msMask, uint msScope))
                 msWrite.Add((uint)ImageOperands.Sample | msMask).Add(args[2].Id, msScope);
             else msWrite.Add((uint)ImageOperands.Sample).Add(args[2].Id);
             _code.Add(msWrite);
             return new Value(0, Types.Void, false);
         }
-        var write = InstrPool.Rent(Op.ImageWrite).Add(args[0].Id, args[1].Id, args[2].Id);
+        Instruction write = InstrPool.Rent(Op.ImageWrite).Add(args[0].Id, args[1].Id, args[2].Id);
         if (ImageMemOperands(mem, store: true) is (uint mask, uint scope)) write.Add(mask, scope);
         _code.Add(write);
         return new Value(0, Types.Void, false);
@@ -6988,9 +6991,9 @@ public sealed partial class Lowerer
         // A single CONSTANT offset (ConstOffset) is a base feature; a dynamic Offset or the ConstOffsets
         // form needs the extended-gather capability.
         if (offsetKind is not ImageOperands.ConstOffset) _m.AddCapability(Capability.ImageGatherExtended);
-        var result = SampleResult((SamplerType)args[0].Type);
+        VectorType result = SampleResult((SamplerType)args[0].Type);
         uint component = args.Length > 3 ? args[3].Id : _m.ConstantInt(SpvType(Types.Int), 0);
-        var (gatherOp, gatherType) = SampleForm(Op.ImageGather, SpvType(result), result);
+        (Op gatherOp, uint gatherType) = SampleForm(Op.ImageGather, SpvType(result), result);
         _code.Add(InstrPool.Rent(gatherOp, gatherType, _m.AllocId())
             .Add(args[0].Id, args[1].Id, component).Add((uint)offsetKind).Add(args[2].Id));
         return new Value(_code[^1].ResultId, result, false);
@@ -7000,7 +7003,7 @@ public sealed partial class Lowerer
     Value GatherDref(Value sampler, Value coord, Value refZ, ImageOperands offsetKind, Value offset)
     {
         if (offsetKind is not ImageOperands.ConstOffset) _m.AddCapability(Capability.ImageGatherExtended);
-        var (drefOp, drefType) = SampleForm(Op.ImageDrefGather, SpvType(Vec4), Vec4);
+        (Op drefOp, uint drefType) = SampleForm(Op.ImageDrefGather, SpvType(Vec4), Vec4);
         _code.Add(InstrPool.Rent(drefOp, drefType, _m.AllocId())
             .Add(sampler.Id, coord.Id, refZ.Id).Add((uint)offsetKind).Add(offset.Id));
         return new Value(_code[^1].ResultId, Vec4, false);
@@ -7011,21 +7014,21 @@ public sealed partial class Lowerer
     Value TextureGather(Value[] args)
     {
         var sampler = (SamplerType)args[0].Type;
-        var result = SampleResult(sampler);
+        VectorType result = SampleResult(sampler);
         if (sampler.Shadow)
         {
-            var (drefOp, drefType) = SampleForm(Op.ImageDrefGather, SpvType(result), result);
+            (Op drefOp, uint drefType) = SampleForm(Op.ImageDrefGather, SpvType(result), result);
             return new Value(Emit(drefOp, drefType, args[0].Id, args[1].Id, args[2].Id), result, false);
         }
         uint component = args.Length > 2 ? args[2].Id : _m.ConstantInt(SpvType(Types.Int), 0);
-        var (gatherOp, gatherType) = SampleForm(Op.ImageGather, SpvType(result), result);
+        (Op gatherOp, uint gatherType) = SampleForm(Op.ImageGather, SpvType(result), result);
         return new Value(Emit(gatherOp, gatherType, args[0].Id, args[1].Id, component), result, false);
     }
 
     // Image atomics operate on a texel pointer obtained from the image variable, not a loaded value.
     Value LowerImageAtomic(Call call)
     {
-        var image = ResolveAccess(call.Args[0]);
+        Access image = ResolveAccess(call.Args[0]);
         var img = (ImageType)image.Type;
         // The formal image parameter carries neither readonly nor writeonly, so an argument cannot drop one.
         if (_writeOnlyVars.Contains(image.Root))
@@ -7050,15 +7053,15 @@ public sealed partial class Lowerer
         for (int i = 1; i < lowered.Length; i++)
             lowered[i] = i > 1 && RepeatsPreviousSymbol(call, i, Target) ? lowered[i - 1]
                 : Target(i) is { } t ? LowerArgAs(call.Args[i], t, $"argument {i + 1} of '{call.Name}'") : LowerExpr(call.Args[i]);
-        var coord = lowered[1];
-        var operands = lowered[2..];
+        Value coord = lowered[1];
+        Value[] operands = lowered[2..];
         int next = 0;
         // A multisampled image takes its sample index as the texel pointer's Sample operand; otherwise it is 0.
         uint sample = img.Multisampled ? operands[next++].Id : _m.ConstantInt(SpvType(Types.UInt), 0);
         var element = new ScalarType(img.Sampled);
         bool isStore = call.Name == "imageAtomicStore";
         // imageAtomicStore returns nothing, so its texel pointer takes the stored value's type.
-        var pointee = isStore ? operands[next].Type : element;
+        GlslType pointee = isStore ? operands[next].Type : element;
         uint texelPtr = Emit(Op.ImageTexelPointer, _m.TypePointer(StorageClass.Image, SpvType(pointee)), image.Pointer, coord.Id, sample);
         if (_nonUniformIds.Contains(image.Pointer)) _m.Decorate(texelPtr, Decoration.NonUniform);
         if (Is64Bit(img.Sampled)) _m.AddCapability(Capability.Int64Atomics);
@@ -7082,7 +7085,7 @@ public sealed partial class Lowerer
         // glslang createAtomicOperation: the default scope is Device (QueueFamily under the Vulkan memory model)
         // and the default semantics Relaxed (Volatile for a volatile image under the model); trailing
         // scope/storage-semantics/semantics arguments replace them, the two semantics masks OR'd into one uint.
-        var data = call.Args.Skip(2).ToArray();
+        Expr[] data = call.Args.Skip(2).ToArray();
         uint scope = _m.ConstantInt(SpvType(Types.UInt), _vmmPragma ? ScopeQueueFamily : ScopeDevice);
         int defaultSem = _vmmPragma && ImageMem(call.Args[0]) == MemQual.Volatile ? 0x8000 : 0;
         uint semantics = _m.ConstantInt(SpvType(Types.UInt), (uint)defaultSem), semantics2 = semantics;
@@ -7146,10 +7149,10 @@ public sealed partial class Lowerer
         {
             case "modf":
             {
-                // glslang uses the ModfStruct form: a {fractional, integer} struct whose integer part is
-                // stored to the out parameter and whose fractional part is the return value.
-                var x = LowerExpr(call.Args[0]);
-                var outArg = ResolveAccess(call.Args[1]);
+                    // glslang uses the ModfStruct form: a {fractional, integer} struct whose integer part is
+                    // stored to the out parameter and whose fractional part is the return value.
+                    Value x = LowerExpr(call.Args[0]);
+                    Access outArg = ResolveAccess(call.Args[1]);
                 uint structType = ResTypeStruct(x.Type);
                 uint s = Emit(Op.ExtInst, structType, set, (uint)GLSLstd450.ModfStruct, x.Id);
                 Store(outArg.Pointer, Emit(Op.CompositeExtract, SpvType(outArg.Type), s, 1));
@@ -7157,10 +7160,10 @@ public sealed partial class Lowerer
             }
             case "frexp":
             {
-                // glslang uses the FrexpStruct form: a {significand, exponent} struct whose exponent
-                // is extracted to the out parameter and whose significand is the return value.
-                var x = LowerExpr(call.Args[0]);
-                var outArg = ResolveAccess(call.Args[1]);
+                    // glslang uses the FrexpStruct form: a {significand, exponent} struct whose exponent
+                    // is extracted to the out parameter and whose significand is the return value.
+                    Value x = LowerExpr(call.Args[0]);
+                    Access outArg = ResolveAccess(call.Args[1]);
                 uint structType = ResTypeStruct2(x.Type, outArg.Type);
                 uint s = Emit(Op.ExtInst, structType, set, (uint)GLSLstd450.FrexpStruct, x.Id);
                 Store(outArg.Pointer, Emit(Op.CompositeExtract, SpvType(outArg.Type), s, 1));
@@ -7168,9 +7171,9 @@ public sealed partial class Lowerer
             }
             case "uaddCarry" or "usubBorrow":
             {
-                var x = LowerExpr(call.Args[0]);
-                var y = LowerExpr(call.Args[1]);
-                var carry = ResolveAccess(call.Args[2]);
+                    Value x = LowerExpr(call.Args[0]);
+                    Value y = LowerExpr(call.Args[1]);
+                    Access carry = ResolveAccess(call.Args[2]);
                 uint structType = ResTypeStruct(x.Type);
                 uint s = Emit(call.Name == "uaddCarry" ? Op.IAddCarry : Op.ISubBorrow, structType, x.Id, y.Id);
                 Store(carry.Pointer, Emit(Op.CompositeExtract, SpvType(x.Type), s, 1));   // member 1 is the carry/borrow
@@ -7178,10 +7181,10 @@ public sealed partial class Lowerer
             }
             default:   // umulExtended / imulExtended(x, y, out msb, out lsb) -> void
             {
-                var x = LowerExpr(call.Args[0]);
-                var y = LowerExpr(call.Args[1]);
-                var msb = ResolveAccess(call.Args[2]);
-                var lsb = ResolveAccess(call.Args[3]);
+                    Value x = LowerExpr(call.Args[0]);
+                    Value y = LowerExpr(call.Args[1]);
+                    Access msb = ResolveAccess(call.Args[2]);
+                    Access lsb = ResolveAccess(call.Args[3]);
                 uint structType = ResTypeStruct(x.Type);
                 uint s = Emit(call.Name == "umulExtended" ? Op.UMulExtended : Op.SMulExtended, structType, x.Id, y.Id);
                 Store(lsb.Pointer, Emit(Op.CompositeExtract, SpvType(x.Type), s, 0));   // member 0 = low bits
@@ -7195,10 +7198,10 @@ public sealed partial class Lowerer
     Value LowerInterpolate(Call call)
     {
         _m.AddCapability(Capability.InterpolationFunction);
-        var interpolant = ResolveAccess(call.Args[0]);
+        Access interpolant = ResolveAccess(call.Args[0]);
         if (interpolant.Storage != StorageClass.Input)
             throw new GlslParseException($"'{call.Name}' : first argument must be an interpolant, or interpolant-array element");
-        var op = call.Name switch
+        GLSLstd450 op = call.Name switch
         {
             "interpolateAtCentroid" => GLSLstd450.InterpolateAtCentroid,
             "interpolateAtSample" => GLSLstd450.InterpolateAtSample,
@@ -7211,7 +7214,7 @@ public sealed partial class Lowerer
         // interpolateAtOffset takes a vec2 offset, interpolateAtSample an int sample (an ivec2 offset
         // converts like any other built-in argument).
         uint[] extra = [.. call.Args.Skip(1).Select(a => (op == GLSLstd450.InterpolateAtOffset ? LowerArgAs(a, Vec2, $"argument 2 of '{call.Name}'") : LowerExpr(a)).Id)];
-        var instr = InstrPool.Rent(Op.ExtInst, typeId, _m.AllocId()).Add(set).Add((uint)op).Add(interpolant.Pointer).Add(extra);
+        Instruction instr = InstrPool.Rent(Op.ExtInst, typeId, _m.AllocId()).Add(set).Add((uint)op).Add(interpolant.Pointer).Add(extra);
         _code.Add(instr);
         return new Value(instr.ResultId, interpolant.Type, false);
     }
@@ -7220,7 +7223,7 @@ public sealed partial class Lowerer
     {
         _m.AddCapability(Capability.ImageQuery);
         var img = (ImageType)args[0].Type;
-        var resultType = IntCoordType(img.Dim, img.Arrayed);
+        GlslType resultType = IntCoordType(img.Dim, img.Arrayed);
         return new Value(Emit(Op.ImageQuerySize, SpvType(resultType), args[0].Id), resultType, false);
     }
 
@@ -7295,7 +7298,7 @@ public sealed partial class Lowerer
     // The conservative-depth mode from a `layout(depth_*) out float gl_FragDepth;` redeclaration.
     static ExecutionMode? DepthConditionOf(Qualifiers q)
     {
-        foreach (var item in q.Layout)
+        foreach (LayoutItem item in q.Layout)
             switch (item.Name)
             {
                 case "depth_greater": return ExecutionMode.DepthGreater;
@@ -7325,7 +7328,7 @@ public sealed partial class Lowerer
     // The AMD stencil mode from a `layout(stencil_ref_*_amd) out int gl_FragStencilRefARB;` redeclaration.
     static ExecutionMode? StencilConditionOf(Qualifiers q)
     {
-        foreach (var item in q.Layout)
+        foreach (LayoutItem item in q.Layout)
             switch (item.Name)
             {
                 case "stencil_ref_unchanged_front_amd": return ExecutionMode.StencilRefUnchangedFrontAMD;
@@ -7370,8 +7373,8 @@ public sealed partial class Lowerer
 
     ImageFormat ResolveImageFormat(Qualifiers q)
     {
-        foreach (var item in q.Layout)
-            if (ImageFormats.TryGetValue(item.Name, out var format))
+        foreach (LayoutItem item in q.Layout)
+            if (ImageFormats.TryGetValue(item.Name, out ImageFormat format))
             {
                 if (format is ImageFormat.R64ui or ImageFormat.R64i)
                 {
@@ -7385,14 +7388,14 @@ public sealed partial class Lowerer
     }
 
     // Component-wise: broadcast scalar args to the widest (vector) type, then emit.
-    Value Ext(GLSLstd450 op, Value[] args) { var t = Widest(args); return ExtFixed(op, t, Broadcast(args, t)); }
-    Value Core(Op op, Value[] args) { var t = Widest(args); var b = Broadcast(args, t); return Relaxed(new Value(Emit(op, SpvType(t), [.. b.Select(a => a.Id)]), t, false), args); }
+    Value Ext(GLSLstd450 op, Value[] args) { GlslType t = Widest(args); return ExtFixed(op, t, Broadcast(args, t)); }
+    Value Core(Op op, Value[] args) { GlslType t = Widest(args); Value[] b = Broadcast(args, t); return Relaxed(new Value(Emit(op, SpvType(t), [.. b.Select(a => a.Id)]), t, false), args); }
 
     Value ExtFixed(GLSLstd450 op, GlslType type, Value[] args)
     {
         uint set = _m.ImportExtInstSet("GLSL.std.450");
-        var instr = InstrPool.Rent(Op.ExtInst, SpvType(type), _m.AllocId()).Add(set).Add((uint)op);
-        foreach (var a in args) instr.Add(a.Id);
+        Instruction instr = InstrPool.Rent(Op.ExtInst, SpvType(type), _m.AllocId()).Add(set).Add((uint)op);
+        foreach (Value a in args) instr.Add(a.Id);
         _code.Add(instr);
         return Relaxed(new Value(instr.ResultId, type, false), args);
     }
@@ -7402,7 +7405,7 @@ public sealed partial class Lowerer
 
     static GlslType Widest(Value[] args)
     {
-        foreach (var a in args) if (a.Type is VectorType) return a.Type;
+        foreach (Value a in args) if (a.Type is VectorType) return a.Type;
         return args[0].Type;
     }
 
@@ -7430,7 +7433,7 @@ public sealed partial class Lowerer
         if (assign.Left is Member sw && IsSwizzleName(sw.Name) && InferType(sw.Target) is VectorType swVec)
         {
             ValidateSwizzle(swVec, sw.Name, writeMask: true);
-            var swTarget = BuildAccess(sw.Target);
+            Chain swTarget = BuildAccess(sw.Target);
             RejectInputWrite(swTarget.Storage);
             RejectReadOnlyWrite(swTarget);
             // A block's bool vector is stored as a uint vector: glslang resolves the declared bvec type with
@@ -7438,26 +7441,26 @@ public sealed partial class Lowerer
             if (swTarget.Layout is not null && swVec.Component == Scalar.Bool && swTarget.Type is VectorType { Component: Scalar.UInt })
             {
                 SpvType(swVec);
-                var rhs = LowerExpr(assign.Right);
-                var storedRhs = ToStored(rhs, rhs.Type is VectorType rv ? new VectorType(Scalar.UInt, rv.Size) : Types.UInt);
+                Value rhs = LowerExpr(assign.Right);
+                Value storedRhs = ToStored(rhs, rhs.Type is VectorType rv ? new VectorType(Scalar.UInt, rv.Size) : Types.UInt);
                 LowerSwizzleAssign(sw, swTarget, storedRhs);
                 return rhs;
             }
-            var swValue = LowerCoerced(assign.Right, InferType(sw), "assignment");
+            Value swValue = LowerCoerced(assign.Right, InferType(sw), "assignment");
             AssignPrecision(swTarget with { Type = InferType(sw) }, swValue);
             return LowerSwizzleAssign(sw, swTarget, swValue);
         }
         // glslang builds the target's access chain (creating its index constants), evaluates the
         // right-hand side, and only then emits the OpAccessChain and OpStore.
-        var lhs = BuildAccess(assign.Left);
+        Chain lhs = BuildAccess(assign.Left);
         RejectInputWrite(lhs.Storage);
         RejectReadOnlyWrite(lhs);
         if (IsOpaque(lhs.Type))
             throw new GlslParseException($"'{Types.Name(lhs.Type)}' is an opaque type and cannot be assigned");
         // A block's chain addresses the STORED type, so a bool member is a uint there. The right-hand
         // side still converts to what was declared, and only then to what the block holds.
-        var declared = lhs.Layout is null ? lhs.Type : InferType(assign.Left);
-        var value = LowerCoerced(assign.Right, declared, "assignment");
+        GlslType declared = lhs.Layout is null ? lhs.Type : InferType(assign.Left);
+        Value value = LowerCoerced(assign.Right, declared, "assignment");
         AssignPrecision(lhs, value);
         MultiTypeStore(lhs, ToStored(value, lhs.Type));
         return value;
@@ -7494,10 +7497,10 @@ public sealed partial class Lowerer
         // A full (possibly reordered) swizzle store loads the vector, shuffles the rhs into place, stores.
         uint whole = Collapse(Swizzled(chain));
         uint loaded = Emit(Op.Load, SpvType(vecType), whole);
-        var pick = new uint[vecType.Size];
+        uint[] pick = new uint[vecType.Size];
         for (int j = 0; j < indices.Length; j++) pick[indices[j]] = (uint)(vecType.Size + j);
-        var shuffle = InstrPool.Rent(Op.VectorShuffle, SpvType(vecType), _m.AllocId()).Add(loaded, rhs.Id);
-        foreach (var idx in pick) shuffle.Add(idx);
+        Instruction shuffle = InstrPool.Rent(Op.VectorShuffle, SpvType(vecType), _m.AllocId()).Add(loaded, rhs.Id);
+        foreach (uint idx in pick) shuffle.Add(idx);
         _code.Add(shuffle);
         Store(whole, shuffle.ResultId);
         return rhs;
@@ -7521,10 +7524,10 @@ public sealed partial class Lowerer
             // array subscript), evaluates the right-hand side, then load-modify-stores through that same
             // chain: the base index is not reloaded for the write-back, and the RHS is computed before
             // the current value is loaded.
-            var baseChain = BuildAccess(sw.Target);
+            Chain baseChain = BuildAccess(sw.Target);
             RejectInputWrite(baseChain.Storage);
             RejectReadOnlyWrite(baseChain);
-            var rhsVal = LowerCompoundRhs(bin, vecType.Component);
+            Value rhsVal = LowerCompoundRhs(bin, vecType.Component);
             int[] indices = [.. sw.Name.Select(SwizzleIndex)];
             var component = new ScalarType(vecType.Component);
 
@@ -7532,7 +7535,7 @@ public sealed partial class Lowerer
             // so this is an ordinary load-modify-store with no shuffling at all.
             if (IsIdentitySwizzle(indices, vecType))
             {
-                var whole = ApplyBinary(bin.Op[..^1], Load(vecType, Collapse(baseChain), baseChain.Layout), rhsVal, bin);
+                Value whole = ApplyBinary(bin.Op[..^1], Load(vecType, Collapse(baseChain), baseChain.Layout), rhsVal, bin);
                 Store(Collapse(baseChain), whole.Id);
                 return whole;
             }
@@ -7553,13 +7556,13 @@ public sealed partial class Lowerer
                 var swType = new VectorType(vecType.Component, indices.Length);
                 uint swTypeId = SpvType(swType);
                 loaded = Emit(Op.Load, SpvType(vecType), Collapse(baseChain));
-                var shuffle = InstrPool.Rent(Op.VectorShuffle, swTypeId, _m.AllocId()).Add(loaded, loaded);
-                foreach (var k in indices) shuffle.Add((uint)k);
+                Instruction shuffle = InstrPool.Rent(Op.VectorShuffle, swTypeId, _m.AllocId()).Add(loaded, loaded);
+                foreach (int k in indices) shuffle.Add((uint)k);
                 _code.Add(shuffle);
                 curr = new Value(shuffle.ResultId, swType, false);
             }
 
-            var updated = ApplyBinary(bin.Op[..^1], curr, rhsVal, bin);
+            Value updated = ApplyBinary(bin.Op[..^1], curr, rhsVal, bin);
 
             if (indices.Length < vecType.Size)
                 for (int k = 0; k < indices.Length; k++)
@@ -7571,10 +7574,10 @@ public sealed partial class Lowerer
                 }
             else
             {
-                var pick = new uint[vecType.Size];
+                uint[] pick = new uint[vecType.Size];
                 for (int j = 0; j < indices.Length; j++) pick[indices[j]] = (uint)(vecType.Size + j);
-                var back = InstrPool.Rent(Op.VectorShuffle, SpvType(vecType), _m.AllocId()).Add(loaded, updated.Id);
-                foreach (var idx in pick) back.Add(idx);
+                Instruction back = InstrPool.Rent(Op.VectorShuffle, SpvType(vecType), _m.AllocId()).Add(loaded, updated.Id);
+                foreach (uint idx in pick) back.Add(idx);
                 _code.Add(back);
                 Store(Collapse(baseChain), back.ResultId);
             }
@@ -7584,18 +7587,18 @@ public sealed partial class Lowerer
         // right-hand side, but emits the OpAccessChain itself only at the load and store. So for an
         // indexed target like `a[i] += a[j]` the right side is computed between the index load and the
         // access chain, and the chain is collapsed separately for the load and the store.
-        var chain = BuildAccess(bin.Left);
+        Chain chain = BuildAccess(bin.Left);
         RejectInputWrite(chain.Storage);
         RejectReadOnlyWrite(chain);
-        var rhs = LowerCompoundRhs(bin, BaseScalar(chain.Type));
+        Value rhs = LowerCompoundRhs(bin, BaseScalar(chain.Type));
         // A compound assignment L op= R must yield L's type: a scalar target cannot take a vector or matrix
         // right-hand side (that would produce a vector/matrix, which is not assignable back to the scalar).
         if (chain.Type is ScalarType && rhs.Type is VectorType or MatrixType)
             throw new GlslParseException($"cannot assign the result of '{bin.Op}' with '{Types.Name(rhs.Type)}' to '{Types.Name(chain.Type)}'");
         // glslang evaluates the right side, INCLUDING its implicit conversion, before loading the current
         // value, so `f += i` converts i to float ahead of the load. (Shifts keep the amount's own type.)
-        var current = Load(chain.Type, Collapse(chain), chain.Layout);
-        var result = ApplyBinary(bin.Op[..^1], current, rhs, bin);
+        Value current = Load(chain.Type, Collapse(chain), chain.Layout);
+        Value result = ApplyBinary(bin.Op[..^1], current, rhs, bin);
         Store(Collapse(chain), result.Id);
         return result;
     }
@@ -7606,7 +7609,7 @@ public sealed partial class Lowerer
     Value LowerCompoundRhs(Binary bin, Scalar target)
     {
         if (bin.Op is "<<=" or ">>=") return LowerExpr(bin.Right);
-        var rt = InferType(bin.Right);
+        GlslType rt = InferType(bin.Right);
         return rt is ScalarType or VectorType or MatrixType && BaseScalar(rt) != target && CanPromote(BaseScalar(rt), target)
             ? LowerArgAs(bin.Right, WithBase(rt, target), $"the right side of '{bin.Op}'")
             : LowerExpr(bin.Right);
@@ -7639,7 +7642,7 @@ public sealed partial class Lowerer
         _ when InferType(e) is not ScalarType => true,
         // A bare block member is not a leaf but IS an index into the block, which is a trivial
         // operation as long as the block itself is a trivial symbol to read.
-        Ident id when _blockMembers.TryGetValue(id.Name, out var bm) => bm.TrivialSymbol,
+        Ident id when _blockMembers.TryGetValue(id.Name, out BlockMember bm) => bm.TrivialSymbol,
         Ident or Literal => IsTrivialLeaf(e),
         Unary { Op: "!" } u => IsTrivialLeaf(u.Operand),
         Binary b when b.Op is "==" or "!=" or "<" or ">" or "<=" or ">=" or "^^" => IsTrivialLeaf(b.Left) && IsTrivialLeaf(b.Right),
@@ -7660,7 +7663,7 @@ public sealed partial class Lowerer
             return new Value(Emit(isAnd ? Op.LogicalAnd : Op.LogicalOr, SpvType(Types.Bool), l, r), Types.Bool, false);
         }
         uint boolType = SpvType(Types.Bool);   // glslang's createShortCircuit makes the bool type first
-        var left = LowerExpr(b.Left);
+        Value left = LowerExpr(b.Left);
         uint leftBlock = _currentBlock;
         // Both branch to the "then" edge to evaluate the right operand; `&&` does so when the left is
         // true, `||` when it is false. glslang models `||` by branching on an explicit OpLogicalNot of
@@ -7672,7 +7675,7 @@ public sealed partial class Lowerer
         BranchConditional(cond, rhsBlock, merge);
 
         Label(rhsBlock);
-        var right = LowerExpr(b.Right);
+        Value right = LowerExpr(b.Right);
         uint rhsEnd = _currentBlock;
         Branch(merge);
 
@@ -7721,7 +7724,7 @@ public sealed partial class Lowerer
         uint typeId = SpvType(target);
         uint srcCol = SpvType(new VectorType(src.Component, src.Rows));
         uint dstCol = SpvType(new VectorType(target.Component, target.Rows));
-        var cols = new uint[target.Columns];
+        uint[] cols = new uint[target.Columns];
         for (int c = 0; c < cols.Length; c++)
             cols[c] = Emit(Op.FConvert, dstCol, Emit(Op.CompositeExtract, srcCol, v.Id, (uint)c));
         return Relaxed(new Value(Emit(Op.CompositeConstruct, typeId, cols), target, false), v);
@@ -7739,7 +7742,7 @@ public sealed partial class Lowerer
     Expr ResolveInitializer(Expr e, GlslType target)
     {
         if (e is not Call c) return e;
-        var args = c.Args;
+        IReadOnlyList<Expr> args = c.Args;
         if (InitMemberTypes(target, args.Count) is { } members)
             args = [.. args.Select((a, i) => ResolveInitializer(a, members[i]))];
         // A brace-produced array constructor carries no dimensions (only the explicit `T[N](..)` syntax
@@ -7816,7 +7819,7 @@ public sealed partial class Lowerer
 
     Value CoerceOrThrow(Value v, GlslType target, string context)
     {
-        var c = Coerce(v, target);
+        Value c = Coerce(v, target);
         if (!c.Type.Equals(target))
             throw new GlslParseException($"cannot convert '{Types.Name(v.Type)}' to '{Types.Name(target)}' for {context}");
         return c;
@@ -7891,13 +7894,13 @@ public sealed partial class Lowerer
         if (result.IsConstant || !CarriesPrecision(result.Type)) return result;
         if (maxRule && RelaxedResult(operands))
         {
-            foreach (var o in operands) if (IsNone(o)) PropagateRelaxed(o);
+            foreach (Value o in operands) if (IsNone(o)) PropagateRelaxed(o);
             foreach (uint id in decorate) Relax(id);
             return result with { Relaxed = true };
         }
         if (maxRule && operands.Any(IsHigh))
         {
-            foreach (var o in operands) if (IsNone(o)) PropagateHigh(o);
+            foreach (Value o in operands) if (IsNone(o)) PropagateHigh(o);
             return result;
         }
         return NoneNode(result, decorate, operands);
@@ -7913,7 +7916,7 @@ public sealed partial class Lowerer
     void PropagateRelaxed(Value v) { if (!v.Relaxed) PropagateRelaxedId(v.Id); }
     void PropagateRelaxedId(uint id)
     {
-        if (!_nonePrecision.Remove(id, out var node)) return;
+        if (!_nonePrecision.Remove(id, out (uint[] Decorate, uint[] Children, uint Var) node)) return;
         foreach (uint d in node.Decorate) Relax(d);
         // The variable a built-in's first access created takes that access's precision; later reads keep their own.
         if (node.Var != 0) _m.Decorate(node.Var, Decoration.RelaxedPrecision);
@@ -7922,7 +7925,7 @@ public sealed partial class Lowerer
     void PropagateHigh(Value v) { if (!v.Relaxed) PropagateHighId(v.Id); }
     void PropagateHighId(uint id)
     {
-        if (!_nonePrecision.Remove(id, out var node)) return;
+        if (!_nonePrecision.Remove(id, out (uint[] Decorate, uint[] Children, uint Var) node)) return;
         foreach (uint c in node.Children) PropagateHighId(c);
     }
 
@@ -7954,7 +7957,7 @@ public sealed partial class Lowerer
     {
         if (loaded.Relaxed || !_noneVars.Contains(var)) return loaded;
         NoneNode(loaded, [loaded.Id], [], _freshVars.Remove(var) ? var : 0);
-        if (indices is not null && _nonePrecision.TryGetValue(loaded.Id, out var node))
+        if (indices is not null && _nonePrecision.TryGetValue(loaded.Id, out (uint[] Decorate, uint[] Children, uint Var) node))
             _nonePrecision[loaded.Id] = node with { Children = [.. node.Children, .. indices] };
         return loaded;
     }
@@ -7988,7 +7991,7 @@ public sealed partial class Lowerer
         // the shift amount to the base type); everything else may need promotion to a common type.
         if (op is not ("&&" or "||" or "^^" or "<<" or ">>"))
             (l, r) = Promote(l, r);
-        var result = BinaryResult(op, l, r);
+        Value result = BinaryResult(op, l, r);
         // A `precise` computation must not be re-associated or fused (e.g. into a multiply-add).
         if (NoContraction(node, result.Type))
             _m.Decorate(result.Id, Decoration.NoContraction);
@@ -8109,7 +8112,7 @@ public sealed partial class Lowerer
                 long offset = unchecked(c.I * stride);
                 return Materialize(new CScalar(Scalar.UInt64, offset, offset)).Id;
             }
-            var countValue = LowerExpr(count);
+            Value countValue = LowerExpr(count);
             if (countValue.Type is not ScalarType || !IsIntegral(BaseScalar(countValue.Type)))
                 throw new GlslParseException($"operator '{op}' cannot be applied to '{Types.Name(brt)}' and '{Types.Name(countValue.Type)}'");
             uint i64 = SpvType(Types.Int64);
@@ -8146,12 +8149,12 @@ public sealed partial class Lowerer
 
     int BufferRefStride(string name)
     {
-        var st = _bufferRefs[name];
-        var layout = _bufferRefLayout[name];
+        StructType st = _bufferRefs[name];
+        BlockLayout layout = _bufferRefLayout[name];
         int size = 0;
         for (int i = 0; i < st.Fields.Count; i++)
         {
-            bool rowMajor = _bufferRefRowMajor.TryGetValue(name, out var rows) && i < rows.Length && rows[i];
+            bool rowMajor = _bufferRefRowMajor.TryGetValue(name, out bool[]? rows) && i < rows.Length && rows[i];
             size = RoundUp(size, Align(st.Fields[i].Type, layout, rowMajor)) + Size(st.Fields[i].Type, layout, rowMajor);
         }
         int align = _bufferRefAlign.GetValueOrDefault(name, 16);
@@ -8175,7 +8178,7 @@ public sealed partial class Lowerer
         var column = new VectorType(mt.Component, mt.Rows);
         uint colType = SpvType(column);
         uint smear = l.Type is ScalarType ? Splat(l, column).Id : r.Type is ScalarType ? Splat(r, column).Id : 0;
-        var columns = new uint[mt.Columns];
+        uint[] columns = new uint[mt.Columns];
         for (int c = 0; c < mt.Columns; c++)
         {
             uint lc = l.Type is MatrixType ? Emit(Op.CompositeExtract, colType, l.Id, (uint)c) : smear;
@@ -8266,7 +8269,7 @@ public sealed partial class Lowerer
     {
         if (u.Op is "++" or "--") return LowerIncDec(u);
         if (u.Op is "+" or "-" && u.Operand is Literal lit) return LowerSignedLiteral(u.Op, lit);
-        var v = LowerExpr(u.Operand);
+        Value v = LowerExpr(u.Operand);
         static bool IsIntegral(Scalar s) => s is Scalar.Int or Scalar.UInt or Scalar.Int64 or Scalar.UInt64 or Scalar.UInt8 or Scalar.Int8 or Scalar.Int16 or Scalar.UInt16;
         GlslParseException Wrong() => new($"wrong operand type for unary '{u.Op}': '{Types.Name(v.Type)}'");
         return u.Op switch
@@ -8295,7 +8298,7 @@ public sealed partial class Lowerer
     Value NegateMatrix(Value v, MatrixType mt)
     {
         var column = new VectorType(mt.Component, mt.Rows);
-        var cols = new uint[mt.Columns];
+        uint[] cols = new uint[mt.Columns];
         for (int c = 0; c < mt.Columns; c++)
         {
             uint part = Emit(Op.CompositeExtract, SpvType(column), v.Id, (uint)c);
@@ -8308,13 +8311,13 @@ public sealed partial class Lowerer
     {
         if (u.Operand is Member sw && IsSwizzleName(sw.Name) && sw.Name.Length > 1 && InferType(sw.Target) is VectorType swVec)
             return LowerSwizzleIncDec(u, sw, swVec);
-        var (pointer, type) = ResolveLValue(u.Operand);
+        (uint pointer, GlslType? type) = ResolveLValue(u.Operand);
         if (type is not (ScalarType or VectorType or MatrixType) || BaseScalar(type) == Scalar.Bool)
             throw new GlslParseException($"'{u.Op}' : wrong operand type, cannot apply to '{Types.Name(type)}'");
-        var current = Load(type, pointer);
+        Value current = Load(type, pointer);
         // glslang adds a SIGNED one to an integer of either signedness and smears it to a vector of the
         // ONE's own type, relying on OpIAdd ignoring signedness rather than matching component types.
-        var oneScalar = IsFloating(BaseScalar(type)) ? BaseScalar(type) : SignedOfWidth(IntWidth(BaseScalar(type)));
+        Scalar oneScalar = IsFloating(BaseScalar(type)) ? BaseScalar(type) : SignedOfWidth(IntWidth(BaseScalar(type)));
         uint one = IncrementOne(BaseScalar(type));
         uint id;
         // A matrix adds the one column by column (glslang's createBinaryMatrixOperation smears it first).
@@ -8338,16 +8341,16 @@ public sealed partial class Lowerer
     Value LowerSwizzleIncDec(Unary u, Member sw, VectorType vecType)
     {
         ValidateSwizzle(vecType, sw.Name, writeMask: true);
-        var baseChain = BuildAccess(sw.Target);
+        Chain baseChain = BuildAccess(sw.Target);
         RejectInputWrite(baseChain.Storage);
         RejectReadOnlyWrite(baseChain);
         int[] indices = [.. sw.Name.Select(SwizzleIndex)];
         var swType = new VectorType(vecType.Component, indices.Length);
         var component = new ScalarType(vecType.Component);
         SpvType(swType);   // the swizzle's type is in hand before the vector is loaded
-        var whole = Load(vecType, Collapse(baseChain), baseChain.Layout);
-        var current = IsIdentitySwizzle(indices, vecType) ? whole : Shuffle(whole, indices);
-        var oneScalar = IsFloating(vecType.Component) ? vecType.Component : SignedOfWidth(IntWidth(vecType.Component));
+        Value whole = Load(vecType, Collapse(baseChain), baseChain.Layout);
+        Value current = IsIdentitySwizzle(indices, vecType) ? whole : Shuffle(whole, indices);
+        Scalar oneScalar = IsFloating(vecType.Component) ? vecType.Component : SignedOfWidth(IntWidth(vecType.Component));
         uint one = IncrementOne(vecType.Component);
         one = Emit(Op.CompositeConstruct, SpvType(new VectorType(oneScalar, indices.Length)), [.. Enumerable.Repeat(one, indices.Length)]);
         uint id = Emit(ArithOp(u.Op == "++" ? "+" : "-", swType), SpvType(swType), current.Id, one);
@@ -8363,10 +8366,10 @@ public sealed partial class Lowerer
             }
         else
         {
-            var pick = new uint[vecType.Size];
+            uint[] pick = new uint[vecType.Size];
             for (int j = 0; j < indices.Length; j++) pick[indices[j]] = (uint)(vecType.Size + j);
-            var back = InstrPool.Rent(Op.VectorShuffle, SpvType(vecType), _m.AllocId()).Add(whole.Id, updated.Id);
-            foreach (var idx in pick) back.Add(idx);
+            Instruction back = InstrPool.Rent(Op.VectorShuffle, SpvType(vecType), _m.AllocId()).Add(whole.Id, updated.Id);
+            foreach (uint idx in pick) back.Add(idx);
             _code.Add(back);
             Store(Collapse(baseChain), back.ResultId);
         }
@@ -8420,12 +8423,12 @@ public sealed partial class Lowerer
 
         // The two arms must share a type; GLSL applies its usual implicit conversion to unify them
         // (e.g. `c ? 1 : 2.0` -> both float), so both edges into the OpPhi carry the same type.
-        var common = CommonType(InferType(t.Then), InferType(t.Else));
+        GlslType common = CommonType(InferType(t.Then), InferType(t.Else));
 
         // A void ternary (`c ? f() : g()`) has no value: just the selection, each arm evaluated for its effects.
         if (common is ScalarType { Kind: Scalar.Void })
         {
-            var vcond = LowerExpr(t.Cond);
+            Value vcond = LowerExpr(t.Cond);
             uint vThen = _m.AllocId(), vMerge = _m.AllocId();
             SelectionMerge(vMerge);
             int vBranchAt = _code.Count;
@@ -8457,8 +8460,8 @@ public sealed partial class Lowerer
             // A constant arm folds to the common type (glslang folds it), so `c ? 1 : 2.0` selects between
             // two float constants rather than converting the int at runtime. glslang does not decorate the
             // OpSelect result of a ternary with RelaxedPrecision, so neither do we.
-            var thenVal = LowerCoerced(t.Then, common, "ternary");
-            var elseVal = LowerCoerced(t.Else, common, "ternary");
+            Value thenVal = LowerCoerced(t.Then, common, "ternary");
+            Value elseVal = LowerCoerced(t.Else, common, "ternary");
             if (common is VectorType cv && version < SpirVVersion.V1_4)
                 condId = Splat(new Value(condId, Types.Bool, false), new VectorType(Scalar.Bool, cv.Size)).Id;
             return SelectionPrecision(new Value(Emit(Op.Select, SpvType(common), condId, thenVal.Id, elseVal.Id), common, false), thenVal, elseVal, 0);
@@ -8467,7 +8470,7 @@ public sealed partial class Lowerer
         // Otherwise only one side may be evaluated, so glslang emits control flow around a Function-local
         // temporary (created after the condition): each arm stores into it and the result is a load, and
         // it deliberately leaves the temp for later SSA passes rather than emitting an OpPhi itself.
-        var cond = LowerExpr(t.Cond);
+        Value cond = LowerExpr(t.Cond);
         uint tempPtr = _m.TypePointer(StorageClass.Function, SpvType(common));   // glslang allocates the pointer type before the temp's id
         uint temp = _m.AllocId();
         _vars.Add(InstrPool.Rent(Op.Variable, tempPtr, temp).AddEnum(StorageClass.Function));
@@ -8477,13 +8480,13 @@ public sealed partial class Lowerer
         int branchAt = _code.Count;   // the OpBranchConditional belongs here, once the else block exists
 
         Label(thenB);
-        var thenArm = LowerCoerced(t.Then, common, "ternary");
+        Value thenArm = LowerCoerced(t.Then, common, "ternary");
         MultiTypeStore(new Chain(temp, [], common, StorageClass.Function), thenArm);   // glslang multiTypeStore: a block-member arm copies logically
         Branch(merge);
 
         uint elseB = _m.AllocId();
         Label(elseB);
-        var elseArm = LowerCoerced(t.Else, common, "ternary");
+        Value elseArm = LowerCoerced(t.Else, common, "ternary");
         MultiTypeStore(new Chain(temp, [], common, StorageClass.Function), elseArm);   // glslang multiTypeStore: a block-member arm copies logically
         Branch(merge);
 
@@ -8492,7 +8495,7 @@ public sealed partial class Lowerer
         bool armsRelaxed = RelaxedResult(thenArm, elseArm) && CarriesPrecision(common);
         if (armsRelaxed) Relax(temp);
         if (keepTemp) { tempChain = new Chain(temp, [], common, StorageClass.Function); return default; }
-        var loaded = Load(common, temp);
+        Value loaded = Load(common, temp);
         return armsRelaxed ? loaded : SelectionPrecision(loaded, thenArm, elseArm, temp);
     }
 
@@ -8531,7 +8534,7 @@ public sealed partial class Lowerer
     // The const value an access path starts from, when it starts from one rather than a variable.
     CAgg? ConstValueRoot(Expr e) => e switch
     {
-        Ident id when !LocalExists(id.Name) && _constValues.TryGetValue(id.Name, out var cv) => cv as CAgg,
+        Ident id when !LocalExists(id.Name) && _constValues.TryGetValue(id.Name, out CVal? cv) => cv as CAgg,
         Index ix => ConstValueRoot(ix.Target),
         Member m => ConstValueRoot(m.Target),
         _ => null,
@@ -8545,7 +8548,7 @@ public sealed partial class Lowerer
         CheckConstIndexBounds(ix);
         if (EvalConst(ix) is { } c) return Materialize(c);
         if (!IsLValuePath(ix.Target) || ConstValueRoot(ix.Target) is { Type: VectorType or MatrixType }) return LowerRValueIndex(ix);
-        var chain = BuildAccess(ix);
+        Chain chain = BuildAccess(ix);
         return FromStored(WithChainPrecision(LoadFrom(AccessOf(chain)), chain), InferType(ix));
     }
 
@@ -8556,7 +8559,7 @@ public sealed partial class Lowerer
     // component selects one component of the indexed vector, kept in the access chain like glslang does.
     Value LowerRValueIndex(Index ix, int component = -1)
     {
-        var targetType = InferType(ix.Target);
+        GlslType targetType = InferType(ix.Target);
         GlslType element = targetType switch
         {
             ArrayType arr => arr.Element,
@@ -8573,7 +8576,7 @@ public sealed partial class Lowerer
             else MemberIndexConst((int)ci.I);
             return new Value(Emit(Op.CompositeExtract, SpvType(element), baseV.Id, (uint)ci.I), element, false);
         }
-        var index = LowerExpr(ix.Idx);
+        Value index = LowerExpr(ix.Idx);
         if (targetType is VectorType)
             return new Value(Emit(Op.VectorExtractDynamic, SpvType(element), baseV.Id, index.Id), element, false);
         if (component >= 0) _m.ConstantInt(_m.TypeInt(32, signed: false), (uint)component);
@@ -8591,7 +8594,7 @@ public sealed partial class Lowerer
     void CheckConstIndexBounds(Index ix)
     {
         if (EvalConst(ix.Idx) is not CScalar { Kind: Scalar.Int or Scalar.UInt } idx) return;
-        var target = InferType(ix.Target);
+        GlslType target = InferType(ix.Target);
         int? bound = target switch
         {
             ArrayType a when a.SpecLength is null && a.Length > 0 => a.Length,
@@ -8638,11 +8641,11 @@ public sealed partial class Lowerer
                 return new Value(Emit(Op.Bitcast, SpvType(Types.Int), count), Types.Int, false);
             }
             case RuntimeArrayType when meth.Target is Member m:
-                var block = ResolveAccess(m.Target);
+                Access block = ResolveAccess(m.Target);
                 if (block.Type is not StructType st) throw new GlslParseException("runtime-array length requires a buffer-block member");
                 return ArrayLength(block.Pointer, IndexOfField(st, m.Name));
             // The same member reached by its bare name, from an anonymous buffer block.
-            case RuntimeArrayType when meth.Target is Ident bare && _blockMembers.TryGetValue(bare.Name, out var bm):
+            case RuntimeArrayType when meth.Target is Ident bare && _blockMembers.TryGetValue(bare.Name, out BlockMember bm):
                 return ArrayLength(bm.Var(), bm.Index);
             default:
                 throw new GlslParseException("'.length()' is only valid on arrays");
@@ -8707,7 +8710,7 @@ public sealed partial class Lowerer
     Value LoadChain(Chain c)
     {
         // A value read from a relaxed symbol or member is itself relaxed (the access chain stays undecorated).
-        var loaded = WithChainPrecision(Load(c.Type, Collapse(c.Swizzle is null ? c : Swizzled(c)), c.Layout, c.Mem, c.TypeId), c);
+        Value loaded = WithChainPrecision(Load(c.Type, Collapse(c.Swizzle is null ? c : Swizzled(c)), c.Layout, c.Mem, c.TypeId), c);
         return c.Swizzle is null ? loaded : Shuffle(loaded, c.Swizzle);
     }
 
@@ -8729,7 +8732,7 @@ public sealed partial class Lowerer
 
     Value Shuffle(Value src, int[] select)
     {
-        var component = ((VectorType)src.Type).Component;
+        Scalar component = ((VectorType)src.Type).Component;
         // A single component rides in the chain as an index, so its unsigned constant is created even
         // though the extract that ends up reading it takes a literal.
         if (select.Length == 1)
@@ -8739,7 +8742,7 @@ public sealed partial class Lowerer
             return new Value(Emit(Op.CompositeExtract, SpvType(scalar), src.Id, (uint)select[0]), scalar, false);
         }
         var result = new VectorType(component, select.Length);
-        var sh = InstrPool.Rent(Op.VectorShuffle, SpvType(result), _m.AllocId()).Add(src.Id, src.Id);
+        Instruction sh = InstrPool.Rent(Op.VectorShuffle, SpvType(result), _m.AllocId()).Add(src.Id, src.Id);
         foreach (int i in select) sh.Add((uint)i);
         _code.Add(sh);
         return Relaxed(new Value(sh.ResultId, result, false), src);
@@ -8786,7 +8789,7 @@ public sealed partial class Lowerer
 
     // The Offset (and MatrixStride) decoration bits of a laid-out struct's member.
     int MemberAlignBits(uint structType, int index) =>
-        _memberAlignBits.TryGetValue(structType, out var bits) && index < bits.Length ? bits[index] : 0;
+        _memberAlignBits.TryGetValue(structType, out int[]? bits) && index < bits.Length ? bits[index] : 0;
 
     // An unsized descriptor array (`sampler2D t[]`, `buffer B {...} b[]`) is a runtime descriptor array.
     void DeclareRuntimeDescriptorArray()
@@ -8918,7 +8921,7 @@ public sealed partial class Lowerer
                     when PerVertexStructOf(arr.Name == "gl_in") is var pvs && FieldIndexOrNone(pvs, pvm) is int pvi:
             {
                 bool input = arr.Name == "gl_in";
-                var storage = input ? StorageClass.Input : StorageClass.Output;
+                    StorageClass storage = input ? StorageClass.Input : StorageClass.Output;
                 uint variable = input
                     ? GlPerVertexArray(ref _glIn, storage, _inVertexCount, "gl_in")
                     : GlPerVertexArray(ref _glOut, storage, _outVertexCount, "gl_out");
@@ -8940,14 +8943,14 @@ public sealed partial class Lowerer
             // GL_NV_mesh_shader: gl_MeshVerticesNV[v].<member>, gl_PrimitiveIndicesNV[i], gl_PrimitiveCountNV.
             case Member { Target: Index { Target: Ident { Name: "gl_MeshVerticesNV" }, Idx: var nvtx }, Name: var nm }:
             {
-                var (ni, nt) = NVMeshMember(MeshVerticesNVMembers(), nm, "gl_MeshVerticesNV");
+                (int ni, GlslType? nt) = NVMeshMember(MeshVerticesNVMembers(), nm, "gl_MeshVerticesNV");
                 NeedClipCullCap(nm);
                 NeedNVMemberCap(nm);
                 return new Chain(GlMeshVerticesNV(), [BuiltinArrayIndex(nvtx, "gl_MeshVerticesNV", _meshMaxVertices), MemberIndexConst(ni)], nt, StorageClass.Output);
             }
             case Member { Target: Index { Target: Ident { Name: "gl_MeshPrimitivesNV" }, Idx: var nprim }, Name: var npm }:
             {
-                var (pi, pt) = NVMeshMember(MeshPrimitivesNVMembers(), npm, "gl_MeshPrimitivesNV");
+                (int pi, GlslType? pt) = NVMeshMember(MeshPrimitivesNVMembers(), npm, "gl_MeshPrimitivesNV");
                 NeedNVMemberCap(npm);
                 return new Chain(GlMeshPrimitivesNV(), [BuiltinArrayIndex(nprim, "gl_MeshPrimitivesNV", _meshMaxPrimitives), MemberIndexConst(pi)], pt, StorageClass.Output);
             }
@@ -8958,22 +8961,22 @@ public sealed partial class Lowerer
             // gl_Primitive{Triangle|Line|Point}IndicesEXT[p] is the per-primitive index output.
             case Index { Target: Ident { Name: "gl_PrimitiveTriangleIndicesEXT" or "gl_PrimitiveLineIndicesEXT" or "gl_PrimitivePointIndicesEXT" }, Idx: var prim }:
             {
-                var (var2, element) = GlMeshIndices();
+                (uint var2, GlslType? element) = GlMeshIndices();
                 return new Chain(var2, [BuiltinArrayIndex(prim, "gl_PrimitiveIndicesEXT", null)], element, StorageClass.Output);
             }
-            case Ident { Name: "gl_TessLevelOuter" }: { var a = TessLevelAccess(ref _glTessOuter, BuiltIn.TessLevelOuter, 4); return new Chain(a.Pointer, [], a.Type, a.Storage); }
-            case Ident { Name: "gl_TessLevelInner" }: { var a = TessLevelAccess(ref _glTessInner, BuiltIn.TessLevelInner, 2); return new Chain(a.Pointer, [], a.Type, a.Storage); }
+            case Ident { Name: "gl_TessLevelOuter" }: { Access a = TessLevelAccess(ref _glTessOuter, BuiltIn.TessLevelOuter, 4); return new Chain(a.Pointer, [], a.Type, a.Storage); }
+            case Ident { Name: "gl_TessLevelInner" }: { Access a = TessLevelAccess(ref _glTessInner, BuiltIn.TessLevelInner, 2); return new Chain(a.Pointer, [], a.Type, a.Storage); }
             case Ident { Name: "gl_Position" }:
             {
                 uint pv = EnsureGlPerVertex();
-                var (mi, mt) = PerVertexOutMember("gl_Position");
+                (int mi, GlslType? mt) = PerVertexOutMember("gl_Position");
                 return new Chain(pv, [MemberIndexConst(mi)], mt, StorageClass.Output);
             }
             case Ident { Name: "gl_PointSize" }:
             {
                 NeedPointSizeCap();
                 uint pv = EnsureGlPerVertex();
-                var (mi, mt) = PerVertexOutMember("gl_PointSize");
+                (int mi, GlslType? mt) = PerVertexOutMember("gl_PointSize");
                 return new Chain(pv, [MemberIndexConst(mi)], mt, StorageClass.Output);
             }
             case Ident { Name: "gl_ClipDistance" or "gl_CullDistance" } esClip when _isEs:
@@ -8984,14 +8987,14 @@ public sealed partial class Lowerer
                 // output member (emitting the gl_PerVertex Position block in a fragment shader is invalid).
                 if (stage == ShaderStage.Fragment)
                     return new Chain(ClipCullInput(ref _glClipFrag, BuiltIn.ClipDistance), [], ClipCullArray("gl_ClipDistance", input: true), StorageClass.Input);
-                { uint pv = EnsureGlPerVertex(); var (mi, mt) = PerVertexOutMember("gl_ClipDistance"); return new Chain(pv, [MemberIndexConst(mi)], mt, StorageClass.Output); }
+                { uint pv = EnsureGlPerVertex(); (int mi, GlslType? mt) = PerVertexOutMember("gl_ClipDistance"); return new Chain(pv, [MemberIndexConst(mi)], mt, StorageClass.Output); }
             case Ident { Name: "gl_CullDistance" }:
                 _m.AddCapability(Capability.CullDistance);
                 if (stage == ShaderStage.Fragment)
                     return new Chain(ClipCullInput(ref _glCullFrag, BuiltIn.CullDistance), [], ClipCullArray("gl_CullDistance", input: true), StorageClass.Input);
-                { uint pv = EnsureGlPerVertex(); var (mi, mt) = PerVertexOutMember("gl_CullDistance"); return new Chain(pv, [MemberIndexConst(mi)], mt, StorageClass.Output); }
-            case Ident id when Builtins.TryGetValue(id.Name, out var b):
-                var (bt, bv) = BuiltinVar(id.Name);
+                { uint pv = EnsureGlPerVertex(); (int mi, GlslType? mt) = PerVertexOutMember("gl_CullDistance"); return new Chain(pv, [MemberIndexConst(mi)], mt, StorageClass.Output); }
+            case Ident id when Builtins.TryGetValue(id.Name, out (BuiltIn Kind, GlslType Type, bool Output, Capability? Cap, string? Ext) b):
+                (GlslType? bt, uint bv) = BuiltinVar(id.Name);
                 return new Chain(bv, [], bt, BuiltinIsOutput(id.Name, b.Output) ? StorageClass.Output : StorageClass.Input);
             case Ident id when ResolveLocalVar(id.Name) is { } local:
                 return new Chain(local.VarId, [], local.Type,
@@ -8999,7 +9002,7 @@ public sealed partial class Lowerer
                     : ContainsRayQuery(local.Type) ? StorageClass.Private : StorageClass.Function);
             case Ident id when ResolveGlobal(id.Name) is { } g:
                 return new Chain(g.VarId, [], g.Type, g.Storage, Layout: BlockRuleset(g.Type), Mem: g.Mem, TypeId: _blockVarTypes.GetValueOrDefault(g.VarId));
-            case Ident id when _blockMembers.TryGetValue(id.Name, out var bm):
+            case Ident id when _blockMembers.TryGetValue(id.Name, out BlockMember bm):
             {
                 uint bmVar = bm.Var();
                 return new Chain(bmVar, [MemberIndexConst(bm.Index)], BlockStored(bm.Type), bm.Storage, Layout: bm.Layout, Mem: bm.Mem,
@@ -9007,7 +9010,7 @@ public sealed partial class Lowerer
             }
             // A dynamic index into a const array: glslang copies the constant into a Function-local
             // "indexable" temp (you cannot access-chain into an OpConstantComposite) and indexes that.
-            case Index { Target: Ident cid } ix when _constValues.TryGetValue(cid.Name, out var cv)
+            case Index { Target: Ident cid } ix when _constValues.TryGetValue(cid.Name, out CVal? cv)
                     && cv is CAgg { Type: ArrayType arrT } && EvalConst(ix.Idx) is null:
             {
                 // glslang order: the constant, then the index load, then the temp's pointer/variable, then
@@ -9021,7 +9024,7 @@ public sealed partial class Lowerer
             case Index ix:
             {
                 CheckVariableDescriptorIndex(ix);
-                var baseC = BuildAccess(ix.Target);
+                    Chain baseC = BuildAccess(ix.Target);
                 // Bounds/type checks BEFORE the deferred-comp early return below: `v[-1] = 1.0` used to
                 // slip through as deferred component -1 and store through the whole-vector pointer.
                 RejectOutOfRangeIndex(baseC.Type, ix.Idx);
@@ -9038,7 +9041,7 @@ public sealed partial class Lowerer
                     CoopMatType cm => new ScalarType(cm.Component),
                     _ => throw new GlslParseException($"cannot index into '{Types.Name(baseC.Type)}'"),
                 };
-                var idxValue = LowerExpr(ix.Idx);
+                    Value idxValue = LowerExpr(ix.Idx);
                 uint idx = idxValue.Id;
                 uint[]? precIndices = CarriesPrecision(baseC.Type) && IsNone(idxValue) && !idxValue.IsConstant ? [.. baseC.PrecIndices ?? [], idx]
                     : CarriesPrecision(baseC.Type) ? baseC.PrecIndices : null;
@@ -9059,7 +9062,7 @@ public sealed partial class Lowerer
                 bool stored = IsLValuePath(m.Target) && !(m.Target is Index rix && InferType(rix.Target) is BufferReferenceType);
                 uint ptr = stored ? Load(new BufferReferenceType(brt.Name), Collapse(BuildAccess(m.Target))).Id : LowerExpr(m.Target).Id;
                 BufferRefDefine(brt.Name);
-                var rst = _bufferRefs[brt.Name];
+                    StructType rst = _bufferRefs[brt.Name];
                 int ri = IndexOfField(rst, m.Name);
                 uint refStruct = _bufferRefStructIds[brt.Name];
                 return new Chain(ptr, [MemberIndexConst(ri)], BlockStored(rst.Fields[ri].Type), StorageClass.PhysicalStorageBuffer, Layout: _bufferRefLayout[brt.Name], Physical: true,
@@ -9067,7 +9070,7 @@ public sealed partial class Lowerer
             }
             case Member m:
             {
-                var baseC = BuildAccess(m.Target);
+                    Chain baseC = BuildAccess(m.Target);
                 // A single-component swizzle (`v.x`) selects a vector component; glslang defers the
                 // index constant until the chain is collapsed, so record it rather than emitting it now.
                 if (baseC.Type is VectorType bvec && IsSwizzleName(m.Name) && m.Name.Length == 1)
@@ -9077,9 +9080,9 @@ public sealed partial class Lowerer
                 if (baseC.Type is not StructType st)
                     throw new GlslParseException($"type '{Types.Name(baseC.Type)}' has no member '.{m.Name}'");
                 int index = IndexOfField(st, m.Name);
-                // An interface block's bool member is stored as uint, so the chain addresses the stored type.
-                var fieldType = st.Fields[index].Type;
-                var memberMem = _blockMemberMem.TryGetValue((st, index), out var mm) ? mm : baseC.Mem;
+                    // An interface block's bool member is stored as uint, so the chain addresses the stored type.
+                    GlslType fieldType = st.Fields[index].Type;
+                    MemQual memberMem = _blockMemberMem.TryGetValue((st, index), out MemQual mm) ? mm : baseC.Mem;
                 int memOff = baseC.Physical ? baseC.PhysOffset | MemberAlignBits(baseC.TypeId, index) : 0;
                 return new Chain(baseC.Base, [.. baseC.Indices, MemberIndexConst(index)],
                     baseC.Layout is not null ? BlockStored(fieldType) : fieldType, baseC.Storage, Layout: baseC.Layout, Physical: baseC.Physical, Mem: memberMem, PhysAlign: baseC.PhysAlign, PhysOffset: memOff,
@@ -9138,7 +9141,7 @@ public sealed partial class Lowerer
     // type just before the struct).
     uint MeshPerPrimitiveBlockType()
     {
-        var members = MeshPrimitiveMembers();
+        List<(string Name, GlslType Type)> members = MeshPrimitiveMembers();
         uint[] memberTypes = [.. members.Select(m => SpvType(m.Type))];
         uint s = _m.TypeStructUnique(memberTypes);
         _m.AddName(s, "gl_MeshPerPrimitiveEXT");
@@ -9266,10 +9269,10 @@ public sealed partial class Lowerer
     // view dimension is gl_MaxMeshViewCountNV; any other unsized dimension takes its implicit size.
     List<(string Name, GlslType Type)> NVMeshRedeclaredMembers(InterfaceBlock block, string array)
     {
-        var full = array == "gl_MeshVerticesNV" ? MeshVerticesNVMembers() : MeshPrimitivesNVMembers();
+        List<(string Name, GlslType Type)> full = array == "gl_MeshVerticesNV" ? MeshVerticesNVMembers() : MeshPrimitivesNVMembers();
         var members = new List<(string Name, GlslType Type)>();
-        foreach (var f in block.Members)
-            foreach (var d in f.Declarators)
+        foreach (Field f in block.Members)
+            foreach (Declarator d in f.Declarators)
             {
                 int i = full.FindIndex(x => x.Name == d.Name);
                 if (i < 0) throw new GlslParseException($"'{d.Name}' : no such field in structure '{block.BlockName}'", d.Line);
@@ -9278,7 +9281,7 @@ public sealed partial class Lowerer
                     throw new GlslParseException(perView
                         ? $"'{d.Name}' : missing perviewNV qualifier to redeclared block member"
                         : $"'{d.Name}' : cannot add perviewNV qualifier to redeclared block member", d.Line);
-                var declared = ApplyArrayDims(ResolveTypeRef(f.Type), d.Array);
+                GlslType declared = ApplyArrayDims(ResolveTypeRef(f.Type), d.Array);
                 members.Add((d.Name, SizeNVMeshMember(declared, full[i].Type, perView, d.Line)));
             }
         return members;
@@ -9337,7 +9340,7 @@ public sealed partial class Lowerer
             throw new GlslParseException($"'{call.Name}' : no matching overloaded function found");
         if (!_requestedExts.Contains("GL_NV_mesh_shader"))
             throw new GlslParseException($"'{call.Name}' : required extension not requested: GL_NV_mesh_shader");
-        var args = call.Args.Select(a => LowerCoerced(a, Types.UInt, call.Name)).ToArray();
+        Value[] args = call.Args.Select(a => LowerCoerced(a, Types.UInt, call.Name)).ToArray();
         return VoidOp(Op.WritePackedPrimitiveIndices4x8NV, args[0].Id, args[1].Id);
     }
 
@@ -9375,7 +9378,7 @@ public sealed partial class Lowerer
     // points, decorated with the matching PrimitiveIndicesEXT built-in.
     (uint Var, GlslType Element) GlMeshIndices()
     {
-        var (element, builtIn) = _meshPrimitive switch
+        (GlslType? element, BuiltIn builtIn) = _meshPrimitive switch
         {
             "lines" => ((GlslType)new VectorType(Scalar.UInt, 2), BuiltIn.PrimitiveLineIndicesEXT),
             "points" => (Types.UInt, BuiltIn.PrimitivePointIndicesEXT),
@@ -9413,7 +9416,7 @@ public sealed partial class Lowerer
     // The gl_MeshPerPrimitiveEXT member a name selects: index in the block and type.
     (int Index, GlslType Type)? MeshPrimitiveMember(string name)
     {
-        var members = MeshPrimitiveMembers();
+        List<(string Name, GlslType Type)> members = MeshPrimitiveMembers();
         int index = members.FindIndex(m => m.Name == name);
         return index < 0 ? null : (index, members[index].Type);
     }
@@ -9439,7 +9442,7 @@ public sealed partial class Lowerer
     {
         if (cache == 0)
         {
-            var redecl = name == "gl_in" ? _perVertexIn : _perVertexOut;
+            List<(string Name, GlslType Type)>? redecl = name == "gl_in" ? _perVertexIn : _perVertexOut;
             uint arr = _m.TypeArray(PerVertexBlockType("gl_PerVertex", redecl, name == "gl_in"), _m.ConstantInt(_m.TypeInt(32, signed: false), (uint)count));
             uint ptr = _m.TypePointer(storage, arr);
             cache = NoPrecisionVariable(_m.GlobalVariable(ptr, storage));
@@ -9455,7 +9458,7 @@ public sealed partial class Lowerer
     // gl_in and gl_out stay distinct even with the same shape.
     uint PerVertexBlockType(string blockName = "gl_PerVertex", List<(string Name, GlslType Type)>? members = null, bool input = false)
     {
-        var m = members ?? DefaultPerVertexMembers(input);
+        List<(string Name, GlslType Type)> m = members ?? DefaultPerVertexMembers(input);
         uint sr = _m.TypeStructUnique([.. m.Select(x => SpvType(x.Type))]);
         _m.AddName(sr, blockName);
         for (int i = 0; i < m.Count; i++)
@@ -9514,7 +9517,7 @@ public sealed partial class Lowerer
         if (!_clipCullSizes.TryGetValue((member, input), out int n))
         {
             int max = -1;
-            foreach (var body in _allBodies)
+            foreach (Stmt body in _allBodies)
                 if (MaxConstIndexWhere(body, t => IsClipCullSite(t, member, input)) is int m && m > max) max = m;
             _clipCullSizes[(member, input)] = n = Math.Max(1, max + 1);
         }
@@ -9538,7 +9541,7 @@ public sealed partial class Lowerer
     // (VUID-TessLevelOuter-04392).
     Access TessLevelAccess(ref uint cache, BuiltIn kind, int size)
     {
-        var storage = stage == ShaderStage.TessEvaluation ? StorageClass.Input : StorageClass.Output;
+        StorageClass storage = stage == ShaderStage.TessEvaluation ? StorageClass.Input : StorageClass.Output;
         var type = new ArrayType(Types.Float, size);
         if (cache == 0)
         {
@@ -9585,7 +9588,7 @@ public sealed partial class Lowerer
     // A built-in's type; an implicitly sized one takes its length from the largest constant index used on it.
     GlslType BuiltinType(string name)
     {
-        var type = Builtins[name].Type;
+        GlslType type = Builtins[name].Type;
         if (type is not RuntimeArrayType implicitArray) return type;
         int? max = MaxConstIndexInUnit(name, out bool dynamic);
         if (dynamic)
@@ -9679,7 +9682,7 @@ public sealed partial class Lowerer
         // named gl_RayTmaxEXT for both, so canonicalize before caching/naming.
         if (name == "gl_HitTEXT") name = "gl_RayTmaxEXT";
         if (name == "gl_HitTNV") name = "gl_RayTmaxNV";
-        if (_builtinVars.TryGetValue(name, out var existing)) return existing;
+        if (_builtinVars.TryGetValue(name, out (GlslType Type, uint VarId) existing)) return existing;
         if (stage != ShaderStage.Fragment && name is "gl_FragCoord" or "gl_FragDepth" or "gl_FrontFacing" or "gl_PointCoord" or "gl_SampleID" or "gl_SampleMaskIn" or "gl_HelperInvocation"
                 or "gl_FragSizeEXT" or "gl_FragInvocationCountEXT" or "gl_BaryCoordEXT" or "gl_BaryCoordNoPerspEXT" or "gl_BaryCoordNV" or "gl_BaryCoordNoPerspNV")
             throw new GlslParseException($"'{name}' is only available in a fragment shader");
@@ -9718,8 +9721,8 @@ public sealed partial class Lowerer
             if (!_requestedExts.Contains("GL_ARB_shader_ballot"))
                 throw new GlslParseException($"'{name}' : required extension not requested: GL_ARB_shader_ballot");
         }
-        var (kind, _, defaultOutput, cap, ext) = Builtins[name];
-        var type = BuiltinType(name);
+        (BuiltIn kind, GlslType _, bool defaultOutput, Capability? cap, string? ext) = Builtins[name];
+        GlslType type = BuiltinType(name);
         bool output = BuiltinIsOutput(name, defaultOutput);
         // gl_PrimitiveID/gl_PrimitiveIDIn pull in the Geometry capability ONLY in a fragment shader
         // (GlslangToSpv EbvPrimitiveId). Every other stage that exposes them already declares a capability
@@ -9740,9 +9743,9 @@ public sealed partial class Lowerer
             && !(c == Capability.Geometry && name is "gl_PrimitiveID" or "gl_PrimitiveIDIn" && stage != ShaderStage.Fragment))
             _m.AddCapability(c);
         if (ext is not null) AddIncorporatedExtension(ext, BuiltinExtensionCoreVersion(ext));
-        var storage = output ? StorageClass.Output : StorageClass.Input;
+        StorageClass storage = output ? StorageClass.Output : StorageClass.Input;
         // glslang getForcedType makes the declared SPIR-V type and then the GLSL one, before the pointer.
-        var forced = ForcedBuiltinStorage(name);
+        GlslType? forced = ForcedBuiltinStorage(name);
         uint storedType = SpvType(forced ?? type);
         if (forced is not null) SpvType(type);
         uint ptr = _m.TypePointer(storage, storedType);
@@ -9794,7 +9797,7 @@ public sealed partial class Lowerer
 
     (uint Pointer, GlslType Type) ResolveLValue(Expr target)
     {
-        var a = ResolveAccess(target);
+        Access a = ResolveAccess(target);
         RejectInputWrite(a.Storage);
         RejectReadOnlyWrite(a.Root);
         return (a.Pointer, a.Type);
@@ -9849,30 +9852,30 @@ public sealed partial class Lowerer
     {
         if (ShadingRateFlags.TryGetValue(id.Name, out int flag)) return Materialize(new CScalar(Scalar.Int, 0, flag));
         if (RayFlags.TryGetValue(id.Name, out int rf)) { RequireRayFlagExtension(id.Name); return Materialize(new CScalar(Scalar.UInt, 0, rf)); }
-        if (_valueParams.TryGetValue(id.Name, out var vp)) return vp;   // shadows any same-named global
-        if (_constants.TryGetValue(id.Name, out var c)) return c;
+        if (_valueParams.TryGetValue(id.Name, out Value vp)) return vp;   // shadows any same-named global
+        if (_constants.TryGetValue(id.Name, out Value c)) return c;
         // A const materializes its OpConstant lazily on first use (glslang folds the declaration and
         // emits the constant only when referenced), caching the result thereafter. A const array reaches
         // here only when used as a whole value; indexing it folds or goes through an "indexable" temp.
-        if (_constValues.TryGetValue(id.Name, out var cv))
+        if (_constValues.TryGetValue(id.Name, out CVal? cv))
             return _constants[id.Name] = Materialize(cv);
-        if (_pendingSpecConstants.TryGetValue(id.Name, out var sc))
+        if (_pendingSpecConstants.TryGetValue(id.Name, out (GlslType Type, Expr Init, int SpecId) sc))
             return MaterializeSpecConstant(id.Name, sc);
         if (_pendingSpecExprs.ContainsKey(id.Name)) return SpecConstantExpr(id);
         // A specializable local size leaves gl_WorkGroupSize unfoldable: it reads the spec composite.
         if (id.Name == "gl_WorkGroupSize" && stage == ShaderStage.Compute) return WorkGroupSizeConstant();
         if (ResolveLocalVar(id.Name) is { } local) return Load(local.Type, local.VarId);
         if (ResolveGlobal(id.Name) is { } g) return Load(g.Type, g.VarId, null, IsOpaque(g.Type) ? MemQual.None : g.Mem);
-        if (_blockMembers.TryGetValue(id.Name, out var member))
+        if (_blockMembers.TryGetValue(id.Name, out BlockMember member))
         {
-            var chain = BuildAccess(id);
-            var a = AccessOf(chain);
+            Chain chain = BuildAccess(id);
+            Access a = AccessOf(chain);
             RejectWriteOnlyRead(a.Root, a.MemberIdx);
             return FromStored(WithChainPrecision(Load(a.Type, a.Pointer, a.Layout, exactType: a.TypeId), chain), member.Type);
         }
-        if (Builtins.ContainsKey(id.Name)) { var (t, v) = BuiltinVar(id.Name); return IsForcedBuiltin(id.Name) ? LoadForcedBuiltin(t, v) : NoneLoad(Load(t, v), v); }
+        if (Builtins.ContainsKey(id.Name)) { (GlslType? t, uint v) = BuiltinVar(id.Name); return IsForcedBuiltin(id.Name) ? LoadForcedBuiltin(t, v) : NoneLoad(Load(t, v), v); }
         // gl_Position and the other gl_PerVertex members are readable, through their access chain.
-        if (PerVertexType(id.Name) is not null) { var a = ResolveAccess(id); return Load(a.Type, a.Pointer); }
+        if (PerVertexType(id.Name) is not null) { Access a = ResolveAccess(id); return Load(a.Type, a.Pointer); }
         throw new GlslParseException($"unresolved identifier '{id.Name}'");
     }
 
@@ -9912,14 +9915,14 @@ public sealed partial class Lowerer
         if (Resolve(call.Name) is MatrixType or VectorType or ScalarType && EvalConst(call) is CVal folded)
             return Materialize(folded);
 
-        var type = Resolve(call.Name);
+        GlslType type = Resolve(call.Name);
         if (type is AccelStructType) return AccelerationStructureFromAddress(call);
         // A buffer reference back to its raw address: uvec2 reinterprets it, uint64_t converts it.
         if (_bufferRefs.Count > 0 && call.Args.Count == 1
             && type is VectorType { Component: Scalar.UInt, Size: 2 } or ScalarType { Kind: Scalar.UInt64 }
             && InferType(call.Args[0]) is BufferReferenceType)
         {
-            var reference = LowerExpr(call.Args[0]);
+            Value reference = LowerExpr(call.Args[0]);
             return new Value(Emit(type is ScalarType ? Op.ConvertPtrToU : Op.Bitcast, SpvType(type), reference.Id), type, false);
         }
         // glslang evaluates AND converts each argument of a multi-argument vector constructor in turn,
@@ -9935,7 +9938,7 @@ public sealed partial class Lowerer
                 : comp is { } c ? LowerConstituent(call.Args[i], c) : LowerExpr(call.Args[i]);
 
         int mark = _code.Count;
-        var built = LowerConstructorBody(type, args, call);
+        Value built = LowerConstructorBody(type, args, call);
         if (built.IsConstant || args.Any(a => a.Id == built.Id)) return built;
         bool conversion = args.Length == 1 && PrecisionScalar(args[0].Type) != PrecisionScalar(type) && SameShape(args[0].Type, type);
         if (conversion) return built;
@@ -9961,7 +9964,7 @@ public sealed partial class Lowerer
         if (type is ScalarType or VectorType && args.Length == 1 && args[0].Type is MatrixType tm
             && IsFloating(tm.Component) != IsFloating(BaseScalar(type)))
         {
-            var transition = WithBase(type, tm.Component);
+            GlslType transition = WithBase(type, tm.Component);
             args = [LowerConstructorBody(transition, args, call)];
         }
         // With only the 8/16-bit STORAGE extensions (no explicit arithmetic types) glslang builds an 8/16-bit
@@ -9975,7 +9978,7 @@ public sealed partial class Lowerer
             return new Value(Emit(IsSigned(narrow) ? Op.SConvert : Op.UConvert, SpvType(type), args[0].Id), type, false);
         if (type is ScalarType scalar && args.Length == 1)
         {
-            var a = args[0];
+            Value a = args[0];
             // A scalar from a vector/matrix converts the whole argument to the scalar's type (keeping its
             // shape), then takes its first component.
             if (a.Type is VectorType or MatrixType)
@@ -10045,7 +10048,7 @@ public sealed partial class Lowerer
             // are used directly, then a single OpCompositeConstruct builds the result from the scalars.
             uint scalarType = SpvType(new ScalarType(vec.Component));
             var flat = new List<uint>();
-            foreach (var a in args)
+            foreach (Value a in args)
             {
                 if (flat.Count >= vec.Size) break;
                 if (a.Type is VectorType av)
@@ -10080,7 +10083,7 @@ public sealed partial class Lowerer
                     uint col = Emit(Op.CompositeExtract, _m.TypeVector(SpvType(new ScalarType(src.Component)), src.Rows), args[0].Id, (uint)c);
                     // Columns of equal height need no component selection, and glslang emits no shuffle.
                     if (src.Rows == mat.Rows) return col;
-                    var shuffle = InstrPool.Rent(Op.VectorShuffle, colType, _m.AllocId()).Add(col, col);
+                    Instruction shuffle = InstrPool.Rent(Op.VectorShuffle, colType, _m.AllocId()).Add(col, col);
                     for (uint r = 0; r < mat.Rows; r++) shuffle.Add(r);
                     _code.Add(shuffle);
                     return shuffle.ResultId;
@@ -10120,7 +10123,7 @@ public sealed partial class Lowerer
                 CompConst(1);
                 CompConst(0);
                 var flat = new List<uint>();
-                foreach (var a in args)
+                foreach (Value a in args)
                 {
                     if (a.Type is VectorType av)
                         for (uint c = 0; c < av.Size; c++) flat.Add(Emit(Op.CompositeExtract, compType, a.Id, c));
@@ -10140,13 +10143,13 @@ public sealed partial class Lowerer
     // accelerationStructureEXT(uint64_t) / accelerationStructureEXT(uvec2): an acceleration structure from its device address.
     Value AccelerationStructureFromAddress(Call call)
     {
-        var argType = call.Args.Count == 1 ? InferType(call.Args[0]) : null;
+        GlslType? argType = call.Args.Count == 1 ? InferType(call.Args[0]) : null;
         bool fromUint64 = argType is ScalarType { Kind: Scalar.UInt64 };
         if (!fromUint64 && argType is not VectorType { Component: Scalar.UInt, Size: 2 })
             throw new GlslParseException($"'{call.Name}' : cannot construct with these arguments");
         if (!_requestedExts.Contains("GL_EXT_ray_query") && !_requestedExts.Contains("GL_EXT_ray_tracing"))
             throw new GlslParseException($"'{(fromUint64 ? "uint64_t conversion to acclerationStructureEXT" : "uvec2 conversion to accelerationStructureEXT")}' : required extension not requested: GL_EXT_ray_query GL_EXT_ray_tracing");
-        var address = LowerExpr(call.Args[0]);
+        Value address = LowerExpr(call.Args[0]);
         var type = new AccelStructType();
         return new Value(Emit(Op.ConvertUToAccelerationStructureKHR, SpvType(type), address.Id), type, false);
     }
@@ -10158,7 +10161,7 @@ public sealed partial class Lowerer
     {
         if (call.Args.Count != 1) throw new GlslParseException($"'{call.Name}' : a buffer reference constructor takes one argument");
         var target = new BufferReferenceType(call.Name);
-        var arg = LowerExpr(call.Args[0]);
+        Value arg = LowerExpr(call.Args[0]);
         if (arg.Type is BufferReferenceType r && r.Name == call.Name) return arg;
         BufferRefDefine(call.Name);
         return arg.Type switch
@@ -10174,13 +10177,13 @@ public sealed partial class Lowerer
         // A constructor of constants folds to one constant, and glslang creates the struct type before its
         // constituents (createSpvConstantFromConstUnionArray).
         if (EvalConst(call) is CAgg folded) return Materialize(folded);
-        var st = _structs[call.Name];
+        StructType st = _structs[call.Name];
         // A struct constructor takes exactly one argument per member; anything else builds a composite
         // whose constituent count does not match its type.
         if (call.Args.Count != st.Fields.Count)
             throw new GlslParseException($"constructor for '{call.Name}' expects {st.Fields.Count} argument(s), but got {call.Args.Count}");
         // Each argument converts to its member's type (glslang's constructAggregate).
-        var args = call.Args.Select((a, i) => LowerArgAs(a, st.Fields[i].Type, $"member '{st.Fields[i].Name}' of '{call.Name}'")).ToArray();
+        Value[] args = call.Args.Select((a, i) => LowerArgAs(a, st.Fields[i].Type, $"member '{st.Fields[i].Name}' of '{call.Name}'")).ToArray();
         uint typeId = SpvType(st);
         uint[] comps = [.. args.Select(a => a.Id)];
         return args.All(a => a.IsConstant)
@@ -10191,7 +10194,7 @@ public sealed partial class Lowerer
     // The type of an array constructor. An unsized `T[](a, b)` takes its length from the argument count.
     ArrayType ArrayCtorType(Call c, GlslType baseType)
     {
-        var element = c.ArrayDims is { Count: > 1 } d ? ApplyArrayDims(baseType, [.. d.Skip(1)]) : baseType;
+        GlslType element = c.ArrayDims is { Count: > 1 } d ? ApplyArrayDims(baseType, [.. d.Skip(1)]) : baseType;
         Expr? outer = c.ArraySize ?? (c.ArrayDims is { Count: > 0 } dd ? dd[0] : null);
         return new ArrayType(element, outer is not null && EvalConst(outer) is CScalar n ? (int)n.I : c.Args.Count);
     }
@@ -10205,9 +10208,9 @@ public sealed partial class Lowerer
             && EvalConst(size) is CScalar n && n.I != call.Args.Count)
             throw new GlslParseException("'constructor' : array constructor needs one argument per array element");
         if (EvalConst(call) is CAgg folded) return Materialize(folded);
-        var element = ArrayCtorElement(call);
+        GlslType element = ArrayCtorElement(call);
         // Constituents convert to the element type: float[](1, 2, 3) turns the int literals into floats.
-        var args = call.Args.Select(a => LowerArgAs(a, element, "an array constructor element")).ToArray();
+        Value[] args = call.Args.Select(a => LowerArgAs(a, element, "an array constructor element")).ToArray();
         int length = call.ArraySize is Literal lit ? (int)ParseIntLiteral(lit.Text) : args.Length;
         var type = new ArrayType(element, length);
         uint typeId = SpvType(type);
@@ -10315,7 +10318,7 @@ public sealed partial class Lowerer
 
     Value ConvertScalar(Scalar target, Value arg)
     {
-        var source = BaseScalar(arg.Type);
+        Scalar source = BaseScalar(arg.Type);
         if (source == target) return arg;
         uint typeId = SpvType(new ScalarType(target));
 
@@ -10329,7 +10332,7 @@ public sealed partial class Lowerer
         {
             // glslang compares an integer against an UNSIGNED zero (OpINotEqual needs matching width,
             // not signedness), so `bool(int)` uses a uint 0 too.
-            var (zero, cmp) = IsFloating(source)
+            (uint zero, Op cmp) = IsFloating(source)
                 ? (Materialize(new CScalar(source, 0, 0)).Id, Op.FUnordNotEqual)
                 : (Materialize(new CScalar(UnsignedOfWidth(IntWidth(source)), 0, 0)).Id, Op.INotEqual);
             return new Value(Emit(cmp, SpvType(Types.Bool), arg.Id, zero), Types.Bool, false);
@@ -10441,7 +10444,7 @@ public sealed partial class Lowerer
             // selection replicates it (`s.xxxx` is vec4(s)).
             if (m.Name.Any(ch => SwizzleIndex(ch) != 0))
                 throw new GlslParseException($"'{m.Name}' : vector swizzle selection out of range", m.Line);
-            var sv = LowerExpr(m.Target);
+            Value sv = LowerExpr(m.Target);
             if (m.Name.Length == 1) return sv;
             var smearType = new VectorType(st.Kind, m.Name.Length);
             return new Value(Emit(Op.CompositeConstruct, SpvType(smearType), [.. Enumerable.Repeat(sv.Id, m.Name.Length)]), smearType, false, sv.Relaxed);
@@ -10472,7 +10475,7 @@ public sealed partial class Lowerer
                 SpvType(db);
             var elem = new ScalarType(bv.Component);
             uint idx = _m.ConstantInt(_m.TypeInt(32, signed: false), (uint)indices[0]);
-            var loaded = Load(elem, Collapse(ComponentChain(baseC, idx, elem)), baseC.Layout);
+            Value loaded = Load(elem, Collapse(ComponentChain(baseC, idx, elem)), baseC.Layout);
             // A component read from a relaxed symbol is itself relaxed.
             if (!loaded.Relaxed && _relaxedIds.Contains(baseC.Base) && bv.Component is not Scalar.Bool)
                 loaded = loaded with { Id = Relax(loaded.Id), Relaxed = true };
@@ -10489,15 +10492,15 @@ public sealed partial class Lowerer
             // then the result converts back to the declared component.
             var resultType = new VectorType(cvt.Component, indices.Length);
             uint resultTypeId = SpvType(resultType);
-            var loadedV = Load(chain.Type, Collapse(Swizzled(chain)), chain.Layout);
+            Value loadedV = Load(chain.Type, Collapse(Swizzled(chain)), chain.Layout);
             uint srcId = loadedV.Id;
-            var sh = InstrPool.Rent(Op.VectorShuffle, resultTypeId, _m.AllocId()).Add(srcId, srcId);
+            Instruction sh = InstrPool.Rent(Op.VectorShuffle, resultTypeId, _m.AllocId()).Add(srcId, srcId);
             foreach (int i in indices) sh.Add((uint)i);
             _code.Add(sh);
             return FromStored(Relaxed(new Value(sh.ResultId, resultType, loadedV.IsConstant), loadedV), new VectorType(ivt.Component, indices.Length));
         }
 
-        var src = LowerExpr(m.Target);
+        Value src = LowerExpr(m.Target);
         if (src.Type is not VectorType vec)
             throw new GlslParseException($"type '{Types.Name(src.Type)}' has no member '.{m.Name}'");
 
@@ -10511,7 +10514,7 @@ public sealed partial class Lowerer
         }
 
         var resultType2 = new VectorType(vec.Component, indices.Length);
-        var shuffle = InstrPool.Rent(Op.VectorShuffle, SpvType(resultType2), _m.AllocId()).Add(src.Id, src.Id);
+        Instruction shuffle = InstrPool.Rent(Op.VectorShuffle, SpvType(resultType2), _m.AllocId()).Add(src.Id, src.Id);
         foreach (int i in indices) shuffle.Add((uint)i);
         _code.Add(shuffle);
         return Relaxed(new Value(shuffle.ResultId, resultType2, false), src);
@@ -10651,7 +10654,7 @@ public sealed partial class Lowerer
     void AddMemoryOperands(Instruction inst, uint pointer, MemQual mem, bool store)
     {
         bool aligned = _physAligned.TryGetValue(pointer, out uint alignment);
-        var vmm = VmmOperands(mem, store);
+        (uint Mask, uint? Scope)? vmm = VmmOperands(mem, store);
         if (!aligned && vmm is null) return;
         inst.Add((aligned ? 0x2u : 0) | (vmm?.Mask ?? 0));
         if (aligned) inst.Add(alignment);
@@ -10660,7 +10663,7 @@ public sealed partial class Lowerer
 
     void Store(uint pointer, uint value, MemQual mem = MemQual.None)
     {
-        var inst = InstrPool.Rent(Op.Store).Add(pointer, value);
+        Instruction inst = InstrPool.Rent(Op.Store).Add(pointer, value);
         AddMemoryOperands(inst, pointer, mem, store: true);
         _code.Add(inst);
     }
@@ -10703,20 +10706,20 @@ public sealed partial class Lowerer
         // field: the target keeps its declared type; the source, if it is a block, stores bools as uint.
         // The member chains restart at the collapsed pointer: glslang clears the access chain, so neither
         // the reference alignment nor the offsets so far carry over (only the new member's own).
-        var at = target with { Base = Collapse(target), Indices = [], DeferredComp = -1, PhysAlign = 0, PhysOffset = 0 };
+        Chain at = target with { Base = Collapse(target), Indices = [], DeferredComp = -1, PhysAlign = 0, PhysOffset = 0 };
         static List<GlslType> PartsOf(GlslType t) => t switch
         {
             ArrayType arr => [.. Enumerable.Repeat(arr.Element, arr.Length)],
             StructType s => s.Fields.Select(f => f.Type).ToList(),
-            _ => new List<GlslType>(),
+            _ => [],
         };
-        var members = PartsOf(at.Type);
+        List<GlslType> members = PartsOf(at.Type);
         // The source's parts come from its own type: a plain bool[] stored into a block's uint[] extracts bools.
-        var sourceMembers = PartsOf(value.Type);
+        List<GlslType> sourceMembers = PartsOf(value.Type);
         for (int i = 0; i < members.Count; i++)
         {
-            var sourceMember = i < sourceMembers.Count ? sourceMembers[i] : members[i];
-            var stored = source is not null ? BlockStored(sourceMember) : sourceMember;
+            GlslType sourceMember = i < sourceMembers.Count ? sourceMembers[i] : members[i];
+            GlslType stored = source is not null ? BlockStored(sourceMember) : sourceMember;
             uint partType = PartType(value.TypeId, i);
             uint part = Emit(Op.CompositeExtract, ExactType(stored, source, partType), value.Id, (uint)i);
             // A block target holds its bools as uint too, so the leaf converts into what it stores.
@@ -10749,7 +10752,7 @@ public sealed partial class Lowerer
     {
         uint typeId = ExactType(type, layout, exactType);
         uint id = _m.AllocId();
-        var inst = InstrPool.Rent(Op.Load, typeId, id).Add(pointer);
+        Instruction inst = InstrPool.Rent(Op.Load, typeId, id).Add(pointer);
         AddMemoryOperands(inst, pointer, mem, store: false);
         _code.Add(inst);
         if (_nonUniformIds.Contains(pointer)) { _m.Decorate(id, Decoration.NonUniform); _nonUniformIds.Add(id); }
@@ -10775,16 +10778,16 @@ public sealed partial class Lowerer
 
     // The exact type of part `index` of an aggregate whose exact type is known (0 when unknown).
     uint PartType(uint parent, int index) =>
-        parent != 0 && _typeParts.TryGetValue(parent, out var parts) ? parts[parts.Length == 1 ? 0 : index] : 0;
+        parent != 0 && _typeParts.TryGetValue(parent, out uint[]? parts) ? parts[parts.Length == 1 ? 0 : index] : 0;
 
     // Layout names the block ruleset a type is being viewed under (null outside any block). It only
     // changes aggregates: those carry the block's Offsets/ArrayStride and so are distinct types.
     uint SpvType(GlslType type, BlockLayout? blockLayout) => blockLayout is not BlockLayout layout ? SpvTypePlain(type) : type switch
     {
-        StructType st when _blockStructIds.TryGetValue(st, out var id) => id,
-        StructType st when _layoutStructIds.TryGetValue((st, layout, false), out var id) => id,
-        StructType st when _layoutStructIds.TryGetValue((st, layout, true), out var id) => id,
-        ArrayType a when _layoutArrayIds.TryGetValue((BlockStored(a.Element), a.Length, layout), out var id) => id,
+        StructType st when _blockStructIds.TryGetValue(st, out uint id) => id,
+        StructType st when _layoutStructIds.TryGetValue((st, layout, false), out uint id) => id,
+        StructType st when _layoutStructIds.TryGetValue((st, layout, true), out uint id) => id,
+        ArrayType a when _layoutArrayIds.TryGetValue((BlockStored(a.Element), a.Length, layout), out uint id) => id,
         // Every laid-out aggregate is built once, when its block struct is, so anything unknown here was
         // reached by a path that cannot name the block's copy. Emitting the unlaid-out type would
         // silently produce a mismatched access chain, so refuse instead.
@@ -10813,8 +10816,8 @@ public sealed partial class Lowerer
         ArrayType { SpecLength: { } spec } a => _m.TypeArray(SpvType(a.Element), SpecConstantExpr(spec).Id),
         ArrayType a => _m.TypeArray(SpvType(a.Element), _m.ConstantInt(_m.TypeInt(32, signed: false), (uint)a.Length)),
         RuntimeArrayType r => _m.TypeRuntimeArray(SpvType(r.Element)),
-        StructType st when _blockStructIds.TryGetValue(st, out var id) => id,
-        StructType st when _plainStructIds.TryGetValue(st, out var id) => id,
+        StructType st when _blockStructIds.TryGetValue(st, out uint id) => id,
+        StructType st when _plainStructIds.TryGetValue(st, out uint id) => id,
         // Unique, not deduped: two distinct GLSL structs with identical members are still distinct types.
         StructType st => _plainStructIds[st] = NameStruct(st, _m.TypeStructUnique([.. st.Fields.Select(f => SpvType(f.Type))])),
         CoopMatType cm => CoopMatSpvType(cm),
@@ -10846,7 +10849,7 @@ public sealed partial class Lowerer
 
     static Op ArithOp(string op, GlslType type)
     {
-        var scalar = BaseScalar(type);
+        Scalar scalar = BaseScalar(type);
         bool f = IsFloating(scalar);
         bool s = IsSigned(scalar);
         return op switch
@@ -10944,7 +10947,7 @@ public sealed partial class Lowerer
         Method { Name: "length" } => Types.Int,
         Call c when Types.IsTypeName(c.Name) => c.IsArray ? ArrayCtorType(c, Resolve(c.Name)) : Resolve(c.Name),
         Call { TemplateArgs: { } } c => ResolveTypeRef(new TypeRef(c.Name, null, c.TemplateArgs)),
-        Call c when _structs.TryGetValue(c.Name, out var st) => c.IsArray ? ArrayCtorType(c, st) : st,
+        Call c when _structs.TryGetValue(c.Name, out StructType? st) => c.IsArray ? ArrayCtorType(c, st) : st,
         Call { IsArray: false } c when _bufferRefs.ContainsKey(c.Name) => new BufferReferenceType(c.Name),
         Call c when CallsUserFunction(c) => ResolveOverload(_userFunctions[c.Name], c.Args).ReturnType,
         Call c => InferBuiltinType(c),
@@ -10955,11 +10958,11 @@ public sealed partial class Lowerer
     // in the base type both operands convert to.
     GlslType InferArithmetic(Binary b)
     {
-        var l = InferType(b.Left);
-        var r = InferType(b.Right);
+        GlslType l = InferType(b.Left);
+        GlslType r = InferType(b.Right);
         if (l is BufferReferenceType or CoopMatType) return l;
         if (r is BufferReferenceType or CoopMatType) return r;
-        var shape = b.Op == "*" ? InferMul(l, r) : l is VectorType or MatrixType ? l : r is VectorType or MatrixType ? r : l;
+        GlslType shape = b.Op == "*" ? InferMul(l, r) : l is VectorType or MatrixType ? l : r is VectorType or MatrixType ? r : l;
         if (l is not (ScalarType or VectorType or MatrixType) || r is not (ScalarType or VectorType or MatrixType)) return shape;
         return ConversionDestination(BaseScalar(l), BaseScalar(r)) is { } d ? WithBase(shape, d) : shape;
     }
@@ -11033,7 +11036,7 @@ public sealed partial class Lowerer
             or "subgroupInverseBallot" or "subgroupBallotBitExtract" or "helperInvocationEXT" => Types.Bool,
         "subgroupBallot" or "subgroupPartitionNV" => new VectorType(Scalar.UInt, 4),
         "mbcntAMD" => Types.UInt,
-        _ when RayQueryOps.TryGetValue(c.Name, out var rqo) => rqo.Ret ?? Types.Void,
+        _ when RayQueryOps.TryGetValue(c.Name, out (Op Op, GlslType? Ret, GlslType[] Args) rqo) => rqo.Ret ?? Types.Void,
         "rayQueryGetIntersectionTriangleVertexPositionsEXT" or "rayQueryInitializeEXT" => Types.Void,
         "subgroupBallotBitCount" or "subgroupBallotInclusiveBitCount" or "subgroupBallotExclusiveBitCount"
             or "subgroupBallotFindLSB" or "subgroupBallotFindMSB" => Types.UInt,
@@ -11102,17 +11105,17 @@ public sealed partial class Lowerer
     {
         if (ShadingRateFlags.ContainsKey(name)) return Types.Int;
         if (RayFlags.ContainsKey(name)) return Types.UInt;
-        if (_valueParams.TryGetValue(name, out var vp)) return vp.Type;
+        if (_valueParams.TryGetValue(name, out Value vp)) return vp.Type;
         if (name == "gl_WorkGroupSize" && stage == ShaderStage.Compute) return UVec3;
-        if (_constants.TryGetValue(name, out var c)) return c.Type;
-        if (_constValues.TryGetValue(name, out var cv)) return cv is CAgg agg ? agg.Type : new ScalarType(((CScalar)cv).Kind);
-        if (_pendingSpecConstants.TryGetValue(name, out var sc)) return sc.Type;
-        if (_pendingSpecExprs.TryGetValue(name, out var se)) return InferType(se);
-        if (_locals.TryGetValue(name, out var l)) return l.Type;
-        if (_pendingLocals.TryGetValue(name, out var pt)) return pt.Type;
-        if (_pendingPrivates.TryGetValue(name, out var pp)) return pp;
+        if (_constants.TryGetValue(name, out Value c)) return c.Type;
+        if (_constValues.TryGetValue(name, out CVal? cv)) return cv is CAgg agg ? agg.Type : new ScalarType(((CScalar)cv).Kind);
+        if (_pendingSpecConstants.TryGetValue(name, out (GlslType Type, Expr Init, int SpecId) sc)) return sc.Type;
+        if (_pendingSpecExprs.TryGetValue(name, out Expr? se)) return InferType(se);
+        if (_locals.TryGetValue(name, out (GlslType Type, uint VarId) l)) return l.Type;
+        if (_pendingLocals.TryGetValue(name, out PendingLocal? pt)) return pt.Type;
+        if (_pendingPrivates.TryGetValue(name, out GlslType? pp)) return pp;
         if (GlobalType(name) is { } gt) return gt;
-        if (_blockMembers.TryGetValue(name, out var bm)) return bm.Type;
+        if (_blockMembers.TryGetValue(name, out BlockMember bm)) return bm.Type;
         if (Builtins.ContainsKey(name)) return BuiltinType(name);
         if (name is "gl_ClipDistance" or "gl_CullDistance")
             return stage == ShaderStage.Fragment ? ClipCullArray(name, input: true) : PerVertexOutMember(name).Type;
@@ -11138,9 +11141,9 @@ public sealed partial class Lowerer
     {
         // gl_in[i].gl_Position / gl_out[i].gl_Position: the per-vertex block's position member.
         if (m is { Name: "gl_Position", Target: Index { Target: Ident { Name: "gl_in" or "gl_out" } } }) return Vec4;
-        var target = InferType(m.Target);
+        GlslType target = InferType(m.Target);
         if (target is StructType st) return st.Fields[IndexOfField(st, m.Name)].Type;
-        if (target is BufferReferenceType brt) { var rst = _bufferRefs[brt.Name]; return rst.Fields[IndexOfField(rst, m.Name)].Type; }
+        if (target is BufferReferenceType brt) { StructType rst = _bufferRefs[brt.Name]; return rst.Fields[IndexOfField(rst, m.Name)].Type; }
         if (target is VectorType v)
             return m.Name.Length == 1 ? new ScalarType(v.Component) : new VectorType(v.Component, m.Name.Length);
         if (target is ScalarType s && IsSwizzleName(m.Name))
@@ -11166,7 +11169,7 @@ public sealed partial class Lowerer
         {
             _m.AddName(id, st.Name);
             for (int i = 0; i < st.Fields.Count; i++) _m.AddMemberName(id, i, st.Fields[i].Name);
-            if (_structMemberRelaxed.TryGetValue(st.Name, out var flags))
+            if (_structMemberRelaxed.TryGetValue(st.Name, out bool[]? flags))
                 for (int i = 0; i < flags.Length && i < st.Fields.Count; i++)
                     if (flags[i]) _m.MemberDecorate(id, i, Decoration.RelaxedPrecision);
         }
@@ -11174,7 +11177,7 @@ public sealed partial class Lowerer
     }
 
     GlslType Resolve(string name) =>
-        Types.Resolve(name) ?? (_structs.TryGetValue(name, out var s) ? s
+        Types.Resolve(name) ?? (_structs.TryGetValue(name, out StructType? s) ? s
             : _bufferRefs.ContainsKey(name) ? new BufferReferenceType(name)
             : throw new GlslParseException($"unknown type '{name}'"));
 
@@ -11184,7 +11187,7 @@ public sealed partial class Lowerer
     {
         _refBlocks = unit.Declarations.OfType<InterfaceBlock>()
             .Where(b => b.Qualifiers.Layout.Any(i => i.Name == "buffer_reference")).ToList();
-        foreach (var b in _refBlocks) _bufferRefs[b.BlockName] = new StructType(b.BlockName, []);
+        foreach (InterfaceBlock b in _refBlocks) _bufferRefs[b.BlockName] = new StructType(b.BlockName, []);
     }
 
     List<InterfaceBlock> _refBlocks = [];
@@ -11192,7 +11195,7 @@ public sealed partial class Lowerer
     // A reference block's members may name user structs, so they resolve once those are declared.
     void ResolveBufferReferenceFields()
     {
-        foreach (var b in _refBlocks)
+        foreach (InterfaceBlock b in _refBlocks)
         {
             var fields = b.Members
                 .SelectMany(f => f.Declarators.Select(d => (d.Name, ApplyArrayDims(ResolveTypeRef(f.Type), d.Array))))
@@ -11200,7 +11203,7 @@ public sealed partial class Lowerer
             _bufferRefs[b.BlockName] = new StructType(b.BlockName, fields);
             // A reference block is a `buffer` block: its packing and matrix layout follow the same rules
             // (and global `layout(...) buffer;` defaults) as an SSBO's.
-            var (defaultPacking, defaultRowMajor) = _blockDefaults.GetValueOrDefault(b);
+            (BlockLayout? defaultPacking, bool defaultRowMajor) = _blockDefaults.GetValueOrDefault(b);
             _bufferRefLayout[b.BlockName] = BlockRulesetOf(b.Qualifiers) ?? defaultPacking ?? BlockLayout.Std430;
             bool blockRowMajor = MatrixLayoutOf(b.Qualifiers) ?? defaultRowMajor;
             _bufferRefRowMajor[b.BlockName] = [.. b.Members.SelectMany(f => f.Declarators.Select(_ => MatrixLayoutOf(f.Qualifiers) ?? blockRowMajor))];
@@ -11208,7 +11211,7 @@ public sealed partial class Lowerer
             var quals = new List<Decoration>();
             if (b.Qualifiers.Has("readonly")) quals.Add(Decoration.NonWritable);
             if (b.Qualifiers.Has("writeonly")) quals.Add(Decoration.NonReadable);
-            foreach (var (word, decoration) in MemoryQualifiers) if (b.Qualifiers.Has(word)) quals.Add(decoration);
+            foreach ((string? word, Decoration decoration) in MemoryQualifiers) if (b.Qualifiers.Has(word)) quals.Add(decoration);
             _bufferRefQuals[b.BlockName] = quals;
             // The Aligned memory operand for a load/store through this reference uses its declared
             // buffer_reference_align, defaulting to 16 (glslang's Type::getBufferReferenceAlignment).
@@ -11243,7 +11246,7 @@ public sealed partial class Lowerer
     // follow its types directly.
     void BufferRefDefine(string name)
     {
-        foreach (var r in BufferRefTypes(name)) { BufferRefNames(r); BufferRefDecorate(r); }
+        foreach (string r in BufferRefTypes(name)) { BufferRefNames(r); BufferRefDecorate(r); }
     }
 
     // Defines a reference's pointee struct and patches its forward pointer, returning every reference type
@@ -11256,16 +11259,16 @@ public sealed partial class Lowerer
         if (!_definedBufferRefs.Add(name)) return defined;
         defined.Add(name);
         uint ptrId = BufferRefPtr(name);
-        var st = _bufferRefs[name];
-        var defer = _bufferRefDefer[name] = new DeferredLayout();
-        var layout = _bufferRefLayout[name];
-        var rowMajor = _bufferRefRowMajor[name];
+        StructType st = _bufferRefs[name];
+        DeferredLayout defer = _bufferRefDefer[name] = new DeferredLayout();
+        BlockLayout layout = _bufferRefLayout[name];
+        bool[] rowMajor = _bufferRefRowMajor[name];
         uint[] memberIds = [.. st.Fields.Select((f, i) => BlockFieldType(f.Type, layout, rowMajor[i], defer))];
         uint structId = _m.TypeStructUnique(memberIds);
         _typeParts[structId] = memberIds;
         _bufferRefStructIds[name] = structId;
         _bufferRefMemberIds[name] = memberIds;
-        foreach (var f in st.Fields)
+        foreach ((string Name, GlslType Type) f in st.Fields)
             if (ReferenceIn(f.Type) is string inner) defined.AddRange(BufferRefTypes(inner));
         _m.TypePointerForward(ptrId, StorageClass.PhysicalStorageBuffer, structId);
         return defined;
@@ -11293,15 +11296,15 @@ public sealed partial class Lowerer
     // they land after the enclosing block's, as glslang orders them.
     void BufferRefNames(string name)
     {
-        foreach (var a in _bufferRefDefer[name].Names) a();
+        foreach (Action a in _bufferRefDefer[name].Names) a();
         _bufferRefDefer[name].Names.Clear();
         NameStruct(_bufferRefs[name], _bufferRefStructIds[name]);
     }
 
     void BufferRefDecorate(string name)
     {
-        var st = _bufferRefs[name];
-        foreach (var a in _bufferRefDefer[name].Decorations) a();
+        StructType st = _bufferRefs[name];
+        foreach (Action a in _bufferRefDefer[name].Decorations) a();
         _bufferRefDefer[name].Decorations.Clear();
         DecorateLayout(st, _bufferRefStructIds[name], _bufferRefMemberIds[name], _bufferRefLayout[name], _bufferRefQuals[name], rowMajor: _bufferRefRowMajor[name]);
         _m.Decorate(_bufferRefStructIds[name], Decoration.Block);
@@ -11320,7 +11323,7 @@ public sealed partial class Lowerer
     static bool InLayout(TranslationUnit unit, string name) => unit.Declarations.Any(d =>
     {
         // A bare `layout(...) in;` or a builtin redeclaration like `layout(pixel_center_integer) in vec4 gl_FragCoord;`.
-        var q = d switch { LayoutDecl l => l.Qualifiers, GlobalVar g => g.Qualifiers, _ => (Qualifiers?)null };
+        Qualifiers? q = d switch { LayoutDecl l => l.Qualifiers, GlobalVar g => g.Qualifiers, _ => (Qualifiers?)null };
         return q is not null && q.Has("in") && q.Layout.Any(i => i.Name == name);
     });
 
@@ -11413,9 +11416,9 @@ public sealed partial class Lowerer
     {
         uint[] value = [1, 1, 1];
         int?[] specId = [null, null, null];
-        int Axis(string name, string prefix) => name[prefix.Length] switch { 'x' => 0, 'y' => 1, 'z' => 2, _ => -1 };
-        foreach (var decl in unit.Declarations.OfType<LayoutDecl>())
-            foreach (var item in decl.Qualifiers.Layout)
+        static int Axis(string name, string prefix) => name[prefix.Length] switch { 'x' => 0, 'y' => 1, 'z' => 2, _ => -1 };
+        foreach (LayoutDecl decl in unit.Declarations.OfType<LayoutDecl>())
+            foreach (LayoutItem item in decl.Qualifiers.Layout)
             {
                 if (item.Name.StartsWith("local_size_", StringComparison.Ordinal) && item.Name.EndsWith("_id", StringComparison.Ordinal)
                     && item.Value is Literal idLit && Axis(item.Name, "local_size_") is >= 0 and var ai)
@@ -11502,17 +11505,17 @@ public sealed partial class Lowerer
             {
                 // The chain and the loaded value carry the bool-as-uint form of the struct, so key by
                 // that (BlockStored is idempotent) and SpvType resolves it back to this block copy.
-                if (_layoutStructIds.TryGetValue((st, layout, rowMajor), out var cached)) return cached;
+                if (_layoutStructIds.TryGetValue((st, layout, rowMajor), out uint cached)) return cached;
                 uint[] memberIds = [.. st.Fields.Select(f => BlockFieldType(f.Type, layout, rowMajor, defer))];
                 uint id = _m.TypeStructUnique(memberIds);
                 // A reference member's pointee struct is defined right after this struct, its names after
                 // this struct's names and its decorations after this struct's decorations.
                 var refs = st.Fields.Select(f => ReferenceIn(f.Type)).OfType<string>().SelectMany(BufferRefTypes).ToList();
-                void Names() { NameStruct(st, id); foreach (var r in refs) BufferRefNames(r); }
+                void Names() { NameStruct(st, id); foreach (string? r in refs) BufferRefNames(r); }
                 if (defer is null) Names(); else defer.Names.Add(Names);
                 _typeParts[id] = memberIds;
                 _layoutStructIds[(st, layout, rowMajor)] = id;
-                Decorate(() => { DecorateLayout(st, id, memberIds, layout, rowMajorAll: rowMajor); foreach (var r in refs) BufferRefDecorate(r); });
+                Decorate(() => { DecorateLayout(st, id, memberIds, layout, rowMajorAll: rowMajor); foreach (string? r in refs) BufferRefDecorate(r); });
                 return id;
             }
             default: return SpvType(BlockStored(t));
@@ -11524,7 +11527,7 @@ public sealed partial class Lowerer
     static BlockLayout? BlockRulesetOf(Qualifiers q)
     {
         BlockLayout? packing = null;   // the last one written wins, as glslang merges layout qualifiers
-        foreach (var item in q.Layout)
+        foreach (LayoutItem item in q.Layout)
             switch (item.Name)
             {
                 case "scalar": packing = BlockLayout.Scalar; break;
@@ -11538,7 +11541,7 @@ public sealed partial class Lowerer
     static bool? MatrixLayoutOf(Qualifiers q)
     {
         bool? rowMajor = null;
-        foreach (var item in q.Layout)
+        foreach (LayoutItem item in q.Layout)
             if (item.Name == "row_major") rowMajor = true;
             else if (item.Name == "column_major") rowMajor = false;
         return rowMajor;
@@ -11555,14 +11558,14 @@ public sealed partial class Lowerer
         {
             ["uniform"] = (null, false), ["buffer"] = (null, false), ["shared"] = (null, false),
         };
-        foreach (var decl in unit.Declarations)
+        foreach (Decl decl in unit.Declarations)
         {
             if (decl is LayoutDecl ld)
             {
-                foreach (var storage in defaults.Keys.ToList())
+                foreach (string? storage in defaults.Keys.ToList())
                     if (ld.Qualifiers.Has(storage))
                     {
-                        var d = defaults[storage];
+                        (BlockLayout? Packing, bool RowMajor) d = defaults[storage];
                         defaults[storage] = (BlockRulesetOf(ld.Qualifiers) ?? d.Packing, MatrixLayoutOf(ld.Qualifiers) ?? d.RowMajor);
                     }
             }
@@ -11579,7 +11582,7 @@ public sealed partial class Lowerer
     // in/out block, which has no explicit layout, stays in the plain universe).
     BlockLayout? BlockRuleset(GlslType t) => t switch
     {
-        StructType st => _blockLayout.TryGetValue(st, out var l) ? l : null,
+        StructType st => _blockLayout.TryGetValue(st, out BlockLayout l) ? l : null,
         ArrayType a => BlockRuleset(a.Element),   // a block declared as an instance array
         _ => null,
     };
@@ -11611,7 +11614,7 @@ public sealed partial class Lowerer
         uint arrayType = SpvType(declared);
         if (version >= SpirVVersion.V1_4)
             return new Value(Emit(Op.CopyLogical, arrayType, loaded.Id), declared, false);
-        var parts = new uint[declared.Length];
+        uint[] parts = new uint[declared.Length];
         for (int i = 0; i < declared.Length; i++)
         {
             uint element = Emit(Op.CompositeExtract, ExactType(stored.Element, loaded.Layout, PartType(loaded.TypeId, 0)), loaded.Id, (uint)i);
@@ -11646,7 +11649,7 @@ public sealed partial class Lowerer
         var list = new List<Decoration>();
         if (q.Has("readonly")) list.Add(Decoration.NonWritable);
         if (q.Has("writeonly")) list.Add(Decoration.NonReadable);
-        foreach (var (word, decoration) in MemoryQualifiers)
+        foreach ((string? word, Decoration decoration) in MemoryQualifiers)
             if (q.Has(word) && !(_vmmPragma && decoration is Decoration.Coherent or Decoration.Volatile))
                 list.Add(decoration);
         return list;
@@ -11659,17 +11662,17 @@ public sealed partial class Lowerer
         List<GlslType>? offsetTypes = null)
     {
         if (!_decorated.Add(structTypeId)) return;
-        var alignBits = _memberAlignBits[structTypeId] = new int[s.Fields.Count];
+        int[] alignBits = _memberAlignBits[structTypeId] = new int[s.Fields.Count];
         // The member types' own layout (array strides, nested-struct offsets) is already decorated by
         // BlockFieldType as it built them, which is what puts it before this struct's decorations.
         int offset = 0;
         for (int i = 0; i < s.Fields.Count; i++)
         {
-            var type = s.Fields[i].Type;
+            GlslType type = s.Fields[i].Type;
             bool memberRowMajor = rowMajor?[i] ?? rowMajorAll;
             // layout(offset=N) pins a member; layout(align=N) rounds up to a larger alignment (an explicit
             // offset too, glslang fixBlockUniformOffsets); else pack at natural alignment.
-            var layoutType = offsetTypes?[i] ?? type;   // an implicitly sized member is laid out unsized
+            GlslType layoutType = offsetTypes?[i] ?? type;   // an implicitly sized member is laid out unsized
             offset = RoundUp(explicitOffsets?[i] ?? offset, Math.Max(Align(layoutType, layout, memberRowMajor), aligns?[i] ?? 0));
             // glslang's per-member order: Col/RowMajor (matrix), then memory qualifiers (NonWritable/...),
             // then Offset, then MatrixStride (matrix).
@@ -11677,9 +11680,9 @@ public sealed partial class Lowerer
             if (matrix is not null)
                 _m.MemberDecorate(structTypeId, i, memberRowMajor ? Decoration.RowMajor : Decoration.ColMajor);
             if (memberQualifiers is not null)
-                foreach (var d in memberQualifiers) _m.MemberDecorate(structTypeId, i, d);
+                foreach (Decoration d in memberQualifiers) _m.MemberDecorate(structTypeId, i, d);
             if (perMemberQualifiers is not null)
-                foreach (var d in perMemberQualifiers[i]) if (memberQualifiers?.Contains(d) != true) _m.MemberDecorate(structTypeId, i, d);
+                foreach (Decoration d in perMemberQualifiers[i]) if (memberQualifiers?.Contains(d) != true) _m.MemberDecorate(structTypeId, i, d);
             // An offset that wrapped negative (absurdly large arrays) is emitted as 0, as glslang's
             // updateMemberOffset clamps it.
             _m.MemberDecorate(structTypeId, i, Decoration.Offset, (uint)Math.Max(offset, 0));
@@ -11715,7 +11718,7 @@ public sealed partial class Lowerer
         {
             case ArrayType or RuntimeArrayType:
             {
-                var (element, length) = t is ArrayType a ? (a.Element, a.Length) : (((RuntimeArrayType)t).Element, 0);
+                (GlslType? element, int length) = t is ArrayType a ? (a.Element, a.Length) : (((RuntimeArrayType)t).Element, 0);
                 int align = LayoutOf(element, layout, rowMajor, out int elementSize);
                 if (std140) align = Math.Max(16, align);
                 int stride = RoundUp(elementSize, align);
@@ -11727,7 +11730,7 @@ public sealed partial class Lowerer
             {
                 size = 0;
                 int maxAlign = std140 ? 16 : 0;
-                foreach (var f in s.Fields)
+                foreach ((string Name, GlslType Type) f in s.Fields)
                 {
                     int memberAlign = LayoutOf(f.Type, layout, rowMajor, out int memberSize);
                     maxAlign = Math.Max(maxAlign, memberAlign);
@@ -11818,7 +11821,7 @@ public sealed partial class Lowerer
 
     static int? LayoutInt(Qualifiers q, string name)
     {
-        foreach (var item in q.Layout)
+        foreach (LayoutItem item in q.Layout)
             if (item.Name == name && item.Value is Literal lit)
                 return (int)LayoutLiteral(lit, name);
         return null;

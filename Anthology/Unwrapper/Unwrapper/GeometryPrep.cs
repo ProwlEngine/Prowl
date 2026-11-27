@@ -70,7 +70,7 @@ internal static class GeometryPrep
 
         // Weld coincident corners that share a "compatible" normal — keeps creases as creases.
         // Rewrites triCleaned in place to point at the welded positions.
-        var triCleaned = (int[])triangles.Clone();
+        int[] triCleaned = (int[])triangles.Clone();
         WeldVertices(positions, vertexCount, triCleaned, triangleCount, normals, out int newPosCount);
         positions = ResizeArray(positions, 3 * newPosCount);
         progress?.Invoke($"[prep] weld in {sw.ElapsedMilliseconds} ms ({vertexCount} -> {newPosCount} verts)");
@@ -78,7 +78,7 @@ internal static class GeometryPrep
 
         // Make the topology manifold before the half-edge builder sees it: edges with >2
         // faces, mismatched winding, or double-sided dupes get cut by duplicating vertices.
-        var fixResult = NonManifoldFixer.Fix(newPosCount, triCleaned, progress);
+        NonManifoldFixer.FixResult fixResult = NonManifoldFixer.Fix(newPosCount, triCleaned, progress);
         if (fixResult.ExtraVertexSourceIndices.Count > 0)
         {
             int extras = fixResult.ExtraVertexSourceIndices.Count;
@@ -118,7 +118,7 @@ internal static class GeometryPrep
             }
         }
 
-        var triRemap = new int[triangleCount];
+        int[] triRemap = new int[triangleCount];
         for (int t = 0; t < triangleCount; ++t) triRemap[t] = t;
 
         RemoveDegenerate(ref positions, ref newPosCount, triCleaned, ref triangleCount, triRemap, out int[]? degenerate);
@@ -139,7 +139,7 @@ internal static class GeometryPrep
         if (flatUVs is not null)
         {
             // Remap original-triangle-indexed UVs to surviving triangles.
-            var newUVs = new double[6 * triangleCount];
+            double[] newUVs = new double[6 * triangleCount];
             for (int t = 0; t < triangleCount; ++t)
             {
                 int src = result.TriangleRemap[t];
@@ -225,7 +225,7 @@ internal static class GeometryPrep
                     {
                         Double3 probe = p + new Double3(dx * cell, dy * cell, dz * cell);
                         long key = Bucket(probe);
-                        if (!bucket.TryGetValue(key, out var candidates)) continue;
+                        if (!bucket.TryGetValue(key, out List<int>? candidates)) continue;
                         foreach (int candidate in candidates)
                         {
                             if (Double3.Distance(p, welded[candidate]) > WeldDistance) continue;
@@ -240,7 +240,7 @@ internal static class GeometryPrep
             welded.Add(p);
             weldedNormals.Add(normal);
             long bk = Bucket(p);
-            if (!bucket.TryGetValue(bk, out var list)) bucket[bk] = list = new List<int>();
+            if (!bucket.TryGetValue(bk, out List<int>? list)) bucket[bk] = list = [];
             list.Add(newIndex);
             return newIndex;
         }

@@ -78,7 +78,7 @@ public sealed partial class LayoutTree
 
     private void InitializeMargins(int nodeIndex, Size inner, bool row)
     {
-        var style = ResolveStyle(_nodes[nodeIndex].Style, inner);
+        Resolved style = ResolveStyle(_nodes[nodeIndex].Style, inner);
         _nodes[nodeIndex].Before = row ? style.Margin.Left : style.Margin.Top;
         _nodes[nodeIndex].After = row ? style.Margin.Right : style.Margin.Bottom;
     }
@@ -106,7 +106,7 @@ public sealed partial class LayoutTree
         }
 
         _measured++;
-        var style = ResolveStyle(node.Style, available);
+        Resolved style = ResolveStyle(node.Style, available);
         Size result = default;
         if (!style.Hidden)
         {
@@ -180,7 +180,7 @@ public sealed partial class LayoutTree
             : 0;
         for (int childIndex = Flow(parentIndex, First(parentIndex)); childIndex >= 0; childIndex = Flow(parentIndex, Next(parentIndex, childIndex)))
         {
-            var childStyle = ResolveStyle(_nodes[childIndex].Style, inner);
+            Resolved childStyle = ResolveStyle(_nodes[childIndex].Style, inner);
             Size size = style.Layout == LayoutMode.Grid
                 ? Measure(
                 childIndex,
@@ -280,7 +280,7 @@ public sealed partial class LayoutTree
 
         _arranged++;
         // A root's percentage padding resolves against this call's viewport, not last frame's size.
-        var style = ResolveStyle(node.Style, parentSize);
+        Resolved style = ResolveStyle(node.Style, parentSize);
         if (style.Hidden)
         {
             ClearHidden(nodeIndex);
@@ -398,12 +398,12 @@ public sealed partial class LayoutTree
             Spacing(style.Justify, Positive(limit - used), count, out float offset, out float extraGap);
             for (int childIndex = start; childIndex != end; childIndex = Flow(parentIndex, Next(parentIndex, childIndex)))
             {
-                var childStyle = ResolveStyle(_nodes[childIndex].Style, inner);
+                Resolved childStyle = ResolveStyle(_nodes[childIndex].Style, inner);
                 Size desired = _nodes[childIndex].Desired;
                 float main = _nodes[childIndex].FlexMain;
                 Align align = childStyle.AlignSelf ?? style.AlignItems;
                 float cross = Cross(desired, row);
-                var crossFlex = FlexCross(childStyle, row, crossSize, cross, align, !style.Wrap);
+                (float Size, float Before, float Remaining) crossFlex = FlexCross(childStyle, row, crossSize, cross, align, !style.Wrap);
                 cross = crossFlex.Size;
                 float crossBefore = row ? childStyle.Margin.Top : childStyle.Margin.Left;
                 float mainBefore = _nodes[childIndex].Before;
@@ -471,7 +471,7 @@ public sealed partial class LayoutTree
                 Length length = row ? node.Style.Width : node.Style.Height;
                 double part = grow ? length.Grow : (double)length.Shrink * node.BaseMain;
                 float proposed = node.FlexMain + (float)(remaining * part / weight);
-                var bounds = ResolveStyle(node.Style, inner);
+                Resolved bounds = ResolveStyle(node.Style, inner);
                 float clamped = Clamp(proposed, row ? bounds.MinWidth : bounds.MinHeight, row ? bounds.MaxWidth : bounds.MaxHeight);
                 if (clamped != proposed)
                 {
@@ -496,7 +496,7 @@ public sealed partial class LayoutTree
     /// would let an empty spacer inflate an auto-sized container to the whole viewport.</summary>
     private Size MeasureFlow(int parentIndex, int childIndex, Size inner, bool row, float main = -1, bool definiteCross = true)
     {
-        var style = ResolveStyle(_nodes[childIndex].Style, inner);
+        Resolved style = ResolveStyle(_nodes[childIndex].Style, inner);
         Style parent = _nodes[parentIndex].Style;
         Length crossLength = row ? style.Height : style.Width;
         float cross = -1;
@@ -543,7 +543,7 @@ public sealed partial class LayoutTree
             float lineHeight = 0;
             while (end >= 0 && count++ < style.GridColumns)
             {
-                var childStyle = ResolveStyle(_nodes[end].Style, inner);
+                Resolved childStyle = ResolveStyle(_nodes[end].Style, inner);
                 Size desired = Measure(
                     end,
                     inner,
@@ -555,7 +555,7 @@ public sealed partial class LayoutTree
             int column = 0;
             for (int childIndex = start; childIndex != end; childIndex = Flow(parentIndex, Next(parentIndex, childIndex)))
             {
-                var childStyle = ResolveStyle(_nodes[childIndex].Style, inner);
+                Resolved childStyle = ResolveStyle(_nodes[childIndex].Style, inner);
                 Align align = childStyle.AlignSelf ?? style.AlignItems;
                 Size desired = _nodes[childIndex].Desired;
                 float height = align == Align.Stretch || childStyle.Height.Grow > 0
@@ -579,7 +579,7 @@ public sealed partial class LayoutTree
     {
         for (int childIndex = Flow(parentIndex, First(parentIndex)); childIndex >= 0; childIndex = Flow(parentIndex, Next(parentIndex, childIndex)))
         {
-            var childStyle = ResolveStyle(_nodes[childIndex].Style, inner);
+            Resolved childStyle = ResolveStyle(_nodes[childIndex].Style, inner);
             Align align = childStyle.AlignSelf ?? style.AlignItems;
             Size size = MeasureOverlay(parentIndex, childIndex, inner);
             Arrange(
@@ -594,7 +594,7 @@ public sealed partial class LayoutTree
 
     private Size MeasureOverlay(int parentIndex, int childIndex, Size inner, bool definiteWidth = true, bool definiteHeight = true)
     {
-        var childStyle = ResolveStyle(_nodes[childIndex].Style, inner);
+        Resolved childStyle = ResolveStyle(_nodes[childIndex].Style, inner);
         Align align = childStyle.AlignSelf ?? _nodes[parentIndex].Style.AlignItems;
         float width = definiteWidth && (align == Align.Stretch || childStyle.Width.Grow > 0)
             ? Clamp(Positive(inner.Width - childStyle.Margin.Horizontal), childStyle.MinWidth, childStyle.MaxWidth)
@@ -607,7 +607,7 @@ public sealed partial class LayoutTree
 
     private void ArrangeAbsolute(int childIndex, Size inner, Edges padding)
     {
-        var style = ResolveStyle(_nodes[childIndex].Style, inner);
+        Resolved style = ResolveStyle(_nodes[childIndex].Style, inner);
         float width = style.Left.HasValue && style.Right.HasValue
             ? Clamp(
             Positive(inner.Width - style.Left.Value - style.Right.Value - style.Margin.Horizontal),

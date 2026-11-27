@@ -52,9 +52,11 @@ public static partial class Noise
         m *= 1.79284291400159f - 0.85373472095314f * (a0 * a0 + h * h);
 
         // Compute final noise value at P
-        Float3 g = new Float3();
-        g.X = a0.X * x0.X + h.X * x0.Y;
-        g.YZ = a0.YZ * x12.XZ + h.YZ * x12.YW;
+        Float3 g = new Float3
+        {
+            X = a0.X * x0.X + h.X * x0.Y,
+            YZ = a0.YZ * x12.XZ + h.YZ * x12.YW
+        };
         return 130.0f * Float3.Dot(m, g);
     }
 }

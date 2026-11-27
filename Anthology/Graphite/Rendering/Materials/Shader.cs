@@ -231,7 +231,7 @@ internal interface IMaterialResources
 /// </summary>
 public sealed class MaterialSchema
 {
-    private readonly Dictionary<PropertyID, int> _indices = new();
+    private readonly Dictionary<PropertyID, int> _indices = [];
     private readonly MaterialProperty[] _properties;
 
     public MaterialSchema(IReadOnlyList<ShaderProperty> properties)
@@ -581,15 +581,15 @@ public sealed partial class Shader
             PremultipliedOutput |= ShaderDefinition.PassHasTag(passes[i], OutputTag, "Premultiplied");
         }
 
-        Dictionary<string, VariantSpace> axes = new(StringComparer.Ordinal);
-        List<VariantSpace> material = new();
-        List<VariantSpace> global = new();
+        Dictionary<string, VariantSpace> axes = [with(StringComparer.Ordinal)];
+        List<VariantSpace> material = [];
+        List<VariantSpace> global = [];
         int queue = DefaultRenderQueue;
         _passAxes = new HashSet<string>[passes.Length];
         for (int p = 0; p < passes.Length; p++)
         {
             ShaderPass pass = passes[p];
-            _passAxes[p] = new HashSet<string>(StringComparer.Ordinal);
+            _passAxes[p] = [with(StringComparer.Ordinal)];
             foreach (VariantSpace axis in pass.AxesWith(compiler))
             {
                 _passAxes[p].Add(axis.Name);
@@ -691,7 +691,7 @@ public sealed partial class Shader
         if (string.IsNullOrEmpty(definition.Fallback))
             definition.Fallback = model.Fallback;
 
-        List<ShaderProperty> properties = new(model.Properties ?? []);
+        List<ShaderProperty> properties = [with(model.Properties ?? [])];
         foreach (ShaderProperty property in definition.Properties ?? [])
         {
             int index = properties.FindIndex(p => p.Name == property.Name);
@@ -742,7 +742,7 @@ public sealed partial class Shader
             + (shading.DefinesSurface ? "#define GRAPHITE_STANDARD_MODEL_SURFACE\n" : "");
         bool light = shading.DefinesLight, ambient = shading.DefinesAmbient;
 
-        List<ShaderPass> passes = new();
+        List<ShaderPass> passes = [];
         foreach (ShaderPass pass in model.Passes ?? [])
         {
             bool gbuffer = ShaderDefinition.PassHasTag(pass, PassType.Tag, PassType.GBuffer.Name);
@@ -773,7 +773,7 @@ public sealed partial class Shader
         }
         model.Passes = [.. passes];
 
-        List<ShaderProperty> properties = new(model.Properties ?? []);
+        List<ShaderProperty> properties = [with(model.Properties ?? [])];
         foreach (ShaderProperty property in shading.Properties)
         {
             int index = properties.FindIndex(p => p.Name == property.Name);
@@ -795,7 +795,7 @@ public sealed partial class Shader
 
     private KeywordBinding[] BindKeywords()
     {
-        List<KeywordBinding> bindings = new();
+        List<KeywordBinding> bindings = [];
         for (int i = 0; i < Properties.Count; i++)
         {
             foreach (string attribute in Properties[i].Attributes)
@@ -849,7 +849,7 @@ public sealed partial class Shader
 
     public IReadOnlyList<VariantSpace> GlobalAxes { get; }
 
-    private readonly Dictionary<string, MaterialAxis> _materialAxes = new(StringComparer.Ordinal);
+    private readonly Dictionary<string, MaterialAxis> _materialAxes = [with(StringComparer.Ordinal)];
 
     /// <summary>The material axis of a name, for <see cref="Material.Set(MaterialAxis, string?)"/>. Throws when the shader has no such axis or it is global.</summary>
     public MaterialAxis Axis(string name)
@@ -944,7 +944,7 @@ public sealed partial class Shader
         return null;
     }
 
-    private readonly Dictionary<string, int> _passIndices = new(StringComparer.Ordinal);
+    private readonly Dictionary<string, int> _passIndices = [with(StringComparer.Ordinal)];
 
     /// <summary>Index of the definition's pass for a pass type, or -1 when the shader has none.</summary>
     internal int PassIndex(PassType type)

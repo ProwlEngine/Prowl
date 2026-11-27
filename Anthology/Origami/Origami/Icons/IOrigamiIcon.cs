@@ -76,8 +76,8 @@ public sealed class FontIcon : IOrigamiIcon
     {
         if (_font == null || string.IsNullOrEmpty(_glyph)) return;
         float size = MathF.Min((float)rect.Size.X, (float)rect.Size.Y) * _scale * Origami.IconScale;
-        var c = _color ?? color;
-        var m = canvas.MeasureText(_glyph, size, _font);
+        Color c = _color ?? color;
+        Float2 m = canvas.MeasureText(_glyph, size, _font);
         float tx = (float)(rect.Min.X + (rect.Size.X - m.X) / 2.0);
         float ty = (float)(rect.Min.Y + (rect.Size.Y - m.Y) / 2.0);
         canvas.DrawText(_glyph, tx, ty, Color32.FromArgb(c.A, c.R, c.G, c.B), size, _font);

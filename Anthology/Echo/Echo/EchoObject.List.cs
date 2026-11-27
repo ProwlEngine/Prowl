@@ -15,7 +15,7 @@ public sealed partial class EchoObject
             if (TagType != EchoType.List)
                 throw new System.InvalidOperationException("Cannot set tag on non-list tag");
 
-            var old = List[tagIdx];
+            EchoObject old = List[tagIdx];
             old.Parent = null;
             old.ListIndex = null;
 
@@ -82,7 +82,7 @@ public sealed partial class EchoObject
         if (index < 0 || index >= List.Count)
             throw new System.ArgumentOutOfRangeException(nameof(index));
 
-        var tag = List[index];
+        EchoObject tag = List[index];
         List.RemoveAt(index);
 
         tag.Parent = null;
@@ -98,7 +98,7 @@ public sealed partial class EchoObject
         if (TagType != EchoType.List)
             throw new System.InvalidOperationException("Cannot clear non-list tag");
 
-        foreach (var tag in List)
+        foreach (EchoObject tag in List)
         {
             tag.Parent = null;
             tag.ListIndex = null;

@@ -1,4 +1,5 @@
 using System.Collections.Generic;
+
 using Prowl.Vector;
 using Prowl.Vector.Spatial;
 
@@ -51,7 +52,7 @@ public sealed class Skeleton
         _parentIndices = new int[count];
         _parentSpaceReferencePose = new Transform3D[count];
         _firstChild = new int[count];
-        _idToIndex = new Dictionary<uint, int>(count);
+        _idToIndex = [with(count)];
 
         for (int i = 0; i < count; i++)
         {
@@ -81,7 +82,7 @@ public sealed class Skeleton
         TransformOps.ComputeModelSpace(_parentSpaceReferencePose, _hierarchy.Order, _hierarchy.Parents, _modelSpaceReferencePose);
 
         _floatChannelIds = floatChannelIds is null ? Array.Empty<StringID>() : floatChannelIds.ToArray();
-        _floatChannelToIndex = new Dictionary<uint, int>(_floatChannelIds.Length);
+        _floatChannelToIndex = [with(_floatChannelIds.Length)];
         for (int i = 0; i < _floatChannelIds.Length; i++)
             _floatChannelToIndex.TryAdd(_floatChannelIds[i].ID, i);
     }

@@ -19,7 +19,7 @@ internal sealed unsafe class VkDescriptorTable : DescriptorTable
         ResourceLayoutDescription description = Layout;
         (_layout, _) = VkDescriptorLayoutBuilder.CreateDescriptorSetLayout(gd, ref description);
 
-        Dictionary<DescriptorType, uint> counts = new();
+        Dictionary<DescriptorType, uint> counts = [];
         foreach (ResourceLayoutElementDescription element in description.Elements)
         {
             DescriptorType type = VkDescriptorLayoutBuilder.GetDescriptorType(element.Kind, element.Options);

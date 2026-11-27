@@ -34,16 +34,16 @@ internal static class SignatureHelpBuilder
 
     public static CodeSignatureHelp? Compute(SemanticModel model, int position, CancellationToken ct)
     {
-        var root = model.SyntaxTree.GetRoot(ct);
-        var token = root.FindToken(Math.Min(position, root.FullSpan.End));
+        SyntaxNode root = model.SyntaxTree.GetRoot(ct);
+        SyntaxToken token = root.FindToken(Math.Min(position, root.FullSpan.End));
         if (token.Parent == null) return null;
 
-        foreach (var node in token.Parent.AncestorsAndSelf())
+        foreach (SyntaxNode node in token.Parent.AncestorsAndSelf())
         {
             ct.ThrowIfCancellationRequested();
             if (FindList(node, position) is not { } list) continue;
 
-            var (candidates, resolved) = Candidates(model, list.Node, position, ct);
+            (List<ISymbol>? candidates, ISymbol? resolved) = Candidates(model, list.Node, position, ct);
             if (candidates.Count == 0) continue;
             return Build(model, candidates, resolved, list, ct);
         }
@@ -52,22 +52,17 @@ internal static class SignatureHelpBuilder
 
     private static ArgumentList? FindList(SyntaxNode node, int position)
     {
-        switch (node)
+        return node switch
         {
-            case ArgumentListSyntax a when Inside(a.OpenParenToken, a.CloseParenToken, position):
-                return Describe(a, a.OpenParenToken, a.Arguments.GetSeparators(), a.Arguments.Count, position,
-                    i => a.Arguments[i].NameColon?.Name.Identifier.ValueText);
-            case BracketedArgumentListSyntax b when Inside(b.OpenBracketToken, b.CloseBracketToken, position):
-                return Describe(b, b.OpenBracketToken, b.Arguments.GetSeparators(), b.Arguments.Count, position,
-                    i => b.Arguments[i].NameColon?.Name.Identifier.ValueText);
-            case AttributeArgumentListSyntax at when Inside(at.OpenParenToken, at.CloseParenToken, position):
-                return Describe(at, at.OpenParenToken, at.Arguments.GetSeparators(), at.Arguments.Count, position,
-                    i => at.Arguments[i].NameColon?.Name.Identifier.ValueText);
-            case TypeArgumentListSyntax t when Inside(t.LessThanToken, t.GreaterThanToken, position):
-                return Describe(t, t.LessThanToken, t.Arguments.GetSeparators(), t.Arguments.Count, position, _ => null);
-            default:
-                return null;
-        }
+            ArgumentListSyntax a when Inside(a.OpenParenToken, a.CloseParenToken, position) => (ArgumentList?)Describe(a, a.OpenParenToken, a.Arguments.GetSeparators(), a.Arguments.Count, position,
+                                i => a.Arguments[i].NameColon?.Name.Identifier.ValueText),
+            BracketedArgumentListSyntax b when Inside(b.OpenBracketToken, b.CloseBracketToken, position) => (ArgumentList?)Describe(b, b.OpenBracketToken, b.Arguments.GetSeparators(), b.Arguments.Count, position,
+                                i => b.Arguments[i].NameColon?.Name.Identifier.ValueText),
+            AttributeArgumentListSyntax at when Inside(at.OpenParenToken, at.CloseParenToken, position) => (ArgumentList?)Describe(at, at.OpenParenToken, at.Arguments.GetSeparators(), at.Arguments.Count, position,
+                                i => at.Arguments[i].NameColon?.Name.Identifier.ValueText),
+            TypeArgumentListSyntax t when Inside(t.LessThanToken, t.GreaterThanToken, position) => (ArgumentList?)Describe(t, t.LessThanToken, t.Arguments.GetSeparators(), t.Arguments.Count, position, _ => null),
+            _ => null,
+        };
     }
 
     private static bool Inside(SyntaxToken open, SyntaxToken close, int position)
@@ -84,7 +79,7 @@ internal static class SignatureHelpBuilder
 
     private static (List<ISymbol> Candidates, ISymbol? Resolved) Candidates(SemanticModel model, SyntaxNode list, int position, CancellationToken ct)
     {
-        var parent = list.Parent;
+        SyntaxNode? parent = list.Parent;
         var symbols = new List<ISymbol>();
         ISymbol? resolved = null;
 
@@ -92,11 +87,11 @@ internal static class SignatureHelpBuilder
         {
             case InvocationExpressionSyntax invocation:
                 symbols.AddRange(model.GetMemberGroup(invocation.Expression, ct).OfType<IMethodSymbol>());
-                var info = model.GetSymbolInfo(invocation, ct);
+                SymbolInfo info = model.GetSymbolInfo(invocation, ct);
                 resolved = info.Symbol;
                 if (symbols.Count == 0)
                 {
-                    var target = model.GetSymbolInfo(invocation.Expression, ct).Symbol;
+                    ISymbol? target = model.GetSymbolInfo(invocation.Expression, ct).Symbol;
                     if (TypeOf(target) is INamedTypeSymbol { DelegateInvokeMethod: { } invoke }) symbols.Add(invoke);
                     else symbols.AddRange(info.CandidateSymbols);
                 }
@@ -112,7 +107,7 @@ internal static class SignatureHelpBuilder
                 resolved = model.GetSymbolInfo(initializer, ct).Symbol;
                 if (initializer.Parent is ConstructorDeclarationSyntax ctor && model.GetDeclaredSymbol(ctor, ct)?.ContainingType is { } self)
                 {
-                    var type = initializer.IsKind(SyntaxKind.ThisConstructorInitializer) ? self : self.BaseType;
+                    INamedTypeSymbol? type = initializer.IsKind(SyntaxKind.ThisConstructorInitializer) ? self : self.BaseType;
                     if (type != null) symbols.AddRange(Constructors(model, type, position));
                 }
                 break;
@@ -125,7 +120,7 @@ internal static class SignatureHelpBuilder
 
             case ElementAccessExpressionSyntax access:
                 resolved = model.GetSymbolInfo(access, ct).Symbol;
-                for (var type = model.GetTypeInfo(access.Expression, ct).Type; type != null; type = type.BaseType)
+                for (ITypeSymbol? type = model.GetTypeInfo(access.Expression, ct).Type; type != null; type = type.BaseType)
                     symbols.AddRange(type.GetMembers().OfType<IPropertySymbol>().Where(p => p.IsIndexer && model.IsAccessible(position, p)));
                 break;
 
@@ -136,7 +131,7 @@ internal static class SignatureHelpBuilder
                 break;
 
             case GenericNameSyntax generic:
-                var genericInfo = model.GetSymbolInfo(generic, ct);
+                SymbolInfo genericInfo = model.GetSymbolInfo(generic, ct);
                 resolved = genericInfo.Symbol;
                 if (genericInfo.Symbol != null) symbols.Add(genericInfo.Symbol);
                 symbols.AddRange(genericInfo.CandidateSymbols);
@@ -224,18 +219,18 @@ internal static class SignatureHelpBuilder
         if (parameters.Count < list.ArgumentCount && !isParams) return -1;
 
         int score = 0, index = 0;
-        foreach (var (name, expression) in Arguments(list.Node))
+        foreach ((string? name, ExpressionSyntax? expression) in Arguments(list.Node))
         {
             ct.ThrowIfCancellationRequested();
-            var parameter = name != null ? parameters.FirstOrDefault(p => p.Name == name)
+            IParameterSymbol? parameter = name != null ? parameters.FirstOrDefault(p => p.Name == name)
                 : index < parameters.Count ? parameters[index]
                 : isParams ? parameters[^1] : null;
             index++;
             if (parameter == null) return -1;
             if (expression.IsMissing) continue;
 
-            var type = parameter.IsParams && parameter.Type is IArrayTypeSymbol array && index > parameters.Count ? array.ElementType : parameter.Type;
-            var conversion = model.ClassifyConversion(expression, type);
+            ITypeSymbol type = parameter.IsParams && parameter.Type is IArrayTypeSymbol array && index > parameters.Count ? array.ElementType : parameter.Type;
+            Conversion conversion = model.ClassifyConversion(expression, type);
             if (conversion.IsIdentity) score += 2;
             else if (conversion.IsImplicit) score += 1;
         }
@@ -270,7 +265,7 @@ internal static class SignatureHelpBuilder
         }
         void AddDisplay(ISymbol displayed, SymbolDisplayFormat format)
         {
-            foreach (var part in displayed.ToDisplayParts(format)) Add(part.ToString(), RoslynMapping.DisplayPart(part.Kind));
+            foreach (SymbolDisplayPart part in displayed.ToDisplayParts(format)) Add(part.ToString(), RoslynMapping.DisplayPart(part.Kind));
         }
 
         var docs = Documentation.Parse(symbol, ct);
@@ -291,7 +286,7 @@ internal static class SignatureHelpBuilder
                 _ => CodeTokenKind.Class,
             } : CodeTokenKind.Method);
             Add("<", CodeTokenKind.Punctuation);
-            var typeParameters = TypeParameters(symbol);
+            IReadOnlyList<ITypeParameterSymbol> typeParameters = TypeParameters(symbol);
             for (int i = 0; i < typeParameters.Count; i++)
             {
                 if (i > 0) Add(", ", CodeTokenKind.Punctuation);
@@ -337,7 +332,7 @@ internal static class SignatureHelpBuilder
         }
 
         Add(indexer ? "[" : "(", CodeTokenKind.Punctuation);
-        var symbolParameters = Parameters(symbol);
+        IReadOnlyList<ISymbol> symbolParameters = Parameters(symbol);
         for (int i = 0; i < symbolParameters.Count; i++)
         {
             if (i > 0) Add(", ", CodeTokenKind.Punctuation);
@@ -372,7 +367,7 @@ internal static class SignatureHelpBuilder
 
         public static Documentation Parse(ISymbol symbol, CancellationToken ct)
         {
-            var source = symbol is IMethodSymbol { ReducedFrom: { } reduced } ? reduced : symbol.OriginalDefinition;
+            ISymbol source = symbol is IMethodSymbol { ReducedFrom: { } reduced } ? reduced : symbol.OriginalDefinition;
             string? xml = source.GetDocumentationCommentXml(expandIncludes: true, cancellationToken: ct);
             if (string.IsNullOrWhiteSpace(xml)) return s_empty;
             try
@@ -397,7 +392,7 @@ internal static class SignatureHelpBuilder
 
         private static void Append(XElement element, StringBuilder sb)
         {
-            foreach (var node in element.Nodes())
+            foreach (XNode node in element.Nodes())
             {
                 if (node is XText text) sb.Append(text.Value);
                 else if (node is XElement child)

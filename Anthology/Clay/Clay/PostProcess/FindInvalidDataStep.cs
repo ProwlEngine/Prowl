@@ -29,12 +29,12 @@ internal sealed class FindInvalidDataStep : IPostProcess
         int fixedFloats = 0;
         int droppedKeys = 0;
 
-        foreach (var mesh in scene.Meshes)
+        foreach (IntermediateMesh mesh in scene.Meshes)
             fixedFloats += SanitizeMesh(mesh, context);
 
-        foreach (var anim in scene.Animations)
+        foreach (IntermediateAnimation anim in scene.Animations)
         {
-            foreach (var binding in anim.Bindings)
+            foreach (IntermediateAnimationBinding binding in anim.Bindings)
             {
                 droppedKeys += DropKeysWithInvalidTimes(binding);
                 fixedFloats += SanitizeCurveValues(binding);
@@ -52,7 +52,7 @@ internal sealed class FindInvalidDataStep : IPostProcess
     private static int SanitizeMesh(IntermediateMesh mesh, ImportContext ctx)
     {
         int fixedCount = 0;
-        var positions = CollectionsMarshal.AsSpan(mesh.Positions);
+        Span<Float3> positions = CollectionsMarshal.AsSpan(mesh.Positions);
         for (int i = 0; i < positions.Length; i++)
         {
             if (!Finite(positions[i]))
@@ -64,7 +64,7 @@ internal sealed class FindInvalidDataStep : IPostProcess
 
         if (mesh.Normals is { } normalList)
         {
-            var normals = CollectionsMarshal.AsSpan(normalList);
+            Span<Float3> normals = CollectionsMarshal.AsSpan(normalList);
             for (int i = 0; i < normals.Length; i++)
             {
                 if (!Finite(normals[i]) || Float3.Length(normals[i]) < 1e-12f)
@@ -77,10 +77,10 @@ internal sealed class FindInvalidDataStep : IPostProcess
 
         if (mesh.Tangents is { } tangentList)
         {
-            var tangents = CollectionsMarshal.AsSpan(tangentList);
+            Span<Float4> tangents = CollectionsMarshal.AsSpan(tangentList);
             for (int i = 0; i < tangents.Length; i++)
             {
-                var t = tangents[i];
+                Float4 t = tangents[i];
                 if (!Finite(t))
                 {
                     tangents[i] = new Float4(1f, 0f, 0f, 1f);
@@ -91,10 +91,10 @@ internal sealed class FindInvalidDataStep : IPostProcess
 
         if (mesh.Colors0 is { } colorList)
         {
-            var colors = CollectionsMarshal.AsSpan(colorList);
+            Span<Color> colors = CollectionsMarshal.AsSpan(colorList);
             for (int i = 0; i < colors.Length; i++)
             {
-                var c = colors[i];
+                Color c = colors[i];
                 if (!Finite(c))
                 {
                     colors[i] = new Color(1f, 1f, 1f, 1f);
@@ -107,10 +107,10 @@ internal sealed class FindInvalidDataStep : IPostProcess
         {
             if (mesh.UVs[uv] is { } uvList)
             {
-                var list = CollectionsMarshal.AsSpan(uvList);
+                Span<Float2> list = CollectionsMarshal.AsSpan(uvList);
                 for (int i = 0; i < list.Length; i++)
                 {
-                    var u = list[i];
+                    Float2 u = list[i];
                     if (!Finite(u))
                     {
                         list[i] = Float2.Zero;
@@ -134,9 +134,9 @@ internal sealed class FindInvalidDataStep : IPostProcess
             }
         }
 
-        foreach (var shape in mesh.BlendShapes)
+        foreach (IntermediateBlendShape shape in mesh.BlendShapes)
         {
-            foreach (var frame in shape.Frames)
+            foreach (IntermediateBlendShapeFrame frame in shape.Frames)
             {
                 fixedCount += SanitizeDeltas(frame.DeltaPositions);
                 if (frame.DeltaNormals is { } dn) fixedCount += SanitizeDeltas(dn);
@@ -246,7 +246,7 @@ internal sealed class FindInvalidDataStep : IPostProcess
     private static int SanitizeAnimation(IntermediateAnimation anim, ImportContext ctx)
     {
         int collapsed = 0;
-        foreach (var b in anim.Bindings)
+        foreach (IntermediateAnimationBinding b in anim.Bindings)
         {
             int valuesPerKey = ValuesPerKey(b);
             if (b.Times.Count < 3 || b.Values.Count != b.Times.Count * valuesPerKey)

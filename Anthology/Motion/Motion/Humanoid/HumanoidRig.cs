@@ -1,4 +1,5 @@
 using System.Linq;
+
 using Prowl.Vector;
 
 namespace Prowl.Motion;
@@ -97,7 +98,7 @@ public sealed class HumanoidRig
     private int[] BuildEncodeOrder()
     {
         int[] parents = _skeleton.SanitizedParentIndices;
-        var needed = new bool[_skeleton.BoneCount];
+        bool[] needed = new bool[_skeleton.BoneCount];
         void Need(int index)
         {
             for (; index != Skeleton.InvalidIndex && !needed[index]; index = parents[index])
@@ -208,7 +209,7 @@ public sealed class HumanoidRig
     private int[] BuildCodecOrder()
     {
         var order = new List<int>(_skeleton.BoneCount);
-        var placed = new bool[_skeleton.BoneCount];
+        bool[] placed = new bool[_skeleton.BoneCount];
         void Place(int index)
         {
             if (index == Skeleton.InvalidIndex || placed[index])

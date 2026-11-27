@@ -61,13 +61,13 @@ internal sealed class ObjFormat : IModelFormat
 
         var state = new ParserState(context);
 
-        foreach (var rawLine in EnumerateLogicalLines(text))
+        foreach (string rawLine in EnumerateLogicalLines(text))
         {
             ReadOnlySpan<char> line = StripComment(rawLine);
             if (line.IsEmpty) continue;
 
             var tok = new ObjTokenizer(line);
-            var keyword = tok.NextToken();
+            ReadOnlySpan<char> keyword = tok.NextToken();
             if (keyword.IsEmpty) continue;
 
             try { ApplyDirective(keyword, ref tok, state); }
@@ -82,7 +82,7 @@ internal sealed class ObjFormat : IModelFormat
 
     private static ReadOnlySpan<char> StripComment(string line)
     {
-        var span = line.AsSpan();
+        ReadOnlySpan<char> span = line.AsSpan();
         int hash = span.IndexOf('#');
         if (hash >= 0) span = span[..hash];
         return span.TrimEnd();
@@ -181,7 +181,7 @@ internal sealed class ObjFormat : IModelFormat
         if (keyword.SequenceEqual("g"))
         {
             // OBJ groups can list multiple names; we use the first as the node name.
-            var groupName = tok.NextToken();
+            ReadOnlySpan<char> groupName = tok.NextToken();
             state.SetGroup(groupName.IsEmpty ? "default" : groupName.ToString());
             return;
         }
@@ -224,9 +224,9 @@ internal sealed class ObjFormat : IModelFormat
 
     private sealed class ParserState
     {
-        public List<Float3> Positions { get; } = new();
-        public List<Float2> UVs { get; } = new();
-        public List<Float3> Normals { get; } = new();
+        public List<Float3> Positions { get; } = [];
+        public List<Float2> UVs { get; } = [];
+        public List<Float3> Normals { get; } = [];
         /// <summary>Per-position vertex color (when the OBJ used the v r g b extension).
         /// <c>null</c> until the first colored vertex shows up.</summary>
         private List<Color>? _vertexColors;
@@ -236,9 +236,9 @@ internal sealed class ObjFormat : IModelFormat
         private readonly MtlReader _mtl;
 
         // (objectName, materialName) -> IntermediateMesh
-        private readonly Dictionary<(string Obj, string Mat), int> _meshByKey = new();
+        private readonly Dictionary<(string Obj, string Mat), int> _meshByKey = [];
         // Per-mesh vertex dedup: (posIdx, uvIdx, normalIdx) -> mesh-local vertex index
-        private readonly Dictionary<int, Dictionary<(int p, int u, int n), int>> _meshVertexDedup = new();
+        private readonly Dictionary<int, Dictionary<(int p, int u, int n), int>> _meshVertexDedup = [];
 
         private string _objectName = "default";
         private string _materialName = "default";
@@ -264,7 +264,7 @@ internal sealed class ObjFormat : IModelFormat
             // Backfill any earlier vertices that didn't have colors.
             if (_vertexColors is null)
             {
-                _vertexColors = new List<Color>(Positions.Count);
+                _vertexColors = [with(Positions.Count)];
                 for (int i = 0; i + 1 < Positions.Count; i++)
                     _vertexColors.Add(new Color(1f, 1f, 1f, 1f));
             }
@@ -324,7 +324,7 @@ internal sealed class ObjFormat : IModelFormat
             }
             try
             {
-                using var stream = _ctx.Resolver.OpenRead(resolved);
+                using Stream stream = _ctx.Resolver.OpenRead(resolved);
                 using var reader = new StreamReader(stream);
                 _mtl.Read(reader.ReadToEnd());
             }
@@ -339,13 +339,13 @@ internal sealed class ObjFormat : IModelFormat
             int materialIndex = ResolveMaterial(_materialName);
             int meshIdx = GetOrCreateMesh(_objectName, _materialName, materialIndex);
 
-            var mesh = _scene.Meshes[meshIdx];
-            var dedup = _meshVertexDedup[meshIdx];
+            IntermediateMesh mesh = _scene.Meshes[meshIdx];
+            Dictionary<(int p, int u, int n), int> dedup = _meshVertexDedup[meshIdx];
 
             var faceIndices = new List<int>(4);
             while (!tok.AtEnd)
             {
-                var faceTok = tok.NextToken();
+                ReadOnlySpan<char> faceTok = tok.NextToken();
                 if (faceTok.IsEmpty) break;
                 if (!TryParseFaceVertex(faceTok, out int posI, out int uvI, out int normI))
                 {
@@ -482,11 +482,11 @@ internal sealed class ObjFormat : IModelFormat
                 return TryResolveIndex(rest, UVs.Count, out uv);
             }
 
-            var uvSpan = rest[..secondSlash];
+            ReadOnlySpan<char> uvSpan = rest[..secondSlash];
             if (!uvSpan.IsEmpty && !TryResolveIndex(uvSpan, UVs.Count, out uv))
                 return false;
 
-            var normSpan = rest[(secondSlash + 1)..];
+            ReadOnlySpan<char> normSpan = rest[(secondSlash + 1)..];
             if (!normSpan.IsEmpty && !TryResolveIndex(normSpan, Normals.Count, out normal))
                 return false;
             return true;
@@ -521,7 +521,7 @@ internal sealed class ObjFormat : IModelFormat
 
         private int GetOrCreateMesh(string obj, string mat, int materialIndex)
         {
-            var key = (obj, mat);
+            (string obj, string mat) key = (obj, mat);
             if (_meshByKey.TryGetValue(key, out int idx)) return idx;
 
             var mesh = new IntermediateMesh
@@ -532,7 +532,7 @@ internal sealed class ObjFormat : IModelFormat
             idx = _scene.Meshes.Count;
             _scene.Meshes.Add(mesh);
             _meshByKey[key] = idx;
-            _meshVertexDedup[idx] = new Dictionary<(int, int, int), int>();
+            _meshVertexDedup[idx] = [];
             return idx;
         }
 
@@ -544,7 +544,7 @@ internal sealed class ObjFormat : IModelFormat
 
             var objectsInOrder = new List<string>();
             var seenObjects = new HashSet<string>(StringComparer.Ordinal);
-            foreach (var key in _meshByKey.Keys)
+            foreach ((string Obj, string Mat) key in _meshByKey.Keys)
             {
                 if (seenObjects.Add(key.Obj))
                     objectsInOrder.Add(key.Obj);
@@ -556,7 +556,7 @@ internal sealed class ObjFormat : IModelFormat
                 root.Children.Add(objectNode);
 
                 var meshesForObj = new List<int>();
-                foreach (var kvp in _meshByKey)
+                foreach (KeyValuePair<(string Obj, string Mat), int> kvp in _meshByKey)
                     if (kvp.Key.Obj == obj)
                         meshesForObj.Add(kvp.Value);
                 if (meshesForObj.Count == 0)

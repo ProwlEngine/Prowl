@@ -29,8 +29,8 @@ public sealed class TerrainProps : IDisposable
     private readonly RenderWorld _world;
     private readonly ITerrainInstances _source;
     private readonly TerrainPropKind?[] _kinds;
-    private readonly Dictionary<(int, int), List<Placed>> _placed = new();
-    private readonly Dictionary<(int, int), Task<IReadOnlyList<TerrainInstance>>> _building = new();
+    private readonly Dictionary<(int, int), List<Placed>> _placed = [];
+    private readonly Dictionary<(int, int), Task<IReadOnlyList<TerrainInstance>>> _building = [];
 
     /// <param name="world">The world the props draw in.</param>
     /// <param name="source">Where the placed instances come from.</param>
@@ -66,7 +66,7 @@ public sealed class TerrainProps : IDisposable
         double size = _source.CellSize;
         int cx = (int)Math.Floor((at.X - _source.Origin.X) / size), cz = (int)Math.Floor((at.Y - _source.Origin.Y) / size);
         int reach = (int)Math.Ceiling(Range / size) + 1;
-        List<((int, int) Cell, double Away)> wanted = new();
+        List<((int, int) Cell, double Away)> wanted = [];
         for (int z = cz - reach; z <= cz + reach; z++)
             for (int x = cx - reach; x <= cx + reach; x++)
             {
@@ -150,10 +150,10 @@ public sealed class TerrainProps : IDisposable
     // Moves the instances that stay, adds the new ones and removes the gone ones
     private void Replace((int, int) cell, List<Placed> old, IReadOnlyList<TerrainInstance> instances)
     {
-        Dictionary<ulong, Placed> before = new(old.Count);
+        Dictionary<ulong, Placed> before = [with(old.Count)];
         foreach (Placed placed in old)
             before[placed.Id] = placed;
-        List<Placed> list = new(instances.Count);
+        List<Placed> list = [with(instances.Count)];
         foreach (TerrainInstance instance in instances)
         {
             if (before.Remove(instance.Id, out Placed kept))
@@ -201,7 +201,7 @@ public sealed class TerrainProps : IDisposable
 
     private void Place((int, int) cell, IReadOnlyList<TerrainInstance> instances)
     {
-        List<Placed> list = new(instances.Count);
+        List<Placed> list = [with(instances.Count)];
         foreach (TerrainInstance instance in instances)
             if (Add(instance) is Placed added)
                 list.Add(added);

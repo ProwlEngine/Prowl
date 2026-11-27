@@ -29,7 +29,7 @@ internal sealed class ReadbackRequest
 /// <summary>Makes the staging buffers of a frame's readbacks and drops the requests whose source was disposed.</summary>
 internal sealed class ReadbackStaging(GraphicsDevice device, Action<RendererError> report)
 {
-    public readonly List<ReadbackRequest> Requests = new();
+    public readonly List<ReadbackRequest> Requests = [];
 
     public void Prepare(List<ReadbackRequest> requests)
     {

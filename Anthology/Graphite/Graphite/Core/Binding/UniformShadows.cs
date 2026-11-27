@@ -27,7 +27,7 @@ internal sealed class UniformShadows
     private PackedBlock?[] _pack = Array.Empty<PackedBlock?>();
     private int[] _hits = Array.Empty<int>();
     private bool[] _covered = Array.Empty<bool>();
-    private readonly List<(PropertySet Source, bool Defaults)> _applied = new();
+    private readonly List<(PropertySet Source, bool Defaults)> _applied = [];
 
     public UniformBindingPlan? Plan => _plan;
 

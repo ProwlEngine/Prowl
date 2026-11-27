@@ -31,19 +31,19 @@ public sealed class Lexer
 
     string Intern(int start, int end)
     {
-        var intern = _internTls ??= [];
-        var span = _src.AsSpan(start, end - start);
+        Dictionary<int, object> intern = _internTls ??= [];
+        ReadOnlySpan<char> span = _src.AsSpan(start, end - start);
         int h = string.GetHashCode(span);
         if (intern.TryGetValue(h, out object? bucket))
         {
-            if (bucket is string s) { if (span.SequenceEqual(s)) return s; var ns = span.ToString(); intern[h] = new List<string> { s, ns }; return ns; }
+            if (bucket is string s) { if (span.SequenceEqual(s)) return s; string ns = span.ToString(); intern[h] = new List<string> { s, ns }; return ns; }
             var list = (List<string>)bucket;
-            foreach (var t in list) if (span.SequenceEqual(t)) return t;
-            var added = span.ToString();
+            foreach (string t in list) if (span.SequenceEqual(t)) return t;
+            string added = span.ToString();
             list.Add(added);
             return added;
         }
-        var fresh = span.ToString();
+        string fresh = span.ToString();
         intern[h] = fresh;
         return fresh;
     }
@@ -62,7 +62,7 @@ public sealed class Lexer
         var lexer = new Lexer(source);
         while (true)
         {
-            var token = lexer.Next();
+            Token token = lexer.Next();
             output.Add(token);
             if (token.Kind == TokenKind.End) return;
         }
@@ -101,7 +101,7 @@ public sealed class Lexer
             case '#': return Punct(TokenKind.Hash, col);
         }
 
-        foreach (var op in Operators)
+        foreach (string op in Operators)
             if (Matches(op))
             {
                 _pos += op.Length;
@@ -120,7 +120,7 @@ public sealed class Lexer
         // its 1024-char token limit with "name too long"; match that instead of accepting them and
         // producing identifiers downstream consumers may choke on.
         if (text.Length > 1024) throw new GlslParseException("name too long", _line);
-        var kind = text is "true" or "false" ? TokenKind.BoolConst : TokenKind.Identifier;
+        TokenKind kind = text is "true" or "false" ? TokenKind.BoolConst : TokenKind.Identifier;
         return new Token(kind, text, _line, col);
     }
 

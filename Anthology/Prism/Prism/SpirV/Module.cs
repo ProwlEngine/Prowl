@@ -98,7 +98,7 @@ public sealed class Module
     uint CacheType(NKey k, Op op, int arity)
     {
         if (_cacheN.TryGetValue(k, out uint id)) return id;
-        var inst = InstrPool.Rent(op, resultId: AllocId());
+        Instruction inst = InstrPool.Rent(op, resultId: AllocId());
         if (arity >= 1) inst.Add(k.A);
         if (arity >= 2) inst.Add(k.B);
         return _cacheN[k] = Emit(_globals, inst);
@@ -231,8 +231,8 @@ public sealed class Module
         hash.Add(type);
         foreach (uint c in components) hash.Add(c);
         int h = hash.ToHashCode();
-        if (_compositeCache.TryGetValue(h, out var bucket))
-            foreach (var e in bucket)
+        if (_compositeCache.TryGetValue(h, out List<(uint Type, uint[] Comps, uint Id)>? bucket))
+            foreach ((uint Type, uint[] Comps, uint Id) e in bucket)
                 if (e.Type == type && e.Comps.AsSpan().SequenceEqual(components)) return e.Id;
         uint id = Emit(_globals, InstrPool.Rent(Op.ConstantComposite, type, AllocId()).Add(components));
         (bucket ??= _compositeCache[h] = []).Add((type, components, id));
@@ -298,7 +298,7 @@ public sealed class Module
     /// not a global variable emitted so far.</summary>
     public StorageClass? GlobalStorage(uint id)
     {
-        foreach (var g in _globals)
+        foreach (Instruction g in _globals)
             if (g.ResultId == id && g.Op == Op.Variable) return (StorageClass)g.Operands[0];
         return null;
     }
@@ -319,15 +319,15 @@ public sealed class Module
     public void PostProcessNarrowTypes(uint version)
     {
         var defs = new Dictionary<uint, Instruction>();
-        foreach (var g in _globals) if (g.ResultId != 0) defs[g.ResultId] = g;
+        foreach (Instruction g in _globals) if (g.ResultId != 0) defs[g.ResultId] = g;
         var typeOf = new Dictionary<uint, uint>();
-        foreach (var g in _globals) if (g.ResultId != 0 && g.TypeId != 0) typeOf[g.ResultId] = g.TypeId;
-        foreach (var f in _functions) if (f.ResultId != 0 && f.TypeId != 0) typeOf[f.ResultId] = f.TypeId;
+        foreach (Instruction g in _globals) if (g.ResultId != 0 && g.TypeId != 0) typeOf[g.ResultId] = g.TypeId;
+        foreach (Instruction f in _functions) if (f.ResultId != 0 && f.TypeId != 0) typeOf[f.ResultId] = f.TypeId;
 
         // Follows vectors, matrices, arrays and pointers down to the scalar/struct at the bottom.
         Instruction? Basic(uint type)
         {
-            while (defs.TryGetValue(type, out var t))
+            while (defs.TryGetValue(type, out Instruction? t))
             {
                 switch (t.Op)
                 {
@@ -340,7 +340,7 @@ public sealed class Module
         }
         bool Contains(uint type, Op op, uint width)
         {
-            if (!defs.TryGetValue(type, out var t)) return false;
+            if (!defs.TryGetValue(type, out Instruction? t)) return false;
             return t.Op switch
             {
                 Op.TypeInt or Op.TypeFloat => t.Op == op && t.Operands[0] == width,
@@ -362,10 +362,10 @@ public sealed class Module
             if (Contains(type, Op.TypeFloat, 16)) AddCapability(Capability.Float16);
         }
         StorageClass? PointerStorage(uint pointer) =>
-            typeOf.TryGetValue(pointer, out uint pt) && defs.TryGetValue(pt, out var p) && p.Op == Op.TypePointer
+            typeOf.TryGetValue(pointer, out uint pt) && defs.TryGetValue(pt, out Instruction? p) && p.Op == Op.TypePointer
                 ? (StorageClass)p.Operands[0] : null;
 
-        foreach (var g in _globals)
+        foreach (Instruction g in _globals)
         {
             switch (g.Op)
             {
@@ -396,14 +396,14 @@ public sealed class Module
         void Check(Instruction inst, uint type)
         {
             if (!defs.ContainsKey(type)) return;
-            var basic = Basic(type);
+            Instruction? basic = Basic(type);
             Op basicOp = basic?.Op ?? Op.Nop;
             uint width = basicOp is Op.TypeInt or Op.TypeFloat ? basic!.Operands[0] : 0;
             switch (inst.Op)
             {
                 case Op.Load or Op.Store:
                     if (basicOp == Op.TypeStruct) { StructCaps(type); break; }
-                    var storage = PointerStorage(inst.Operands[0]);
+                    StorageClass? storage = PointerStorage(inst.Operands[0]);
                     bool storageClassExempt = storage is StorageClass.PhysicalStorageBuffer or StorageClass.Uniform
                         or StorageClass.StorageBuffer or StorageClass.PushConstant;
                     if (width == 8 && !storageClassExempt) AddCapability(Capability.Int8);
@@ -433,13 +433,13 @@ public sealed class Module
             }
         }
 
-        foreach (var inst in _functions)
+        foreach (Instruction inst in _functions)
         {
             // OpFunction/OpFunctionParameter sit outside any block; glslang only visits block instructions.
             if (inst.Op is Op.Function or Op.FunctionParameter or Op.FunctionEnd) continue;
             if (inst.TypeId != 0) Check(inst, inst.TypeId);
             int lead = (inst.TypeId != 0 ? 1 : 0) + (inst.ResultId != 0 ? 1 : 0);
-            var words = new uint[lead + inst.Operands.Count];
+            uint[] words = new uint[lead + inst.Operands.Count];
             int w = 0;
             if (inst.TypeId != 0) words[w++] = inst.TypeId;
             if (inst.ResultId != 0) words[w++] = inst.ResultId;
@@ -460,12 +460,12 @@ public sealed class Module
     {
         if (Version < (uint)SpirVVersion.V1_4) return;
         var defs = new Dictionary<uint, Instruction>();
-        foreach (var g in _globals) if (g.ResultId != 0) defs[g.ResultId] = g;
+        foreach (Instruction g in _globals) if (g.ResultId != 0) defs[g.ResultId] = g;
         var typeOf = new Dictionary<uint, uint>();
-        foreach (var g in _globals) if (g.ResultId != 0 && g.TypeId != 0) typeOf[g.ResultId] = g.TypeId;
-        foreach (var f in _functions) if (f.ResultId != 0 && f.TypeId != 0) typeOf[f.ResultId] = f.TypeId;
+        foreach (Instruction g in _globals) if (g.ResultId != 0 && g.TypeId != 0) typeOf[g.ResultId] = g.TypeId;
+        foreach (Instruction f in _functions) if (f.ResultId != 0 && f.TypeId != 0) typeOf[f.ResultId] = f.TypeId;
 
-        foreach (var inst in _functions)
+        foreach (Instruction inst in _functions)
         {
             int maskIndex = inst.Op switch
             {
@@ -476,9 +476,9 @@ public sealed class Module
                 Op.ImageGather or Op.ImageSparseGather or Op.ImageWrite => 3,
                 _ => -1,
             };
-            if (maskIndex < 0 || !typeOf.TryGetValue(inst.Operands[0], out uint imageType) || !defs.TryGetValue(imageType, out var it)) continue;
+            if (maskIndex < 0 || !typeOf.TryGetValue(inst.Operands[0], out uint imageType) || !defs.TryGetValue(imageType, out Instruction? it)) continue;
             if (it.Op == Op.TypeSampledImage && !defs.TryGetValue(it.Operands[0], out it)) continue;
-            if (it.Op != Op.TypeImage || !defs.TryGetValue(it.Operands[0], out var sampled)) continue;
+            if (it.Op != Op.TypeImage || !defs.TryGetValue(it.Operands[0], out Instruction? sampled)) continue;
             if (sampled.Op != Op.TypeInt || sampled.Operands[0] != 32) continue;
             uint bit = (uint)(sampled.Operands[1] != 0 ? ImageOperands.SignExtend : ImageOperands.ZeroExtend);
             // Neither bit takes an operand, so ORing it into an existing mask keeps the operand order intact.
@@ -495,10 +495,10 @@ public sealed class Module
     {
         // Build into a pooled per-thread word buffer so the (large) growing list is reused across compiles;
         // only the final result array is a genuine allocation (it escapes to the caller).
-        var words = _serializeBuf ??= [];
+        List<uint> words = _serializeBuf ??= [];
         words.Clear();
         words.Add(Spv.MagicNumber); words.Add(Version); words.Add(Generator); words.Add(_bound); words.Add(0 /* schema */);
-        void Emit(IEnumerable<Instruction> section) { foreach (var i in section) i.WriteTo(words); }
+        void Emit(IEnumerable<Instruction> section) { foreach (Instruction i in section) i.WriteTo(words); }
 
         // Section order mirrors glslang's Builder::dump exactly (references/.../SpvBuilder.cpp).
         // glslang keeps capabilities in a std::set, so they are emitted in ascending value order.

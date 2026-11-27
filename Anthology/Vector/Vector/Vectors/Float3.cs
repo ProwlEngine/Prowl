@@ -87,7 +87,7 @@ public partial struct Float3 : IEquatable<Float3>, IFormattable
 
     public Float3(IEnumerable<float> values)
     {
-        var array = values.ToArray();
+        float[] array = values.ToArray();
         if (array.Length < 3) throw new ArgumentException("Collection must contain at least 3 elements.", nameof(values));
         X = array[0];
         Y = array[1];

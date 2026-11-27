@@ -51,15 +51,15 @@ internal readonly struct CachedFieldInfo
         _property = null;
         SerializedName = serializedName;
 
-        var serializeIf = member.GetCustomAttribute<SerializeIfAttribute>();
+        SerializeIfAttribute? serializeIf = member.GetCustomAttribute<SerializeIfAttribute>();
         SerializeIf = serializeIf == null ? null : BuildSerializeIf(ownerType, serializeIf.ConditionMemberName);
 
         HasIgnoreOnNull = member.IsDefined(typeof(IgnoreOnNullAttribute), false);
 
-        var formerAttrs = member.GetCustomAttributes<FormerlySerializedAsAttribute>();
+        IEnumerable<FormerlySerializedAsAttribute> formerAttrs = member.GetCustomAttributes<FormerlySerializedAsAttribute>();
         string[]? names = null;
         // Avoid LINQ allocation in the common case (no former names)
-        foreach (var attr in formerAttrs)
+        foreach (FormerlySerializedAsAttribute attr in formerAttrs)
         {
             names ??= CollectFormerNames(formerAttrs);
             break;
@@ -108,7 +108,7 @@ internal readonly struct CachedFieldInfo
     private static string[] CollectFormerNames(IEnumerable<FormerlySerializedAsAttribute> attrs)
     {
         var list = new List<string>();
-        foreach (var attr in attrs)
+        foreach (FormerlySerializedAsAttribute attr in attrs)
             list.Add(attr.oldName);
         return list.ToArray();
     }
@@ -246,7 +246,7 @@ public static class ReflectionUtils
 
             foreach (Type type in types)
             {
-                foreach (var attr in type.GetCustomAttributes<FormerlySerializedAsAttribute>(false))
+                foreach (FormerlySerializedAsAttribute attr in type.GetCustomAttributes<FormerlySerializedAsAttribute>(false))
                 {
                     if (attr.oldName == typeNameOnly || attr.oldName == shortName)
                         return type;
@@ -278,15 +278,15 @@ public static class ReflectionUtils
                                      BindingFlags.DeclaredOnly;
 
             // Walk up the inheritance hierarchy to collect members from all base types, most derived first.
-            List<MemberInfo> members = new();
+            List<MemberInfo> members = [];
             Type? currentType = targetType;
             while (currentType != null && currentType != typeof(object))
             {
-                foreach (var field in currentType.GetFields(flags))
+                foreach (FieldInfo field in currentType.GetFields(flags))
                     if (IsFieldSerializable(field))
                         members.Add(field);
 
-                foreach (var property in currentType.GetProperties(flags))
+                foreach (PropertyInfo property in currentType.GetProperties(flags))
                     if (IsPropertySerializable(property))
                         members.Add(property);
 
@@ -296,7 +296,7 @@ public static class ReflectionUtils
             // The base most member of a shadowed name keeps the plain name, so adding a shadowing member in
             // a subclass leaves existing data with the member that wrote it. Any other one is qualified by
             // its declaring type so both survive instead of colliding on one key.
-            HashSet<string> seenNames = new();
+            HashSet<string> seenNames = [];
             var fields = new CachedFieldInfo[members.Count];
             for (int i = members.Count - 1; i >= 0; i--)
             {

@@ -38,8 +38,8 @@ public sealed partial class PaperDevTools
 
     // Scroll offsets + measured content heights, keyed by region name (kept here rather than in
     // Paper storage so DevTools is fully self-contained).
-    private readonly Dictionary<string, float> _scroll = new();
-    private readonly Dictionary<string, float> _scrollContent = new();
+    private readonly Dictionary<string, float> _scroll = [];
+    private readonly Dictionary<string, float> _scrollContent = [];
 
     /// <summary> Initializes a new instance of PaperDevTools associated with the given Paper frame. </summary>
     public PaperDevTools(Paper paper) => _p = paper;
@@ -88,10 +88,10 @@ public sealed partial class PaperDevTools
         _frameHead = (_frameHead + 1) % _frameHist.Length;
 
         // Geometry stats from the frame we just rendered (canvas is filled now, cleared next BeginFrame).
-        var canvas = _p.Canvas;
+        Canvas canvas = _p.Canvas;
         if (canvas != null)
         {
-            var dcs = canvas.DrawCalls;
+            IReadOnlyList<DrawCall> dcs = canvas.DrawCalls;
             _statDrawCalls = dcs.Count;
             _statVerts = canvas.VertexCount;
             _statTris = canvas.IndexCount / 3;
@@ -143,7 +143,7 @@ public sealed partial class PaperDevTools
         // Split the screen: move the app (already built this frame as root's children) into a
         // clipped viewport occupying the top region, so it shrinks/clips above the panel instead
         // of being covered by it. Works no matter how the app sizes itself.
-        var root = _p.RootElement;
+        ElementHandle root = _p.RootElement;
         var appKids = new List<int>(root.Data.ChildIndices);
         root.Data.ChildIndices.Clear();
 
@@ -151,7 +151,7 @@ public sealed partial class PaperDevTools
             .Size(w, appTop).Clip().Enter())
         {
             int vpIndex = _p.CurrentParent.Index;
-            var vpKids = _p.CurrentParent.Data.ChildIndices;
+            List<int> vpKids = _p.CurrentParent.Data.ChildIndices;
             for (int i = 0; i < appKids.Count; i++)
             {
                 vpKids.Add(appKids[i]);
@@ -304,7 +304,7 @@ public sealed partial class PaperDevTools
         sy = Math.Clamp(sy, 0f, maxScroll);
         _scroll[key] = sy;
 
-        var outer = _p.Box("scr_" + key).Width(w).Height(h).Clip()
+        ElementBuilder outer = _p.Box("scr_" + key).Width(w).Height(h).Clip()
             .OnScroll(e =>
             {
                 float m = MathF.Max(0f, _scrollContent.GetValueOrDefault(key) - h);
@@ -313,12 +313,12 @@ public sealed partial class PaperDevTools
                 _scroll[key] = next;
                 if (next != prev) e.StopPropagation();
             });
-        var oScope = outer.Enter();
+        IDisposable oScope = outer.Enter();
 
-        var inner = _p.Column("sci_" + key).PositionType(PositionType.SelfDirected).Position(0, -sy)
+        ElementBuilder inner = _p.Column("sci_" + key).PositionType(PositionType.SelfDirected).Position(0, -sy)
             .Width(_p.Percent(100)).Height(_p.Auto)
             .OnPostLayout((h2, rect) => _scrollContent[key] = (float)rect.Size.Y);
-        var iScope = inner.Enter();
+        IDisposable iScope = inner.Enter();
 
         return new ScrollScope(iScope, oScope);
     }

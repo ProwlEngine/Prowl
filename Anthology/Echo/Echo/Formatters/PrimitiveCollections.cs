@@ -97,11 +97,11 @@ internal static class PrimitiveCollections
     };
 
     public static List<EchoObject>? TryWrite(object collection, Type elementType) =>
-        Codecs.TryGetValue(elementType, out var codec) ? codec.Write(collection) : null;
+        Codecs.TryGetValue(elementType, out Codec? codec) ? codec.Write(collection) : null;
 
     public static Array? TryReadArray(List<EchoObject> tags, Type elementType, SerializationContext context) =>
-        context.OnDeserialize == null && Codecs.TryGetValue(elementType, out var codec) ? codec.ReadArray(tags) : null;
+        context.OnDeserialize == null && Codecs.TryGetValue(elementType, out Codec? codec) ? codec.ReadArray(tags) : null;
 
     public static bool TryReadList(object list, List<EchoObject> tags, Type elementType, SerializationContext context) =>
-        context.OnDeserialize == null && Codecs.TryGetValue(elementType, out var codec) && codec.ReadList(list, tags);
+        context.OnDeserialize == null && Codecs.TryGetValue(elementType, out Codec? codec) && codec.ReadList(list, tags);
 }

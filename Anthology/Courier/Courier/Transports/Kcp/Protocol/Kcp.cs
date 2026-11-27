@@ -62,7 +62,7 @@ public sealed class Kcp
     private int segments_out;
     private uint ts_pool_trim;
 
-    internal readonly List<AckItem> acklist = new(16);
+    internal readonly List<AckItem> acklist = [with(16)];
     private readonly uint conv; // conversation
 
     // output function of type <buffer, size>
@@ -70,13 +70,13 @@ public sealed class Kcp
 
     // rcv_buffer needs index insertions and backwards iteration.
     // C# LinkedList allocates for each entry, so let's keep List for now.
-    internal readonly List<Segment> rcv_buf = new(16); // receive buffer
+    internal readonly List<Segment> rcv_buf = [with(16)]; // receive buffer
 
     internal readonly Queue<Segment> rcv_queue = new(16); // receive queue
 
     // snd_buffer needs index removals.
     // C# LinkedList allocates for each entry, so let's keep List for now.
-    internal readonly List<Segment> snd_buf = new(16); // send buffer
+    internal readonly List<Segment> snd_buf = [with(16)]; // send buffer
     internal readonly Queue<Segment> snd_queue = new(16); // send queue
 
     // memory buffer

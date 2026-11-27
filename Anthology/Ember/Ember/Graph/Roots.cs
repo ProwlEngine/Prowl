@@ -64,12 +64,14 @@ public interface IRootProvider
 
 public sealed class RootProviderCollection : ICollection<IRootProvider>
 {
-    private readonly List<IRootProvider> _providers = new();
+    private readonly List<IRootProvider> _providers = [];
 
     public static RootProviderCollection CreateDefault()
     {
-        var providers = new RootProviderCollection();
-        providers.Add(new StaticFieldRoots());
+        var providers = new RootProviderCollection
+        {
+            new StaticFieldRoots()
+        };
         return providers;
     }
 
@@ -89,7 +91,7 @@ public sealed class RootProviderCollection : ICollection<IRootProvider>
 /// <summary>Instances the host registered as roots, such as a scene's components.</summary>
 public sealed class ExplicitRoots : IRootProvider
 {
-    private readonly HashSet<object> _instances = new(ReferenceEqualityComparer.Instance);
+    private readonly HashSet<object> _instances = [with(ReferenceEqualityComparer.Instance)];
 
     public IReadOnlyCollection<object> Instances => _instances;
 
@@ -99,7 +101,7 @@ public sealed class ExplicitRoots : IRootProvider
 
     public IEnumerable<Root> Enumerate(RootContext context)
     {
-        foreach (var instance in _instances)
+        foreach (object instance in _instances)
             yield return Root.Value(instance);
     }
 }

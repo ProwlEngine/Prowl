@@ -18,12 +18,12 @@ namespace Prowl.PaperUI.RichText;
 /// </summary>
 public sealed class RichTextParser
 {
-    private readonly List<RichEffectSpan> _effects = new();
-    private readonly List<RichStyleSpan> _styles = new();
-    private readonly List<RichColorSpan> _colors = new();
-    private readonly List<RichSizeSpan> _sizes = new();
-    private readonly List<RichLinkSpan> _links = new();
-    private readonly List<Open> _open = new();
+    private readonly List<RichEffectSpan> _effects = [];
+    private readonly List<RichStyleSpan> _styles = [];
+    private readonly List<RichColorSpan> _colors = [];
+    private readonly List<RichSizeSpan> _sizes = [];
+    private readonly List<RichLinkSpan> _links = [];
+    private readonly List<Open> _open = [];
     private readonly System.Text.StringBuilder _visible = new();
 
     public string VisibleText { get; private set; } = string.Empty;
@@ -101,7 +101,7 @@ public sealed class RichTextParser
                 continue;
             }
 
-            var body = source.AsSpan(i + 1, close - i - 1);
+            ReadOnlySpan<char> body = source.AsSpan(i + 1, close - i - 1);
             if (body.IndexOf('<') < 0 && ApplyTag(body))
             {
                 i = close + 1;
@@ -133,7 +133,7 @@ public sealed class RichTextParser
 
         if (body[0] == '/')
         {
-            var name = body.Slice(1).Trim();
+            ReadOnlySpan<char> name = body.Slice(1).Trim();
             if (name.Length == 0)
             {
                 // </> closes the most recent open tag, and is consumed even if there is none.
@@ -168,8 +168,8 @@ public sealed class RichTextParser
     private bool OpenTag(ReadOnlySpan<char> body)
     {
         int space = body.IndexOf(' ');
-        var name = space < 0 ? body : body.Slice(0, space);
-        var rest = space < 0 ? ReadOnlySpan<char>.Empty : body.Slice(space + 1);
+        ReadOnlySpan<char> name = space < 0 ? body : body.Slice(0, space);
+        ReadOnlySpan<char> rest = space < 0 ? ReadOnlySpan<char>.Empty : body.Slice(space + 1);
 
         // "2 < 3 and 4 > 1" looks like a tag but has no name, so it is ordinary prose.
         if (name.Length == 0)
@@ -245,7 +245,7 @@ public sealed class RichTextParser
 
     private void CloseAt(int index, int end)
     {
-        var open = _open[index];
+        Open open = _open[index];
         if (end <= open.Start)
         {
             return;
@@ -295,7 +295,7 @@ public sealed class RichTextParser
                 i++;
             }
 
-            var token = rest.Slice(start, i - start);
+            ReadOnlySpan<char> token = rest.Slice(start, i - start);
             if (token.Length == 0 || token[0] == '#')
             {
                 continue;
@@ -319,7 +319,7 @@ public sealed class RichTextParser
 
     private static float ReadFloat(ReadOnlySpan<char> rest, float fallback)
     {
-        var token = rest.Trim();
+        ReadOnlySpan<char> token = rest.Trim();
         return float.TryParse(token, NumberStyles.Float, CultureInfo.InvariantCulture, out float value) ? value : fallback;
     }
 
@@ -350,7 +350,7 @@ public sealed class RichTextParser
             return false;
         }
 
-        var digits = token.Slice(1);
+        ReadOnlySpan<char> digits = token.Slice(1);
         Span<int> v = stackalloc int[8];
         if (digits.Length != 3 && digits.Length != 6 && digits.Length != 8)
         {

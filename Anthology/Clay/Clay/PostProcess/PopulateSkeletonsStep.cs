@@ -21,7 +21,7 @@ internal sealed class PopulateSkeletonsStep : IPostProcess
 
     public void Execute(IntermediateScene scene, ImportContext context)
     {
-        foreach (var skin in scene.Skins)
+        foreach (IntermediateSkin skin in scene.Skins)
         {
             if (skin.RootNode is not null || skin.BoneNodes.Count == 0)
                 continue;

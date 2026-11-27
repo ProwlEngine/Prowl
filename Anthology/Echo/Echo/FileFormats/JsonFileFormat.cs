@@ -30,7 +30,7 @@ public sealed class JsonFileFormat : IFileFormat
     public EchoObject ReadFrom(Stream stream)
     {
         using var reader = new StreamReader(stream, Encoding.UTF8, true, 1024, leaveOpen: true);
-        var json = reader.ReadToEnd();
+        string json = reader.ReadToEnd();
         int index = 0;
         SkipWhitespace(json, ref index);
         if (index >= json.Length)
@@ -92,7 +92,7 @@ public sealed class JsonFileFormat : IFileFormat
         if (float.IsPositiveInfinity(value)) { writer.Write("\"Infinity\""); return; }
         if (float.IsNegativeInfinity(value)) { writer.Write("\"-Infinity\""); return; }
         Span<char> buffer = stackalloc char[32];
-        var s = TextFormatting.WriteNumber(writer, value, buffer, "R", CultureInfo.InvariantCulture);
+        ReadOnlySpan<char> s = TextFormatting.WriteNumber(writer, value, buffer, "R", CultureInfo.InvariantCulture);
         // Ensure it looks like a float (has a decimal point)
         if (s.IndexOf('.') < 0 && s.IndexOf('E') < 0)
             writer.Write(".0");
@@ -104,14 +104,14 @@ public sealed class JsonFileFormat : IFileFormat
         if (double.IsPositiveInfinity(value)) { writer.Write("\"Infinity\""); return; }
         if (double.IsNegativeInfinity(value)) { writer.Write("\"-Infinity\""); return; }
         Span<char> buffer = stackalloc char[32];
-        var s = TextFormatting.WriteNumber(writer, value, buffer, "R", CultureInfo.InvariantCulture);
+        ReadOnlySpan<char> s = TextFormatting.WriteNumber(writer, value, buffer, "R", CultureInfo.InvariantCulture);
         if (s.IndexOf('.') < 0 && s.IndexOf('E') < 0)
             writer.Write(".0");
     }
 
     private void WriteArray(TextWriter writer, EchoObject list, int indent)
     {
-        var items = list.List;
+        List<EchoObject> items = list.List;
         if (items.Count == 0)
         {
             writer.Write("[]");
@@ -135,7 +135,7 @@ public sealed class JsonFileFormat : IFileFormat
 
     private void WriteObject(TextWriter writer, EchoObject compound, int indent)
     {
-        var tags = compound.Tags;
+        CompoundTags tags = compound.Tags;
         if (tags.Count == 0)
         {
             writer.Write("{}");
@@ -146,7 +146,7 @@ public sealed class JsonFileFormat : IFileFormat
         if (Indented) writer.WriteLine();
 
         bool first = true;
-        foreach (var kvp in tags)
+        foreach (KeyValuePair<string, EchoObject> kvp in tags)
         {
             if (!first)
             {
@@ -352,7 +352,7 @@ public sealed class JsonFileFormat : IFileFormat
             }
         }
 
-        var numStr = json.AsSpan(start, index - start);
+        ReadOnlySpan<char> numStr = json.AsSpan(start, index - start);
 
         if (hasDecimal || hasExponent)
         {
@@ -394,7 +394,7 @@ public sealed class JsonFileFormat : IFileFormat
             // Read key
             if (json[index] != '"')
                 throw new InvalidDataException($"Expected '\"' for object key at position {index}");
-            var key = ReadJsonString(json, ref index);
+            string key = ReadJsonString(json, ref index);
 
             // Read colon
             SkipWhitespace(json, ref index);

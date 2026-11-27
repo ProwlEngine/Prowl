@@ -224,9 +224,9 @@ internal static class LoopOp
 
         int moved = 0;
         float amount = Math.Clamp(Math.Abs(factor), 0f, 1f);
-        foreach (var pair in targets)
+        foreach (KeyValuePair<Vertex, (Float3 Left, Float3 Right, bool HasLeft, bool HasRight)> pair in targets)
         {
-            var (left, right, hasLeft, hasRight) = pair.Value;
+            (Float3 left, Float3 right, bool hasLeft, bool hasRight) = pair.Value;
             if (factor > 0 ? !hasLeft : !hasRight) continue;
             pair.Key.Point = pair.Key.Point + ((factor > 0 ? left : right) - pair.Key.Point) * amount;
             moved++;

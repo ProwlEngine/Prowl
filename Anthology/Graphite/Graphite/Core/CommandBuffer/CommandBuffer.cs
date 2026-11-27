@@ -40,9 +40,9 @@ public abstract partial class CommandBuffer : CommandBufferBase
 
     private PropertySet? _lastAppliedDefaults;
     private uint _lastAppliedDefaultsVersion;
-    private readonly System.Collections.Generic.HashSet<PropertyID> _defaultPropertyKeys = new();
+    private readonly System.Collections.Generic.HashSet<PropertyID> _defaultPropertyKeys = [];
 
-    private readonly System.Collections.Generic.List<PropertyID> _changedPropertyKeys = new();
+    private readonly System.Collections.Generic.List<PropertyID> _changedPropertyKeys = [];
     private bool _allPropertiesChanged = true;
 
     internal System.Collections.Generic.List<PropertyID> ChangedPropertyKeys => _changedPropertyKeys;

@@ -19,14 +19,14 @@ internal static class FbxTextureMapper
 {
     public sealed class TextureMapping
     {
-        public Dictionary<long, int> TextureIndex { get; } = new();
+        public Dictionary<long, int> TextureIndex { get; } = [];
 
         /// <summary>Per-Texture-object UV transform, keyed by the FBX Texture object's own id -
         /// kept separate from the (possibly shared/deduplicated) <see cref="IntermediateTexture"/>
         /// image data in <see cref="TextureIndex"/>, since two materials can legitimately tile/offset
         /// the same image differently (e.g. a shared brick texture repeated 2x2 on one wall and 4x4
         /// on another).</summary>
-        public Dictionary<long, (Vector.Float2 Offset, Vector.Float2 Scale, float Rotation)> UVTransform { get; } = new();
+        public Dictionary<long, (Vector.Float2 Offset, Vector.Float2 Scale, float Rotation)> UVTransform { get; } = [];
     }
 
     public static TextureMapping MapAll(FbxDocument doc, IntermediateScene scene, ImportContext ctx)
@@ -47,7 +47,7 @@ internal static class FbxTextureMapper
         var videoIdToIndex = new Dictionary<long, int>();
         var pathToIndex = new Dictionary<string, int>(StringComparer.OrdinalIgnoreCase);
 
-        foreach (var obj in doc.Objects.Values)
+        foreach (FbxObject obj in doc.Objects.Values)
         {
             if (obj.ObjectType != "Texture") continue;
 
@@ -60,7 +60,7 @@ internal static class FbxTextureMapper
                 continue;
             }
 
-            var built = BuildTexture(obj, video, ctx);
+            IntermediateTexture built = BuildTexture(obj, video, ctx);
 
             if (built.SourcePath is not null && pathToIndex.TryGetValue(built.SourcePath, out int existingByPath))
             {
@@ -81,11 +81,11 @@ internal static class FbxTextureMapper
     /// <summary>Walks the Texture object's connections to find the Video object carrying its bytes/filename, if any.</summary>
     private static FbxObject? FindConnectedVideo(FbxDocument doc, long texId)
     {
-        if (doc.ConnectionsByDestination.TryGetValue(texId, out var conns))
+        if (doc.ConnectionsByDestination.TryGetValue(texId, out List<FbxConnection>? conns))
         {
-            foreach (var c in conns)
+            foreach (FbxConnection c in conns)
             {
-                if (!doc.Objects.TryGetValue(c.Source, out var srcObj)) continue;
+                if (!doc.Objects.TryGetValue(c.Source, out FbxObject? srcObj)) continue;
                 if (srcObj.ObjectType == "Video")
                     return srcObj;
             }
@@ -111,7 +111,7 @@ internal static class FbxTextureMapper
             relName ??= video.Node.FindChild("RelativeFilename")?.StringAt(0);
 
             // Embedded content (newer FBX): R-blob child.
-            var content = video.Node.FindChild("Content");
+            FbxNode? content = video.Node.FindChild("Content");
             if (content is not null && content.Properties.Count > 0 && content.Properties[0].BlobValue is { Length: > 0 } bytes)
             {
                 intermediate.EncodedBytes = bytes;
@@ -162,14 +162,14 @@ internal static class FbxTextureMapper
         float rotation = 0f;
 
         // Old-style ModelUVTranslation / ModelUVScaling: direct children with two floats.
-        var modelUVT = tex.Node.FindChild("ModelUVTranslation");
+        FbxNode? modelUVT = tex.Node.FindChild("ModelUVTranslation");
         if (modelUVT is not null && modelUVT.Properties.Count >= 2)
         {
             offset = new Float2(
                 (float)(modelUVT.Properties[0].AsDouble()),
                 (float)(modelUVT.Properties[1].AsDouble()));
         }
-        var modelUVS = tex.Node.FindChild("ModelUVScaling");
+        FbxNode? modelUVS = tex.Node.FindChild("ModelUVScaling");
         if (modelUVS is not null && modelUVS.Properties.Count >= 2)
         {
             scale = new Float2(
@@ -177,7 +177,7 @@ internal static class FbxTextureMapper
                 (float)(modelUVS.Properties[1].AsDouble()));
         }
         // Property-table form (overrides old-style if present).
-        var p = tex.Properties;
+        FbxPropertyTable p = tex.Properties;
         if (p.TryGetVec3("Translation", out double tx, out double ty, out _))
             offset = new Float2((float)tx, (float)ty);
         if (p.TryGetVec3("Scaling", out double sx, out double sy, out _))

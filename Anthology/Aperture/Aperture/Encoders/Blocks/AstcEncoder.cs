@@ -3,6 +3,7 @@
 
 using System.Collections.Concurrent;
 using System.Numerics;
+
 using Prowl.Aperture.Decoders.Dds;
 
 namespace Prowl.Aperture.Encoders.Blocks;

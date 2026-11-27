@@ -38,7 +38,7 @@ public partial struct Float4x4 : System.IEquatable<Float4x4>, IFormattable
     }
 
     /// <summary>Returns a reference to the Float4 (column) at a specified index.</summary>
-    unsafe public ref Float4 this[int index]
+    public unsafe ref Float4 this[int index]
     {
         get
         {
@@ -65,7 +65,7 @@ public partial struct Float4x4 : System.IEquatable<Float4x4>, IFormattable
         {
             if ((uint)column >= 4)
                 throw new System.ArgumentOutOfRangeException(nameof(column));
-            var temp = this[column];
+            Float4 temp = this[column];
             temp[row] = value;
             this[column] = temp;
         }
@@ -479,24 +479,24 @@ public partial struct Float4x4 : System.IEquatable<Float4x4>, IFormattable
     /// <returns>True if the source matrix could be inverted; False otherwise.</returns>
     public static bool Invert(Float4x4 matrix, out Float4x4 result)
     {
-        var a = matrix.c0.X; var b = matrix.c1.X; var c = matrix.c2.X; var d = matrix.c3.X;
-        var e = matrix.c0.Y; var f = matrix.c1.Y; var g = matrix.c2.Y; var h = matrix.c3.Y;
-        var i = matrix.c0.Z; var j = matrix.c1.Z; var k = matrix.c2.Z; var l = matrix.c3.Z;
-        var m = matrix.c0.W; var n = matrix.c1.W; var o = matrix.c2.W; var p = matrix.c3.W;
+        float a = matrix.c0.X; float b = matrix.c1.X; float c = matrix.c2.X; float d = matrix.c3.X;
+        float e = matrix.c0.Y; float f = matrix.c1.Y; float g = matrix.c2.Y; float h = matrix.c3.Y;
+        float i = matrix.c0.Z; float j = matrix.c1.Z; float k = matrix.c2.Z; float l = matrix.c3.Z;
+        float m = matrix.c0.W; float n = matrix.c1.W; float o = matrix.c2.W; float p = matrix.c3.W;
 
-        var kp_lo = k * p - l * o;
-        var jp_ln = j * p - l * n;
-        var jo_kn = j * o - k * n;
-        var ip_lm = i * p - l * m;
-        var io_km = i * o - k * m;
-        var in_jm = i * n - j * m;
+        float kp_lo = k * p - l * o;
+        float jp_ln = j * p - l * n;
+        float jo_kn = j * o - k * n;
+        float ip_lm = i * p - l * m;
+        float io_km = i * o - k * m;
+        float in_jm = i * n - j * m;
 
-        var a11 = +(f * kp_lo - g * jp_ln + h * jo_kn);
-        var a12 = -(e * kp_lo - g * ip_lm + h * io_km);
-        var a13 = +(e * jp_ln - f * ip_lm + h * in_jm);
-        var a14 = -(e * jo_kn - f * io_km + g * in_jm);
+        float a11 = +(f * kp_lo - g * jp_ln + h * jo_kn);
+        float a12 = -(e * kp_lo - g * ip_lm + h * io_km);
+        float a13 = +(e * jp_ln - f * ip_lm + h * in_jm);
+        float a14 = -(e * jo_kn - f * io_km + g * in_jm);
 
-        var det = a * a11 + b * a12 + c * a13 + d * a14;
+        float det = a * a11 + b * a12 + c * a13 + d * a14;
 
         if (MathF.Abs(det) < float.Epsilon)
         {
@@ -509,21 +509,21 @@ public partial struct Float4x4 : System.IEquatable<Float4x4>, IFormattable
             return false;
         }
 
-        var invDet = 1f / det;
+        float invDet = 1f / det;
 
-        var gp_ho = g * p - h * o;
-        var fp_hn = f * p - h * n;
-        var fo_gn = f * o - g * n;
-        var ep_hm = e * p - h * m;
-        var eo_gm = e * o - g * m;
-        var en_fm = e * n - f * m;
+        float gp_ho = g * p - h * o;
+        float fp_hn = f * p - h * n;
+        float fo_gn = f * o - g * n;
+        float ep_hm = e * p - h * m;
+        float eo_gm = e * o - g * m;
+        float en_fm = e * n - f * m;
 
-        var gl_hk = g * l - h * k;
-        var fl_hj = f * l - h * j;
-        var fk_gj = f * k - g * j;
-        var el_hi = e * l - h * i;
-        var ek_gi = e * k - g * i;
-        var ej_fi = e * j - f * i;
+        float gl_hk = g * l - h * k;
+        float fl_hj = f * l - h * j;
+        float fk_gj = f * k - g * j;
+        float el_hi = e * l - h * i;
+        float ek_gi = e * k - g * i;
+        float ej_fi = e * j - f * i;
 
         result = new Float4x4(
             new Float4(

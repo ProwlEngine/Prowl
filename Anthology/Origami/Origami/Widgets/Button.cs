@@ -6,6 +6,7 @@ using System;
 using Prowl.PaperUI;
 using Prowl.PaperUI.LayoutEngine;
 using Prowl.Quill;
+using Prowl.Scribe;
 using Prowl.Vector;
 using Prowl.Vector.Spatial;
 
@@ -213,7 +214,7 @@ public sealed class ButtonBuilder
         {
             if (font != null)
             {
-                var size = _paper.MeasureText(_label, fontSize, font);
+                Float2 size = _paper.MeasureText(_label, fontSize, font);
                 content += (float)size.X;
             }
             else
@@ -232,10 +233,10 @@ public sealed class ButtonBuilder
     public void Show()
     {
         if (Origami.IsReadOnly) _disabled = true;
-        var ramp = _theme.Get(_variant);
-        var ink = _theme.Ink;
-        var font = _theme.Medium ?? _theme.Font;   // .w2btn is weight 500
-        var metrics = _theme.Metrics;
+        OrigamiRamp ramp = _theme.Get(_variant);
+        OrigamiRamp ink = _theme.Ink;
+        FontFile? font = _theme.Medium ?? _theme.Font;   // .w2btn is weight 500
+        OrigamiMetrics metrics = _theme.Metrics;
         float fontSize = metrics.FontSize * _fontScale;
 
         bool interactive = !_disabled && !_loading;
@@ -258,7 +259,7 @@ public sealed class ButtonBuilder
         }
         float roundingValue = _roundingOverride ?? metrics.Rounding;
 
-        var box = _paper.Box(_id)
+        ElementBuilder box = _paper.Box(_id)
             .Width(widthValue)
             .Height(_height);
 
@@ -269,24 +270,24 @@ public sealed class ButtonBuilder
             else box.IsNotFocusable();
             if (_onClick != null)
             {
-                var click = _onClick;
+                Action click = _onClick;
                 box.OnClick(_ => click());
             }
             if (_onRightClick != null)
             {
-                var rc = _onRightClick;
+                Action rc = _onRightClick;
                 box.OnRightClick(_ => rc());
             }
             if (_onDoubleClick != null)
             {
-                var dc = _onDoubleClick;
+                Action dc = _onDoubleClick;
                 box.OnDoubleClick(_ => dc());
             }
         }
 
         using (box.Enter())
         {
-            var handle = _paper.CurrentParent;
+            ElementHandle handle = _paper.CurrentParent;
             _handleSink?.Invoke(handle);
 
             // First-frame autofocus.
@@ -353,7 +354,7 @@ public sealed class ButtonBuilder
             // Custom render overrides the entire visual (still inside the button's hit box).
             if (_customRender != null)
             {
-                var custom = _customRender;
+                Action<Canvas, ButtonContext> custom = _customRender;
                 _paper.Draw((canvas, rect) =>
                 {
                     var ctx = new ButtonContext(rect, isHovered, isPressed, isFocused,
@@ -369,7 +370,7 @@ public sealed class ButtonBuilder
             }
 
             // Optional content callback runs as actual children (uses normal layout).
-            if (_customContent != null) _customContent();
+            _customContent?.Invoke();
 
             // Hover tooltip routed through the shared TooltipSystem (drawn in Origami.EndFrame).
             if (!string.IsNullOrEmpty(_tooltip) && isHovered)
@@ -541,7 +542,7 @@ public sealed class ButtonBuilder
     /// <summary>Resolve the full paint recipe (fill, gradient, border, glow, label) for the style + state.</summary>
     private static BtnColors ResolveColors(in ButtonRenderSnapshot s)
     {
-        var ramp = s.Ramp; var ink = s.Ink; var neutral = s.Theme.Neutral; var primary = s.Theme.Primary;
+        OrigamiRamp ramp = s.Ramp; OrigamiRamp ink = s.Ink; OrigamiRamp neutral = s.Theme.Neutral; OrigamiRamp primary = s.Theme.Primary;
         bool isDefault = s.Variant == OrigamiVariant.Default;
         bool isSubtle = s.Variant == OrigamiVariant.Subtle;
         bool saturated = !isDefault && !isSubtle;

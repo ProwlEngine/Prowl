@@ -57,7 +57,7 @@ internal static class CecilSignature
         {
             if (reference is not GenericInstanceType instance) return false;
 
-            var arguments = type.GenericTypeArguments;
+            Type[] arguments = type.GenericTypeArguments;
             if (arguments.Length != instance.GenericArguments.Count) return false;
 
             for (int i = 0; i < arguments.Length; i++)
@@ -112,15 +112,15 @@ internal static class CecilSignature
                 return SubstituteParameter(method, parameter);
 
             case ArrayType array:
-                var element = Substitute(method, array.ElementType);
+                TypeReference element = Substitute(method, array.ElementType);
                 return array.Rank == 1 ? element.MakeArrayType() : element.MakeArrayType(array.Rank);
 
             case ByReferenceType byRef:
                 return Substitute(method, byRef.ElementType).MakeByReferenceType();
 
             case GenericInstanceType instance:
-                var definition = Substitute(method, instance.ElementType);
-                var arguments = instance.GenericArguments.Select(x => Substitute(method, x)).ToArray();
+                TypeReference definition = Substitute(method, instance.ElementType);
+                TypeReference[] arguments = instance.GenericArguments.Select(x => Substitute(method, x)).ToArray();
                 return definition.MakeGenericInstanceType(arguments);
 
             default:
@@ -141,7 +141,7 @@ internal static class CecilSignature
 
         if (parameter.DeclaringType == null) return parameter;
 
-        for (var declaring = method.DeclaringType; declaring != null; declaring = declaring.DeclaringType)
+        for (TypeReference declaring = method.DeclaringType; declaring != null; declaring = declaring.DeclaringType)
             if (declaring is GenericInstanceType instance
                 && instance.GetElementType().FullName == parameter.DeclaringType.FullName)
                 return instance.GenericArguments[parameter.Position];

@@ -348,7 +348,7 @@ public static class GeometryUVs
     /// <summary>The faces' UV edges drawn as white lines on a clear image, rows from the top, four bytes a pixel.</summary>
     public static byte[] LayoutImage(IEnumerable<GeometryData.Face> faces, int width, int height)
     {
-        var pixels = new byte[width * height * 4];
+        byte[] pixels = new byte[width * height * 4];
         void Plot(int x, int y)
         {
             if (x < 0 || y < 0 || x >= width || y >= height) return;
@@ -425,7 +425,7 @@ public static class GeometryUVs
     /// <summary>Puts the UV points on the line through the two furthest apart, each moved straight onto it.</summary>
     public static void Straighten(GeometryData mesh, IEnumerable<GeometryData.Loop> corners)
     {
-        var points = Points(corners);
+        List<(Float2 UV, List<GeometryData.Loop> Corners)> points = Points(corners);
         if (points.Count < 3) return;
         (Float2 a, Float2 b) = Ends(points);
         Float2 line = b - a;
@@ -442,7 +442,7 @@ public static class GeometryUVs
     /// <summary>Spaces the UV points evenly between the two furthest apart, keeping their order along that line.</summary>
     public static void Distribute(GeometryData mesh, IEnumerable<GeometryData.Loop> corners)
     {
-        var points = Points(corners);
+        List<(Float2 UV, List<GeometryData.Loop> Corners)> points = Points(corners);
         if (points.Count < 3) return;
         (Float2 a, Float2 b) = Ends(points);
         Float2 line = b - a;
@@ -499,8 +499,8 @@ public static class GeometryUVs
         for (int i = 0; i < triangles.Count; i++)
             for (int j = i + 1; j < triangles.Count; j++)
             {
-                var p = triangles[i];
-                var q = triangles[j];
+                (GeometryData.Face Face, Float2 A, Float2 B, Float2 C, Float2 Min, Float2 Max) p = triangles[i];
+                (GeometryData.Face Face, Float2 A, Float2 B, Float2 C, Float2 Min, Float2 Max) q = triangles[j];
                 if (p.Face == q.Face) continue;
                 if (p.Max.X <= q.Min.X || q.Max.X <= p.Min.X || p.Max.Y <= q.Min.Y || q.Max.Y <= p.Min.Y) continue;
                 if (!TrianglesOverlap(p.A, p.B, p.C, q.A, q.B, q.C)) continue;

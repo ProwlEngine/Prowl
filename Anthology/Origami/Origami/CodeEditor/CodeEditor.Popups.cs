@@ -29,7 +29,7 @@ public sealed partial class CodeEditor
     // A popup line as coloured runs. Popups use the editor's monospace font so sizing is just counting chars.
     internal sealed class PopupLine
     {
-        public readonly List<(string Text, Color32 Color, bool Underline)> Runs = new();
+        public readonly List<(string Text, Color32 Color, bool Underline)> Runs = [];
         public int Length;
 
         public PopupLine Add(string text, Color32 color, bool underline = false)
@@ -70,7 +70,7 @@ public sealed partial class CodeEditor
     internal static void WrapTagged(IReadOnlyList<CodeTaggedText> parts, int width, CodeEditorColors pal, List<PopupLine> into)
     {
         var line = new PopupLine();
-        foreach (var part in parts)
+        foreach (CodeTaggedText part in parts)
         {
             string[] pieces = part.Text.Replace("\r", "").Split('\n');
             for (int i = 0; i < pieces.Length; i++)
@@ -101,7 +101,7 @@ public sealed partial class CodeEditor
         {
             float cx = x;
             float ty = y + i * lineH + (lineH - glyphH) * 0.5f;
-            foreach (var (text, color, underline) in lines[i].Runs)
+            foreach ((string? text, Color32 color, bool underline) in lines[i].Runs)
             {
                 DrawPlain(canvas, font, text, cx, ty, color, size);
                 if (underline) canvas.RectFilled(cx, ty + glyphH, text.Length * cw, 1, color);
@@ -113,14 +113,14 @@ public sealed partial class CodeEditor
     private static int MaxLength(List<PopupLine> lines)
     {
         int max = 0;
-        foreach (var l in lines) max = Math.Max(max, l.Length);
+        foreach (PopupLine l in lines) max = Math.Max(max, l.Length);
         return max;
     }
 
     private ElementBuilder PopupBox(Paper paper, string id, float x, float y, float w, float h)
     {
-        var pal = Palette();
-        var v = _view;
+        CodeEditorColors pal = Palette();
+        ViewLayout v = _view;
         return paper.Box(id)
             .PositionType(PositionType.SelfDirected)
             .Position(x - v.X, y - v.Y)
@@ -142,7 +142,7 @@ public sealed partial class CodeEditor
     private void BuildPopups(Paper paper, string id)
     {
         if (!_view.Valid) return;
-        var font = EditorFont;
+        FontFile? font = EditorFont;
         if (font == null) return;
 
         if (_completion != null) BuildCompletion(paper, id, font);
@@ -178,7 +178,7 @@ public sealed partial class CodeEditor
     private bool IsPopupFocused(Paper paper)
         => (_findBarOpen || _gotoOpen || _renameOpen) && paper.FocusedElementId != 0 && _inputHandles.Contains(paper.FocusedElementId);
 
-    private readonly HashSet<int> _inputHandles = new();
+    private readonly HashSet<int> _inputHandles = [];
 
     private void OnEditForPopups(TextChange change)
     {
@@ -206,7 +206,7 @@ public sealed partial class CodeEditor
     {
         if (_completion != null && !_completionUpdating)
         {
-            var c = Caret;
+            TextPosition c = Caret;
             if (c.Line != _completion.Start.Line || c.Column < _completion.Start.Column) CloseCompletion();
             else RefilterCompletion();
         }
@@ -241,7 +241,7 @@ public sealed partial class CodeEditor
 
         if (_completion != null && _completion.Filtered.Count > 0)
         {
-            var c = _completion;
+            CompletionState c = _completion;
             int page = Math.Max(1, CompletionRows - 1);
             switch (key)
             {
@@ -308,7 +308,7 @@ public sealed partial class CodeEditor
             RequestCompletion(new CodeCompletionTrigger(CodeCompletionTriggerKind.Character, c));
         else if (Options.CompletionOnTyping && _language.IsWordChar(c) && !char.IsDigit(c))
         {
-            var w = WordAt(Caret);
+            TextRange w = WordAt(Caret);
             if (w.End.Column - w.Start.Column == 1 && IsCodeAt(Caret.Line, Math.Max(0, Caret.Column - 1)))
                 RequestCompletion(new CodeCompletionTrigger(CodeCompletionTriggerKind.Character, c));
         }
@@ -332,7 +332,7 @@ public sealed partial class CodeEditor
     {
         public CodeCompletionList List = null!;
         public TextPosition Start;
-        public readonly List<(CodeCompletionItem Item, int Score, ulong Mask)> Filtered = new();
+        public readonly List<(CodeCompletionItem Item, int Score, ulong Mask)> Filtered = [];
         public int Selected;
         public int Scroll;
         public bool UserMoved;
@@ -380,8 +380,8 @@ public sealed partial class CodeEditor
     // Lexical fallback: every other word in the nearby text.
     private CodeCompletionList WordCompletions()
     {
-        var word = WordAt(Caret);
-        var start = word.IsEmpty ? Caret : word.Start;
+        TextRange word = WordAt(Caret);
+        TextPosition start = word.IsEmpty ? Caret : word.Start;
         string current = Document.GetText(new TextRange(start, Caret));
         var seen = new HashSet<string>(StringComparer.Ordinal);
         var items = new List<CodeCompletionItem>();
@@ -408,7 +408,7 @@ public sealed partial class CodeEditor
 
     private void ShowCompletion(CodeCompletionList list, bool isExplicit)
     {
-        var start = Document.OffsetToPosition(list.SpanStart);
+        TextPosition start = Document.OffsetToPosition(list.SpanStart);
         if (start.Line != Caret.Line || start.Column > Caret.Column) return;
         _completion = new CompletionState { List = list, Start = start, Explicit = isExplicit };
         RefilterCompletion();
@@ -418,7 +418,7 @@ public sealed partial class CodeEditor
 
     private string FilterText()
     {
-        var c = _completion!;
+        CompletionState c = _completion!;
         if (Caret.Line != c.Start.Line) return "";
         int end = Math.Min(Caret.Column, Document.GetLineLength(c.Start.Line));
         return end > c.Start.Column ? Document[c.Start.Line].Substring(c.Start.Column, end - c.Start.Column) : "";
@@ -426,13 +426,13 @@ public sealed partial class CodeEditor
 
     private void RefilterCompletion()
     {
-        var c = _completion;
+        CompletionState? c = _completion;
         if (c == null) return;
         string filter = FilterText();
-        var prevItem = c.Filtered.Count > 0 && c.Selected < c.Filtered.Count ? c.Filtered[c.Selected].Item : null;
+        CodeCompletionItem? prevItem = c.Filtered.Count > 0 && c.Selected < c.Filtered.Count ? c.Filtered[c.Selected].Item : null;
 
         c.Filtered.Clear();
-        foreach (var item in c.List.Items)
+        foreach (CodeCompletionItem item in c.List.Items)
         {
             int score = FuzzyScore(filter, item.Filter, out ulong mask);
             if (score < 0) continue;
@@ -525,27 +525,27 @@ public sealed partial class CodeEditor
     }
 
     // When each suggestion was last accepted, shared by every editor, for sorting by recent use.
-    private static readonly Dictionary<string, long> s_recentCompletions = new();
+    private static readonly Dictionary<string, long> s_recentCompletions = [];
     private static long s_recentClock;
 
     private static long RecentUse(CodeCompletionItem item) => s_recentCompletions.TryGetValue(item.Label, out long at) ? at : 0;
 
     private bool CompletionCommitsOn(char c)
     {
-        var comp = _completion;
+        CompletionState? comp = _completion;
         if (comp == null || comp.Filtered.Count == 0 || _language.IsWordChar(c)) return false;
         if (comp.List.SuggestionMode && !comp.UserMoved) return false;
         if (FilterText().Length == 0 && !comp.UserMoved && !comp.Explicit) return false;
-        var item = comp.Filtered[comp.Selected].Item;
+        CodeCompletionItem item = comp.Filtered[comp.Selected].Item;
         string commit = Options.CompletionCommitCharacters ?? item.CommitCharacters ?? (Session != null ? ".,;()[]{}<>=" : "");
         return commit.IndexOf(c) >= 0;
     }
 
     private void CommitCompletion(char commitChar)
     {
-        var comp = _completion;
+        CompletionState? comp = _completion;
         if (comp == null || comp.Filtered.Count == 0) { CloseCompletion(); return; }
-        var item = comp.Filtered[comp.Selected].Item;
+        CodeCompletionItem item = comp.Filtered[comp.Selected].Item;
         _completion = null;
         s_recentCompletions[item.Label] = ++s_recentClock;
 
@@ -564,12 +564,12 @@ public sealed partial class CodeEditor
             }
             else
             {
-                var end = Caret;
-                var wordEnd = WordAt(end).End;
+                TextPosition end = Caret;
+                TextPosition wordEnd = WordAt(end).End;
                 if (wordEnd > end && wordEnd.Line == end.Line) end = wordEnd;
                 Edit(CodeEditKind.Other, () =>
                 {
-                    var c = Document.Replace(new TextRange(comp.Start, end), item.InsertText ?? item.Label);
+                    TextChange c = Document.Replace(new TextRange(comp.Start, end), item.InsertText ?? item.Label);
                     _selections.Clear();
                     _selections.Add(new CodeSelection(c.NewEnd));
                     _primary = 0;
@@ -588,8 +588,8 @@ public sealed partial class CodeEditor
 
     private void BuildCompletion(Paper paper, string id, FontFile font)
     {
-        var c = _completion!;
-        var pal = Palette();
+        CompletionState c = _completion!;
+        CodeEditorColors pal = Palette();
         if (c.Filtered.Count == 0) return;
 
         float cw = PopupCharW;
@@ -610,13 +610,13 @@ public sealed partial class CodeEditor
         float w = Math.Clamp(iconW + 10 + (Math.Min(labelChars, 48) + Math.Min(detailChars, 32) + 3) * cw, 220, 560);
         float h = rows * rowH + 4;
 
-        var anchor = PointFromPosition(c.Start);
+        Float2 anchor = PointFromPosition(c.Start);
         float x = anchor.X - iconW - 6;
         float y = anchor.Y + _view.LineH + 2;
         if (y + h > _view.Y + _view.TextH && anchor.Y - h - 2 > _view.Y) y = anchor.Y - h - 2;
 
         ElementHandle popup = default;
-        var box = PopupBox(paper, id + "_completion", x, y, w, h)
+        ElementBuilder box = PopupBox(paper, id + "_completion", x, y, w, h)
             .OnScroll(e =>
             {
                 c.Scroll = Math.Clamp(c.Scroll - (int)MathF.Round(e.Delta * 3), 0, Math.Max(0, c.Filtered.Count - rows));
@@ -642,7 +642,7 @@ public sealed partial class CodeEditor
                 {
                     int index = c.Scroll + i;
                     if (index >= c.Filtered.Count) break;
-                    var (item, _, mask) = c.Filtered[index];
+                    (CodeCompletionItem? item, int _, ulong mask) = c.Filtered[index];
                     float ry = r.Min.Y + 2 + i * rowH;
                     if (index == c.Selected) canvas.RoundedRectFilled(r.Min.X + 2, ry, r.Size.X - 4, rowH, 4, pal.PopupSelection);
 
@@ -651,7 +651,7 @@ public sealed partial class CodeEditor
                     float tx = r.Min.X + iconW + 10;
                     float ty = ry + (rowH - glyphH) * 0.5f;
                     string label = item.Label;
-                    var maskFor = FilterMaskFor(item, label, mask);
+                    ulong maskFor = FilterMaskFor(item, label, mask);
                     DrawMatchedLabel(canvas, font, label, tx, ty, maskFor, pal);
 
                     if (!string.IsNullOrEmpty(item.Detail))
@@ -703,7 +703,7 @@ public sealed partial class CodeEditor
 
     private void DrawKindIcon(Canvas canvas, FontFile font, CodeSymbolKind kind, float x, float y, float size, CodeEditorColors pal)
     {
-        var (letter, tokenKind) = kind switch
+        (string? letter, CodeTokenKind tokenKind) = kind switch
         {
             CodeSymbolKind.Keyword => ("K", CodeTokenKind.Keyword),
             CodeSymbolKind.Snippet => ("S", CodeTokenKind.Comment),
@@ -729,7 +729,7 @@ public sealed partial class CodeEditor
             CodeSymbolKind.Label => ("L", CodeTokenKind.Label),
             _ => ("a", CodeTokenKind.Plain),
         };
-        var col = pal[tokenKind];
+        Color32 col = pal[tokenKind];
         canvas.RoundedRectFilled(x, y, size, size, 3, new Color32(col.R, col.G, col.B, 46));
         float fs = PopupFontSize * 0.9f;
         float gw = _charW * (fs / FontSize);
@@ -741,7 +741,7 @@ public sealed partial class CodeEditor
 
     private void BuildCompletionDescription(Paper paper, string id, FontFile font, CompletionState c, float x, float y)
     {
-        var item = c.Filtered[c.Selected].Item;
+        CodeCompletionItem item = c.Filtered[c.Selected].Item;
         if (c.LastSelected != c.Selected)
         {
             c.LastSelected = c.Selected;
@@ -760,15 +760,15 @@ public sealed partial class CodeEditor
             }, requireVersion: false);
         }
 
-        var info = ReferenceEquals(c.DescriptionFor, item) ? c.Description : null;
+        CodeQuickInfo? info = ReferenceEquals(c.DescriptionFor, item) ? c.Description : null;
         if (info == null || (info.Signature.Count == 0 && info.Documentation.Count == 0)) return;
 
-        var pal = Palette();
+        CodeEditorColors pal = Palette();
         var lines = new List<PopupLine>();
         const int width = 56;
         WrapTagged(info.Signature, width, pal, lines);
         if (info.Documentation.Count > 0) lines.Add(new PopupLine());
-        foreach (var doc in info.Documentation) Wrap(doc, width, pal.PopupTextDim, lines);
+        foreach (string doc in info.Documentation) Wrap(doc, width, pal.PopupTextDim, lines);
         if (lines.Count > 24) lines.RemoveRange(24, lines.Count - 24);
 
         float lh = PopupLineH;
@@ -811,18 +811,18 @@ public sealed partial class CodeEditor
 
     private void BuildSignature(Paper paper, string id, FontFile font)
     {
-        var help = _signature!;
-        var pal = Palette();
+        CodeSignatureHelp help = _signature!;
+        CodeEditorColors pal = Palette();
         int index = Math.Clamp(_sigIndex, 0, help.Signatures.Count - 1);
-        var sig = help.Signatures[index];
+        CodeSignature sig = help.Signatures[index];
         const int width = 90;
 
         var line = new PopupLine();
         if (help.Signatures.Count > 1) line.Add($"{index + 1}/{help.Signatures.Count}  ", pal.PopupTextDim);
-        var active = help.ActiveParameter >= 0 && help.ActiveParameter < sig.Parameters.Count ? sig.Parameters[help.ActiveParameter] : null;
+        CodeSignatureParameter? active = help.ActiveParameter >= 0 && help.ActiveParameter < sig.Parameters.Count ? sig.Parameters[help.ActiveParameter] : null;
 
         int pos = 0;
-        foreach (var part in sig.Parts)
+        foreach (CodeTaggedText part in sig.Parts)
         {
             string t = part.Text;
             if (active != null && active.LabelLength > 0 && pos < active.LabelStart + active.LabelLength && pos + t.Length > active.LabelStart)
@@ -856,7 +856,7 @@ public sealed partial class CodeEditor
         float lh = PopupLineH;
         float w = Math.Min(MaxLength(lines), 120) * PopupCharW + 20;
         float h = lines.Count * lh + 10;
-        var anchor = PointFromPosition(Document.OffsetToPosition(Math.Min(help.ArgumentListStart, Document.Length)));
+        Float2 anchor = PointFromPosition(Document.OffsetToPosition(Math.Min(help.ArgumentListStart, Document.Length)));
         float y = anchor.Y - h - 2;
         if (y < _view.Y) y = anchor.Y + _view.LineH + 2;
 
@@ -899,12 +899,12 @@ public sealed partial class CodeEditor
             return;
         }
 
-        var pos = PositionFromPoint(_pointer, false);
-        var word = WordAt(pos);
+        TextPosition pos = PositionFromPoint(_pointer, false);
+        TextRange word = WordAt(pos);
         bool beyondText = _pointer.X > ColX(VisualColumn(pos.Line, Document.GetLineLength(pos.Line))) + _view.CharW;
         if (beyondText) word = new TextRange(new TextPosition(-1, -1), new TextPosition(-1, -1));
 
-        var key = word.IsEmpty ? pos : word.Start;
+        TextPosition key = word.IsEmpty ? pos : word.Start;
         if (key != _hoverPos)
         {
             if (_hoverLines != null && !(_hoverRange.Contains(pos) && !beyondText)) CloseHover();
@@ -918,23 +918,23 @@ public sealed partial class CodeEditor
         _hoverRequested = true;
 
         var diags = new List<CodeEditorDiagnostic>();
-        foreach (var d in _diagnostics)
+        foreach (CodeEditorDiagnostic d in _diagnostics)
         {
-            var r = d.Range;
+            TextRange r = d.Range;
             bool hit = r.IsEmpty ? r.Start.Line == pos.Line && Math.Abs(r.Start.Column - pos.Column) <= 1 : r.Start <= pos && pos <= r.End;
             if (hit) diags.Add(d);
         }
 
         _hoverRange = word.IsEmpty ? new TextRange(pos, pos) : word;
         _hoverAnchor = PointFromPosition(_hoverRange.Start);
-        var pal = Palette();
+        CodeEditorColors pal = Palette();
 
         List<PopupLine> DiagLines()
         {
             var lines = new List<PopupLine>();
-            foreach (var d in diags)
+            foreach (CodeEditorDiagnostic d in diags)
             {
-                var color = d.Severity == CodeDiagnosticSeverity.Error ? pal.Error : d.Severity == CodeDiagnosticSeverity.Warning ? pal.Warning : pal.Info;
+                Color32 color = d.Severity == CodeDiagnosticSeverity.Error ? pal.Error : d.Severity == CodeDiagnosticSeverity.Warning ? pal.Warning : pal.Info;
                 var wrapped = new List<PopupLine>();
                 Wrap(d.Message, 80, pal.PopupText, wrapped);
                 if (wrapped.Count == 0) continue;
@@ -950,15 +950,15 @@ public sealed partial class CodeEditor
         if (Session == null || word.IsEmpty) return;
         _hoverCts?.Cancel();
         _hoverCts = new CancellationTokenSource();
-        var hoverKey = _hoverPos;
+        TextPosition hoverKey = _hoverPos;
         Continue(Session.GetQuickInfoAsync(Document.PositionToOffset(word.Start), _hoverCts.Token), Document.Version, info =>
         {
             if (_hoverPos != hoverKey || info == null || (info.Signature.Count == 0 && info.Documentation.Count == 0)) return;
-            var lines = DiagLines();
+            List<PopupLine> lines = DiagLines();
             if (lines.Count > 0) lines.Add(new PopupLine());
             WrapTagged(info.Signature, 80, pal, lines);
             if (info.Documentation.Count > 0) lines.Add(new PopupLine());
-            foreach (var doc in info.Documentation) Wrap(doc, 80, pal.PopupTextDim, lines);
+            foreach (string doc in info.Documentation) Wrap(doc, 80, pal.PopupTextDim, lines);
             if (lines.Count > 30) lines.RemoveRange(30, lines.Count - 30);
             _hoverLines = lines;
         });
@@ -966,7 +966,7 @@ public sealed partial class CodeEditor
 
     private void BuildHover(Paper paper, string id, FontFile font)
     {
-        var lines = _hoverLines!;
+        List<PopupLine> lines = _hoverLines!;
         if (lines.Count == 0) return;
         float lh = PopupLineH;
         float w = MaxLength(lines) * PopupCharW + 20;
@@ -985,7 +985,7 @@ public sealed partial class CodeEditor
 
     #region Occurrence highlights
 
-    private readonly List<TextRange> _highlights = new();
+    private readonly List<TextRange> _highlights = [];
     private int _highlightKey = -1;
     private double _highlightAt;
     private CancellationTokenSource? _highlightCts;
@@ -1000,7 +1000,7 @@ public sealed partial class CodeEditor
         _highlights.Clear();
         if (!Selection.IsEmpty && !Selection.Range.IsSingleLine) return;
 
-        var word = Selection.IsEmpty ? WordAt(Caret) : Selection.Range;
+        TextRange word = Selection.IsEmpty ? WordAt(Caret) : Selection.Range;
         if (word.IsEmpty || !IsCodeAt(word.Start.Line, word.Start.Column)) return;
 
         if (Session != null && Selection.IsEmpty)
@@ -1011,7 +1011,7 @@ public sealed partial class CodeEditor
             Continue(Session.GetHighlightsAsync(Document.PositionToOffset(Caret), _highlightCts.Token), version, spans =>
             {
                 _highlights.Clear();
-                foreach (var s in spans)
+                foreach (CodeClassifiedSpan s in spans)
                     _highlights.Add(new TextRange(Document.OffsetToPosition(s.Start), Document.OffsetToPosition(s.Start + s.Length)));
                 if (_highlights.Count <= 1) _highlights.Clear();
             });
@@ -1057,7 +1057,7 @@ public sealed partial class CodeEditor
         int offset = Document.PositionToOffset(Caret);
         Continue(query(Session)(offset, CancellationToken.None), Document.Version, locations =>
         {
-            if (locations.Count == 0) { OpenList($"No {title.ToLowerInvariant()} found", new List<ListItem>()); return; }
+            if (locations.Count == 0) { OpenList($"No {title.ToLowerInvariant()} found", []); return; }
             if (locations.Count == 1) { Navigate(locations[0]); return; }
             ShowLocations(title, locations, lineText: false);
         });
@@ -1067,7 +1067,7 @@ public sealed partial class CodeEditor
     {
         if (Session == null) return;
         int offset = Document.PositionToOffset(Caret);
-        var word = WordAt(Caret);
+        TextRange word = WordAt(Caret);
         string name = word.IsEmpty ? "symbol" : Document.GetText(word);
         Continue(Session.FindReferencesAsync(offset, CancellationToken.None), Document.Version, locations =>
         {
@@ -1080,8 +1080,8 @@ public sealed partial class CodeEditor
     {
         if (location.IsCurrentDocument)
         {
-            var start = Document.OffsetToPosition(location.Start);
-            var end = Document.OffsetToPosition(location.Start + location.Length);
+            TextPosition start = Document.OffsetToPosition(location.Start);
+            TextPosition end = Document.OffsetToPosition(location.Start + location.Length);
             Select(start, end);
             CenterOnCaret(onlyIfOffscreen: true);
             return;
@@ -1094,21 +1094,21 @@ public sealed partial class CodeEditor
     private void ShowLocations(string title, IReadOnlyList<CodeLocation> locations, bool lineText)
     {
         string thisFile = System.IO.Path.GetFileName(FilePath ?? "this file");
-        var groups = locations
+        IOrderedEnumerable<IGrouping<string, CodeLocation>> groups = locations
             .GroupBy(l => l.IsCurrentDocument ? "" : l.Path ?? "?")
             .OrderBy(g => g.Key.Length == 0 ? 0 : 1).ThenBy(g => g.Key, StringComparer.OrdinalIgnoreCase);
 
         var items = new List<ListItem>();
-        foreach (var group in groups)
+        foreach (IGrouping<string, CodeLocation>? group in groups)
         {
-            var first = group.First();
+            CodeLocation first = group.First();
             string file = first.IsCurrentDocument ? thisFile : first.Path != null ? System.IO.Path.GetFileName(first.Path) : "assemblies";
             int count = group.Count();
             items.Add(new ListItem(file, count == 1 ? "1" : count.ToString(), null, Header: true));
 
-            foreach (var loc in group.OrderBy(l => l.IsCurrentDocument ? Document.OffsetToPosition(l.Start).Line : l.Line))
+            foreach (CodeLocation? loc in group.OrderBy(l => l.IsCurrentDocument ? Document.OffsetToPosition(l.Start).Line : l.Line))
             {
-                var target = loc;
+                CodeLocation target = loc;
                 int line = loc.IsCurrentDocument ? Document.OffsetToPosition(loc.Start).Line : loc.Line;
                 int column = loc.IsCurrentDocument ? Document.OffsetToPosition(loc.Start).Column : loc.Column;
                 bool hasSource = loc.IsCurrentDocument || loc.Path != null;
@@ -1163,11 +1163,11 @@ public sealed partial class CodeEditor
         int version = Document.Version;
         Continue(Session.GetCodeActionsAsync(start, length, CancellationToken.None), version, actions =>
         {
-            if (actions.Count == 0) { OpenList("No code actions", new List<ListItem>()); return; }
+            if (actions.Count == 0) { OpenList("No code actions", []); return; }
             var items = new List<ListItem>();
-            foreach (var a in actions)
+            foreach (CodeAction? a in actions)
             {
-                var action = a;
+                CodeAction action = a;
                 items.Add(new ListItem(a.Title, a.IsQuickFix ? "fix" : "", () => ApplyCodeAction(action, version)));
             }
             OpenList("Code actions", items);
@@ -1180,7 +1180,7 @@ public sealed partial class CodeEditor
         if (IsReadOnly) return;
         if (Document.Version != version)
         {
-            OpenList($"The text changed, run '{action.Title}' again", new List<ListItem>());
+            OpenList($"The text changed, run '{action.Title}' again", []);
             return;
         }
         if (action.Resolve == null)
@@ -1188,23 +1188,23 @@ public sealed partial class CodeEditor
             ApplyEdits(action.Edits);
             return;
         }
-        var task = action.Resolve(CancellationToken.None);
+        Task<CodeRenameResult?> task = action.Resolve(CancellationToken.None);
         task.ContinueWith(t => Post(() =>
         {
             if (t.IsFaulted)
             {
-                OpenList($"'{action.Title}' failed: {t.Exception?.GetBaseException().Message}", new List<ListItem>());
+                OpenList($"'{action.Title}' failed: {t.Exception?.GetBaseException().Message}", []);
                 return;
             }
-            var result = t.IsCompletedSuccessfully ? t.Result : null;
+            CodeRenameResult? result = t.IsCompletedSuccessfully ? t.Result : null;
             if (result == null || (result.Edits.Count == 0 && result.OtherDocuments.Count == 0))
             {
-                OpenList($"'{action.Title}' made no text changes", new List<ListItem>());
+                OpenList($"'{action.Title}' made no text changes", []);
                 return;
             }
             if (Document.Version != version)
             {
-                OpenList($"The text changed, run '{action.Title}' again", new List<ListItem>());
+                OpenList($"The text changed, run '{action.Title}' again", []);
                 return;
             }
             ApplyEdits(result.Edits);
@@ -1214,7 +1214,7 @@ public sealed partial class CodeEditor
 
     private void OpenContextMenu(Float2 p)
     {
-        var paper = _paper!;
+        Paper paper = _paper!;
         bool hasSession = Session != null;
         bool ro = IsReadOnly;
         ContextMenu.Show(p.X, p.Y, menu =>
@@ -1253,7 +1253,7 @@ public sealed partial class CodeEditor
     private sealed class ListState
     {
         public string Title = "";
-        public List<ListItem> Items = new();
+        public List<ListItem> Items = [];
         public int Selected;
         public int Scroll;
         public Float2 Anchor;
@@ -1279,7 +1279,7 @@ public sealed partial class CodeEditor
 
     private void MoveListSelection(int delta)
     {
-        var list = _list!;
+        ListState list = _list!;
         int target = list.Selected;
         int step = Math.Sign(delta);
         for (int n = 0; n < Math.Abs(delta); n++)
@@ -1293,22 +1293,22 @@ public sealed partial class CodeEditor
 
     private void InvokeListSelection()
     {
-        var list = _list;
+        ListState? list = _list;
         _list = null;
         if (list != null && list.Selected >= 0 && list.Selected < list.Items.Count) list.Items[list.Selected].Invoke?.Invoke();
     }
 
     private void BuildList(Paper paper, string id, FontFile font)
     {
-        var list = _list!;
-        var pal = Palette();
+        ListState list = _list!;
+        CodeEditorColors pal = Palette();
         float cw = PopupCharW;
         float rowH = MathF.Round(PopupLineH * 1.1f);
         int rows = Math.Min(ListRows, list.Items.Count);
 
         int labelChars = 0, chars = list.Title.Length;
-        foreach (var it in list.Items) if (!it.Header) labelChars = Math.Max(labelChars, it.Label.Length);
-        foreach (var it in list.Items)
+        foreach (ListItem it in list.Items) if (!it.Header) labelChars = Math.Max(labelChars, it.Label.Length);
+        foreach (ListItem it in list.Items)
             chars = Math.Max(chars, Math.Min(110, (it.Header ? it.Label.Length + it.Detail.Length + 2 : labelChars + it.Detail.Length + 2)));
         float w = Math.Max(260, chars * cw + 40);
         float h = (rows + 1) * rowH + 6;
@@ -1321,7 +1321,7 @@ public sealed partial class CodeEditor
         list.Scroll = Math.Clamp(list.Scroll, 0, Math.Max(0, list.Items.Count - rows));
 
         ElementHandle popup = default;
-        var box = PopupBox(paper, id + "_list", list.Anchor.X, list.Anchor.Y + _view.LineH + 2, w, h)
+        ElementBuilder box = PopupBox(paper, id + "_list", list.Anchor.X, list.Anchor.Y + _view.LineH + 2, w, h)
             .OnScroll(e =>
             {
                 list.Scroll = Math.Clamp(list.Scroll - (int)MathF.Round(e.Delta * 3), 0, Math.Max(0, list.Items.Count - rows));
@@ -1350,7 +1350,7 @@ public sealed partial class CodeEditor
                 {
                     int index = list.Scroll + i;
                     if (index >= list.Items.Count) break;
-                    var item = list.Items[index];
+                    ListItem item = list.Items[index];
                     float ry = r.Min.Y + 3 + (i + 1) * rowH;
                     float ty = ry + (rowH - glyphH) * 0.5f;
 
@@ -1409,11 +1409,11 @@ public sealed partial class CodeEditor
     {
         _findBarOpen = true;
         _replaceOpen = replace;
-        var sel = Selection;
+        CodeSelection sel = Selection;
         if (!sel.IsEmpty && sel.Range.IsSingleLine) FindQuery = Document.GetText(sel.Range);
         else if (sel.IsEmpty && FindQuery.Length == 0)
         {
-            var w = WordAt(Caret);
+            TextRange w = WordAt(Caret);
             if (!w.IsEmpty) FindQuery = Document.GetText(w);
         }
         _findStart = Selection.Start;
@@ -1436,7 +1436,7 @@ public sealed partial class CodeEditor
     public void StartRename()
     {
         if (Session == null || IsReadOnly) return;
-        var w = WordAt(Caret);
+        TextRange w = WordAt(Caret);
         if (w.IsEmpty || !IsCodeAt(w.Start.Line, w.Start.Column)) return;
         _renameOpen = true;
         _renameBusy = false;
@@ -1448,8 +1448,8 @@ public sealed partial class CodeEditor
     // A one line input styled for popups. Focus lands on it over two frames so select all applies after focus.
     private ElementHandle InputField(Paper paper, string id, string value, Action<string> onChange, ref int focusFrames, float width, string placeholder, FontFile font)
     {
-        var pal = Palette();
-        var settings = ElementBuilder.TextInputSettings.Default;
+        CodeEditorColors pal = Palette();
+        ElementBuilder.TextInputSettings settings = ElementBuilder.TextInputSettings.Default;
         settings.Font = font;
         settings.TextColor = pal.PopupText;
         settings.Placeholder = placeholder;
@@ -1483,7 +1483,7 @@ public sealed partial class CodeEditor
 
     private void ToolButton(Paper paper, string id, string label, bool active, Action onClick, FontFile font, string? tooltip = null)
     {
-        var pal = Palette();
+        CodeEditorColors pal = Palette();
         float h = PopupLineH + 6;
         paper.Box(id)
             .Width(Math.Max(h, label.Length * PopupCharW + 12)).Height(h)
@@ -1498,7 +1498,7 @@ public sealed partial class CodeEditor
 
     private void BuildFindBar(Paper paper, string id, FontFile font)
     {
-        var pal = Palette();
+        CodeEditorColors pal = Palette();
         float rowH = PopupLineH + 6;
         float fieldW = Math.Max(160, Math.Min(320, _view.TextW * 0.4f));
         float w = fieldW + 8 + rowH * 3 + 90 + rowH * 3 + 24;
@@ -1510,12 +1510,12 @@ public sealed partial class CodeEditor
         {
             using (paper.Row(id + "_find_row").Height(rowH).Gap(2).Enter())
             {
-                var q = InputField(paper, id + "_find_q", FindQuery, v =>
+                ElementHandle q = InputField(paper, id + "_find_q", FindQuery, v =>
                 {
                     FindQuery = v;
                     if (v.Length > 0)
                     {
-                        var start = _findStart;
+                        TextPosition start = _findStart;
                         SetCaretQuiet(start);
                         FindNextMatch();
                     }
@@ -1551,7 +1551,7 @@ public sealed partial class CodeEditor
                 using (paper.Row(id + "_repl_row").Height(rowH).Gap(2).Enter())
                 {
                     int none = 0;
-                    var r = InputField(paper, id + "_find_r", ReplaceText, v => ReplaceText = v, ref none, fieldW, "Replace", font);
+                    ElementHandle r = InputField(paper, id + "_find_r", ReplaceText, v => ReplaceText = v, ref none, fieldW, "Replace", font);
                     ToolButton(paper, id + "_r_one", "Replace", false, ReplaceNext, font);
                     ToolButton(paper, id + "_r_all", "All", false, () => ReplaceAll(), font);
 
@@ -1580,7 +1580,7 @@ public sealed partial class CodeEditor
         float x = _view.TextX + (_view.TextW - w) * 0.5f;
         using (PopupBox(paper, id + "_goto", x, _view.Y + 4, w, rowH + 12).Padding(6).Enter())
         {
-            var f = InputField(paper, id + "_goto_f", _gotoText, v => _gotoText = v, ref _focusGotoFrames, w - 12,
+            ElementHandle f = InputField(paper, id + "_goto_f", _gotoText, v => _gotoText = v, ref _focusGotoFrames, w - 12,
                 $"Go to line (1 to {Document.LineCount}), line:col", font);
 
             if (paper.IsElementFocused(f.Data.ID))
@@ -1604,12 +1604,12 @@ public sealed partial class CodeEditor
 
     private void BuildRename(Paper paper, string id, FontFile font)
     {
-        var anchor = PointFromPosition(_renameAt);
+        Float2 anchor = PointFromPosition(_renameAt);
         float rowH = PopupLineH + 6;
         float w = Math.Max(200, (_renameText.Length + 8) * PopupCharW);
         using (PopupBox(paper, id + "_rename", anchor.X - 8, anchor.Y + _view.LineH + 2, w + 12, rowH + 12).Padding(6).Enter())
         {
-            var f = InputField(paper, id + "_rename_f", _renameText, v => _renameText = v, ref _focusRenameFrames, w, "New name", font);
+            ElementHandle f = InputField(paper, id + "_rename_f", _renameText, v => _renameText = v, ref _focusRenameFrames, w, "New name", font);
             if (paper.IsElementFocused(f.Data.ID))
             {
                 if (paper.IsKeyPressed(PaperKey.Enter) && !_renameBusy) ApplyRename();

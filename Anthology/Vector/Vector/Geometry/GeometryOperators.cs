@@ -101,7 +101,7 @@ public sealed class SimplifyOptions
     /// squared difference, int attributes cost their weight whenever they differ. Attributes left out
     /// cost nothing to change, but their seams are still kept.
     /// </summary>
-    public Dictionary<string, float> AttributeWeights = new();
+    public Dictionary<string, float> AttributeWeights = [];
 
     /// <summary>
     /// Loop attributes whose discontinuities are seams that must survive. Null means every loop attribute.
@@ -159,7 +159,7 @@ public static class GeometryOperators
     public static void AttributeLerp(GeometryData mesh, GeometryData.Vertex destination,
         GeometryData.Vertex v1, GeometryData.Vertex v2, float t)
     {
-        foreach (var attr in mesh.VertexAttributes)
+        foreach (GeometryData.AttributeDefinition attr in mesh.VertexAttributes)
         {
             if (!v1.Attributes.ContainsKey(attr.Name) || !v2.Attributes.ContainsKey(attr.Name))
                 continue;
@@ -168,9 +168,7 @@ public static class GeometryOperators
             {
                 case GeometryData.AttributeBaseType.Float:
                     {
-                        var val1 = v1.Attributes[attr.Name] as GeometryData.FloatAttributeValue;
-                        var val2 = v2.Attributes[attr.Name] as GeometryData.FloatAttributeValue;
-                        if (val1 == null || val2 == null) break;
+                        if (v1.Attributes[attr.Name] is not GeometryData.FloatAttributeValue val1 || v2.Attributes[attr.Name] is not GeometryData.FloatAttributeValue val2) break;
 
                         int n = val1.Data.Length;
                         Debug.Assert(val2.Data.Length == n);
@@ -184,9 +182,7 @@ public static class GeometryOperators
                     }
                 case GeometryData.AttributeBaseType.Int:
                     {
-                        var val1 = v1.Attributes[attr.Name] as GeometryData.IntAttributeValue;
-                        var val2 = v2.Attributes[attr.Name] as GeometryData.IntAttributeValue;
-                        if (val1 == null || val2 == null) break;
+                        if (v1.Attributes[attr.Name] is not GeometryData.IntAttributeValue val1 || v2.Attributes[attr.Name] is not GeometryData.IntAttributeValue val2) break;
 
                         int n = val1.Data.Length;
                         Debug.Assert(val2.Data.Length == n);
@@ -214,7 +210,7 @@ public static class GeometryOperators
     /// <param name="scale">The scale factor.</param>
     public static void Scale(GeometryData mesh, float scale)
     {
-        foreach (var v in mesh.Vertices)
+        foreach (GeometryData.Vertex v in mesh.Vertices)
         {
             v.Point *= scale;
         }
@@ -231,15 +227,15 @@ public static class GeometryOperators
     {
         // Calculate face center
         Float3 center = Float3.Zero;
-        var verts = face.NeighborVertices();
+        List<GeometryData.Vertex> verts = face.NeighborVertices();
         int count = verts.Count;
-        foreach (var v in verts)
+        foreach (GeometryData.Vertex v in verts)
         {
             center += v.Point;
         }
         center /= count;
         // Scale each vertex away from the center
-        foreach (var v in verts)
+        foreach (GeometryData.Vertex v in verts)
         {
             Float3 dir = v.Point - center;
             v.Point = center + dir * scale;
@@ -254,7 +250,7 @@ public static class GeometryOperators
     /// <param name="offset">The translation offset.</param>
     public static void Translate(GeometryData mesh, Float3 offset)
     {
-        foreach (var v in mesh.Vertices)
+        foreach (GeometryData.Vertex v in mesh.Vertices)
         {
             v.Point += offset;
         }
@@ -269,9 +265,9 @@ public static class GeometryOperators
     public static void TranslateFaces(GeometryData mesh, IEnumerable<GeometryData.Face> faces, Float3 offset)
     {
         var movedVertices = new HashSet<GeometryData.Vertex>();
-        foreach (var face in faces)
+        foreach (GeometryData.Face face in faces)
         {
-            foreach (var v in face.NeighborVerticesEnumerable())
+            foreach (GeometryData.Vertex v in face.NeighborVerticesEnumerable())
             {
                 if (!movedVertices.Contains(v))
                 {
@@ -289,7 +285,7 @@ public static class GeometryOperators
     /// </summary>
     public static void Transform(GeometryData mesh, Float4x4 transform, IReadOnlyCollection<string>? offsets = null, IReadOnlyCollection<string>? normals = null)
     {
-        foreach (var v in mesh.Vertices)
+        foreach (GeometryData.Vertex v in mesh.Vertices)
             v.Point = Float4x4.TransformPoint(v.Point, transform);
 
         Float3 origin = Float4x4.TransformPoint(Float3.Zero, transform);
@@ -310,8 +306,8 @@ public static class GeometryOperators
         }
         if (offsets is { Count: > 0 } || normals is { Count: > 0 })
         {
-            foreach (var v in mesh.Vertices) Turn(v);
-            foreach (var l in mesh.Loops) Turn(l);
+            foreach (GeometryData.Vertex v in mesh.Vertices) Turn(v);
+            foreach (GeometryData.Loop l in mesh.Loops) Turn(l);
         }
 
         if (Float4x4.Determinant(transform) < 0f) FlipFaces(mesh, [.. mesh.Faces]);
@@ -327,9 +323,9 @@ public static class GeometryOperators
     public static void TransformFaces(GeometryData mesh, IEnumerable<GeometryData.Face> faces, Float4x4 transform)
     {
         var transformedVertices = new HashSet<GeometryData.Vertex>();
-        foreach (var face in faces)
+        foreach (GeometryData.Face face in faces)
         {
-            foreach (var v in face.NeighborVerticesEnumerable())
+            foreach (GeometryData.Vertex v in face.NeighborVerticesEnumerable())
             {
                 if (!transformedVertices.Contains(v))
                 {
@@ -352,7 +348,7 @@ public static class GeometryOperators
         // Classify vertices
         var verticesToRemove = new List<GeometryData.Vertex>();
 
-        foreach (var v in mesh.Vertices.ToArray())
+        foreach (GeometryData.Vertex v in mesh.Vertices.ToArray())
         {
             float distance = plane.GetSignedDistanceToPoint(v.Point);
             if (distance > epsilon) // Positive side
@@ -363,7 +359,7 @@ public static class GeometryOperators
 
         // Remove vertices (this will also remove connected edges and faces).
         // Each vertex is collected once and removing one never removes another, so no presence check is needed.
-        foreach (var v in verticesToRemove)
+        foreach (GeometryData.Vertex v in verticesToRemove)
             mesh.RemoveVertex(v);
     }
 
@@ -379,7 +375,7 @@ public static class GeometryOperators
         // Classify vertices
         var verticesToRemove = new List<GeometryData.Vertex>();
 
-        foreach (var v in mesh.Vertices.ToArray())
+        foreach (GeometryData.Vertex v in mesh.Vertices.ToArray())
         {
             float distance = plane.GetSignedDistanceToPoint(v.Point);
             if (distance < -epsilon) // Negative side
@@ -390,7 +386,7 @@ public static class GeometryOperators
 
         // Remove vertices (this will also remove connected edges and faces).
         // Each vertex is collected once and removing one never removes another, so no presence check is needed.
-        foreach (var v in verticesToRemove)
+        foreach (GeometryData.Vertex v in verticesToRemove)
             mesh.RemoveVertex(v);
     }
 
@@ -484,7 +480,7 @@ public static class GeometryOperators
 
     /// <summary>The face of the original a <see cref="Slice"/> output face came from, or -1 for a cap.</summary>
     public static int SliceSourceFace(GeometryData.Face face)
-        => face.Attributes.TryGetValue(SliceFaceAttribute, out var value) && value is GeometryData.IntAttributeValue i ? i.Data[0] : -1;
+        => face.Attributes.TryGetValue(SliceFaceAttribute, out GeometryData.AttributeValue? value) && value is GeometryData.IntAttributeValue i ? i.Data[0] : -1;
 
     /// <summary>The mesh intersected with a box filling everything behind the plane and well past the mesh.</summary>
     private static GeometryData SliceHalf(GeometryData closed, Plane plane)
@@ -511,10 +507,10 @@ public static class GeometryOperators
         GeometryData built = scene.Build();
 
         var vertices = new Dictionary<GeometryData.Vertex, GeometryData.Vertex>();
-        foreach (var face in built.Faces)
+        foreach (GeometryData.Face face in built.Faces)
         {
-            var ring = face.NeighborVertices().Select(v => vertices.TryGetValue(v, out var copy) ? copy : vertices[v] = result.AddVertex(v.Point)).ToArray();
-            var added = result.AddFace(ring);
+            GeometryData.Vertex[] ring = face.NeighborVertices().Select(v => vertices.TryGetValue(v, out GeometryData.Vertex? copy) ? copy : vertices[v] = result.AddVertex(v.Point)).ToArray();
+            GeometryData.Face? added = result.AddFace(ring);
             if (added == null) continue;
             int index = CSGScene.GetBrushId(face) == source.Id ? CSGScene.GetSourceFaceIndex(face) : -1;
             added.Attributes[SliceFaceAttribute] = new GeometryData.IntAttributeValue(index);
@@ -552,7 +548,7 @@ public static class GeometryOperators
         GeometryData.Vertex? argmin = null;
         float min = 0;
 
-        foreach (var v in mesh.Vertices)
+        foreach (GeometryData.Vertex v in mesh.Vertices)
         {
             if (!v.Attributes.ContainsKey(attrName))
                 continue;
@@ -619,17 +615,17 @@ public static class GeometryOperators
             mesh.AddVertexAttribute("normal", GeometryData.AttributeBaseType.Float, 3);
 
         var sums = new Dictionary<GeometryData.Vertex, Float3>(mesh.Vertices.Count);
-        foreach (var face in mesh.Faces)
+        foreach (GeometryData.Face face in mesh.Faces)
         {
             Float3 normal = face.Normal();
             if (Float3.LengthSquared(normal) < 0.5f) continue;
-            foreach (var v in face.NeighborVerticesEnumerable())
-                sums[v] = (sums.TryGetValue(v, out var sum) ? sum : Float3.Zero) + normal;
+            foreach (GeometryData.Vertex v in face.NeighborVerticesEnumerable())
+                sums[v] = (sums.TryGetValue(v, out Float3 sum) ? sum : Float3.Zero) + normal;
         }
 
-        foreach (var v in mesh.Vertices)
+        foreach (GeometryData.Vertex v in mesh.Vertices)
         {
-            Float3 n = sums.TryGetValue(v, out var sum) && Float3.LengthSquared(sum) > 0f ? Float3.Normalize(sum) : Float3.Zero;
+            Float3 n = sums.TryGetValue(v, out Float3 sum) && Float3.LengthSquared(sum) > 0f ? Float3.Normalize(sum) : Float3.Zero;
             v.Attributes["normal"] = new GeometryData.FloatAttributeValue(n.X, n.Y, n.Z);
         }
     }
@@ -649,10 +645,10 @@ public static class GeometryOperators
     public static List<GeometryData.Face> Triangulate(GeometryData mesh, IEnumerable<GeometryData.Face> faces)
     {
         var made = new List<GeometryData.Face>();
-        foreach (var face in faces.Where(f => mesh.Contains(f) && f.VertCount > 3).ToList())
+        foreach (GeometryData.Face? face in faces.Where(f => mesh.Contains(f) && f.VertCount > 3).ToList())
         {
             var snapshot = FaceSnapshot.Capture(mesh, face);
-            var verts = snapshot.Vertices;
+            List<GeometryData.Vertex> verts = snapshot.Vertices;
             Float3 normal = face.Normal();
             var frame = new PlaneFrame(Float3.LengthSquared(normal) > 0.5f ? normal : Float3.UnitY, verts[0].Point);
             List<int> triangles = Polygon2D.Triangulate(verts.Select(v => frame.To2D(v.Point)).ToList());
@@ -661,7 +657,7 @@ public static class GeometryOperators
             mesh.RemoveFace(face);
             for (int t = 0; t + 2 < triangles.Count; t += 3)
             {
-                var triangle = mesh.AddFace(verts[triangles[t]], verts[triangles[t + 1]], verts[triangles[t + 2]]);
+                GeometryData.Face? triangle = mesh.AddFace(verts[triangles[t]], verts[triangles[t + 1]], verts[triangles[t + 2]]);
                 if (triangle == null) continue;
                 snapshot.ApplyFaceAttributes(triangle);
                 FaceSnapshot.ApplyLoops(triangle, snapshot.LoopOf);
@@ -1408,7 +1404,7 @@ public static class GeometryOperators
     /// <summary>Gives faces a material and drops any texture mapping they had, so the material's own projection applies.</summary>
     public static void Paint(GeometryData mesh, IEnumerable<GeometryData.Face> faces, int material)
     {
-        foreach (var face in faces)
+        foreach (GeometryData.Face face in faces)
         {
             face.Material = material;
             face.Mapping = null;

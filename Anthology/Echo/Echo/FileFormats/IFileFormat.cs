@@ -74,7 +74,7 @@ public static class FileFormatExtensions
     /// </summary>
     public static void WriteToFile(this IFileFormat format, EchoObject tag, string path)
     {
-        using var stream = File.Create(path);
+        using FileStream stream = File.Create(path);
         format.WriteTo(tag, stream);
     }
 
@@ -83,7 +83,7 @@ public static class FileFormatExtensions
     /// </summary>
     public static EchoObject ReadFromFile(this IFileFormat format, string path)
     {
-        using var stream = File.OpenRead(path);
+        using FileStream stream = File.OpenRead(path);
         return format.ReadFrom(stream);
     }
 }

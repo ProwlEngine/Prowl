@@ -25,7 +25,7 @@ public sealed partial class EchoObject
         if (string.IsNullOrWhiteSpace(path)) return this;
 
         EchoObject current = this;
-        var remaining = path.AsSpan();
+        ReadOnlySpan<char> remaining = path.AsSpan();
 
         while (remaining.Length > 0)
         {
@@ -52,7 +52,7 @@ public sealed partial class EchoObject
             // Handle as compound property
             else if (current.TagType == EchoType.Compound)
             {
-                if (!current.Tags.TryGetValue(segment.ToString(), out var next))
+                if (!current.Tags.TryGetValue(segment.ToString(), out EchoObject? next))
                     return null;
                 current = next!;
             }
@@ -63,7 +63,7 @@ public sealed partial class EchoObject
 
     public T? GetValue<T>(string path, T? defaultValue = default)
     {
-        var tag = Find(path);
+        EchoObject? tag = Find(path);
         if (tag == null) return defaultValue;
 
         try
@@ -80,7 +80,7 @@ public sealed partial class EchoObject
             }
 
             // Handle primitive value types
-            var value = tag.Value;
+            object? value = tag.Value;
             if (value != null)
             {
                 // If the value is already the correct type, return it
@@ -144,12 +144,12 @@ public sealed partial class EchoObject
 
         if (current.TagType == EchoType.List)
         {
-            foreach (var item in current.List)
+            foreach (EchoObject item in current.List)
                 FindAllRecursive(item, predicate, results);
         }
         else if (current.TagType == EchoType.Compound)
         {
-            foreach (var item in current.Tags.Values)
+            foreach (EchoObject item in current.Tags.Values)
                 FindAllRecursive(item, predicate, results);
         }
     }
@@ -175,7 +175,7 @@ public sealed partial class EchoObject
         }
         else if (current.TagType == EchoType.Compound)
         {
-            foreach (var (key, value) in current.Tags)
+            foreach ((string? key, EchoObject? value) in current.Tags)
                 GetPathsToRecursive(value, $"{currentPath}{(currentPath == "" ? "" : "/")}{key}", predicate, paths);
         }
     }
@@ -183,7 +183,7 @@ public sealed partial class EchoObject
     public string GetPath()
     {
         var segments = new List<string>();
-        var current = this;
+        EchoObject current = this;
 
         while (current.Parent != null)
         {
@@ -205,7 +205,7 @@ public sealed partial class EchoObject
         if (to.Parent == null) throw new ArgumentException("'to' must exist inside 'from'");
 
         var path = new List<string>();
-        var current = to;
+        EchoObject current = to;
 
         // Build path from property up to source
         while (!object.ReferenceEquals(current, from) && current.Parent != null)

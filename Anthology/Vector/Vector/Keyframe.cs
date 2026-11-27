@@ -161,10 +161,10 @@ public struct Keyframe : IEquatable<Keyframe>, IComparable<Keyframe>
         Interpolation == other.Interpolation;
 
     /// <inheritdoc/>
-    public readonly override bool Equals(object? obj) => obj is Keyframe other && Equals(other);
+    public override readonly bool Equals(object? obj) => obj is Keyframe other && Equals(other);
 
     /// <inheritdoc/>
-    public readonly override int GetHashCode()
+    public override readonly int GetHashCode()
     {
         int hash = Time.GetHashCode();
         hash = (hash * 397) ^ Value4.GetHashCode();
@@ -180,5 +180,5 @@ public struct Keyframe : IEquatable<Keyframe>, IComparable<Keyframe>
     public static bool operator !=(Keyframe left, Keyframe right) => !left.Equals(right);
 
     /// <inheritdoc/>
-    public readonly override string ToString() => Time.ToString() + ": " + Value4.ToString() + " (" + Interpolation.ToString() + ")";
+    public override readonly string ToString() => Time.ToString() + ": " + Value4.ToString() + " (" + Interpolation.ToString() + ")";
 }

@@ -19,67 +19,67 @@ freely, subject to the following restrictions:
 
 using System;
 using System.Collections.Generic;
+
 using Prowl.Recast.Core;
 using Prowl.Recast.Core.Numerics;
 
-namespace Prowl.Recast
+namespace Prowl.Recast;
+
+public static class RcPolyMeshRaycast
 {
-    public static class RcPolyMeshRaycast
+    public static bool Raycast(IList<RcBuilderResult> results, RcVec3f src, RcVec3f dst, out float hitTime)
     {
-        public static bool Raycast(IList<RcBuilderResult> results, RcVec3f src, RcVec3f dst, out float hitTime)
+        hitTime = 0.0f;
+        foreach (RcBuilderResult result in results)
         {
-            hitTime = 0.0f;
-            foreach (RcBuilderResult result in results)
+            if (result.MeshDetail != null)
             {
-                if (result.MeshDetail != null)
+                if (Raycast(result.Mesh, result.MeshDetail, src, dst, out hitTime))
                 {
-                    if (Raycast(result.Mesh, result.MeshDetail, src, dst, out hitTime))
+                    return true;
+                }
+            }
+        }
+
+        return false;
+    }
+
+    private static bool Raycast(RcPolyMesh poly, RcPolyMeshDetail meshDetail, RcVec3f sp, RcVec3f sq, out float hitTime)
+    {
+        hitTime = 0;
+        Span<RcVec3f> tempVs = stackalloc RcVec3f[3];
+        if (meshDetail != null)
+        {
+            for (int i = 0; i < meshDetail.nmeshes; ++i)
+            {
+                int m = i * 4;
+                int bverts = meshDetail.meshes[m];
+                int btris = meshDetail.meshes[m + 2];
+                int ntris = meshDetail.meshes[m + 3];
+                int verts = bverts * 3;
+                int tris = btris * 4;
+                for (int j = 0; j < ntris; ++j)
+                {
+                    Span<RcVec3f> vs = tempVs;
+                    for (int k = 0; k < 3; ++k)
+                    {
+                        vs[k].X = meshDetail.verts[verts + meshDetail.tris[tris + j * 4 + k] * 3];
+                        vs[k].Y = meshDetail.verts[verts + meshDetail.tris[tris + j * 4 + k] * 3 + 1];
+                        vs[k].Z = meshDetail.verts[verts + meshDetail.tris[tris + j * 4 + k] * 3 + 2];
+                    }
+
+                    if (RcIntersections.IntersectSegmentTriangle(sp, sq, vs[0], vs[1], vs[2], out hitTime))
                     {
                         return true;
                     }
                 }
             }
-
-            return false;
         }
-
-        private static bool Raycast(RcPolyMesh poly, RcPolyMeshDetail meshDetail, RcVec3f sp, RcVec3f sq, out float hitTime)
+        else
         {
-            hitTime = 0;
-            Span<RcVec3f> tempVs = stackalloc RcVec3f[3];
-            if (meshDetail != null)
-            {
-                for (int i = 0; i < meshDetail.nmeshes; ++i)
-                {
-                    int m = i * 4;
-                    int bverts = meshDetail.meshes[m];
-                    int btris = meshDetail.meshes[m + 2];
-                    int ntris = meshDetail.meshes[m + 3];
-                    int verts = bverts * 3;
-                    int tris = btris * 4;
-                    for (int j = 0; j < ntris; ++j)
-                    {
-                        Span<RcVec3f> vs = tempVs;
-                        for (int k = 0; k < 3; ++k)
-                        {
-                            vs[k].X = meshDetail.verts[verts + meshDetail.tris[tris + j * 4 + k] * 3];
-                            vs[k].Y = meshDetail.verts[verts + meshDetail.tris[tris + j * 4 + k] * 3 + 1];
-                            vs[k].Z = meshDetail.verts[verts + meshDetail.tris[tris + j * 4 + k] * 3 + 2];
-                        }
-
-                        if (RcIntersections.IntersectSegmentTriangle(sp, sq, vs[0], vs[1], vs[2], out hitTime))
-                        {
-                            return true;
-                        }
-                    }
-                }
-            }
-            else
-            {
-                // TODO: check PolyMesh instead
-            }
-
-            return false;
+            // TODO: check PolyMesh instead
         }
+
+        return false;
     }
 }

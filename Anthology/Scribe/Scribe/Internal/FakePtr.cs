@@ -1,8 +1,8 @@
 ﻿using System;
 
-namespace Prowl.Scribe.Internal
-{
-    public struct FakePtr<T> where T : new()
+namespace Prowl.Scribe.Internal;
+
+public struct FakePtr<T> where T : new()
 	{
 		public static readonly FakePtr<T> Null = new FakePtr<T>(null!);
 
@@ -66,7 +66,7 @@ namespace Prowl.Scribe.Internal
 
 		public T GetAndIncrease()
 		{
-			var result = _array[Offset];
+        T? result = _array[Offset];
 			++Offset;
 
 			return result;
@@ -122,7 +122,7 @@ namespace Prowl.Scribe.Internal
 		{
 			var result = new FakePtr<T>(new T[size]);
 
-			for (var i = 0; i < size; ++i) result[i] = new T();
+			for (int i = 0; i < size; ++i) result[i] = new T();
 
 			return result;
 		}
@@ -137,24 +137,23 @@ namespace Prowl.Scribe.Internal
 			return CreateWithSize(1);
 		}
 
-        internal void memset(T value, int count)
+    internal void memset(T value, int count)
 		{
 			for (long i = 0; i < count; ++i) this[i] = value;
 		}
 
-        internal static void memcpy(FakePtr<T> a, FakePtr<T> b, int count)
+    internal static void memcpy(FakePtr<T> a, FakePtr<T> b, int count)
 		{
 			for (long i = 0; i < count; ++i) a[i] = b[i];
 		}
 
-        internal static void memcpy(T[] a, FakePtr<T> b, int count)
+    internal static void memcpy(T[] a, FakePtr<T> b, int count)
 		{
 			for (long i = 0; i < count; ++i) a[i] = b[i];
 		}
 
-        internal static void memcpy(FakePtr<T> a, T[] b, int count)
+    internal static void memcpy(FakePtr<T> a, T[] b, int count)
 		{
 			for (long i = 0; i < count; ++i) a[i] = b[i];
 		}
 	}
-}

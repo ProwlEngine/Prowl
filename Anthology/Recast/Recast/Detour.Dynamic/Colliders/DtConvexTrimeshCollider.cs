@@ -18,34 +18,34 @@ freely, subject to the following restrictions:
 */
 
 using System;
-using Prowl.Recast.Core;
+
 using Prowl.Recast;
+using Prowl.Recast.Core;
 
-namespace Prowl.Recast.Detour.Dynamic.Colliders
+namespace Prowl.Recast.Detour.Dynamic.Colliders;
+
+public class DtConvexTrimeshCollider : DtCollider
 {
-    public class DtConvexTrimeshCollider : DtCollider
+    private readonly float[] vertices;
+    private readonly int[] triangles;
+
+    public DtConvexTrimeshCollider(float[] vertices, int[] triangles, int area, float flagMergeThreshold)
+        : base(area, flagMergeThreshold, DtTrimeshCollider.ComputeBounds(vertices))
     {
-        private readonly float[] vertices;
-        private readonly int[] triangles;
+        this.vertices = vertices;
+        this.triangles = triangles;
+    }
 
-        public DtConvexTrimeshCollider(float[] vertices, int[] triangles, int area, float flagMergeThreshold)
-            : base(area, flagMergeThreshold, DtTrimeshCollider.ComputeBounds(vertices))
-        {
-            this.vertices = vertices;
-            this.triangles = triangles;
-        }
+    public DtConvexTrimeshCollider(float[] vertices, int[] triangles, float[] bounds, int area, float flagMergeThreshold)
+        : base(area, flagMergeThreshold, bounds)
+    {
+        this.vertices = vertices;
+        this.triangles = triangles;
+    }
 
-        public DtConvexTrimeshCollider(float[] vertices, int[] triangles, float[] bounds, int area, float flagMergeThreshold)
-            : base(area, flagMergeThreshold, bounds)
-        {
-            this.vertices = vertices;
-            this.triangles = triangles;
-        }
-
-        public override void Rasterize(RcHeightfield hf, RcContext context)
-        {
-            RcFilledVolumeRasterization.RasterizeConvex(hf, vertices, triangles, area,
-                (int)MathF.Floor(flagMergeThreshold / hf.ch), context);
-        }
+    public override void Rasterize(RcHeightfield hf, RcContext context)
+    {
+        RcFilledVolumeRasterization.RasterizeConvex(hf, vertices, triangles, area,
+            (int)MathF.Floor(flagMergeThreshold / hf.ch), context);
     }
 }

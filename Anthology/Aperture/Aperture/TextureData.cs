@@ -136,7 +136,7 @@ public sealed class TextureData
             return false;
         }
 
-        List<TextureLevel> levels = new(planes.Count);
+        List<TextureLevel> levels = [with(planes.Count)];
         foreach (DdsPlane plane in planes)
         {
             levels.Add(new TextureLevel

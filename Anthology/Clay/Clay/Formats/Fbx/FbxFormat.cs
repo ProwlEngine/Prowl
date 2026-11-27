@@ -141,19 +141,19 @@ internal sealed class FbxFormat : IModelFormat
         };
 
         // 1. Textures - first so material wiring can resolve them.
-        var textureMapping = FbxTextureMapper.MapAll(doc, scene, context);
+        FbxTextureMapper.TextureMapping textureMapping = FbxTextureMapper.MapAll(doc, scene, context);
         // 2. Materials.
-        var materialMapping = FbxMaterialMapper.MapAll(doc, scene, textureMapping, context);
+        FbxMaterialMapper.MaterialMapping materialMapping = FbxMaterialMapper.MapAll(doc, scene, textureMapping, context);
         // 3. Mesh geometry (un-skinned for now).
-        var meshMapping = FbxMeshMapper.MapAll(doc, scene, context);
+        FbxMeshMapper.MeshMapping meshMapping = FbxMeshMapper.MapAll(doc, scene, context);
         // 4. Model nodes + parenting + mesh attachment + transform composition.
-        var modelMapping = FbxModelMapper.Map(doc, meshMapping, materialMapping, scene, context);
+        FbxModelMapper.ModelMapping modelMapping = FbxModelMapper.Map(doc, meshMapping, materialMapping, scene, context);
         scene.Root = modelMapping.Root;
 
         // 5. Deformers (skinning + blend shapes) + animations. These all rely on the FBX-vertex
         //    -> intermediate-vertex expansion table that FbxMeshMapper built.
         FbxSkinMapper.MapAll(doc, meshMapping, modelMapping, scene, context);
-        var blendShapeChannels = FbxBlendShapeMapper.MapAll(doc, meshMapping, scene, context);
+        Dictionary<long, FbxBlendShapeMapper.ChannelTarget> blendShapeChannels = FbxBlendShapeMapper.MapAll(doc, meshMapping, scene, context);
         FbxAnimationMapper.MapAll(doc, modelMapping, scene, context, blendShapeChannels);
 
         return scene;

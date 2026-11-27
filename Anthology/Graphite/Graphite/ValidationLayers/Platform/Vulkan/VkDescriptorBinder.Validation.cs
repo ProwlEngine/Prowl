@@ -2,9 +2,9 @@ using System.Collections.Generic;
 
 namespace Prowl.Graphite.Vk;
 
-internal unsafe sealed partial class VkDescriptorBinder
+internal sealed unsafe partial class VkDescriptorBinder
 {
-    private readonly HashSet<PropertyID> _reportedSkippedUniforms = new();
+    private readonly HashSet<PropertyID> _reportedSkippedUniforms = [];
 
     private void ReportSkippedUniform(PropertyID block, PropertyID uniform)
     {

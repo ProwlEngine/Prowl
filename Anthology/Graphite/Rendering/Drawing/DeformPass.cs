@@ -36,9 +36,9 @@ internal sealed class DeformPass(LazyCompute program, GeometryPool geometry) : I
     private const uint SkinnedStreams = (1u << (int)VertexSemantic.Position) | (1u << (int)VertexSemantic.Normal) | (1u << (int)VertexSemantic.Tangent);
 
     private readonly PropertySet _properties = new();
-    private readonly List<(RenderWorld.RenderSide World, int Index)> _jobs = new();
+    private readonly List<(RenderWorld.RenderSide World, int Index)> _jobs = [];
 
-    public readonly List<RenderWorld.RenderSide> Worlds = new();
+    public readonly List<RenderWorld.RenderSide> Worlds = [];
 
     public void Add(FrameGraph graph)
     {

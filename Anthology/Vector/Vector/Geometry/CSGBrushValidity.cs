@@ -36,14 +36,14 @@ public static class CSGBrushValidity
     /// non-convex is set by <paramref name="planarTolerance"/>.</summary>
     public static BrushValidity Check(GeometryData shape, float planarTolerance = 1e-3f)
     {
-        var result = BrushValidity.Valid;
+        BrushValidity result = BrushValidity.Valid;
         if (shape == null) return BrushValidity.TooFewFaces;
 
         if (shape.Faces.Count < 4)
             result |= BrushValidity.TooFewFaces;
 
         // Closed surface: every edge used by exactly two faces.
-        foreach (var edge in shape.Edges)
+        foreach (GeometryData.Edge edge in shape.Edges)
         {
             if (edge.NeighborFaces().Count != 2) { result |= BrushValidity.NotClosed; break; }
         }
@@ -51,9 +51,9 @@ public static class CSGBrushValidity
         var planes = new List<Plane>(shape.Faces.Count);
         var centroids = new List<Float3>(shape.Faces.Count);
 
-        foreach (var face in shape.Faces)
+        foreach (GeometryData.Face face in shape.Faces)
         {
-            var verts = face.NeighborVertices();
+            List<GeometryData.Vertex> verts = face.NeighborVertices();
             if (verts.Count < 3) { result |= BrushValidity.DegenerateFace; continue; }
 
             // Newell's method: correct for n-gons, and its magnitude is twice the face area.
@@ -80,9 +80,9 @@ public static class CSGBrushValidity
             return result | BrushValidity.TooFewFaces;
 
         // Convexity: with outward faces, every vertex sits on or behind every face plane.
-        foreach (var plane in planes)
+        foreach (Plane plane in planes)
         {
-            foreach (var vert in shape.Vertices)
+            foreach (GeometryData.Vertex vert in shape.Vertices)
             {
                 if (plane.GetSignedDistanceToPoint(vert.Point) > planarTolerance)
                 {
@@ -95,7 +95,7 @@ public static class CSGBrushValidity
 
         // Consistent outward winding: face planes should point away from the shape's centre.
         Float3 center = Float3.Zero;
-        foreach (var v in shape.Vertices) center += v.Point;
+        foreach (GeometryData.Vertex v in shape.Vertices) center += v.Point;
         if (shape.Vertices.Count > 0) center /= shape.Vertices.Count;
 
         int outward = 0;
@@ -120,9 +120,9 @@ public static class CSGBrushValidity
     private static float ApproximateVolume(GeometryData shape, Float3 center)
     {
         float volume = 0f;
-        foreach (var face in shape.Faces)
+        foreach (GeometryData.Face face in shape.Faces)
         {
-            var verts = face.NeighborVertices();
+            List<GeometryData.Vertex> verts = face.NeighborVertices();
             for (int i = 1; i < verts.Count - 1; i++)
             {
                 Float3 a = verts[0].Point - center;

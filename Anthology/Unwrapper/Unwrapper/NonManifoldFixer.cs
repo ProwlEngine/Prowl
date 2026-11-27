@@ -45,8 +45,7 @@ internal static class NonManifoldFixer
                 int v0 = triangles[3 * triI + prevApex];
                 int v1 = triangles[3 * triI + apex];
                 long key = EdgeKey(v0, v1);
-                int slot;
-                if (!edgeIndex.TryGetOrAdd(key, uniqueEdgeCount, out slot))
+                if (!edgeIndex.TryGetOrAdd(key, uniqueEdgeCount, out int slot))
                 {
                     slot = uniqueEdgeCount++;
                 }
@@ -90,7 +89,7 @@ internal static class NonManifoldFixer
         var singularVertices = new HashSet<int>();
         int sgOver = 0, sgWinding = 0, sgDoubleSided = 0;
 
-        var edgeIt = edgeIndex.GetEnumerator();
+        LongIntMap.Enumerator edgeIt = edgeIndex.GetEnumerator();
         while (edgeIt.MoveNext())
         {
             int slot = edgeIt.Current.Value;
@@ -162,7 +161,7 @@ internal static class NonManifoldFixer
 
             if (componentCount > 1)
             {
-                var copy = new int[starCount];
+                int[] copy = new int[starCount];
                 System.Array.Copy(labelScratch, copy, starCount);
                 vertexComponentLabels[vi] = copy;
             }

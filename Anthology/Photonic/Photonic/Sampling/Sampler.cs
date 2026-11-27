@@ -85,7 +85,7 @@ internal static class Hemisphere
         float y = r * (float)System.Math.Sin(phi);
         float z = (float)System.Math.Sqrt(System.Math.Max(0f, 1f - u1));
 
-        BuildOrthonormalBasis(normal, out var t, out var b);
+        BuildOrthonormalBasis(normal, out Float3 t, out Float3 b);
         return Float3.Normalize(t * x + b * y + normal * z);
     }
 
@@ -102,7 +102,7 @@ internal static class Hemisphere
         float phi = 2f * (float)System.Math.PI * u2;
         float x = sinT * (float)System.Math.Cos(phi);
         float y = sinT * (float)System.Math.Sin(phi);
-        BuildOrthonormalBasis(normal, out var t, out var b);
+        BuildOrthonormalBasis(normal, out Float3 t, out Float3 b);
         return Float3.Normalize(t * x + b * y + normal * cosT);
     }
 

@@ -64,10 +64,10 @@ public partial class GeometryData
     }
 
     private static bool ReadFlag(Element element, string name) =>
-        element.TryGetAttribute(name, out var value) && value is IntAttributeValue i && i.Data.Length > 0 && i.Data[0] != 0;
+        element.TryGetAttribute(name, out AttributeValue? value) && value is IntAttributeValue i && i.Data.Length > 0 && i.Data[0] != 0;
 
     private static bool ReadFlag(Dictionary<string, AttributeValue> attributes, string name) =>
-        attributes.TryGetValue(name, out var value) && value is IntAttributeValue i && i.Data.Length > 0 && i.Data[0] != 0;
+        attributes.TryGetValue(name, out AttributeValue? value) && value is IntAttributeValue i && i.Data.Length > 0 && i.Data[0] != 0;
 
     // A flag that is off holds no value at all, which reads as off and keeps large meshes free of values that say nothing
     private static void WriteFlag(Element element, string name, bool value)
@@ -99,7 +99,7 @@ public partial class GeometryData
             {
                 if (IsHidden) return false;
                 if (Loop == null) return true;
-                var it = Loop;
+                Loop it = Loop;
                 do
                 {
                     if (!it.Face.IsHidden) return true;
@@ -116,7 +116,7 @@ public partial class GeometryData
             {
                 if (Loop == null) return 0;
                 int count = 0;
-                var it = Loop;
+                Loop it = Loop;
                 do { count++; it = it.RadialNext!; } while (it != Loop);
                 return count;
             }
@@ -138,7 +138,7 @@ public partial class GeometryData
         /// <summary>Index of the face's material, zero when it has none.</summary>
         public int Material
         {
-            get => TryGetAttribute(MaterialAttribute, out var value) && value is IntAttributeValue i && i.Data.Length > 0 ? i.Data[0] : 0;
+            get => TryGetAttribute(MaterialAttribute, out AttributeValue? value) && value is IntAttributeValue i && i.Data.Length > 0 ? i.Data[0] : 0;
             set => SetAttribute(MaterialAttribute, new IntAttributeValue(value));
         }
 
@@ -154,7 +154,7 @@ public partial class GeometryData
         {
             get
             {
-                if (!Attributes.TryGetValue(MappingAttribute, out var value) || value is not FloatAttributeValue f || f.Data.Length < 8) return null;
+                if (!Attributes.TryGetValue(MappingAttribute, out AttributeValue? value) || value is not FloatAttributeValue f || f.Data.Length < 8) return null;
                 float[] d = f.Data;
                 return new UvMapping(new Float3(d[0], d[1], d[2]), d[3], new Float3(d[4], d[5], d[6]), d[7]);
             }
@@ -196,7 +196,7 @@ public partial class GeometryData
         public float Area()
         {
             Float3 sum = Float3.Zero;
-            var it = Loop;
+            Loop? it = Loop;
             if (it == null) return 0f;
             do
             {
@@ -325,7 +325,7 @@ public partial class GeometryData
     {
         Vertex a = edge.Vert1, b = edge.Vert2;
         if (vertex == a || vertex == b) return;
-        var attributes = AttributeTransfer.Copy(edge.Attributes);
+        Dictionary<string, AttributeValue> attributes = AttributeTransfer.Copy(edge.Attributes);
 
         var faces = new List<(List<Vertex> Verts, Face Like)>();
         foreach (Face face in edge.NeighborFaces())
@@ -367,7 +367,7 @@ public partial class GeometryData
 
         RemoveVertex(from);
 
-        foreach ((Vertex other, var attributes) in edges)
+        foreach ((Vertex other, Dictionary<string, AttributeValue>? attributes) in edges)
         {
             if (other == into) continue;
             bool existed = FindEdge(into, other) != null;
@@ -426,7 +426,7 @@ public partial class GeometryData
         if (Float3.Length(Float3.Cross(a.Point - vertex.Point, b.Point - vertex.Point)) > Epsilon * Float3.Length(a.Point - b.Point)) return false;
 
         bool hidden = edges[0].IsHidden && edges[1].IsHidden;
-        var attributes = AttributeTransfer.Copy(edges[0].Attributes);
+        Dictionary<string, AttributeValue> attributes = AttributeTransfer.Copy(edges[0].Attributes);
         var faces = new List<(List<Vertex> Verts, Face Like)>();
         foreach (Face face in vertex.NeighborFaces())
         {
@@ -461,11 +461,11 @@ public partial class GeometryData
     /// <summary>Edges with exactly one of the faces on them, the outline of a region, each with the face it borders.</summary>
     public static List<(Vertex A, Vertex B, Edge Edge, Face Face)> Boundary(IReadOnlyCollection<Face> region)
     {
-        var set = region as HashSet<Face> ?? new HashSet<Face>(region);
+        HashSet<Face> set = region as HashSet<Face> ?? [with(region)];
         var result = new List<(Vertex, Vertex, Edge, Face)>();
         foreach (Face face in set)
         {
-            var it = face.Loop!;
+            Loop it = face.Loop!;
             do
             {
                 int inside = 0;
@@ -725,8 +725,8 @@ public partial class GeometryData
 
         // Elements are made in the order they were saved in, so a saved value's place is its element's place in the list.
         // A face that cannot be made again would break that, so where each face and corner ended up is kept.
-        var faceSlots = new int[snapshot.FaceSizes.Length];
-        var cornerSlots = new int[snapshot.FaceVerts.Length];
+        int[] faceSlots = new int[snapshot.FaceSizes.Length];
+        int[] cornerSlots = new int[snapshot.FaceVerts.Length];
         int at = 0;
         for (int f = 0; f < faceSlots.Length; f++)
         {
@@ -813,7 +813,7 @@ public sealed class GeometrySnapshot
             snapshot.EdgeVerts[i * 2 + 1] = data.Edges[i].Vert2.Slot;
         }
 
-        var cornerSlots = new int[data.Loops.Count];
+        int[] cornerSlots = new int[data.Loops.Count];
         int at = 0;
         for (int f = 0; f < data.Faces.Count; f++)
         {

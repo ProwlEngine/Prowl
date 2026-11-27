@@ -1,9 +1,8 @@
-namespace Prowl.Recast.Core
+namespace Prowl.Recast.Core;
+
+public enum RcByteOrder
 {
-    public enum RcByteOrder
-    {
-        /// <summary>Default on most Windows systems</summary>
-        LITTLE_ENDIAN,
-        BIG_ENDIAN,
-    }
+    /// <summary>Default on most Windows systems</summary>
+    LITTLE_ENDIAN,
+    BIG_ENDIAN,
 }

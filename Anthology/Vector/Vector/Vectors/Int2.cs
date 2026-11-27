@@ -71,7 +71,7 @@ public partial struct Int2 : IEquatable<Int2>, IFormattable
 
     public Int2(IEnumerable<int> values)
     {
-        var array = values.ToArray();
+        int[] array = values.ToArray();
         if (array.Length < 2) throw new ArgumentException("Collection must contain at least 2 elements.", nameof(values));
         X = array[0];
         Y = array[1];

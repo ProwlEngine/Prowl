@@ -40,10 +40,10 @@ public struct GradientColorKey : IEquatable<GradientColorKey>, IComparable<Gradi
     public readonly bool Equals(GradientColorKey other) => Time.Equals(other.Time) && Color.Equals(other.Color);
 
     /// <inheritdoc/>
-    public readonly override bool Equals(object? obj) => obj is GradientColorKey other && Equals(other);
+    public override readonly bool Equals(object? obj) => obj is GradientColorKey other && Equals(other);
 
     /// <inheritdoc/>
-    public readonly override int GetHashCode() => (Time.GetHashCode() * 397) ^ Color.GetHashCode();
+    public override readonly int GetHashCode() => (Time.GetHashCode() * 397) ^ Color.GetHashCode();
 
     /// <summary>Compares two keys for equality.</summary>
     public static bool operator ==(GradientColorKey left, GradientColorKey right) => left.Equals(right);
@@ -52,7 +52,7 @@ public struct GradientColorKey : IEquatable<GradientColorKey>, IComparable<Gradi
     public static bool operator !=(GradientColorKey left, GradientColorKey right) => !left.Equals(right);
 
     /// <inheritdoc/>
-    public readonly override string ToString() => Time.ToString() + ": " + Color.ToString();
+    public override readonly string ToString() => Time.ToString() + ": " + Color.ToString();
 }
 
 /// <summary>An opacity key on a <see cref="Gradient"/>.</summary>
@@ -79,10 +79,10 @@ public struct GradientAlphaKey : IEquatable<GradientAlphaKey>, IComparable<Gradi
     public readonly bool Equals(GradientAlphaKey other) => Time.Equals(other.Time) && Alpha.Equals(other.Alpha);
 
     /// <inheritdoc/>
-    public readonly override bool Equals(object? obj) => obj is GradientAlphaKey other && Equals(other);
+    public override readonly bool Equals(object? obj) => obj is GradientAlphaKey other && Equals(other);
 
     /// <inheritdoc/>
-    public readonly override int GetHashCode() => (Time.GetHashCode() * 397) ^ Alpha.GetHashCode();
+    public override readonly int GetHashCode() => (Time.GetHashCode() * 397) ^ Alpha.GetHashCode();
 
     /// <summary>Compares two keys for equality.</summary>
     public static bool operator ==(GradientAlphaKey left, GradientAlphaKey right) => left.Equals(right);
@@ -91,7 +91,7 @@ public struct GradientAlphaKey : IEquatable<GradientAlphaKey>, IComparable<Gradi
     public static bool operator !=(GradientAlphaKey left, GradientAlphaKey right) => !left.Equals(right);
 
     /// <inheritdoc/>
-    public readonly override string ToString() => Time.ToString() + ": " + Alpha.ToString();
+    public override readonly string ToString() => Time.ToString() + ": " + Alpha.ToString();
 }
 
 /// <summary>
@@ -128,15 +128,15 @@ public sealed class Gradient
     /// <summary>Creates a solid white gradient spanning 0 to 1.</summary>
     public Gradient()
     {
-        _colorKeys = new List<GradientColorKey> { new GradientColorKey(0f, Color.White), new GradientColorKey(1f, Color.White) };
-        _alphaKeys = new List<GradientAlphaKey> { new GradientAlphaKey(0f, 1f), new GradientAlphaKey(1f, 1f) };
+        _colorKeys = [new GradientColorKey(0f, Color.White), new GradientColorKey(1f, Color.White)];
+        _alphaKeys = [new GradientAlphaKey(0f, 1f), new GradientAlphaKey(1f, 1f)];
     }
 
     /// <summary>Creates a gradient from the given keys, in any order.</summary>
     public Gradient(IEnumerable<GradientColorKey> colorKeys, IEnumerable<GradientAlphaKey> alphaKeys)
     {
-        _colorKeys = new List<GradientColorKey>();
-        _alphaKeys = new List<GradientAlphaKey>();
+        _colorKeys = [];
+        _alphaKeys = [];
         SetKeys(colorKeys, alphaKeys);
     }
 

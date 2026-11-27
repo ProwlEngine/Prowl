@@ -20,19 +20,18 @@ freely, subject to the following restrictions:
 
 using Prowl.Recast.Core.Numerics;
 
-namespace Prowl.Recast.Detour
+namespace Prowl.Recast.Detour;
+
+public struct DtQueryData
 {
-    public struct DtQueryData
-    {
-        public DtStatus status;
-        public DtNode lastBestNode;
-        public float lastBestNodeCost;
-        public long startRef;
-        public long endRef;
-        public RcVec3f startPos;
-        public RcVec3f endPos;
-        public IDtQueryFilter filter;
-        public int options;
-        public float raycastLimitSqr;
-    }
+    public DtStatus status;
+    public DtNode lastBestNode;
+    public float lastBestNodeCost;
+    public long startRef;
+    public long endRef;
+    public RcVec3f startPos;
+    public RcVec3f endPos;
+    public IDtQueryFilter filter;
+    public int options;
+    public float raycastLimitSqr;
 }

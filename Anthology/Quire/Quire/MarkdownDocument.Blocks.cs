@@ -13,13 +13,13 @@ public sealed partial class MarkdownDocument
 
     private void SetBlockLinks(int index, int firstInline, int firstChild, int nextSibling)
     {
-        var b = _blocks[index];
+        Block b = _blocks[index];
         _blocks[index] = new Block(b.Kind, b.Level, b.Flag, b.Align, b.Text, b.Info, firstInline, firstChild, nextSibling);
     }
 
     private void SetFirstInline(int index, int firstInline)
     {
-        var b = _blocks[index];
+        Block b = _blocks[index];
         _blocks[index] = new Block(b.Kind, b.Level, b.Flag, b.Align, b.Text, b.Info, firstInline, b.FirstChild, b.NextSibling);
     }
 
@@ -28,12 +28,12 @@ public sealed partial class MarkdownDocument
         if (first < 0)
         {
             first = child;
-            var p = _blocks[parent];
+            Block p = _blocks[parent];
             _blocks[parent] = new Block(p.Kind, p.Level, p.Flag, p.Align, p.Text, p.Info, p.FirstInline, child, p.NextSibling);
         }
         else
         {
-            var l = _blocks[last];
+            Block l = _blocks[last];
             _blocks[last] = new Block(l.Kind, l.Level, l.Flag, l.Align, l.Text, l.Info, l.FirstInline, l.FirstChild, child);
         }
 
@@ -116,7 +116,7 @@ public sealed partial class MarkdownDocument
                 }
 
                 int bodyEnd = end > line + 1 ? LineEnd(end - 1) : bodyStart;
-                var code = AddBlock(BlockKind.CodeBlock, text: new TextSpan(bodyStart, Math.Max(0, bodyEnd - bodyStart)), info: info);
+                int code = AddBlock(BlockKind.CodeBlock, text: new TextSpan(bodyStart, Math.Max(0, bodyEnd - bodyStart)), info: info);
                 AppendChild(parent, code, ref first, ref last);
                 line = end < LineCount ? end + 1 : end;
                 continue;
@@ -294,9 +294,9 @@ public sealed partial class MarkdownDocument
             AppendChild(table, row, ref first, ref last);
             int cellFirst = -1, cellLast = -1;
             int column = 0;
-            foreach (var cell in SplitRow(i, indent))
+            foreach (TextSpan cell in SplitRow(i, indent))
             {
-                var align = column < columns ? alignment[column] : TableAlign.None;
+                TableAlign align = column < columns ? alignment[column] : TableAlign.None;
                 int node = AddBlock(BlockKind.TableCell, align: align);
                 SetFirstInline(node, ParseInlines(cell));
                 AppendChild(row, node, ref cellFirst, ref cellLast);

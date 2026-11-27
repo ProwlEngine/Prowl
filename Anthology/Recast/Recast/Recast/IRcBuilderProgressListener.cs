@@ -1,7 +1,6 @@
-namespace Prowl.Recast
+namespace Prowl.Recast;
+
+public interface IRcBuilderProgressListener
 {
-    public interface IRcBuilderProgressListener
-    {
-        void OnProgress(int completed, int total);
-    }
+    void OnProgress(int completed, int total);
 }

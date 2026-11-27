@@ -9,12 +9,12 @@ internal readonly record struct ReferencedResource(DeviceBuffer? Buffer, Texture
 
 public abstract partial class CommandBuffer
 {
-    private readonly List<PropertyState> _stateScratch = new();
-    private readonly List<ReferencedResource> _referenced = new();
-    private readonly HashSet<ResourceId> _referencedIds = new();
+    private readonly List<PropertyState> _stateScratch = [];
+    private readonly List<ReferencedResource> _referenced = [];
+    private readonly HashSet<ResourceId> _referencedIds = [];
     private AttachmentUse[] _attachmentScratch = new AttachmentUse[8];
     private VertexBindingUse[] _vertexScratch = new VertexBindingUse[8];
-    private readonly List<DescriptorTableEntryState> _tableScratch = new();
+    private readonly List<DescriptorTableEntryState> _tableScratch = [];
     private (DescriptorTable? Table, uint Version)[] _reportedTables = [];
 
     internal bool CaptureActive => Execution != null && (Profilers.CommandStream != null || Profilers.Capture != null);

@@ -117,8 +117,8 @@ public sealed class CSGScene
     // changes, because fragmentation still tests every brush against every overlapping brush
     // regardless of where each sits in the tree.
     private readonly SceneGroup _root = new() { Op = CSGOperation.Additive, Attached = true };
-    private readonly List<SceneBrush> _brushes = new();
-    private readonly List<AABB> _pendingDirtyRegions = new();
+    private readonly List<SceneBrush> _brushes = [];
+    private readonly List<AABB> _pendingDirtyRegions = [];
     private int _nextId;
     private bool _treeDirty = true;      // the flattened brush cache is stale
     private bool _evalDirty = true;      // every brush must be re-evaluated, not just dirty ones
@@ -130,8 +130,8 @@ public sealed class CSGScene
     private GeometryData? _output;
     private bool _reassemble = true;
     private bool _hasAttributes;
-    private readonly Dictionary<SnapKey, List<GeometryData.Vertex>> _vertexGrid = new();
-    private readonly Dictionary<SnapKey, List<RepPoint>> _representatives = new();
+    private readonly Dictionary<SnapKey, List<GeometryData.Vertex>> _vertexGrid = [];
+    private readonly Dictionary<SnapKey, List<RepPoint>> _representatives = [];
     private readonly DynamicBvh<RepPoint> _representativeTree = new();
     private readonly DynamicBvh<SceneBrush> _brushTree = new();
     private bool _brushTreeStale = true;
@@ -174,8 +174,8 @@ public sealed class CSGScene
     /// <summary>The face pieces the last <see cref="Build"/> removed, while <see cref="KeepDiscarded"/> is on.</summary>
     public IEnumerable<CSGDiscardedFace> Discarded()
     {
-        foreach (var brush in _brushes)
-            foreach (var frag in brush.Discarded)
+        foreach (SceneBrush brush in _brushes)
+            foreach (OutFrag frag in brush.Discarded)
                 yield return new CSGDiscardedFace(brush.Id, frag.Source.SourceIndex, frag.Poly, frag.Source.Plane);
     }
 
@@ -237,7 +237,7 @@ public sealed class CSGScene
         _cachedOutput = null;
         _reassemble = true;
         if (!reweld) return;
-        foreach (var brush in _brushes) brush.WeldDirty = true;
+        foreach (SceneBrush brush in _brushes) brush.WeldDirty = true;
     }
 
     /// <summary>Number of brushes in the scene, across every group.</summary>
@@ -268,9 +268,9 @@ public sealed class CSGScene
                                 CSGOperation operation = CSGOperation.Additive, Float4x4 transform = default)
     {
         if (convexShape == null) throw new ArgumentNullException(nameof(convexShape));
-        if (transform.Equals(default(Float4x4))) transform = Float4x4.Identity;
+        if (transform.Equals(default)) transform = Float4x4.Identity;
 
-        var group = ResolveGroup(parent);
+        SceneGroup group = ResolveGroup(parent);
         var brush = new SceneBrush
         {
             Id = _nextId++,
@@ -293,7 +293,7 @@ public sealed class CSGScene
     /// <summary>Inserts a convex brush at a specific index within the root group.</summary>
     public CSGBrushHandle Insert(int index, GeometryData convexShape, CSGOperation operation, Float4x4 transform)
     {
-        var handle = AddTo(null, convexShape, operation, transform);
+        CSGBrushHandle handle = AddTo(null, convexShape, operation, transform);
         SetOrder(handle, index);
         return handle;
     }
@@ -313,7 +313,7 @@ public sealed class CSGScene
     /// <summary>Changes how a group folds into its parent.</summary>
     public void SetOperation(CSGGroupHandle handle, CSGOperation operation)
     {
-        var group = Validate(handle);
+        SceneGroup group = Validate(handle);
         if (group.Op == operation) return;
         group.Op = operation;
         DirtySubtree(group);
@@ -323,7 +323,7 @@ public sealed class CSGScene
     /// <summary>Removes a group and everything inside it.</summary>
     public void Remove(CSGGroupHandle handle)
     {
-        var group = Validate(handle);
+        SceneGroup group = Validate(handle);
         if (group == _root) throw new InvalidOperationException("The root group cannot be removed.");
 
         DirtySubtree(group);
@@ -335,8 +335,8 @@ public sealed class CSGScene
     /// <summary>Moves a brush into another group, keeping its transform and operation.</summary>
     public void SetParent(CSGBrushHandle handle, CSGGroupHandle? parent)
     {
-        var brush = Validate(handle);
-        var group = ResolveGroup(parent);
+        SceneBrush brush = Validate(handle);
+        SceneGroup group = ResolveGroup(parent);
         if (ReferenceEquals(brush.Parent, group)) return;
 
         brush.Parent?.Children.Remove(brush);
@@ -352,8 +352,8 @@ public sealed class CSGScene
     /// <summary>Moves a group into another group.</summary>
     public void SetParent(CSGGroupHandle handle, CSGGroupHandle? parent)
     {
-        var group = Validate(handle);
-        var target = ResolveGroup(parent);
+        SceneGroup group = Validate(handle);
+        SceneGroup target = ResolveGroup(parent);
         if (group == _root) throw new InvalidOperationException("The root group cannot be re-parented.");
         if (ReferenceEquals(group.Parent, target)) return;
         if (IsAncestorOf(group, target)) throw new InvalidOperationException("A group cannot be moved inside itself.");
@@ -369,7 +369,7 @@ public sealed class CSGScene
     /// <summary>Removes a brush from the scene. Its handle becomes invalid.</summary>
     public void Remove(CSGBrushHandle handle)
     {
-        var brush = Validate(handle);
+        SceneBrush brush = Validate(handle);
         _pendingDirtyRegions.Add(BrushBox(brush)); // dirty whatever it used to touch
         brush.Attached = false;
         brush.Parent?.Children.Remove(brush);
@@ -379,7 +379,7 @@ public sealed class CSGScene
     /// <summary>Moves/transforms a brush. Only the brush and the brushes it touches are re-evaluated.</summary>
     public void SetTransform(CSGBrushHandle handle, Float4x4 transform)
     {
-        var brush = Validate(handle);
+        SceneBrush brush = Validate(handle);
         _pendingDirtyRegions.Add(BrushBox(brush)); // brushes it currently touches
         brush.Transform = transform;
         RecomputeWorld(brush);
@@ -392,7 +392,7 @@ public sealed class CSGScene
     /// <summary>Changes a brush's additive/subtractive operation.</summary>
     public void SetOperation(CSGBrushHandle handle, CSGOperation operation)
     {
-        var brush = Validate(handle);
+        SceneBrush brush = Validate(handle);
         if (brush.Op == operation) return;
         brush.Op = operation;
         brush.Dirty = true;
@@ -407,7 +407,7 @@ public sealed class CSGScene
     /// </summary>
     public void SetEmits(CSGBrushHandle handle, bool emits)
     {
-        var brush = Validate(handle);
+        SceneBrush brush = Validate(handle);
         if (brush.Emits == emits) return;
         brush.Emits = emits;
         brush.Dirty = true;
@@ -417,8 +417,8 @@ public sealed class CSGScene
     /// <summary>Re-orders a brush to a new index, preserving everyone else's relative order.</summary>
     public void SetOrder(CSGBrushHandle handle, int index)
     {
-        var brush = Validate(handle);
-        var siblings = brush.Parent!.Children;
+        SceneBrush brush = Validate(handle);
+        List<SceneNode> siblings = brush.Parent!.Children;
         index = Maths.Clamp(index, 0, siblings.Count - 1);
         if (siblings.IndexOf(brush) == index) return;
 
@@ -450,7 +450,7 @@ public sealed class CSGScene
     public static IEnumerable<GeometryData.Face> FacesOf(GeometryData built, CSGBrushHandle handle)
     {
         int id = handle.Id;
-        foreach (var face in built.Faces)
+        foreach (GeometryData.Face face in built.Faces)
             if (GetBrushId(face) == id) yield return face;
     }
 
@@ -458,12 +458,12 @@ public sealed class CSGScene
     public static IEnumerable<GeometryData.Face> FacesOf(GeometryData built, CSGBrushHandle handle, int sourceFaceIndex)
     {
         int id = handle.Id;
-        foreach (var face in built.Faces)
+        foreach (GeometryData.Face face in built.Faces)
             if (GetBrushId(face) == id && GetSourceFaceIndex(face) == sourceFaceIndex) yield return face;
     }
 
     private static int ReadInt(GeometryData.Face face, string name)
-        => face.Attributes.TryGetValue(name, out var value) && value is GeometryData.IntAttributeValue i && i.Data.Length > 0
+        => face.Attributes.TryGetValue(name, out GeometryData.AttributeValue? value) && value is GeometryData.IntAttributeValue i && i.Data.Length > 0
             ? i.Data[0]
             : -1;
 
@@ -472,10 +472,10 @@ public sealed class CSGScene
         // A changed tree, or a changed operation, can alter any brush's visibility.
         FlattenTree();
         if (_evalDirty)
-            foreach (var b in _brushes) b.Dirty = true;
+            foreach (SceneBrush b in _brushes) b.Dirty = true;
         _evalDirty = false;
 
-        var bvh = _brushTree;
+        DynamicBvh<SceneBrush> bvh = _brushTree;
         if (_brushTreeStale)
         {
             int[] handles = bvh.Rebuild(_brushes, _brushes.ConvertAll(BrushBox));
@@ -484,7 +484,7 @@ public sealed class CSGScene
         }
         else
         {
-            foreach (var brush in _brushes)
+            foreach (SceneBrush brush in _brushes)
                 bvh.Update(brush.TreeHandle, BrushBox(brush));
         }
 
@@ -492,11 +492,11 @@ public sealed class CSGScene
         if (_pendingDirtyRegions.Count > 0)
         {
             var hits = new List<SceneBrush>();
-            foreach (var region in _pendingDirtyRegions)
+            foreach (AABB region in _pendingDirtyRegions)
             {
                 hits.Clear();
                 bvh.QueryAABB(region.Expanded(DistanceEpsilon), hits);
-                foreach (var b in hits) b.Dirty = true;
+                foreach (SceneBrush b in hits) b.Dirty = true;
             }
             _pendingDirtyRegions.Clear();
         }
@@ -504,7 +504,7 @@ public sealed class CSGScene
         int recomputed = 0;
         var neighborBuffer = new List<SceneBrush>();
         var changed = new List<SceneBrush>();
-        foreach (var brush in _brushes)
+        foreach (SceneBrush brush in _brushes)
         {
             if (!brush.Dirty) continue;
             Recompute(brush, bvh, neighborBuffer);
@@ -525,11 +525,11 @@ public sealed class CSGScene
         // neighbours' welds too. Anything outside those bounds keeps its cached rings.
         if (WeldTJunctions)
         {
-            foreach (var brush in changed)
+            foreach (SceneBrush brush in changed)
             {
                 neighborBuffer.Clear();
                 bvh.QueryAABB(BrushBox(brush).Expanded(WeldTolerance), neighborBuffer);
-                foreach (var n in neighborBuffer) n.WeldDirty = true;
+                foreach (SceneBrush n in neighborBuffer) n.WeldDirty = true;
             }
         }
 
@@ -588,7 +588,7 @@ public sealed class CSGScene
 
         void Walk(SceneGroup group)
         {
-            foreach (var child in group.Children)
+            foreach (SceneNode child in group.Children)
             {
                 if (child.Op == CSGOperation.Intersect) _hasIntersect = true;
 
@@ -636,14 +636,14 @@ public sealed class CSGScene
             return;
         }
         if (node is SceneGroup group)
-            foreach (var child in group.Children) DirtySubtree(child);
+            foreach (SceneNode child in group.Children) DirtySubtree(child);
     }
 
     private static void DetachSubtree(SceneNode node)
     {
         node.Attached = false;
         if (node is SceneGroup group)
-            foreach (var child in group.Children) DetachSubtree(child);
+            foreach (SceneNode child in group.Children) DetachSubtree(child);
     }
 
     private static AABB BrushBox(SceneBrush brush) => brush.Bounds;
@@ -664,10 +664,10 @@ public sealed class CSGScene
 
         for (int faceIndex = 0; faceIndex < brush.Shape.Faces.Count; faceIndex++)
         {
-            var face = brush.Shape.Faces[faceIndex];
+            GeometryData.Face face = brush.Shape.Faces[faceIndex];
             if (face.VertCount < 3) continue;
 
-            var verts = face.NeighborVertices();
+            List<GeometryData.Vertex> verts = face.NeighborVertices();
             int n = verts.Count;
             var world = new Float3[n];
             var srcVerts = new GeometryData.Vertex[n];
@@ -778,7 +778,7 @@ public sealed class CSGScene
 
     private static bool IsFlat(Float3[] world, Plane plane)
     {
-        foreach (var p in world)
+        foreach (Float3 p in world)
             if (Maths.Abs(Float3.Dot(plane.Normal, p) - plane.D) > DegenerateEpsilon) return false;
         return true;
     }
@@ -800,12 +800,12 @@ public sealed class CSGScene
     {
         int pieces = 0;
         var sources = new HashSet<int>();
-        foreach (var face in brush.Faces) { pieces++; sources.Add(face.SourceIndex); }
+        foreach (FaceData face in brush.Faces) { pieces++; sources.Add(face.SourceIndex); }
         if (pieces != sources.Count) return false;
 
-        foreach (var face in brush.Faces)
-            foreach (var other in brush.Faces)
-                foreach (var p in other.World)
+        foreach (FaceData face in brush.Faces)
+            foreach (FaceData other in brush.Faces)
+                foreach (Float3 p in other.World)
                     if (Float3.Dot(face.Plane.Normal, p) - face.Plane.D > 1e-3f) return false;
         return true;
     }
@@ -852,19 +852,19 @@ public sealed class CSGScene
         var work = new List<Fragment>();
         var next = new List<Fragment>();
 
-        foreach (var face in self.Faces)
+        foreach (FaceData face in self.Faces)
         {
             work.Clear();
-            work.Add(new Fragment(new List<Float3>(face.World), new List<Rel>()));
+            work.Add(new Fragment([with(face.World)], []));
 
-            foreach (var b in neighborBuffer)
+            foreach (SceneBrush b in neighborBuffer)
             {
                 if (b == self) continue;
                 if (!face.Bounds.Expanded(DistanceEpsilon).Intersects(b.Bounds))
                     continue;
 
                 next.Clear();
-                foreach (var frag in work)
+                foreach (Fragment frag in work)
                 {
                     if (frag.Final || !Reaches(frag.Poly, b.Bounds)) next.Add(frag);
                     else if (b.Convex) SplitByBrush(frag, b, face.Plane, self, next);
@@ -875,7 +875,7 @@ public sealed class CSGScene
             }
 
             int emitted = self.Output.Count;
-            foreach (var frag in work)
+            foreach (Fragment frag in work)
             {
                 if (frag.Poly.Count < 3) continue;
                 if (Visible(frag.Rels, self, out bool flip))
@@ -954,7 +954,7 @@ public sealed class CSGScene
     // two planes through the same points can still differ in their constants by rounding.
     private bool LiesOn(IReadOnlyList<Float3> poly, Plane plane)
     {
-        foreach (var p in poly)
+        foreach (Float3 p in poly)
             if (Maths.Abs(Float3.Dot(plane.Normal, p) - plane.D) > DistanceEpsilon) return false;
         return true;
     }
@@ -993,7 +993,7 @@ public sealed class CSGScene
         }
 
         int start = results.Count;
-        var inside = frag.Poly;
+        List<Float3> inside = frag.Poly;
         var back = new List<Float3>();
         var front = new List<Float3>();
 
@@ -1012,8 +1012,8 @@ public sealed class CSGScene
 
             if (!anyFront) continue;
             if (front.Count >= 3)
-                results.Add(new Fragment(new List<Float3>(front), frag.Rels));
-            inside = new List<Float3>(back);
+                results.Add(new Fragment([with(front)], frag.Rels));
+            inside = [with(back)];
         }
 
         // Two brushes sharing a surface would each emit it. The later one in traversal order owns it.
@@ -1043,7 +1043,7 @@ public sealed class CSGScene
         var cuts = new List<(Plane Plane, Float3 A, Float3 B)>();
         var coplanar = new List<(FaceData Face, Relation Relation)>();
 
-        foreach (var f in b.Faces)
+        foreach (FaceData f in b.Faces)
         {
             if (!f.Bounds.Expanded(DistanceEpsilon).Intersects(fragBox)) continue;
 
@@ -1059,7 +1059,7 @@ public sealed class CSGScene
         }
 
         // A face in the plane covers the fragment only within its outline. Edges two of its pieces share run inside it.
-        foreach (var (f, _) in coplanar)
+        foreach ((FaceData? f, Relation _) in coplanar)
         {
             for (int i = 0; i < f.World.Length; i++)
             {
@@ -1076,10 +1076,10 @@ public sealed class CSGScene
         var cells = new List<List<Float3>> { frag.Poly };
         var back = new List<Float3>();
         var front = new List<Float3>();
-        foreach (var (plane, a, c) in cuts)
+        foreach ((Plane plane, Float3 a, Float3 c) in cuts)
         {
             var split = new List<List<Float3>>(cells.Count + 2);
-            foreach (var cell in cells)
+            foreach (List<Float3> cell in cells)
             {
                 if (!RunsThrough(cell, facePlane.Normal, a, c))
                 {
@@ -1090,22 +1090,22 @@ public sealed class CSGScene
                 ClipByPlane(cell, plane, back, front, out bool anyBack, out bool anyFront);
                 if (anyBack && anyFront && back.Count >= 3 && front.Count >= 3)
                 {
-                    split.Add(new List<Float3>(back));
-                    split.Add(new List<Float3>(front));
+                    split.Add([with(back)]);
+                    split.Add([with(front)]);
                 }
                 else split.Add(cell);
             }
             cells = split;
         }
 
-        foreach (var cell in cells)
+        foreach (List<Float3> cell in cells)
         {
             Float3 centre = Float3.Zero;
-            foreach (var p in cell) centre += p;
+            foreach (Float3 p in cell) centre += p;
             centre /= cell.Count;
 
             Relation? relation = null;
-            foreach (var (f, rel) in coplanar)
+            foreach ((FaceData? f, Relation rel) in coplanar)
                 if (InsideConvex(f.World, f.Plane.Normal, centre)) { relation = rel; break; }
             if (relation == null && WindingNumber(b, centre) > 0.5f) relation = Relation.Interior;
 
@@ -1137,7 +1137,7 @@ public sealed class CSGScene
         if (Float3.LengthSquared(along) < DegenerateEpsilon * DegenerateEpsilon) return false;
 
         float min = float.MaxValue, max = float.MinValue;
-        var poly = face.World;
+        Float3[] poly = face.World;
         for (int i = 0; i < poly.Length; i++)
         {
             Float3 p = poly[i], q = poly[(i + 1) % poly.Length];
@@ -1160,7 +1160,7 @@ public sealed class CSGScene
     /// <summary>Whether another piece of the same face in the plane has the edge too, run the other way, so it lies inside the face.</summary>
     private static bool SharedWithinPlane(List<(FaceData Face, Relation Relation)> coplanar, FaceData face, Float3 a, Float3 c)
     {
-        foreach (var (other, _) in coplanar)
+        foreach ((FaceData? other, Relation _) in coplanar)
         {
             if (ReferenceEquals(other, face) || other.SourceIndex != face.SourceIndex) continue;
             for (int i = 0; i < other.World.Length; i++)
@@ -1173,7 +1173,7 @@ public sealed class CSGScene
     private bool RunsThrough(List<Float3> cell, Float3 normal, Float3 a, Float3 c)
     {
         Float3 centre = Float3.Zero;
-        foreach (var p in cell) centre += p;
+        foreach (Float3 p in cell) centre += p;
         centre /= cell.Count;
 
         float t0 = 0f, t1 = 1f;
@@ -1220,7 +1220,7 @@ public sealed class CSGScene
     private bool Touches(Float3[] poly, Plane plane)
     {
         bool below = false, above = false;
-        foreach (var p in poly)
+        foreach (Float3 p in poly)
         {
             float d = Float3.Dot(plane.Normal, p) - plane.D;
             if (d <= DistanceEpsilon) below = true;
@@ -1250,7 +1250,7 @@ public sealed class CSGScene
     private static float WindingNumber(SceneBrush brush, Float3 point)
     {
         float total = 0f;
-        foreach (var face in brush.Faces)
+        foreach (FaceData face in brush.Faces)
         {
             Float3 a = face.World[0] - point;
             for (int i = 1; i + 1 < face.World.Length; i++)
@@ -1280,7 +1280,7 @@ public sealed class CSGScene
         // Two brushes sharing a surface would each emit it, whichever way their faces point. The later one in traversal
         // order owns it. The earlier one always meets the later one before its fragment is settled, so it is the one
         // that can reliably step aside.
-        foreach (var r in rels)
+        foreach (Rel r in rels)
             if (r.Relation != Relation.Interior && r.Brush.EvalOrder > self.EvalOrder)
                 return false;
 
@@ -1300,7 +1300,7 @@ public sealed class CSGScene
     private static bool FlatSolid(List<Rel> rels, SceneBrush self, bool inner)
     {
         bool selfPending = inner;
-        foreach (var r in rels)
+        foreach (Rel r in rels)
         {
             if (selfPending && r.Brush.EvalOrder < self.EvalOrder)
                 return self.Op == CSGOperation.Additive;
@@ -1321,7 +1321,7 @@ public sealed class CSGScene
     private static bool EvaluateTree(SceneGroup group, List<Rel> rels, SceneBrush self, bool inner)
     {
         bool acc = false;
-        foreach (var child in group.Children)
+        foreach (SceneNode child in group.Children)
         {
             bool occupied = child is SceneBrush brush
                 ? Occupies(brush, rels, self, inner)
@@ -1344,7 +1344,7 @@ public sealed class CSGScene
         // The fragment came from self's own face, so self fills the side behind it and not in front.
         if (ReferenceEquals(brush, self)) return inner;
 
-        foreach (var r in rels)
+        foreach (Rel r in rels)
         {
             if (!ReferenceEquals(r.Brush, brush)) continue;
             return r.Relation switch
@@ -1411,17 +1411,17 @@ public sealed class CSGScene
         bool fresh = _output == null || _reassemble || _brushes.TrueForAll(b => b.WeldDirty);
         if (fresh) StartAssembly();
 
-        var output = _output!;
+        GeometryData output = _output!;
         if (WeldTJunctions)
         {
             _deferRepresentativeTree = fresh;
-            foreach (var brush in _brushes)
+            foreach (SceneBrush brush in _brushes)
                 if (brush.OutputChanged) Reference(brush);
             _deferRepresentativeTree = false;
             if (fresh) RebuildRepresentativeTree();
         }
 
-        foreach (var brush in _brushes)
+        foreach (SceneBrush brush in _brushes)
         {
             brush.OutputChanged = false;
             if (!brush.WeldDirty) continue;
@@ -1429,7 +1429,7 @@ public sealed class CSGScene
 
             if (!fresh) RemoveEmitted(output, brush);
             Reweld(brush);
-            foreach (var item in brush.Welded)
+            foreach (EmitItem item in brush.Welded)
                 EmitPolygon(output, _vertexGrid, item, _hasAttributes);
         }
 
@@ -1453,7 +1453,7 @@ public sealed class CSGScene
         _reassemble = false;
         _vertexGrid.Clear();
         _representatives.Clear();
-        foreach (var brush in _brushes)
+        foreach (SceneBrush brush in _brushes)
         {
             brush.Emitted.Clear();
             brush.References.Clear();
@@ -1467,11 +1467,11 @@ public sealed class CSGScene
     // holds the representative of every corner of its output, and a representative lives while anything holds it.
     private void Reference(SceneBrush brush)
     {
-        foreach (var held in brush.References) Release(held);
+        foreach (RepPoint held in brush.References) Release(held);
         brush.References.Clear();
 
-        foreach (var frag in brush.Output)
-            foreach (var p in frag.Poly)
+        foreach (OutFrag frag in brush.Output)
+            foreach (Float3 p in frag.Poly)
                 brush.References.Add(Representative(p));
     }
 
@@ -1479,8 +1479,8 @@ public sealed class CSGScene
     {
         var all = new List<RepPoint>();
         var boxes = new List<AABB>();
-        foreach (var bucket in _representatives.Values)
-            foreach (var rep in bucket)
+        foreach (List<RepPoint> bucket in _representatives.Values)
+            foreach (RepPoint rep in bucket)
             {
                 all.Add(rep);
                 boxes.Add(new AABB(rep.Point, rep.Point).Expanded(WeldTolerance));
@@ -1496,14 +1496,14 @@ public sealed class CSGScene
         brush.Welded.Clear();
         if (!WeldTJunctions)
         {
-            foreach (var frag in brush.Output)
-                brush.Welded.Add(new EmitItem { Brush = brush, Ring = new List<Float3>(frag.Poly), Source = frag.Source, Flip = frag.Flip });
+            foreach (OutFrag frag in brush.Output)
+                brush.Welded.Add(new EmitItem { Brush = brush, Ring = [with(frag.Poly)], Source = frag.Source, Flip = frag.Flip });
             return;
         }
 
         var candidates = new List<RepPoint>();
         int held = 0;
-        foreach (var frag in brush.Output)
+        foreach (OutFrag frag in brush.Output)
         {
             var ring = new List<Float3>(frag.Poly.Length);
             for (int i = 0; i < frag.Poly.Length; i++)
@@ -1531,10 +1531,10 @@ public sealed class CSGScene
 
         var edges = new List<GeometryData.Edge>();
         var verts = new List<GeometryData.Vertex>();
-        foreach (var face in brush.Emitted)
+        foreach (GeometryData.Face face in brush.Emitted)
         {
             if (face.Owner != output) continue;
-            var loop = face.Loop;
+            GeometryData.Loop? loop = face.Loop;
             if (loop != null)
             {
                 do
@@ -1548,15 +1548,15 @@ public sealed class CSGScene
         }
         brush.Emitted.Clear();
 
-        foreach (var edge in edges)
+        foreach (GeometryData.Edge edge in edges)
             if (edge.Owner == output && edge.Loop == null)
                 output.RemoveEdge(edge);
 
-        foreach (var vertex in verts)
+        foreach (GeometryData.Vertex vertex in verts)
         {
             if (vertex.Owner != output || vertex.Edge != null) continue;
-            var home = VertexHome(vertex.Point);
-            if (_vertexGrid.TryGetValue(home, out var bucket) && bucket.Remove(vertex) && bucket.Count == 0)
+            SnapKey home = VertexHome(vertex.Point);
+            if (_vertexGrid.TryGetValue(home, out List<GeometryData.Vertex>? bucket) && bucket.Remove(vertex) && bucket.Count == 0)
                 _vertexGrid.Remove(home);
             output.RemoveVertex(vertex);
         }
@@ -1585,7 +1585,7 @@ public sealed class CSGScene
             _representativeTree.QueryAABB(new AABB(Maths.Min(a, b), Maths.Max(a, b)).Expanded(WeldTolerance), candidates);
 
             inserts.Clear();
-            foreach (var rep in candidates)
+            foreach (RepPoint rep in candidates)
             {
                 Float3 c = rep.Point;
                 if (Float3.LengthSquared(c - a) < tol2 || Float3.LengthSquared(c - b) < tol2) continue;
@@ -1600,7 +1600,7 @@ public sealed class CSGScene
             inserts.Sort((x, y) => x.t.CompareTo(y.t));
 
             Float3 last = a;
-            foreach (var (_, point) in inserts)
+            foreach ((float _, Float3 point) in inserts)
             {
                 if (Float3.LengthSquared(point - last) < tol2) continue;
                 output.Add(point);
@@ -1617,7 +1617,7 @@ public sealed class CSGScene
 
     private void EmitPolygon(GeometryData result, Dictionary<SnapKey, List<GeometryData.Vertex>> weld, EmitItem item, bool hasAttributes)
     {
-        var ring = item.Ring;
+        List<Float3> ring = item.Ring;
         int count = ring.Count;
         var verts = new List<GeometryData.Vertex>(count);
         var positions = new List<Float3>(count);
@@ -1625,7 +1625,7 @@ public sealed class CSGScene
         for (int idx = 0; idx < count; idx++)
         {
             Float3 point = item.Flip != _invertOutput ? ring[count - 1 - idx] : ring[idx];
-            var vertex = GetOrAddVertex(result, weld, point);
+            GeometryData.Vertex vertex = GetOrAddVertex(result, weld, point);
             if (verts.Count > 0 && verts[verts.Count - 1] == vertex) continue;
             verts.Add(vertex);
             positions.Add(point);
@@ -1640,7 +1640,7 @@ public sealed class CSGScene
         if (verts.Count < 3)
             return;
 
-        var face = result.AddFace(verts.ToArray());
+        GeometryData.Face? face = result.AddFace(verts.ToArray());
         if (face == null)
             return;
         item.Brush.Emitted.Add(face);
@@ -1648,8 +1648,8 @@ public sealed class CSGScene
         face.Attributes[BrushIdAttribute] = new GeometryData.IntAttributeValue(item.Brush.Id);
         face.Attributes[SourceFaceAttribute] = new GeometryData.IntAttributeValue(item.Source.SourceIndex);
 
-        var source = item.Source;
-        var shape = item.Brush.Shape;
+        FaceData source = item.Source;
+        GeometryData shape = item.Brush.Shape;
 
         // A surface with its own texture space projects rather than interpolates, so its UVs do not
         // drift when CSG re-cuts the surface into different fragments.
@@ -1665,7 +1665,7 @@ public sealed class CSGScene
         {
             for (int i = 0; i < verts.Count; i++)
             {
-                var loop = face.GetLoop(verts[i]);
+                GeometryData.Loop? loop = face.GetLoop(verts[i]);
                 if (loop == null) continue;
                 Float2 uv = texSpace.Project(positions[i]);
                 if (_invertOutput) uv = new Float2(-uv.X, uv.Y);
@@ -1677,9 +1677,9 @@ public sealed class CSGScene
             return;
 
 
-        foreach (var def in result.FaceAttributes)
+        foreach (GeometryData.AttributeDefinition def in result.FaceAttributes)
         {
-            if (shape.HasFaceAttribute(def.Name) && source.Source.Attributes.TryGetValue(def.Name, out var value))
+            if (shape.HasFaceAttribute(def.Name) && source.Source.Attributes.TryGetValue(def.Name, out GeometryData.AttributeValue? value))
                 face.Attributes[def.Name] = GeometryData.AttributeValue.Copy(value);
         }
 
@@ -1687,7 +1687,7 @@ public sealed class CSGScene
         bool anyVertex = result.VertexAttributes.Count > 0;
         if (anyLoop || anyVertex)
         {
-            var weights = new float[source.World.Length];
+            float[] weights = new float[source.World.Length];
             for (int i = 0; i < verts.Count; i++)
             {
                 if (!Intersection.PolygonMeanValueWeights(positions[i], source.World, weights))
@@ -1695,10 +1695,10 @@ public sealed class CSGScene
 
                 if (anyLoop)
                 {
-                    var loop = face.GetLoop(verts[i]);
+                    GeometryData.Loop? loop = face.GetLoop(verts[i]);
                     if (loop != null)
                     {
-                        foreach (var def in result.LoopAttributes)
+                        foreach (GeometryData.AttributeDefinition def in result.LoopAttributes)
                         {
                             if (projectUV && def.Name == UVAttributeName) continue; // already projected
                             if (!shape.HasLoopAttribute(def.Name)) continue;
@@ -1709,7 +1709,7 @@ public sealed class CSGScene
 
                 if (anyVertex)
                 {
-                    foreach (var def in result.VertexAttributes)
+                    foreach (GeometryData.AttributeDefinition def in result.VertexAttributes)
                     {
                         if (!shape.HasVertexAttribute(def.Name)) continue;
                         verts[i].Attributes[def.Name] = InterpolateVertex(def, source, weights);
@@ -1737,15 +1737,15 @@ public sealed class CSGScene
                 if (Intersection.DistanceSqPointToLineSegment(v0, v1, positions[i]) >= WeldTolerance * WeldTolerance) continue;
                 if (Intersection.DistanceSqPointToLineSegment(v0, v1, positions[j]) >= WeldTolerance * WeldTolerance) continue;
 
-                var sourceEdge = source.SrcLoops[k]?.Edge;
+                GeometryData.Edge? sourceEdge = source.SrcLoops[k]?.Edge;
                 if (sourceEdge == null) break;
 
-                var edge = result.FindEdge(verts[i], verts[j]);
+                GeometryData.Edge? edge = result.FindEdge(verts[i], verts[j]);
                 if (edge == null) break;
 
-                foreach (var def in result.EdgeAttributes)
+                foreach (GeometryData.AttributeDefinition def in result.EdgeAttributes)
                 {
-                    if (shape.HasEdgeAttribute(def.Name) && sourceEdge.Attributes.TryGetValue(def.Name, out var value))
+                    if (shape.HasEdgeAttribute(def.Name) && sourceEdge.Attributes.TryGetValue(def.Name, out GeometryData.AttributeValue? value))
                         edge.Attributes[def.Name] = GeometryData.AttributeValue.Copy(value);
                 }
                 break;
@@ -1755,13 +1755,13 @@ public sealed class CSGScene
 
     private bool RegisterAttributes(GeometryData result)
     {
-        foreach (var brush in _brushes)
+        foreach (SceneBrush brush in _brushes)
         {
-            var mesh = brush.Shape;
-            foreach (var def in mesh.VertexAttributes) result.AddVertexAttribute(def.Name, def.Type.BaseType, def.Type.Dimensions);
-            foreach (var def in mesh.EdgeAttributes) result.AddEdgeAttribute(def.Name, def.Type.BaseType, def.Type.Dimensions);
-            foreach (var def in mesh.LoopAttributes) result.AddLoopAttribute(def.Name, def.Type.BaseType, def.Type.Dimensions);
-            foreach (var def in mesh.FaceAttributes) result.AddFaceAttribute(def.Name, def.Type.BaseType, def.Type.Dimensions);
+            GeometryData mesh = brush.Shape;
+            foreach (GeometryData.AttributeDefinition def in mesh.VertexAttributes) result.AddVertexAttribute(def.Name, def.Type.BaseType, def.Type.Dimensions);
+            foreach (GeometryData.AttributeDefinition def in mesh.EdgeAttributes) result.AddEdgeAttribute(def.Name, def.Type.BaseType, def.Type.Dimensions);
+            foreach (GeometryData.AttributeDefinition def in mesh.LoopAttributes) result.AddLoopAttribute(def.Name, def.Type.BaseType, def.Type.Dimensions);
+            foreach (GeometryData.AttributeDefinition def in mesh.FaceAttributes) result.AddFaceAttribute(def.Name, def.Type.BaseType, def.Type.Dimensions);
         }
 
         return result.VertexAttributes.Count > 0 || result.EdgeAttributes.Count > 0 ||
@@ -1773,7 +1773,7 @@ public sealed class CSGScene
         int n = source.World.Length;
         var perCorner = new GeometryData.AttributeValue?[n];
         for (int k = 0; k < n; k++)
-            if (source.SrcLoops[k] is { } loop && loop.Attributes.TryGetValue(def.Name, out var value))
+            if (source.SrcLoops[k] is { } loop && loop.Attributes.TryGetValue(def.Name, out GeometryData.AttributeValue? value))
                 perCorner[k] = value;
         return Interpolate(def, perCorner, weights);
     }
@@ -1783,7 +1783,7 @@ public sealed class CSGScene
         int n = source.World.Length;
         var perCorner = new GeometryData.AttributeValue?[n];
         for (int k = 0; k < n; k++)
-            if (source.SrcVerts[k].Attributes.TryGetValue(def.Name, out var value))
+            if (source.SrcVerts[k].Attributes.TryGetValue(def.Name, out GeometryData.AttributeValue? value))
                 perCorner[k] = value;
         return Interpolate(def, perCorner, weights);
     }
@@ -1792,7 +1792,7 @@ public sealed class CSGScene
         GeometryData.AttributeValue?[] perCorner, float[] weights)
     {
         int dims = def.Type.Dimensions;
-        var acc = new float[dims];
+        float[] acc = new float[dims];
         for (int k = 0; k < perCorner.Length; k++)
         {
             float w = weights[k];
@@ -1810,7 +1810,7 @@ public sealed class CSGScene
         if (def.Type.BaseType == GeometryData.AttributeBaseType.Float)
             return new GeometryData.FloatAttributeValue { Data = acc };
 
-        var rounded = new int[dims];
+        int[] rounded = new int[dims];
         for (int d = 0; d < dims; d++) rounded[d] = (int)MathF.Round(acc[d]);
         return new GeometryData.IntAttributeValue { Data = rounded };
     }
@@ -1830,8 +1830,8 @@ public sealed class CSGScene
             for (int y = y0; y <= y1; y++)
                 for (int z = z0; z <= z1; z++)
                 {
-                    if (!_representatives.TryGetValue(new SnapKey(x, y, z), out var bucket)) continue;
-                    foreach (var candidate in bucket)
+                    if (!_representatives.TryGetValue(new SnapKey(x, y, z), out List<RepPoint>? bucket)) continue;
+                    foreach (RepPoint candidate in bucket)
                     {
                         Float3 d = candidate.Point - point;
                         if (MathF.Abs(d.X) <= WeldTolerance && MathF.Abs(d.Y) <= WeldTolerance && MathF.Abs(d.Z) <= WeldTolerance)
@@ -1843,7 +1843,7 @@ public sealed class CSGScene
                 }
 
         var rep = new RepPoint { Point = point, Home = VertexHome(point), Count = 1 };
-        if (!_representatives.TryGetValue(rep.Home, out var list)) _representatives[rep.Home] = list = new List<RepPoint>(1);
+        if (!_representatives.TryGetValue(rep.Home, out List<RepPoint>? list)) _representatives[rep.Home] = list = [with(1)];
         list.Add(rep);
         if (!_deferRepresentativeTree) rep.TreeHandle = _representativeTree.Add(rep, new AABB(point, point).Expanded(WeldTolerance));
         return rep;
@@ -1852,7 +1852,7 @@ public sealed class CSGScene
     private void Release(RepPoint rep)
     {
         if (--rep.Count > 0) return;
-        if (_representatives.TryGetValue(rep.Home, out var bucket) && bucket.Remove(rep) && bucket.Count == 0)
+        if (_representatives.TryGetValue(rep.Home, out List<RepPoint>? bucket) && bucket.Remove(rep) && bucket.Count == 0)
             _representatives.Remove(rep.Home);
         _representativeTree.Remove(rep.TreeHandle);
     }
@@ -1886,8 +1886,8 @@ public sealed class CSGScene
             for (int y = y0; y <= y1; y++)
                 for (int z = z0; z <= z1; z++)
                 {
-                    if (!weld.TryGetValue(new SnapKey(x, y, z), out var bucket)) continue;
-                    foreach (var candidate in bucket)
+                    if (!weld.TryGetValue(new SnapKey(x, y, z), out List<GeometryData.Vertex>? bucket)) continue;
+                    foreach (GeometryData.Vertex candidate in bucket)
                     {
                         Float3 d = candidate.Point - point;
                         if (MathF.Abs(d.X) <= WeldTolerance && MathF.Abs(d.Y) <= WeldTolerance && MathF.Abs(d.Z) <= WeldTolerance)
@@ -1895,9 +1895,9 @@ public sealed class CSGScene
                     }
                 }
 
-        var vertex = result.AddVertex(point);
-        var home = VertexHome(point);
-        if (!weld.TryGetValue(home, out var list)) weld[home] = list = new List<GeometryData.Vertex>(1);
+        GeometryData.Vertex vertex = result.AddVertex(point);
+        SnapKey home = VertexHome(point);
+        if (!weld.TryGetValue(home, out List<GeometryData.Vertex>? list)) weld[home] = list = [with(1)];
         list.Add(vertex);
         return vertex;
     }
@@ -1953,7 +1953,7 @@ public sealed class CSGScene
 
     internal sealed class SceneGroup : SceneNode
     {
-        public readonly List<SceneNode> Children = new();
+        public readonly List<SceneNode> Children = [];
     }
 
     internal sealed class SceneBrush : SceneNode
@@ -1970,21 +1970,21 @@ public sealed class CSGScene
         /// <summary>Every face one flat convex piece with all corners behind it, so neighbours can clip by its planes.</summary>
         public bool Convex = true;
 
-        public readonly List<FaceData> Faces = new();
+        public readonly List<FaceData> Faces = [];
         public AABB Bounds;
-        public readonly List<OutFrag> Output = new();
-        public readonly List<OutFrag> Discarded = new();
+        public readonly List<OutFrag> Output = [];
+        public readonly List<OutFrag> Discarded = [];
 
         /// <summary>Rings after T-junction welding. Cached because welding a brush's rings only
         /// depends on points from brushes it overlaps, so an untouched brush keeps its result.</summary>
-        public readonly List<EmitItem> Welded = new();
+        public readonly List<EmitItem> Welded = [];
         public bool WeldDirty = true;
 
         /// <summary>Faces this brush put in the assembled mesh, taken out again when it is re-welded.</summary>
-        public readonly List<GeometryData.Face> Emitted = new();
+        public readonly List<GeometryData.Face> Emitted = [];
 
         /// <summary>The representative of every corner of <see cref="Output"/>, in order.</summary>
-        public readonly List<RepPoint> References = new();
+        public readonly List<RepPoint> References = [];
         public bool OutputChanged = true;
 
         /// <summary>Handle in the scene's brush tree.</summary>

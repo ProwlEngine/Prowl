@@ -1,19 +1,18 @@
 using System.Threading;
 
-namespace Prowl.Recast.Core
+namespace Prowl.Recast.Core;
+
+public class RcAtomicBoolean
 {
-    public class RcAtomicBoolean
+    private volatile int _location;
+
+    public bool Set(bool v)
     {
-        private volatile int _location;
+        return 0 != Interlocked.Exchange(ref _location, v ? 1 : 0);
+    }
 
-        public bool Set(bool v)
-        {
-            return 0 != Interlocked.Exchange(ref _location, v ? 1 : 0);
-        }
-
-        public bool Get()
-        {
-            return 0 != _location;
-        }
+    public bool Get()
+    {
+        return 0 != _location;
     }
 }

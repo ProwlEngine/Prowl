@@ -1,14 +1,13 @@
-namespace Prowl.Recast
-{
-    public readonly struct RcPotentialDiagonal
-    {
-        public readonly int vert;
-        public readonly int dist;
+namespace Prowl.Recast;
 
-        public RcPotentialDiagonal(int vert, int dist)
-        {
-            this.vert = vert;
-            this.dist = dist;
-        }
+public readonly struct RcPotentialDiagonal
+{
+    public readonly int vert;
+    public readonly int dist;
+
+    public RcPotentialDiagonal(int vert, int dist)
+    {
+        this.vert = vert;
+        this.dist = dist;
     }
 }

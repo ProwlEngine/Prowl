@@ -18,21 +18,20 @@ freely, subject to the following restrictions:
 3. This notice may not be removed or altered from any source distribution.
 */
 
-namespace Prowl.Recast
+namespace Prowl.Recast;
+
+/** Provides information on the content of a cell column in a compact heightfield. */
+public readonly struct RcCompactCell
 {
-    /** Provides information on the content of a cell column in a compact heightfield. */
-    public readonly struct RcCompactCell
+    /** Index to the first span in the column. */
+    public readonly int index;
+
+    /** Number of spans in the column. */
+    public readonly int count;
+
+    public RcCompactCell(int index, int count)
     {
-        /** Index to the first span in the column. */
-        public readonly int index;
-
-        /** Number of spans in the column. */
-        public readonly int count;
-
-        public RcCompactCell(int index, int count)
-        {
-            this.index = index;
-            this.count = count;
-        }
+        this.index = index;
+        this.count = count;
     }
 }

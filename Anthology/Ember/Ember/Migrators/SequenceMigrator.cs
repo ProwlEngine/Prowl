@@ -16,15 +16,15 @@ public sealed class SequenceMigrator : IValueMigrator
     public MigrationPlan Plan(Type type, PlanContext context)
     {
         var shape = CollectionShape.Probe(type);
-        var resolution = context.Types.Resolve(type);
+        TypeResolution resolution = context.Types.Resolve(type);
         if (resolution.IsRemoved) return MigrationPlan.Dropped;
 
-        var element = shape.ElementType;
+        Type element = shape.ElementType;
         bool elementsNeedMapping = !context.IsInertSlot(element) || context.Types.Resolve(element).IsSubstituted;
 
         if (resolution.IsUnchanged && !elementsNeedMapping) return MigrationPlan.Preserved;
 
-        var target = resolution.Target!;
+        Type target = resolution.Target!;
 
         // Without a usable constructor there is no way to produce an empty container to refill. A plain field
         // copy migrates the backing array through the array migrator and gets the same answer.
@@ -75,7 +75,7 @@ public sealed class SequenceMigrator : IValueMigrator
         {
             if (!_moved) return Allocation.Preserve(source);
 
-            var created = _capacity != null
+            object? created = _capacity != null
                 ? _capacity.Invoke(new object[] { _from.Count(source) })
                 : Activator.CreateInstance(_target);
 
@@ -94,7 +94,7 @@ public sealed class SequenceMigrator : IValueMigrator
 
             _to.Clear(target);
 
-            foreach (var item in _from.Items(source))
+            foreach (object? item in _from.Items(source))
                 TryAdd(target, item, context);
         }
 
@@ -105,7 +105,7 @@ public sealed class SequenceMigrator : IValueMigrator
             if (_from.SupportsIndexer)
             {
                 int index = 0;
-                foreach (var item in _from.Items(collection).ToArray())
+                foreach (object? item in _from.Items(collection).ToArray())
                 {
                     try
                     {
@@ -122,10 +122,10 @@ public sealed class SequenceMigrator : IValueMigrator
             }
 
             // No indexer, so the only way to rewrite it is to drain a snapshot and refill in order.
-            var snapshot = _from.Items(collection).ToArray();
+            object?[] snapshot = _from.Items(collection).ToArray();
             _from.Clear(collection);
 
-            foreach (var item in snapshot)
+            foreach (object? item in snapshot)
                 TryAdd(collection, item, context);
         }
 

@@ -34,31 +34,26 @@
 using System;
 using System.Diagnostics;
 
+using Real = System.Single;
+
 namespace Prowl.Quill.External
 {
-
-using Real = System.Single;
 namespace LibTessDotNet
 {
     internal static class Geom
     {
         public static bool IsWindingInside(WindingRule rule, int n)
         {
-            switch (rule)
-            {
-                case WindingRule.EvenOdd:
-                    return (n & 1) == 1;
-                case WindingRule.NonZero:
-                    return n != 0;
-                case WindingRule.Positive:
-                    return n > 0;
-                case WindingRule.Negative:
-                    return n < 0;
-                case WindingRule.AbsGeqTwo:
-                    return n >= 2 || n <= -2;
+                return rule switch
+                {
+                    WindingRule.EvenOdd => (n & 1) == 1,
+                    WindingRule.NonZero => n != 0,
+                    WindingRule.Positive => n > 0,
+                    WindingRule.Negative => n < 0,
+                    WindingRule.AbsGeqTwo => n >= 2 || n <= -2,
+                    _ => throw new Exception("Wrong winding rule"),
+                };
             }
-            throw new Exception("Wrong winding rule");
-        }
 
         public static bool VertCCW(MeshUtils.Vertex u, MeshUtils.Vertex v, MeshUtils.Vertex w)
         {
@@ -88,8 +83,8 @@ namespace LibTessDotNet
         {
             Debug.Assert(VertLeq(u, v) && VertLeq(v, w));
 
-            var gapL = v._s - u._s;
-            var gapR = w._s - v._s;
+                float gapL = v._s - u._s;
+                float gapR = w._s - v._s;
 
             if (gapL + gapR > 0.0f)
             {
@@ -115,8 +110,8 @@ namespace LibTessDotNet
         {
             Debug.Assert(VertLeq(u, v) && VertLeq(v, w));
 
-            var gapL = v._s - u._s;
-            var gapR = w._s - v._s;
+                float gapL = v._s - u._s;
+                float gapR = w._s - v._s;
 
             if (gapL + gapR > 0.0f)
             {
@@ -135,8 +130,8 @@ namespace LibTessDotNet
         {
             Debug.Assert(TransLeq(u, v) && TransLeq(v, w));
 
-            var gapL = v._t - u._t;
-            var gapR = w._t - v._t;
+                float gapL = v._t - u._t;
+                float gapR = w._t - v._t;
 
             if (gapL + gapR > 0.0f)
             {
@@ -157,8 +152,8 @@ namespace LibTessDotNet
         {
             Debug.Assert(TransLeq(u, v) && TransLeq(v, w));
 
-            var gapL = v._t - u._t;
-            var gapR = w._t - v._t;
+                float gapL = v._t - u._t;
+                float gapR = w._t - v._t;
 
             if (gapL + gapR > 0.0f)
             {
@@ -206,7 +201,7 @@ namespace LibTessDotNet
 
         static void Swap(ref MeshUtils.Vertex a, ref MeshUtils.Vertex b)
         {
-            var tmp = a;
+                MeshUtils.Vertex tmp = a;
             a = b;
             b = tmp;
         }
@@ -236,9 +231,9 @@ namespace LibTessDotNet
             }
             else if (VertLeq(d1, d2))
             {
-                // Interpolate between o2 and d1
-                var z1 = EdgeEval(o1, o2, d1);
-                var z2 = EdgeEval(o2, d1, d2);
+                    // Interpolate between o2 and d1
+                    float z1 = EdgeEval(o1, o2, d1);
+                    float z2 = EdgeEval(o2, d1, d2);
                 if (z1 + z2 < 0.0f)
                 {
                     z1 = -z1;
@@ -248,9 +243,9 @@ namespace LibTessDotNet
             }
             else
             {
-                // Interpolate between o2 and d2
-                var z1 = EdgeSign(o1, o2, d1);
-                var z2 = -EdgeSign(o1, d2, d1);
+                    // Interpolate between o2 and d2
+                    float z1 = EdgeSign(o1, o2, d1);
+                    float z2 = -EdgeSign(o1, d2, d1);
                 if (z1 + z2 < 0.0f)
                 {
                     z1 = -z1;
@@ -272,9 +267,9 @@ namespace LibTessDotNet
             }
             else if (TransLeq(d1, d2))
             {
-                // Interpolate between o2 and d1
-                var z1 = TransEval(o1, o2, d1);
-                var z2 = TransEval(o2, d1, d2);
+                    // Interpolate between o2 and d1
+                    float z1 = TransEval(o1, o2, d1);
+                    float z2 = TransEval(o2, d1, d2);
                 if (z1 + z2 < 0.0f)
                 {
                     z1 = -z1;
@@ -284,9 +279,9 @@ namespace LibTessDotNet
             }
             else
             {
-                // Interpolate between o2 and d2
-                var z1 = TransSign(o1, o2, d1);
-                var z2 = -TransSign(o1, d2, d1);
+                    // Interpolate between o2 and d2
+                    float z1 = TransSign(o1, o2, d1);
+                    float z2 = -TransSign(o1, d2, d1);
                 if (z1 + z2 < 0.0f)
                 {
                     z1 = -z1;

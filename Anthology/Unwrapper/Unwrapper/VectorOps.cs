@@ -64,7 +64,7 @@ internal static class VectorOps
         double s = 0.0;
         if (System.Numerics.Vector.IsHardwareAccelerated && n >= Lane)
         {
-            var acc = Vector<double>.Zero;
+            Vector<double> acc = Vector<double>.Zero;
             int last = n - (n % Lane);
             for (; i < last; i += Lane)
             {

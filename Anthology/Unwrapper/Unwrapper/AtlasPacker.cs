@@ -32,7 +32,7 @@ internal static class AtlasPacker
 
         // Build the placement order: deterministic centroid sort first, then stable sort by extent
         // descending so the biggest charts go in first.
-        var ordering = new int[slots.Length];
+        int[] ordering = new int[slots.Length];
         for (int i = 0; i < ordering.Length; ++i) ordering[i] = i;
 
         System.Array.Sort(ordering, (a, b) => CompareByOrigin3D(slots[a], slots[b]));
@@ -82,7 +82,7 @@ internal static class AtlasPacker
 
         for (int i = 0; i < ordered.Length; ++i)
         {
-            var slot = ordered[i];
+            AtlasSlot slot = ordered[i];
             UvChart chart = charts[slot.ChartIndex];
             for (int v = 0; v < chart.UVs.Length; ++v)
                 chart.UVs[v] = slot.Origin + slot.Scale * (chart.UVs[v] - slot.SourceOrigin);
@@ -132,8 +132,8 @@ internal static class AtlasPacker
         System.Array.Sort(pairs, (a, b) =>
         {
             const double eps = 1e-6;
-            var ea = slots[a.Index].Extent;
-            var eb = slots[b.Index].Extent;
+            Double2 ea = slots[a.Index].Extent;
+            Double2 eb = slots[b.Index].Extent;
             if (System.Math.Abs(ea.X - eb.X) > eps) return ea.X > eb.X ? -1 : 1;
             if (System.Math.Abs(ea.Y - eb.Y) > eps) return ea.Y > eb.Y ? -1 : 1;
             return a.Original.CompareTo(b.Original);

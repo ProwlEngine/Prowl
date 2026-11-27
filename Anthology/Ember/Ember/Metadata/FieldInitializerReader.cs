@@ -8,10 +8,10 @@ using Mono.Cecil;
 using Mono.Cecil.Cil;
 using Mono.Cecil.Rocks;
 
-using EmitOpCodes = System.Reflection.Emit.OpCodes;
+using CecilFlowControl = Mono.Cecil.Cil.FlowControl;
 using CecilOpCode = Mono.Cecil.Cil.OpCode;
 using CecilStackBehaviour = Mono.Cecil.Cil.StackBehaviour;
-using CecilFlowControl = Mono.Cecil.Cil.FlowControl;
+using EmitOpCodes = System.Reflection.Emit.OpCodes;
 
 namespace Prowl.Ember;
 
@@ -30,15 +30,15 @@ internal static class FieldInitializerReader
 {
     public static Func<object?>? Build(MetadataCache cache, FieldInfo field, ReportBuilder report)
     {
-        var declaringType = field.DeclaringType!;
+        Type declaringType = field.DeclaringType!;
 
-        var typeDefinition = cache.FindType(declaringType);
+        TypeDefinition? typeDefinition = cache.FindType(declaringType);
         if (typeDefinition == null) return null;
 
-        var fieldDefinition = typeDefinition.Fields.FirstOrDefault(x => x.Name == field.Name);
+        FieldDefinition? fieldDefinition = typeDefinition.Fields.FirstOrDefault(x => x.Name == field.Name);
         if (fieldDefinition == null) return null;
 
-        var action = typeDefinition.GetConstructors()
+        CtorAction? action = typeDefinition.GetConstructors()
             .Select(ctor => ReadActions(ctor).ToArray())
             .Where(actions => actions.Length > 0)
             .Where(actions => actions.All(a => !a.ChainsToPeerConstructor && !a.ReadsParameter))
@@ -48,7 +48,7 @@ internal static class FieldInitializerReader
 
         if (action == null) return null;
 
-        var genericTypeArguments = declaringType.IsGenericType ? declaringType.GetGenericArguments() : null;
+        Type[]? genericTypeArguments = declaringType.IsGenericType ? declaringType.GetGenericArguments() : null;
 
         try
         {
@@ -56,7 +56,7 @@ internal static class FieldInitializerReader
             // skipping visibility keeps access to the private members an initializer may touch.
             var method = new DynamicMethod($"<{field.Name}>__initializer", typeof(object), Type.EmptyTypes,
                 declaringType.Module, skipVisibility: true);
-            var il = method.GetILGenerator();
+            ILGenerator il = method.GetILGenerator();
 
             // Emit only the value expression, between the leading 'this' load and the trailing field store.
             ILTranslator.Emit(il, declaringType.Module, action.First!.Next, action.Last!, genericTypeArguments, null);

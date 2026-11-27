@@ -1,29 +1,28 @@
 using System.Threading;
 
-namespace Prowl.Recast.Core
+namespace Prowl.Recast.Core;
+
+public class RcAtomicFloat
 {
-    public class RcAtomicFloat
+    private volatile float _location;
+
+    public RcAtomicFloat(float location)
     {
-        private volatile float _location;
+        _location = location;
+    }
 
-        public RcAtomicFloat(float location)
-        {
-            _location = location;
-        }
+    public float Get()
+    {
+        return _location;
+    }
 
-        public float Get()
-        {
-            return _location;
-        }
+    public float Exchange(float exchange)
+    {
+        return Interlocked.Exchange(ref _location, exchange);
+    }
 
-        public float Exchange(float exchange)
-        {
-            return Interlocked.Exchange(ref _location, exchange);
-        }
-
-        public float CompareExchange(float value, float comparand)
-        {
-            return Interlocked.CompareExchange(ref _location, value, comparand);
-        }
+    public float CompareExchange(float value, float comparand)
+    {
+        return Interlocked.CompareExchange(ref _location, value, comparand);
     }
 }

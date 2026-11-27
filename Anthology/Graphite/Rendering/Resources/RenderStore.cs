@@ -5,8 +5,8 @@ namespace Prowl.Graphite.Rendering;
 
 internal sealed class RenderStore : IDisposable
 {
-    private readonly List<(DeviceBuffer From, DeviceBuffer To)> _resizes = new();
-    private readonly List<IDisposable> _retired = new();
+    private readonly List<(DeviceBuffer From, DeviceBuffer To)> _resizes = [];
+    private readonly List<IDisposable> _retired = [];
 
     public bool HasResizes => _resizes.Count > 0;
 

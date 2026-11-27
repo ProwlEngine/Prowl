@@ -20,17 +20,16 @@ freely, subject to the following restrictions:
 
 using Prowl.Recast.Core;
 
-namespace Prowl.Recast.Detour.TileCache
-{
-    public readonly struct DtTileCacheStorageParams
-    {
-        public readonly RcByteOrder Order;
-        public readonly bool Compatibility;
+namespace Prowl.Recast.Detour.TileCache;
 
-        public DtTileCacheStorageParams(RcByteOrder order, bool compatibility)
-        {
-            Order = order;
-            Compatibility = compatibility;
-        }
+public readonly struct DtTileCacheStorageParams
+{
+    public readonly RcByteOrder Order;
+    public readonly bool Compatibility;
+
+    public DtTileCacheStorageParams(RcByteOrder order, bool compatibility)
+    {
+        Order = order;
+        Compatibility = compatibility;
     }
 }

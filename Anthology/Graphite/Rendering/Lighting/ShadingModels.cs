@@ -68,7 +68,7 @@ internal static class ShadingModelLibrary
     public static uint FirstLoadedId => Foliage + (uint)Shipped.Length + 1;
 
     private static readonly object s_lock = new();
-    private static readonly Dictionary<string, ShadingModelDefinition?> s_documents = new(StringComparer.Ordinal);
+    private static readonly Dictionary<string, ShadingModelDefinition?> s_documents = [with(StringComparer.Ordinal)];
 
     /// <summary>The ShadingModel document the library holds under a name, null when it holds none.</summary>
     public static ShadingModelDefinition? Find(string name)
@@ -110,10 +110,10 @@ public sealed class ShadingModels : IDisposable
     private readonly CompilePolicy _policy;
     private readonly BlendStateDescription _blend;
     private readonly object _lock = new();
-    private readonly List<ShadingModel> _models = new();
-    private readonly HashSet<ShadingModel> _broken = new();
-    private readonly Dictionary<string, ShadingModelDefinition> _loaded = new(StringComparer.Ordinal);
-    private readonly Dictionary<string, uint> _ids = new(StringComparer.Ordinal);
+    private readonly List<ShadingModel> _models = [];
+    private readonly HashSet<ShadingModel> _broken = [];
+    private readonly Dictionary<string, ShadingModelDefinition> _loaded = [with(StringComparer.Ordinal)];
+    private readonly Dictionary<string, uint> _ids = [with(StringComparer.Ordinal)];
     private readonly Action<RendererError>? _report;
     private readonly Tier[] _tiers = [new(""), new("#define PBR_TIER_LITE 1\n"), new("#define PBR_TIER_MAX 1\n")];
     private ShadingModel[] _lit, _wantedModels;
@@ -352,7 +352,7 @@ public sealed class ShadingModels : IDisposable
     private void Fail(string message)
     {
         _failed = _wanted;
-        List<string> names = new();
+        List<string> names = [];
         lock (_lock)
         {
             foreach (ShadingModel model in _wantedModels)

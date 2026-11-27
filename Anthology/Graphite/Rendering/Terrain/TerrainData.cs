@@ -125,7 +125,7 @@ public sealed partial class TerrainData : IDisposable
     /// </summary>
     public Task SetInterest(IReadOnlyList<Double3> points, double radius)
     {
-        HashSet<TerrainPageKey> wanted = new();
+        HashSet<TerrainPageKey> wanted = [];
         double size = TerrainPage.Quads * Header.Spacing;
         (int pagesX, int pagesZ) = PagesAt(0);
         foreach (Double3 point in points)

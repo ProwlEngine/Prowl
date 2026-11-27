@@ -18,86 +18,86 @@ freely, subject to the following restrictions:
 */
 
 using System.Collections.Generic;
+
 using Prowl.Recast.Core.Numerics;
 
-namespace Prowl.Recast.Core
+namespace Prowl.Recast.Core;
+
+public static class RcConvexUtils
 {
-    public static class RcConvexUtils
+    // Calculates convex hull on xz-plane of points on 'pts',
+    // stores the indices of the resulting hull in 'out' and
+    // returns number of points on hull.
+    public static List<int> Convexhull(List<RcVec3f> pts)
     {
-        // Calculates convex hull on xz-plane of points on 'pts',
-        // stores the indices of the resulting hull in 'out' and
-        // returns number of points on hull.
-        public static List<int> Convexhull(List<RcVec3f> pts)
+        int npts = pts.Count;
+        List<int> @out = [];
+        // Find lower-leftmost point.
+        int hull = 0;
+        for (int i = 1; i < npts; ++i)
         {
-            int npts = pts.Count;
-            List<int> @out = new List<int>();
-            // Find lower-leftmost point.
-            int hull = 0;
-            for (int i = 1; i < npts; ++i)
+            if (Cmppt(pts[i], pts[hull]))
             {
-                if (Cmppt(pts[i], pts[hull]))
-                {
-                    hull = i;
-                }
+                hull = i;
             }
-
-            // Gift wrap hull.
-            int endpt = 0;
-            do
-            {
-                @out.Add(hull);
-                endpt = 0;
-                for (int j = 1; j < npts; ++j)
-                {
-                    RcVec3f a = pts[hull];
-                    RcVec3f b = pts[endpt];
-                    RcVec3f c = pts[j];
-                    if (hull == endpt || Left(a, b, c))
-                    {
-                        endpt = j;
-                    }
-                }
-
-                hull = endpt;
-            } while (endpt != @out[0]);
-
-            return @out;
         }
 
-        // Returns true if 'a' is more lower-left than 'b'.
-        private static bool Cmppt(RcVec3f a, RcVec3f b)
+        // Gift wrap hull.
+        int endpt = 0;
+        do
         {
-            if (a.X < b.X)
+            @out.Add(hull);
+            endpt = 0;
+            for (int j = 1; j < npts; ++j)
             {
-                return true;
+                RcVec3f a = pts[hull];
+                RcVec3f b = pts[endpt];
+                RcVec3f c = pts[j];
+                if (hull == endpt || Left(a, b, c))
+                {
+                    endpt = j;
+                }
             }
 
-            if (a.X > b.X)
-            {
-                return false;
-            }
+            hull = endpt;
+        } while (endpt != @out[0]);
 
-            if (a.Z < b.Z)
-            {
-                return true;
-            }
+        return @out;
+    }
 
-            if (a.Z > b.Z)
-            {
-                return false;
-            }
+    // Returns true if 'a' is more lower-left than 'b'.
+    private static bool Cmppt(RcVec3f a, RcVec3f b)
+    {
+        if (a.X < b.X)
+        {
+            return true;
+        }
 
+        if (a.X > b.X)
+        {
             return false;
         }
 
-        // Returns true if 'c' is left of line 'a'-'b'.
-        private static bool Left(RcVec3f a, RcVec3f b, RcVec3f c)
+        if (a.Z < b.Z)
         {
-            float u1 = b.X - a.X;
-            float v1 = b.Z - a.Z;
-            float u2 = c.X - a.X;
-            float v2 = c.Z - a.Z;
-            return u1 * v2 - v1 * u2 < 0;
+            return true;
         }
+
+        if (a.Z > b.Z)
+        {
+            return false;
+        }
+
+        return false;
+    }
+
+    // Returns true if 'c' is left of line 'a'-'b'.
+    private static bool Left(RcVec3f a, RcVec3f b, RcVec3f c)
+    {
+        float u1 = b.X - a.X;
+        float v1 = b.Z - a.Z;
+        float u2 = c.X - a.X;
+        float v2 = c.Z - a.Z;
+        return u1 * v2 - v1 * u2 < 0;
     }
 }

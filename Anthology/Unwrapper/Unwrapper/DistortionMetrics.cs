@@ -43,10 +43,10 @@ internal static class DistortionMetrics
         }
 
         int angleCount = 3 * triCount;
-        var srcArea = new double[triCount];
-        var uvArea = new double[triCount];
-        var srcAngle = new double[angleCount];
-        var uvAngle = new double[angleCount];
+        double[] srcArea = new double[triCount];
+        double[] uvArea = new double[triCount];
+        double[] srcAngle = new double[angleCount];
+        double[] uvAngle = new double[angleCount];
 
         for (int triI = 0; triI < triCount; ++triI)
         {
@@ -54,7 +54,7 @@ internal static class DistortionMetrics
             AnalyseTriangle2D(chart.UVs, 3 * triI, out uvArea[triI], uvAngle, 3 * triI);
         }
 
-        var angleDiff = new double[angleCount];
+        double[] angleDiff = new double[angleCount];
         for (int a = 0; a < angleCount; ++a)
         {
             angleDiff[a] = srcAngle[a] > AngleTinyRadians
@@ -75,7 +75,7 @@ internal static class DistortionMetrics
         stats.TotalAngularDistortion = (float)weightedAngleDiff;
 
         // Area distortion: how much the per-triangle scale varies around the chart mean.
-        var areaDiff = new double[triCount];
+        double[] areaDiff = new double[triCount];
         double targetScale = 0.0, totalUvArea = 0.0;
         for (int triI = 0; triI < triCount; ++triI)
         {
@@ -100,7 +100,7 @@ internal static class DistortionMetrics
     {
         stats = default;
 
-        var angleDiff = new double[3 * mesh.Triangles.Count];
+        double[] angleDiff = new double[3 * mesh.Triangles.Count];
         for (int faceI = 0; faceI < mesh.Triangles.Count; ++faceI)
         {
             HalfEdge edge = mesh.Triangles[faceI].FirstEdge!;

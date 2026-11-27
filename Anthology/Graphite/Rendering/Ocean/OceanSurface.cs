@@ -297,7 +297,7 @@ public sealed class OceanSurface : RenderProvider, IDisposable
         }
 
         float inner = 1f - step;
-        List<uint> indices = new();
+        List<uint> indices = [];
         for (int j = 0; j < cells; j++)
         {
             for (int i = 0; i < cells; i++)

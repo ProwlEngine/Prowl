@@ -83,7 +83,7 @@ internal sealed class CompositeCommandStreamProfiler(ICommandStreamProfiler[] pr
 
     public IPassCommandSink? BeginPassCommands(in PassInfo pass)
     {
-        List<IPassCommandSink> sinks = new(profilers.Length);
+        List<IPassCommandSink> sinks = [with(profilers.Length)];
         foreach (ICommandStreamProfiler profiler in profilers)
         {
             if (profiler.BeginPassCommands(in pass) is { } sink)

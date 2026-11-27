@@ -29,8 +29,10 @@ internal unsafe partial class VkGraphicsDevice
         for (uint i = 0; i < _maxExecutingTasks; i++)
         {
             VkBuffer primary = new(this, new BufferDescription(_transientInitialSize,
-                BufferUsage.Dynamic | BufferUsage.UniformBuffer));
-            primary.Name = $"TransientPrimary[{i}]";
+                BufferUsage.Dynamic | BufferUsage.UniformBuffer))
+            {
+                Name = $"TransientPrimary[{i}]"
+            };
 
             _slots[i] = new SlotState
             {
@@ -124,8 +126,10 @@ internal unsafe partial class VkGraphicsDevice
         }
 
         VkBuffer overflow = new(this, new BufferDescription(sizeInBytes,
-            BufferUsage.Dynamic | BufferUsage.UniformBuffer));
-        overflow.Name = "TransientOverflow";
+            BufferUsage.Dynamic | BufferUsage.UniformBuffer))
+        {
+            Name = "TransientOverflow"
+        };
         return overflow;
     }
 

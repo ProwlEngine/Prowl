@@ -46,7 +46,7 @@ public sealed partial class OceanFeature
     private const float ClipInput = 0f, ClipHeight = 1f, ClipClear = 2f;
 
     private LazyCompute _clipProgram = null!;
-    private readonly List<ClipPush> _clipDraws = new();
+    private readonly List<ClipPush> _clipDraws = [];
     private ClipPush _clipBase;
     private bool _clipCleared;
 
@@ -54,7 +54,7 @@ public sealed partial class OceanFeature
     public Texture Clip { get; private set; } = null!;
 
     /// <summary>The shapes cutting the surface. Host thread.</summary>
-    public List<OceanClipInput> ClipInputs { get; } = new();
+    public List<OceanClipInput> ClipInputs { get; } = [];
 
     /// <summary>
     /// The pass over the depth's slices that reads the finished waves, drawing <see cref="ClipInputs"/> and stepping the

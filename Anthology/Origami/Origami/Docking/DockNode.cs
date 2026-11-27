@@ -36,7 +36,7 @@ public class DockNode
 
     public static DockNode Leaf(params DockPanel[] panels)
     {
-        return new DockNode { Tabs = new List<DockPanel>(panels), ActiveTabIndex = 0 };
+        return new DockNode { Tabs = [with(panels)], ActiveTabIndex = 0 };
     }
 
     public static DockNode Split(SplitDirection dir, float ratio, DockNode a, DockNode b)
@@ -47,7 +47,7 @@ public class DockNode
     public DockPanel? RemoveTab(int index)
     {
         if (Tabs == null || index < 0 || index >= Tabs.Count) return null;
-        var panel = Tabs[index];
+        DockPanel panel = Tabs[index];
         Tabs.RemoveAt(index);
         if (ActiveTabIndex >= Tabs.Count)
             ActiveTabIndex = Math.Max(0, Tabs.Count - 1);
@@ -56,7 +56,7 @@ public class DockNode
 
     public void InsertTab(DockPanel panel, int index = -1)
     {
-        Tabs ??= new List<DockPanel>();
+        Tabs ??= [];
         if (index < 0 || index >= Tabs.Count)
             Tabs.Add(panel);
         else

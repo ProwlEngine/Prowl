@@ -26,7 +26,7 @@ public sealed class YamlFileFormat : IFileFormat
     public EchoObject ReadFrom(Stream stream)
     {
         using var reader = new StreamReader(stream, Encoding.UTF8, true, 1024, leaveOpen: true);
-        var lines = ReadLines(reader);
+        List<YamlLine> lines = ReadLines(reader);
         int index = 0;
         // Skip leading document markers (---)
         while (index < lines.Count && (lines[index].Content == "---" || lines[index].Content.Length == 0))
@@ -56,7 +56,7 @@ public sealed class YamlFileFormat : IFileFormat
 
     private static void WriteMapping(TextWriter writer, EchoObject compound, int indent, bool inlineKey)
     {
-        var tags = compound.Tags;
+        CompoundTags tags = compound.Tags;
         if (tags.Count == 0)
         {
             writer.Write("{}");
@@ -64,7 +64,7 @@ public sealed class YamlFileFormat : IFileFormat
         }
 
         bool first = true;
-        foreach (var kvp in tags)
+        foreach (KeyValuePair<string, EchoObject> kvp in tags)
         {
             // Write indent for all entries, except the first entry when inline (after "- ")
             if (!(first && inlineKey))
@@ -103,14 +103,14 @@ public sealed class YamlFileFormat : IFileFormat
 
     private static void WriteSequence(TextWriter writer, EchoObject list, int indent, bool inlineKey)
     {
-        var items = list.List;
+        List<EchoObject> items = list.List;
         if (items.Count == 0)
         {
             writer.Write("[]");
             return;
         }
 
-        foreach (var item in items)
+        foreach (EchoObject item in items)
         {
             writer.Write(TextFormatting.Spaces(indent));
             writer.Write("- ");
@@ -194,7 +194,7 @@ public sealed class YamlFileFormat : IFileFormat
             "on" or "On" or "ON" or
             "off" or "Off" or "OFF") return true;
 
-        foreach (var c in value)
+        foreach (char c in value)
         {
             if (c is ':' or '#' or '[' or ']' or '{' or '}' or ',' or '&' or '*' or
                 '?' or '|' or '-' or '<' or '>' or '=' or '!' or '%' or '@' or
@@ -252,7 +252,7 @@ public sealed class YamlFileFormat : IFileFormat
         while ((line = reader.ReadLine()) != null)
         {
             // Skip comments and document end markers
-            var trimmed = line.TrimStart();
+            string trimmed = line.TrimStart();
             if (trimmed.StartsWith('#') || trimmed == "...")
                 continue;
 
@@ -270,7 +270,7 @@ public sealed class YamlFileFormat : IFileFormat
         if (index >= lines.Count)
             return new EchoObject(EchoType.Null, null);
 
-        var line = lines[index];
+        YamlLine line = lines[index];
 
         // Empty content
         if (line.Content.Length == 0)
@@ -306,7 +306,7 @@ public sealed class YamlFileFormat : IFileFormat
 
         while (index < lines.Count)
         {
-            var line = lines[index];
+            YamlLine line = lines[index];
             if (line.Content.Length == 0) { index++; continue; }
             if (line.Indent < mappingIndent) break;
             if (line.Indent > mappingIndent) break; // shouldn't happen at this level
@@ -314,7 +314,7 @@ public sealed class YamlFileFormat : IFileFormat
             if (!IsMappingLine(line.Content))
                 break;
 
-            var (key, rest) = SplitMappingLine(line.Content);
+            (string? key, string? rest) = SplitMappingLine(line.Content);
             index++;
 
             if (rest.Length > 0)
@@ -357,7 +357,7 @@ public sealed class YamlFileFormat : IFileFormat
 
         while (index < lines.Count)
         {
-            var line = lines[index];
+            YamlLine line = lines[index];
             if (line.Content.Length == 0) { index++; continue; }
             if (line.Indent < seqIndent) break;
             if (line.Indent > seqIndent) break;
@@ -366,7 +366,7 @@ public sealed class YamlFileFormat : IFileFormat
                 break;
 
             // Strip the "- " prefix
-            var itemContent = line.Content.Length > 2 ? line.Content.Substring(2) : "";
+            string itemContent = line.Content.Length > 2 ? line.Content.Substring(2) : "";
             index++;
 
             if (itemContent.Length == 0)
@@ -385,7 +385,7 @@ public sealed class YamlFileFormat : IFileFormat
             {
                 // Inline mapping starting on the dash line
                 // We need to reconstruct this as a mapping with potential continuation
-                var (key, rest) = SplitMappingLine(itemContent);
+                (string? key, string? rest) = SplitMappingLine(itemContent);
                 var compound = EchoObject.NewCompound();
 
                 if (rest.Length > 0)
@@ -399,8 +399,8 @@ public sealed class YamlFileFormat : IFileFormat
                 while (index < lines.Count && lines[index].Indent == seqIndent + 2 &&
                        lines[index].Content.Length > 0 && IsMappingLine(lines[index].Content))
                 {
-                    var subLine = lines[index];
-                    var (subKey, subRest) = SplitMappingLine(subLine.Content);
+                    YamlLine subLine = lines[index];
+                    (string? subKey, string? subRest) = SplitMappingLine(subLine.Content);
                     index++;
 
                     if (subRest.Length > 0)
@@ -444,14 +444,14 @@ public sealed class YamlFileFormat : IFileFormat
 
     private static EchoObject ParseFlowSequence(List<YamlLine> lines, ref int index)
     {
-        var result = ParseFlowSequenceFromString(lines[index].Content);
+        EchoObject result = ParseFlowSequenceFromString(lines[index].Content);
         index++;
         return result;
     }
 
     private static EchoObject ParseFlowMapping(List<YamlLine> lines, ref int index)
     {
-        var result = ParseFlowMappingFromString(lines[index].Content);
+        EchoObject result = ParseFlowMappingFromString(lines[index].Content);
         index++;
         return result;
     }
@@ -468,9 +468,9 @@ public sealed class YamlFileFormat : IFileFormat
         if (input.Length == 0)
             return list;
 
-        foreach (var item in SplitFlowItems(input))
+        foreach (string item in SplitFlowItems(input))
         {
-            var trimmed = item.Trim();
+            string trimmed = item.Trim();
             if (trimmed.Length > 0)
                 list.ListAdd(ParseScalarOrFlow(trimmed));
         }
@@ -489,16 +489,16 @@ public sealed class YamlFileFormat : IFileFormat
         if (input.Length == 0)
             return compound;
 
-        foreach (var item in SplitFlowItems(input))
+        foreach (string item in SplitFlowItems(input))
         {
-            var trimmed = item.Trim();
+            string trimmed = item.Trim();
             if (trimmed.Length == 0) continue;
 
             int colonIdx = FindUnquotedColon(trimmed);
             if (colonIdx < 0) continue;
 
-            var key = trimmed.Substring(0, colonIdx).Trim();
-            var val = trimmed.Substring(colonIdx + 1).Trim();
+            string key = trimmed.Substring(0, colonIdx).Trim();
+            string val = trimmed.Substring(colonIdx + 1).Trim();
 
             key = UnquoteString(key);
             compound.Add(key, ParseScalarOrFlow(val));
@@ -556,7 +556,7 @@ public sealed class YamlFileFormat : IFileFormat
         // Handle !!binary tag
         if (value.StartsWith("!!binary ", StringComparison.Ordinal) || value.StartsWith("!!binary\t", StringComparison.Ordinal))
         {
-            var b64 = UnquoteString(value.Substring(9).Trim());
+            string b64 = UnquoteString(value.Substring(9).Trim());
             return new EchoObject(Convert.FromBase64String(b64));
         }
 
@@ -610,8 +610,8 @@ public sealed class YamlFileFormat : IFileFormat
     private static (string key, string value) SplitMappingLine(string content)
     {
         int colonIdx = FindUnquotedColon(content);
-        var key = content.Substring(0, colonIdx).Trim();
-        var val = colonIdx + 1 < content.Length ? content.Substring(colonIdx + 1).Trim() : "";
+        string key = content.Substring(0, colonIdx).Trim();
+        string val = colonIdx + 1 < content.Length ? content.Substring(colonIdx + 1).Trim() : "";
         key = UnquoteString(key);
         return (key, val);
     }

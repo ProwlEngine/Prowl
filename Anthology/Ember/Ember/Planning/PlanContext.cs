@@ -55,7 +55,7 @@ public sealed class PlanContext
         if (Options.NewFields != NewFieldPolicy.DeclaredInitializer) return false;
         if (field.DeclaringType is not { } declaring) return false;
 
-        var metadata = _metadata.For(declaring.Assembly);
+        AssemblyMetadata? metadata = _metadata.For(declaring.Assembly);
         return metadata != null && metadata.TryGetFieldInitializer(field, out factory);
     }
 

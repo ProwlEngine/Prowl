@@ -16,7 +16,7 @@ internal static class PluralRules
     public static string GetCategory(string locale, int count)
     {
         // Normalize locale to language code (e.g. "en-US" → "en")
-        var lang = locale.Split('-', '_')[0].ToLowerInvariant();
+        string lang = locale.Split('-', '_')[0].ToLowerInvariant();
 
         return lang switch
         {

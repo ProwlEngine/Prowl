@@ -10,8 +10,8 @@ namespace Prowl.Quire;
 /// </summary>
 public sealed partial class MarkdownDocument
 {
-    private readonly List<Block> _blocks = new();
-    private readonly List<Inline> _inlines = new();
+    private readonly List<Block> _blocks = [];
+    private readonly List<Inline> _inlines = [];
     private string _source = string.Empty;
 
     public string Source => _source;
@@ -87,7 +87,7 @@ public sealed partial class MarkdownDocument
             return;
         }
 
-        var node = _inlines[inline];
+        Inline node = _inlines[inline];
         if (node.Kind == InlineKind.Text || node.Kind == InlineKind.Code)
         {
             builder.Append(_source, node.Text.Start, node.Text.Length);

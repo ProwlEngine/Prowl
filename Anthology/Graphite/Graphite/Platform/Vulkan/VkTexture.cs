@@ -52,10 +52,13 @@ internal unsafe partial class VkTexture : Texture
         VkFormat = VkFormats.ToVkPixelFormat(Format, (description.Usage & TextureUsage.DepthStencil) == TextureUsage.DepthStencil);
 
         ulong allocatedSize;
-        ImageCreateInfo imageCI = new() { SType = StructureType.ImageCreateInfo };
-        imageCI.MipLevels = MipLevels;
-        imageCI.ArrayLayers = _actualImageArrayLayers;
-        imageCI.ImageType = VkFormats.ToVkTextureType(Type);
+        ImageCreateInfo imageCI = new()
+        {
+            SType = StructureType.ImageCreateInfo,
+            MipLevels = MipLevels,
+            ArrayLayers = _actualImageArrayLayers,
+            ImageType = VkFormats.ToVkTextureType(Type)
+        };
         imageCI.Extent.Width = Width;
         imageCI.Extent.Height = Height;
         imageCI.Extent.Depth = Depth;

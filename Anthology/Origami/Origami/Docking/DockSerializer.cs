@@ -40,15 +40,15 @@ public static class DockSerializer
         var doc = JsonNode.Parse(json);
         if (doc == null) return null;
 
-        var root = DeserializeNode(doc["root"], panelFactory);
+        DockNode? root = DeserializeNode(doc["root"], panelFactory);
 
         floatingWindows.Clear();
         if (doc["floatingWindows"] is JsonArray arr)
         {
-            foreach (var item in arr)
+            foreach (JsonNode? item in arr)
             {
                 if (item == null) continue;
-                var node = DeserializeNode(item["node"], panelFactory);
+                DockNode? node = DeserializeNode(item["node"], panelFactory);
                 if (node == null) continue;
 
                 float x = item["x"]?.GetValue<float>() ?? 200;
@@ -70,7 +70,7 @@ public static class DockSerializer
         if (node.IsLeaf)
         {
             var tabs = new JsonArray();
-            foreach (var panel in node.Tabs!)
+            foreach (DockPanel panel in node.Tabs!)
             {
                 var entry = new JsonObject
                 {
@@ -107,7 +107,7 @@ public static class DockSerializer
     private static JsonArray SerializeFloating(List<FloatingWindow> windows)
     {
         var arr = new JsonArray();
-        foreach (var fw in windows)
+        foreach (FloatingWindow fw in windows)
         {
             arr.Add(new JsonObject
             {
@@ -133,7 +133,7 @@ public static class DockSerializer
             var tabs = new List<DockPanel>();
             if (json["tabs"] is JsonArray tabArr)
             {
-                foreach (var tabNode in tabArr)
+                foreach (JsonNode? tabNode in tabArr)
                 {
                     string? typeName;
                     JsonObject? state = null;
@@ -148,7 +148,7 @@ public static class DockSerializer
                     }
                     if (typeName == null) continue;
 
-                    var panel = panelFactory(typeName, state);
+                    DockPanel? panel = panelFactory(typeName, state);
                     if (panel != null)
                         tabs.Add(panel);
                 }
@@ -166,11 +166,11 @@ public static class DockSerializer
 
         if (type == "split")
         {
-            var dir = Enum.TryParse<SplitDirection>(json["direction"]?.GetValue<string>(), out var d)
+            SplitDirection dir = Enum.TryParse<SplitDirection>(json["direction"]?.GetValue<string>(), out SplitDirection d)
                 ? d : SplitDirection.Horizontal;
             float ratio = json["ratio"]?.GetValue<float>() ?? 0.5f;
-            var childA = DeserializeNode(json["childA"], panelFactory);
-            var childB = DeserializeNode(json["childB"], panelFactory);
+            DockNode? childA = DeserializeNode(json["childA"], panelFactory);
+            DockNode? childB = DeserializeNode(json["childB"], panelFactory);
 
             if (childA == null && childB == null) return null;
             if (childA == null) return childB;

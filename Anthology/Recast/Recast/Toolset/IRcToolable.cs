@@ -1,7 +1,6 @@
-namespace Prowl.Recast.Toolset
+namespace Prowl.Recast.Toolset;
+
+public interface IRcToolable
 {
-    public interface IRcToolable
-    {
-        string GetName();
-    }
+    string GetName();
 }

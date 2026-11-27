@@ -80,7 +80,7 @@ public sealed partial class TerrainData
         if (edit.Brush >= TerrainBrush.Paint)
             return ChangeSurface(edit, i0, i1, j0, j1, cx, cz);
 
-        Dictionary<TerrainPageKey, TerrainPage> pages = new();
+        Dictionary<TerrainPageKey, TerrainPage> pages = [];
         int width = i1 - i0 + 3, depth = j1 - j0 + 3;
         ushort[] old = new ushort[width * depth];
         for (int z = 0; z < depth; z++)
@@ -111,7 +111,7 @@ public sealed partial class TerrainData
         for (int level = 0; level < Levels; level++)
             Rebuild(level, i0, i1, j0, j1, pages);
 
-        List<TerrainPageKey> keys = new(pages.Keys);
+        List<TerrainPageKey> keys = [with(pages.Keys)];
         keys.Sort((a, b) => a.Level != b.Level ? a.Level.CompareTo(b.Level) : a.Z != b.Z ? a.Z.CompareTo(b.Z) : a.X.CompareTo(b.X));
         foreach (TerrainPageKey key in keys)
             Bound(key, pages);
@@ -202,7 +202,7 @@ public sealed partial class TerrainData
         double spacing = Header.Spacing;
         double middle = edit.Brush == TerrainBrush.Hole ? 0.5 : 0.0;
         (int pagesX, int pagesZ) = PagesAt(0);
-        Dictionary<TerrainPageKey, TerrainPage> pages = new();
+        Dictionary<TerrainPageKey, TerrainPage> pages = [];
         bool changed = false;
         for (int j = j0; j <= j1; j++)
             for (int i = i0; i <= i1; i++)
@@ -227,7 +227,7 @@ public sealed partial class TerrainData
             for (int level = 1; level < Math.Min(Header.SplatLevels, Levels); level++)
                 RebuildSurface(level, i0, i1, j0, j1, pages);
 
-        List<TerrainPageKey> keys = new(pages.Keys);
+        List<TerrainPageKey> keys = [with(pages.Keys)];
         keys.Sort((a, b) => a.Level != b.Level ? a.Level.CompareTo(b.Level) : a.Z != b.Z ? a.Z.CompareTo(b.Z) : a.X.CompareTo(b.X));
         foreach (TerrainPageKey key in keys)
         {

@@ -13,20 +13,20 @@ namespace Prowl.Clay.Intermediate;
 public sealed class IntermediateScene
 {
     public IntermediateNode Root { get; set; } = new();
-    public List<IntermediateNode> Nodes { get; } = new();
-    public List<IntermediateMesh> Meshes { get; } = new();
-    public List<IntermediateMaterial> Materials { get; } = new();
-    public List<IntermediateTexture> Textures { get; } = new();
-    public List<IntermediateCamera> Cameras { get; } = new();
-    public List<IntermediateLight> Lights { get; } = new();
-    public List<IntermediateSkin> Skins { get; } = new();
-    public List<IntermediateAnimation> Animations { get; } = new();
+    public List<IntermediateNode> Nodes { get; } = [];
+    public List<IntermediateMesh> Meshes { get; } = [];
+    public List<IntermediateMaterial> Materials { get; } = [];
+    public List<IntermediateTexture> Textures { get; } = [];
+    public List<IntermediateCamera> Cameras { get; } = [];
+    public List<IntermediateLight> Lights { get; } = [];
+    public List<IntermediateSkin> Skins { get; } = [];
+    public List<IntermediateAnimation> Animations { get; } = [];
 
     public CoordinateSystem SourceCoordinateSystem { get; set; } = CoordinateSystem.RightHandedYUp;
     public float SourceUnitToMeters { get; set; } = 1f;
 
-    public Dictionary<string, JsonElement> RawExtensions { get; } = new();
-    public Dictionary<string, object?> Extras { get; } = new();
+    public Dictionary<string, JsonElement> RawExtensions { get; } = [];
+    public Dictionary<string, object?> Extras { get; } = [];
 
     public string? FormatVersion { get; set; }
     public string? Generator { get; set; }

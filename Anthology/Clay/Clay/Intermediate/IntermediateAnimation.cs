@@ -11,7 +11,7 @@ namespace Prowl.Clay.Intermediate;
 public sealed class IntermediateAnimation
 {
     public string Name { get; set; } = string.Empty;
-    public List<IntermediateAnimationBinding> Bindings { get; } = new();
+    public List<IntermediateAnimationBinding> Bindings { get; } = [];
 }
 
 /// <summary>
@@ -26,13 +26,13 @@ public sealed class IntermediateAnimationBinding
     public int SubIndex { get; set; }
     public CurveInterpolation Interpolation { get; set; } = CurveInterpolation.Linear;
     public int Dimension { get; set; }
-    public List<float> Times { get; } = new();
+    public List<float> Times { get; } = [];
 
     /// <summary>
     /// For step and linear, <c>Dimension</c> floats per key. For cubic spline, <c>3 * Dimension</c>
     /// laid out as in-tangent, value, out-tangent per key, which is glTF's sampler layout.
     /// </summary>
-    public List<float> Values { get; } = new();
+    public List<float> Values { get; } = [];
 
     /// <summary>Floats per key, which the cubic layout triples.</summary>
     public int ValuesPerKey => Interpolation == CurveInterpolation.CubicSpline ? Dimension * 3 : Dimension;

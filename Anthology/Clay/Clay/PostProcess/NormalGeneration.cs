@@ -39,10 +39,10 @@ internal static class NormalGeneration
 
         // Face normals. A degenerate face has no meaningful normal and takes no part in smoothing.
         var faceNormals = new Float3[mesh.Faces.Count];
-        var faceValid = new bool[mesh.Faces.Count];
+        bool[] faceValid = new bool[mesh.Faces.Count];
         for (int f = 0; f < mesh.Faces.Count; f++)
         {
-            var idx = mesh.Faces.IndicesOf(f);
+            Span<int> idx = mesh.Faces.IndicesOf(f);
             if (idx.Length != 3) continue;
 
             Float3 a = mesh.Positions[idx[0]];
@@ -57,7 +57,7 @@ internal static class NormalGeneration
         // Vertices split only by their UVs or colours still sit on one continuous surface, so faces
         // are gathered per position rather than per vertex index.
         int[] positionOf = WeldPositions(mesh, out int positionCount);
-        var adjacency = BuildAdjacency(mesh, positionOf, positionCount, faceValid);
+        List<int>?[] adjacency = BuildAdjacency(mesh, positionOf, positionCount, faceValid);
         var smoothing = new PositionSmoothing?[positionCount];
 
         var normals = new Float3[vertexCount];
@@ -72,7 +72,7 @@ internal static class NormalGeneration
         for (int v = 0; v < vertexCount; v++)
         {
             int p = positionOf[v];
-            var faces = adjacency[p];
+            List<int>? faces = adjacency[p];
             if (faces is null || faces.Count == 0)
             {
                 // Referenced only by lines or points, or by nothing at all. Nothing to derive a
@@ -88,7 +88,7 @@ internal static class NormalGeneration
             bool used = false;
             foreach (int f in faces)
             {
-                var idx = mesh.Faces.IndicesOf(f);
+                Span<int> idx = mesh.Faces.IndicesOf(f);
                 for (int c = 0; c < idx.Length; c++)
                 {
                     if (idx[c] != v) continue;
@@ -149,12 +149,12 @@ internal static class NormalGeneration
 
     private static int[] WeldPositions(IntermediateMesh mesh, out int positionCount)
     {
-        var positionOf = new int[mesh.Positions.Count];
+        int[] positionOf = new int[mesh.Positions.Count];
         var byPosition = new Dictionary<(float, float, float), int>();
         for (int v = 0; v < positionOf.Length; v++)
         {
             Float3 p = mesh.Positions[v];
-            var key = (p.X, p.Y, p.Z);
+            (float X, float Y, float Z) key = (p.X, p.Y, p.Z);
             if (!byPosition.TryGetValue(key, out int id))
             {
                 id = byPosition.Count;
@@ -175,7 +175,7 @@ internal static class NormalGeneration
             foreach (int v in mesh.Faces.IndicesOf(f))
             {
                 if ((uint)v >= (uint)positionOf.Length) continue;
-                var faces = adjacency[positionOf[v]] ??= new List<int>(4);
+                List<int> faces = adjacency[positionOf[v]] ??= [with(4)];
                 if (faces.Count == 0 || faces[^1] != f)
                     faces.Add(f);
             }
@@ -216,7 +216,7 @@ internal static class NormalGeneration
         Span<int> parent = n <= 32 ? stackalloc int[n] : new int[n];
         for (int i = 0; i < n; i++) parent[i] = i;
 
-        int Find(Span<int> p, int i)
+        static int Find(Span<int> p, int i)
         {
             while (p[i] != i) { p[i] = p[p[i]]; i = p[i]; }
             return i;
@@ -248,7 +248,7 @@ internal static class NormalGeneration
     /// <summary>Interior angle of face <paramref name="face"/> at its corner on <paramref name="position"/>.</summary>
     private static float CornerAngle(IntermediateMesh mesh, int face, int position, int[] positionOf)
     {
-        var idx = mesh.Faces.IndicesOf(face);
+        Span<int> idx = mesh.Faces.IndicesOf(face);
         int corner = -1;
         for (int c = 0; c < idx.Length; c++)
             if (positionOf[idx[c]] == position) { corner = c; break; }
@@ -305,8 +305,8 @@ internal static class NormalGeneration
         if (mesh.VertexJoints is { } joints && mesh.VertexWeights is { } weights)
         {
             int influences = mesh.MaxInfluencesPerVertex;
-            var newJoints = new int[(oldCount + extra) * influences];
-            var newWeights = new float[(oldCount + extra) * influences];
+            int[] newJoints = new int[(oldCount + extra) * influences];
+            float[] newWeights = new float[(oldCount + extra) * influences];
             Array.Copy(joints, newJoints, oldCount * influences);
             Array.Copy(weights, newWeights, oldCount * influences);
 
@@ -325,11 +325,11 @@ internal static class NormalGeneration
             mesh.VertexWeights = newWeights;
         }
 
-        foreach (var shape in mesh.BlendShapes)
+        foreach (IntermediateBlendShape shape in mesh.BlendShapes)
         {
             for (int f = 0; f < shape.Frames.Count; f++)
             {
-                var frame = shape.Frames[f];
+                IntermediateBlendShapeFrame frame = shape.Frames[f];
                 shape.Frames[f] = new IntermediateBlendShapeFrame
                 {
                     Weight = frame.Weight,
@@ -340,7 +340,7 @@ internal static class NormalGeneration
             }
         }
 
-        foreach (var kvp in cornerRemap)
+        foreach (KeyValuePair<(int Face, int Corner), int> kvp in cornerRemap)
             mesh.Faces.IndicesOf(kvp.Key.Face)[kvp.Key.Corner] = kvp.Value;
     }
 

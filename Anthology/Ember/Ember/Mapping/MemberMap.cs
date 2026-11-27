@@ -16,8 +16,8 @@ public sealed class MemberMap
 
     private readonly TypeMap _types;
     private readonly ReportBuilder _report;
-    private readonly Dictionary<MemberInfo, MemberInfo?> _cache = new();
-    private readonly HashSet<MemberInfo> _resolving = new();
+    private readonly Dictionary<MemberInfo, MemberInfo?> _cache = [];
+    private readonly HashSet<MemberInfo> _resolving = [];
 
     private LambdaMatcher _lambdas = null!;
 
@@ -35,13 +35,13 @@ public sealed class MemberMap
 
     public ParameterInfo? ResolveParameter(ParameterInfo parameter)
     {
-        var member = Resolve(parameter.Member);
+        MemberInfo? member = Resolve(parameter.Member);
         if (ReferenceEquals(member, parameter.Member)) return parameter;
         if (member == null) return null;
 
         if (member is not MethodBase method) return parameter;
 
-        var parameters = method.GetParameters();
+        ParameterInfo[] parameters = method.GetParameters();
         if (parameter.Position < parameters.Length && parameters[parameter.Position].Name == parameter.Name)
             return parameters[parameter.Position];
 
@@ -52,7 +52,7 @@ public sealed class MemberMap
     {
         if (member is Type type) return _types.Resolve(type).Target;
 
-        if (_cache.TryGetValue(member, out var cached)) return cached;
+        if (_cache.TryGetValue(member, out MemberInfo? cached)) return cached;
 
         // A member whose resolution depends on its own. Handing back the previous side member would be
         // silently wrong once its declaring type moved, so that is only assumed where it cannot be.
@@ -60,7 +60,7 @@ public sealed class MemberMap
 
         try
         {
-            var resolved = ResolveUncached(member);
+            MemberInfo? resolved = ResolveUncached(member);
             _cache[member] = resolved;
             return resolved;
         }
@@ -90,7 +90,7 @@ public sealed class MemberMap
         if (member is MethodInfo lambda && LambdaMatcher.IsSynthetic(lambda))
             return _lambdas.Match(lambda);
 
-        var target = _types.Resolve(declaring);
+        TypeResolution target = _types.Resolve(declaring);
 
         // Nothing moved, and the handle is not a closed generic method that needs rebuilding.
         if (target.IsUnchanged && member is not MethodInfo { IsConstructedGenericMethod: true })
@@ -98,7 +98,7 @@ public sealed class MemberMap
 
         if (target.Target is not { } currentType) return null;
 
-        var match = currentType.GetMembers(AllDeclared)
+        MemberInfo? match = currentType.GetMembers(AllDeclared)
             .FirstOrDefault(candidate => SignatureComparer.Corresponds(member, candidate, _types));
 
         if (match == null)
@@ -118,7 +118,7 @@ public sealed class MemberMap
 
     private MethodInfo? CloseGenericMethod(MethodInfo previous, MethodInfo definition)
     {
-        var arguments = previous.GetGenericArguments();
+        Type[] arguments = previous.GetGenericArguments();
         var mapped = new Type[arguments.Length];
 
         for (int i = 0; i < arguments.Length; i++)

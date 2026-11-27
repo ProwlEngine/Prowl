@@ -13,8 +13,8 @@ internal sealed class BoneHierarchy
         int count = parents.Count;
         Parents = new int[count];
         Order = new int[count];
-        var state = new byte[count]; // 0 unvisited, 1 on the current walk, 2 emitted
-        var chain = new int[count];
+        byte[] state = new byte[count]; // 0 unvisited, 1 on the current walk, 2 emitted
+        int[] chain = new int[count];
         int written = 0;
 
         for (int i = 0; i < count; i++)
@@ -67,15 +67,15 @@ internal sealed class BoneHierarchy
 
     private void BuildSubtreeOrder(int count)
     {
-        var childCount = new int[count + 1];
+        int[] childCount = new int[count + 1];
         for (int i = 0; i < count; i++)
             if (Parents[i] >= 0)
                 childCount[Parents[i] + 1]++;
         for (int i = 0; i < count; i++)
             childCount[i + 1] += childCount[i];
 
-        var children = new int[count];
-        var fill = (int[])childCount.Clone();
+        int[] children = new int[count];
+        int[] fill = (int[])childCount.Clone();
         for (int i = 0; i < count; i++)
             if (Parents[i] >= 0)
                 children[fill[Parents[i]]++] = i;
@@ -83,7 +83,7 @@ internal sealed class BoneHierarchy
         SubtreeOrder = new int[count];
         SubtreeStart = new int[count];
         SubtreeEnd = new int[count];
-        var stack = new int[count];
+        int[] stack = new int[count];
         int written = 0;
         for (int root = 0; root < count; root++)
         {
@@ -125,7 +125,7 @@ internal sealed class BoneHierarchy
     /// <summary>The evaluation order restricted to the first <paramref name="count"/> bones and their ancestors.</summary>
     public int[] SubsetOrder(int count)
     {
-        var needed = new bool[Parents.Length];
+        bool[] needed = new bool[Parents.Length];
         int neededCount = 0;
         for (int i = 0; i < Math.Min(count, Parents.Length); i++)
         {
@@ -136,7 +136,7 @@ internal sealed class BoneHierarchy
             }
         }
 
-        var subset = new int[neededCount];
+        int[] subset = new int[neededCount];
         int written = 0;
         foreach (int bone in Order)
             if (needed[bone])

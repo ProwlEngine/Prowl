@@ -64,7 +64,7 @@ internal sealed class FbxBinaryReader
         var root = new FbxNode { Name = "<Root>" };
         while (_cursor < _data.Length)
         {
-            var node = ReadNode();
+            FbxNode? node = ReadNode();
             if (node is null)
                 break; // null-sentinel block marking end of file body
             root.Children.Add(node);
@@ -114,7 +114,7 @@ internal sealed class FbxBinaryReader
         {
             while (_cursor < endOffset - sentinelSize)
             {
-                var child = ReadNode();
+                FbxNode? child = ReadNode();
                 if (child is null) break;
                 node.Children.Add(child);
             }
@@ -211,28 +211,28 @@ internal sealed class FbxBinaryReader
         {
             case FbxPropertyType.ArrayInt32:
                 {
-                    var arr = new int[length];
+                    int[] arr = new int[length];
                     Buffer.BlockCopy(raw, 0, arr, 0, uncompressedBytes);
                     p.IntArrayValue = arr;
                     break;
                 }
             case FbxPropertyType.ArrayInt64:
                 {
-                    var arr = new long[length];
+                    long[] arr = new long[length];
                     Buffer.BlockCopy(raw, 0, arr, 0, uncompressedBytes);
                     p.LongArrayValue = arr;
                     break;
                 }
             case FbxPropertyType.ArrayFloat:
                 {
-                    var arr = new float[length];
+                    float[] arr = new float[length];
                     Buffer.BlockCopy(raw, 0, arr, 0, uncompressedBytes);
                     p.FloatArrayValue = arr;
                     break;
                 }
             case FbxPropertyType.ArrayDouble:
                 {
-                    var arr = new double[length];
+                    double[] arr = new double[length];
                     Buffer.BlockCopy(raw, 0, arr, 0, uncompressedBytes);
                     p.DoubleArrayValue = arr;
                     break;

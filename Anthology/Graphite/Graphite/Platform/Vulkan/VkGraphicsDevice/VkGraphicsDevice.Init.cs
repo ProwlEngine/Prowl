@@ -228,9 +228,11 @@ internal unsafe partial class VkGraphicsDevice
         int i = 0;
         foreach (uint index in familyIndices)
         {
-            DeviceQueueCreateInfo queueCreateInfo = new(sType: StructureType.DeviceQueueCreateInfo);
-            queueCreateInfo.QueueFamilyIndex = index;
-            queueCreateInfo.QueueCount = 1;
+            DeviceQueueCreateInfo queueCreateInfo = new(sType: StructureType.DeviceQueueCreateInfo)
+            {
+                QueueFamilyIndex = index,
+                QueueCount = 1
+            };
             float priority = 1f;
             queueCreateInfo.PQueuePriorities = &priority;
             queueCreateInfos[i] = queueCreateInfo;
@@ -241,7 +243,7 @@ internal unsafe partial class VkGraphicsDevice
 
         ExtensionProperties[] props = GetDeviceExtensionProperties();
 
-        HashSet<string> requiredInstanceExtensions = new(options.DeviceExtensions ?? Array.Empty<string>());
+        HashSet<string> requiredInstanceExtensions = [with(options.DeviceExtensions ?? Array.Empty<string>())];
 
         bool core12 = _physicalDeviceProperties.ApiVersion >= new Version32(1, 2, 0);
         HashSet<string> promotedExtensions = [];
@@ -384,11 +386,13 @@ internal unsafe partial class VkGraphicsDevice
             featureChain = &statisticsFeatures;
         }
 
-        DeviceCreateInfo deviceCreateInfo = new(sType: StructureType.DeviceCreateInfo, pNext: featureChain);
-        deviceCreateInfo.QueueCreateInfoCount = queueCreateInfosCount;
-        deviceCreateInfo.PQueueCreateInfos = queueCreateInfos;
+        DeviceCreateInfo deviceCreateInfo = new(sType: StructureType.DeviceCreateInfo, pNext: featureChain)
+        {
+            QueueCreateInfoCount = queueCreateInfosCount,
+            PQueueCreateInfos = queueCreateInfos,
 
-        deviceCreateInfo.PEnabledFeatures = &deviceFeatures;
+            PEnabledFeatures = &deviceFeatures
+        };
 
         _enabledVulkan11Features = vulkan11Features with { PNext = null };
         _enabledVulkan12Features = vulkan12Features with { PNext = null };

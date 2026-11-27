@@ -19,101 +19,103 @@ freely, subject to the following restrictions:
 */
 
 using System.IO;
+
 using Prowl.Recast.Core;
 using Prowl.Recast.Detour.Io;
 using Prowl.Recast.Detour.TileCache.Io.Compress;
 
-namespace Prowl.Recast.Detour.TileCache.Io
+namespace Prowl.Recast.Detour.TileCache.Io;
+
+public class DtTileCacheReader
 {
-    public class DtTileCacheReader
+    private readonly DtNavMeshParamsReader paramReader = new DtNavMeshParamsReader();
+    private readonly IDtTileCacheCompressorFactory _compFactory;
+
+    public DtTileCacheReader(IDtTileCacheCompressorFactory compFactory)
     {
-        private readonly DtNavMeshParamsReader paramReader = new DtNavMeshParamsReader();
-        private readonly IDtTileCacheCompressorFactory _compFactory;
+        _compFactory = compFactory;
+    }
 
-        public DtTileCacheReader(IDtTileCacheCompressorFactory compFactory)
-        {
-            _compFactory = compFactory;
-        }
+    public DtTileCache Read(BinaryReader @is, int maxVertPerPoly, IDtTileCacheMeshProcess meshProcessor)
+    {
+        RcByteBuffer bb = RcIO.ToByteBuffer(@is);
+        return Read(bb, maxVertPerPoly, meshProcessor);
+    }
 
-        public DtTileCache Read(BinaryReader @is, int maxVertPerPoly, IDtTileCacheMeshProcess meshProcessor)
+    public DtTileCache Read(RcByteBuffer bb, int maxVertPerPoly, IDtTileCacheMeshProcess meshProcessor)
+    {
+        DtTileCacheSetHeader header = new DtTileCacheSetHeader
         {
-            RcByteBuffer bb = RcIO.ToByteBuffer(@is);
-            return Read(bb, maxVertPerPoly, meshProcessor);
-        }
-
-        public DtTileCache Read(RcByteBuffer bb, int maxVertPerPoly, IDtTileCacheMeshProcess meshProcessor)
+            magic = bb.GetInt()
+        };
+        if (header.magic != DtTileCacheSetHeader.TILECACHESET_MAGIC)
         {
-            DtTileCacheSetHeader header = new DtTileCacheSetHeader();
-            header.magic = bb.GetInt();
+            header.magic = RcIO.SwapEndianness(header.magic);
             if (header.magic != DtTileCacheSetHeader.TILECACHESET_MAGIC)
             {
-                header.magic = RcIO.SwapEndianness(header.magic);
-                if (header.magic != DtTileCacheSetHeader.TILECACHESET_MAGIC)
-                {
-                    throw new IOException("Invalid magic");
-                }
-
-                bb.Order(bb.Order() == RcByteOrder.BIG_ENDIAN ? RcByteOrder.LITTLE_ENDIAN : RcByteOrder.BIG_ENDIAN);
+                throw new IOException("Invalid magic");
             }
 
-            header.version = bb.GetInt();
-            if (header.version != DtTileCacheSetHeader.TILECACHESET_VERSION)
-            {
-                if (header.version != DtTileCacheSetHeader.TILECACHESET_VERSION_RECAST4J)
-                {
-                    throw new IOException("Invalid version");
-                }
-            }
-
-            bool cCompatibility = header.version == DtTileCacheSetHeader.TILECACHESET_VERSION;
-            header.numTiles = bb.GetInt();
-            header.meshParams = paramReader.Read(bb);
-            header.cacheParams = ReadCacheParams(bb, cCompatibility);
-            DtNavMesh mesh = new DtNavMesh();
-            mesh.Init(header.meshParams, maxVertPerPoly);
-            IRcCompressor comp = _compFactory.Create(cCompatibility ? 0 : 1);
-            DtTileCacheStorageParams storageParams = new DtTileCacheStorageParams(bb.Order(), cCompatibility);
-            DtTileCache tc = new DtTileCache(header.cacheParams, storageParams, mesh, comp, meshProcessor);
-            // Read tiles.
-            for (int i = 0; i < header.numTiles; ++i)
-            {
-                long tileRef = bb.GetInt();
-                int dataSize = bb.GetInt();
-                if (tileRef == 0 || dataSize == 0)
-                {
-                    break;
-                }
-
-                byte[] data = bb.ReadBytes(dataSize).ToArray();
-                long tile = tc.AddTile(data, 0);
-                if (tile != 0)
-                {
-                    tc.BuildNavMeshTile(tile);
-                }
-            }
-
-            return tc;
+            bb.Order(bb.Order() == RcByteOrder.BIG_ENDIAN ? RcByteOrder.LITTLE_ENDIAN : RcByteOrder.BIG_ENDIAN);
         }
 
-        private DtTileCacheParams ReadCacheParams(RcByteBuffer bb, bool cCompatibility)
+        header.version = bb.GetInt();
+        if (header.version != DtTileCacheSetHeader.TILECACHESET_VERSION)
         {
-            DtTileCacheParams option = new DtTileCacheParams();
-
-            option.orig.X = bb.GetFloat();
-            option.orig.Y = bb.GetFloat();
-            option.orig.Z = bb.GetFloat();
-
-            option.cs = bb.GetFloat();
-            option.ch = bb.GetFloat();
-            option.width = bb.GetInt();
-            option.height = bb.GetInt();
-            option.walkableHeight = bb.GetFloat();
-            option.walkableRadius = bb.GetFloat();
-            option.walkableClimb = bb.GetFloat();
-            option.maxSimplificationError = bb.GetFloat();
-            option.maxTiles = bb.GetInt();
-            option.maxObstacles = bb.GetInt();
-            return option;
+            if (header.version != DtTileCacheSetHeader.TILECACHESET_VERSION_RECAST4J)
+            {
+                throw new IOException("Invalid version");
+            }
         }
+
+        bool cCompatibility = header.version == DtTileCacheSetHeader.TILECACHESET_VERSION;
+        header.numTiles = bb.GetInt();
+        header.meshParams = paramReader.Read(bb);
+        header.cacheParams = ReadCacheParams(bb, cCompatibility);
+        DtNavMesh mesh = new DtNavMesh();
+        mesh.Init(header.meshParams, maxVertPerPoly);
+        IRcCompressor comp = _compFactory.Create(cCompatibility ? 0 : 1);
+        DtTileCacheStorageParams storageParams = new DtTileCacheStorageParams(bb.Order(), cCompatibility);
+        DtTileCache tc = new DtTileCache(header.cacheParams, storageParams, mesh, comp, meshProcessor);
+        // Read tiles.
+        for (int i = 0; i < header.numTiles; ++i)
+        {
+            long tileRef = bb.GetInt();
+            int dataSize = bb.GetInt();
+            if (tileRef == 0 || dataSize == 0)
+            {
+                break;
+            }
+
+            byte[] data = bb.ReadBytes(dataSize).ToArray();
+            long tile = tc.AddTile(data, 0);
+            if (tile != 0)
+            {
+                tc.BuildNavMeshTile(tile);
+            }
+        }
+
+        return tc;
+    }
+
+    private DtTileCacheParams ReadCacheParams(RcByteBuffer bb, bool cCompatibility)
+    {
+        DtTileCacheParams option = new DtTileCacheParams();
+
+        option.orig.X = bb.GetFloat();
+        option.orig.Y = bb.GetFloat();
+        option.orig.Z = bb.GetFloat();
+
+        option.cs = bb.GetFloat();
+        option.ch = bb.GetFloat();
+        option.width = bb.GetInt();
+        option.height = bb.GetInt();
+        option.walkableHeight = bb.GetFloat();
+        option.walkableRadius = bb.GetFloat();
+        option.walkableClimb = bb.GetFloat();
+        option.maxSimplificationError = bb.GetFloat();
+        option.maxTiles = bb.GetInt();
+        option.maxObstacles = bb.GetInt();
+        return option;
     }
 }

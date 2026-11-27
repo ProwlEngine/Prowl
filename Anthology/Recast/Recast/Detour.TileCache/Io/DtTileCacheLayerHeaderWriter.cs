@@ -19,39 +19,39 @@ freely, subject to the following restrictions:
 */
 
 using System.IO;
+
 using Prowl.Recast.Core;
 
-namespace Prowl.Recast.Detour.TileCache.Io
+namespace Prowl.Recast.Detour.TileCache.Io;
+
+public class DtTileCacheLayerHeaderWriter
 {
-    public class DtTileCacheLayerHeaderWriter
+    public void Write(BinaryWriter stream, DtTileCacheLayerHeader header, RcByteOrder order, bool cCompatibility)
     {
-        public void Write(BinaryWriter stream, DtTileCacheLayerHeader header, RcByteOrder order, bool cCompatibility)
+        RcIO.Write(stream, header.magic, order);
+        RcIO.Write(stream, header.version, order);
+        RcIO.Write(stream, header.tx, order);
+        RcIO.Write(stream, header.ty, order);
+        RcIO.Write(stream, header.tlayer, order);
+
+        RcIO.Write(stream, header.bmin.X, order);
+        RcIO.Write(stream, header.bmin.Y, order);
+        RcIO.Write(stream, header.bmin.Z, order);
+        RcIO.Write(stream, header.bmax.X, order);
+        RcIO.Write(stream, header.bmax.Y, order);
+        RcIO.Write(stream, header.bmax.Z, order);
+
+        RcIO.Write(stream, (short)header.hmin, order);
+        RcIO.Write(stream, (short)header.hmax, order);
+        RcIO.Write(stream, (byte)header.width);
+        RcIO.Write(stream, (byte)header.height);
+        RcIO.Write(stream, (byte)header.minx);
+        RcIO.Write(stream, (byte)header.maxx);
+        RcIO.Write(stream, (byte)header.miny);
+        RcIO.Write(stream, (byte)header.maxy);
+        if (cCompatibility)
         {
-            RcIO.Write(stream, header.magic, order);
-            RcIO.Write(stream, header.version, order);
-            RcIO.Write(stream, header.tx, order);
-            RcIO.Write(stream, header.ty, order);
-            RcIO.Write(stream, header.tlayer, order);
-
-            RcIO.Write(stream, header.bmin.X, order);
-            RcIO.Write(stream, header.bmin.Y, order);
-            RcIO.Write(stream, header.bmin.Z, order);
-            RcIO.Write(stream, header.bmax.X, order);
-            RcIO.Write(stream, header.bmax.Y, order);
-            RcIO.Write(stream, header.bmax.Z, order);
-
-            RcIO.Write(stream, (short)header.hmin, order);
-            RcIO.Write(stream, (short)header.hmax, order);
-            RcIO.Write(stream, (byte)header.width);
-            RcIO.Write(stream, (byte)header.height);
-            RcIO.Write(stream, (byte)header.minx);
-            RcIO.Write(stream, (byte)header.maxx);
-            RcIO.Write(stream, (byte)header.miny);
-            RcIO.Write(stream, (byte)header.maxy);
-            if (cCompatibility)
-            {
-                RcIO.Write(stream, (short)0, order); // C struct padding
-            }
+            RcIO.Write(stream, (short)0, order); // C struct padding
         }
     }
 }

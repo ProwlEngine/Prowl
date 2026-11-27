@@ -37,7 +37,7 @@ internal sealed class SparseMatrixAssembler
 
         // Tally entries per column to lay out ColumnRanges.
         int[] perColumnCount = new int[columnCount];
-        var it = _entries.GetEnumerator();
+        LongDoubleMap.Enumerator it = _entries.GetEnumerator();
         while (it.MoveNext())
         {
             UnpackKey(it.Current.Key, out _, out int col);

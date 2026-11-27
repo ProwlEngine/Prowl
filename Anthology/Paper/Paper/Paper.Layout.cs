@@ -3,6 +3,7 @@ using System.Collections.Generic;
 
 using Prowl.PaperUI.LayoutEngine;
 using Prowl.Scribe;
+using Prowl.Vector;
 
 using LayoutBackend = Prowl.Scaffold;
 
@@ -11,8 +12,8 @@ namespace Prowl.PaperUI;
 public partial class Paper
 {
     private readonly LayoutBackend.LayoutTree _layoutTree = new(1024);
-    private readonly Dictionary<int, LayoutState> _layoutStates = new();
-    private readonly List<int> _layoutIds = new();
+    private readonly Dictionary<int, LayoutState> _layoutStates = [];
+    private readonly List<int> _layoutIds = [];
     private long _layoutEpoch;
     private static long s_layoutEpoch;
     /// <summary>Work counts for the last layout (excludes style resolution, copying and rendering).</summary>
@@ -25,7 +26,7 @@ public partial class Paper
     /// <summary>Invalidate external content for a persistent element ID. Unknown/removed IDs are ignored.</summary>
     public void MarkLayoutDirty(int elementId)
     {
-        if (_layoutStates.TryGetValue(elementId, out var state) && _layoutTree.IsAlive(state.Node))
+        if (_layoutStates.TryGetValue(elementId, out LayoutState? state) && _layoutTree.IsAlive(state.Node))
         {
             _layoutTree.MarkDirty(state.Node);
         }
@@ -37,7 +38,7 @@ public partial class Paper
     /// <summary>Invalidate external content throughout an element's retained subtree.</summary>
     public void MarkSubtreeLayoutDirty(int elementId)
     {
-        if (_layoutStates.TryGetValue(elementId, out var state) && _layoutTree.IsAlive(state.Node))
+        if (_layoutStates.TryGetValue(elementId, out LayoutState? state) && _layoutTree.IsAlive(state.Node))
         {
             _layoutTree.MarkSubtreeDirty(state.Node);
         }
@@ -102,7 +103,7 @@ public partial class Paper
             return default;
         }
 
-        var style = data._elementStyle;
+        ElementStyle style = data._elementStyle;
         return new(
             data.Paragraph,
             data.Font,
@@ -128,19 +129,19 @@ public partial class Paper
     private static readonly LayoutBackend.MeasureContent s_measureLayout = (_, available, context) =>
     {
         var state = (LayoutState)context!;
-        ref var data = ref state.Owner.GetElementData(state.Index);
+        ref ElementData data = ref state.Owner.GetElementData(state.Index);
         if (data._intrinsicSize.HasValue)
         {
             return data._intrinsicSize.Value;
         }
 
-        var custom = data.ContentSizer?.Invoke(available.Width, available.Height);
+        (float, float)? custom = data.ContentSizer?.Invoke(available.Width, available.Height);
         if (custom.HasValue)
         {
             return new LayoutBackend.Size(custom.Value.Item1, custom.Value.Item2);
         }
 
-        var text = data.ProcessText(state.Owner, available.Width);
+        Float2 text = data.ProcessText(state.Owner, available.Width);
         return new LayoutBackend.Size(text.X, text.Y);
     };
     // Called after Paper has resolved this frame's animated/inherited style values.
@@ -148,11 +149,11 @@ public partial class Paper
     {
         long started = _devTools.DeepProfiling ? System.Diagnostics.Stopwatch.GetTimestamp() : 0;
         _layoutEpoch = System.Threading.Interlocked.Increment(ref s_layoutEpoch);
-        var root = SubmitLayout(RootElement.Index, default, default);
+        LayoutBackend.NodeId root = SubmitLayout(RootElement.Index, default, default);
         for (int i = _layoutIds.Count - 1; i >= 0; i--)
         {
             int id = _layoutIds[i];
-            var state = _layoutStates[id];
+            LayoutState state = _layoutStates[id];
             if (state.Seen == _layoutEpoch)
             {
                 continue;
@@ -169,9 +170,9 @@ public partial class Paper
             _layoutIds.RemoveAt(last);
         }
 
-        var style = RootElement.Data._elementStyle;
+        ElementStyle style = RootElement.Data._elementStyle;
         float width = style.GetUnit(GuiProp.Width).Px, height = style.GetUnit(GuiProp.Height).Px;
-        var statistics = _layoutTree.Layout(root, new LayoutBackend.Size(width, height));
+        LayoutBackend.LayoutStatistics statistics = _layoutTree.Layout(root, new LayoutBackend.Size(width, height));
         LayoutStatistics = new LayoutStatistics(
             statistics.MeasuredNodes,
             statistics.ArrangedNodes,
@@ -186,8 +187,8 @@ public partial class Paper
 
     private LayoutBackend.NodeId SubmitLayout(int index, LayoutBackend.NodeId parent, LayoutBackend.NodeId after)
     {
-        ref var data = ref GetElementData(index);
-        if (!_layoutStates.TryGetValue(data.ID, out var state))
+        ref ElementData data = ref GetElementData(index);
+        if (!_layoutStates.TryGetValue(data.ID, out LayoutState? state))
         {
             state = new LayoutState(this, _layoutTree.Create(LayoutBackend.Style.Default));
             _layoutStates.Add(data.ID, state);
@@ -246,7 +247,7 @@ public partial class Paper
 
     private void SynchronizeContentMeasurement(ref ElementData data, LayoutState state)
     {
-        var metrics = Metrics(data);
+        TextMetrics metrics = Metrics(data);
         bool hasSizer = data.ContentSizer != null;
         bool textChanged = metrics != state.Metrics;
         // A cached sizer is keyed on its revision, not on the delegate: declaration code
@@ -268,7 +269,7 @@ public partial class Paper
 
     private LayoutBackend.Style MapLayout(ref ElementData data)
     {
-        var style = data._elementStyle;
+        ElementStyle style = data._elementStyle;
         UnitValue left = Margin(style, GuiProp.Left);
         UnitValue top = Margin(style, GuiProp.Top);
         UnitValue right = Margin(style, GuiProp.Right);
@@ -276,7 +277,7 @@ public partial class Paper
         UnitValue widthValue = style.GetUnit(GuiProp.Width), heightValue = style.GetUnit(GuiProp.Height);
         if (data.ParentIndex >= 0 && data.PositionType == PositionType.ParentDirected)
         {
-            ref var parentData = ref GetElementData(data.ParentIndex);
+            ref ElementData parentData = ref GetElementData(data.ParentIndex);
             if (parentData.ContentWrap && parentData._justify == LayoutJustification.Fill)
             {
                 if (parentData.LayoutType == LayoutType.Row)
@@ -384,11 +385,11 @@ public partial class Paper
 
     private void CopyLayout(int index, float x, float y, bool hidden, float screenWidth, float screenHeight)
     {
-        ref var data = ref GetElementData(index);
+        ref ElementData data = ref GetElementData(index);
         hidden |= !data.Visible;
-        var node = _layoutStates[data.ID].Node;
-        var rect = hidden ? default : _layoutTree.GetRect(node);
-        var content = hidden ? default : _layoutTree.GetContentRect(node);
+        LayoutBackend.NodeId node = _layoutStates[data.ID].Node;
+        LayoutBackend.Rect rect = hidden ? default : _layoutTree.GetRect(node);
+        LayoutBackend.Rect content = hidden ? default : _layoutTree.GetContentRect(node);
         data.ContentRect = new Prowl.Vector.Rect(content.X, content.Y, content.X + content.Width, content.Y + content.Height);
         data.RelativeX = rect.X;
         data.RelativeY = rect.Y;

@@ -48,7 +48,7 @@ internal sealed class ChartBuilder
         public int SeedFace;
         public int FaceCount;
         public double Area;
-        public List<Candidate> Frontier = new();
+        public List<Candidate> Frontier = [];
         public bool FrontierDirty;
 
         public ChartState(HalfEdgeMesh m, int seed)
@@ -75,7 +75,7 @@ internal sealed class ChartBuilder
 
     private HalfEdgeMesh _workMesh = new();
     private MeshRegion _source = null!;
-    private readonly List<ChartState> _charts = new();
+    private readonly List<ChartState> _charts = [];
     private int[] _faceToChart = System.Array.Empty<int>();
     private int[] _faceToChartPrev = System.Array.Empty<int>();
     private int[] _faceToChartPrev2 = System.Array.Empty<int>();
@@ -197,7 +197,7 @@ internal sealed class ChartBuilder
 
             for (int ci = 0; ci < _charts.Count; ++ci)
             {
-                var chart = _charts[ci];
+                ChartState chart = _charts[ci];
                 chart.Area = 0.0;
                 chart.FaceCount = 0;
                 EnqueueFace(chart.SeedFace, ci);
@@ -319,7 +319,7 @@ internal sealed class ChartBuilder
             double minError = 1e30;
             for (int i = 0; i < _charts.Count; ++i)
             {
-                var chart = _charts[i];
+                ChartState chart = _charts[i];
                 double chartError = chart.Frontier.Count > 0 ? chart.Frontier[^1].Priority : 1e32;
                 if (NumericHelpers.ApproxLess(chartError, minError, errorEpsilon))
                     minError = chartError;
@@ -327,7 +327,7 @@ internal sealed class ChartBuilder
 
             for (int i = 0; i < _charts.Count; ++i)
             {
-                var chart = _charts[i];
+                ChartState chart = _charts[i];
                 if (chart.Frontier.Count > 0 && System.Math.Abs(chart.Frontier[^1].Priority - minError) < errorEpsilon)
                     sharedTopChart.Add(i);
             }
@@ -337,7 +337,7 @@ internal sealed class ChartBuilder
             for (int gi = 0; gi < sharedTopChart.Count; ++gi)
             {
                 int chartI = sharedTopChart[gi];
-                var chart = _charts[chartI];
+                ChartState chart = _charts[chartI];
 
                 Candidate target = chart.Frontier[^1];
                 chart.Frontier.RemoveAt(chart.Frontier.Count - 1);
@@ -354,13 +354,13 @@ internal sealed class ChartBuilder
 
                     for (int ci = 0; ci < _charts.Count; ++ci)
                     {
-                        var dirty = _charts[ci];
+                        ChartState dirty = _charts[ci];
                         if (!dirty.FrontierDirty) continue;
 
-                        var entries = System.Runtime.InteropServices.CollectionsMarshal.AsSpan(dirty.Frontier);
+                        Span<Candidate> entries = System.Runtime.InteropServices.CollectionsMarshal.AsSpan(dirty.Frontier);
                         for (int e = 0; e < entries.Length; ++e)
                         {
-                            ref var v = ref entries[e];
+                            ref Candidate v = ref entries[e];
                             int stamp = _faceStamp[v.FaceIndex];
                             if (v.Stamp == stamp) continue;
                             v.Priority = StraightnessAdjustedPriority(v.FaceIndex, ci, v.Priority0);
@@ -401,7 +401,7 @@ internal sealed class ChartBuilder
                 HalfEdge neighEdge = neighbour.FirstEdge!;
                 for (int side = 0; side < 3; ++side)
                 {
-                    var info = _workMesh.EdgeAttributes[_workMesh.IndexOf(neighEdge)];
+                    EdgeAttribute info = _workMesh.EdgeAttributes[_workMesh.IndexOf(neighEdge)];
                     if (!info.IsCrease)
                     {
                         // Seam edges get a penalty so chart growth prefers to follow them.
@@ -425,7 +425,7 @@ internal sealed class ChartBuilder
 
         for (int chartI = _charts.Count - 1; chartI >= 0; --chartI)
         {
-            var chart = _charts[chartI];
+            ChartState chart = _charts[chartI];
             if (chart.Area < areaCutoff && chart.FaceCount < faceCutoff)
                 DropChart(chartI, -1);
         }
@@ -440,7 +440,7 @@ internal sealed class ChartBuilder
         {
             int chartI = _faceToChart[faceI];
             if (chartI < 0) continue;
-            ref var info = ref System.Runtime.InteropServices.CollectionsMarshal.AsSpan(_workMesh.FaceAttributes)[faceI];
+            ref FaceAttribute info = ref System.Runtime.InteropServices.CollectionsMarshal.AsSpan(_workMesh.FaceAttributes)[faceI];
             fitters[chartI].Accept(info.Normal, info.Centroid, info.Area);
         }
 
@@ -500,7 +500,7 @@ internal sealed class ChartBuilder
         Double3 v2 = f.FirstEdge!.Next!.Next!.Apex!.Position;
 
         double dist = 0.0;
-        var chart = _charts[chartI];
+        ChartState chart = _charts[chartI];
         double d0 = 0, d1 = 0, d2 = 0;
         for (int side = 0; side < 3; ++side)
         {
@@ -600,13 +600,13 @@ internal sealed class ChartBuilder
             }
         }
 
-        foreach (var b in output) b.FitError = MeasureMergeError(b);
+        foreach (ChartBoundary b in output) b.FitError = MeasureMergeError(b);
 
         // Geometric pre-sort + stable sort by fit error.
         output.Sort((a, b) =>
         {
             const double eps = 1e-6;
-            int Cmp(double x, double y) => System.Math.Abs(x - y) > eps ? (x > y ? 1 : -1) : 0;
+            static int Cmp(double x, double y) => System.Math.Abs(x - y) > eps ? (x > y ? 1 : -1) : 0;
             int r;
             if ((r = Cmp(a.FirstCentre.X, b.FirstCentre.X)) != 0) return r;
             if ((r = Cmp(a.FirstCentre.Y, b.FirstCentre.Y)) != 0) return r;
@@ -660,7 +660,7 @@ internal sealed class ChartBuilder
         DropChart(removed, kept);
 
         // Chart indices shifted after removal; patch every boundary in place.
-        foreach (var b in boundaries)
+        foreach (ChartBoundary b in boundaries)
         {
             if (b.First > removed) b.First -= 1;
             else if (b.First == removed) b.First = kept;
@@ -677,10 +677,10 @@ internal sealed class ChartBuilder
         // Only the surviving chart's face set moved, so every boundary that doesn't touch it
         // keeps the error it already had.
         int merged = kept > removed ? kept - 1 : kept;
-        foreach (var b in boundaries)
+        foreach (ChartBoundary b in boundaries)
             if (b.First == merged || b.Second == merged) b.FitError = MeasureMergeError(b);
 
-        var tail = boundaries.GetRange(targetIndex + 1, boundaries.Count - (targetIndex + 1));
+        List<ChartBoundary> tail = boundaries.GetRange(targetIndex + 1, boundaries.Count - (targetIndex + 1));
         var indexed = new List<(ChartBoundary Info, int Order)>(tail.Count);
         for (int i = 0; i < tail.Count; ++i) indexed.Add((tail[i], i));
         indexed.Sort((a, b) =>
@@ -701,7 +701,7 @@ internal sealed class ChartBuilder
         {
             if (_faceToChart[faceI] == b.First || _faceToChart[faceI] == b.Second)
             {
-                var fi = _workMesh.FaceAttributes[faceI];
+                FaceAttribute fi = _workMesh.FaceAttributes[faceI];
                 fitter.Accept(fi.Normal, fi.Centroid, fi.Area);
             }
         }
@@ -715,7 +715,7 @@ internal sealed class ChartBuilder
         {
             if (_faceToChart[faceI] == b.First || _faceToChart[faceI] == b.Second)
             {
-                var fi = _workMesh.FaceAttributes[faceI];
+                FaceAttribute fi = _workMesh.FaceAttributes[faceI];
                 double dev = NormalDeviation(mergedNormal, fi.Normal);
                 mergedError += fi.Area * dev;
                 mergedArea += fi.Area;

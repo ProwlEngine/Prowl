@@ -98,7 +98,7 @@ public sealed class DialogModal : IModal
 
     public void Draw(Paper paper, int layer, int stackIndex)
     {
-        var theme = Origami.Current;
+        OrigamiTheme theme = Origami.Current;
         if (theme.Font == null) return;
 
         float screenW = (float)paper.ScreenRect.Size.X;
@@ -107,7 +107,7 @@ public sealed class DialogModal : IModal
         float dialogX = (screenW - Width) / 2;
         float dialogY = screenH * 0.24f + offsetY;
 
-        var container = paper.Column($"omd_dlg_{stackIndex}")
+        ElementBuilder container = paper.Column($"omd_dlg_{stackIndex}")
             .PositionType(PositionType.SelfDirected)
             .Position(dialogX, dialogY)
             .Width(Width).Height(Height > 0 ? UnitValue.Pixels(Height) : UnitValue.Auto)
@@ -134,7 +134,7 @@ public sealed class DialogModal : IModal
     public void DrawEmbedded(Paper paper, string id)
     {
         if (Origami.Current.Font == null) return;
-        var container = paper.Column(id)
+        ElementBuilder container = paper.Column(id)
             .Width(EmbeddedWidth.HasValue ? UnitValue.Pixels(EmbeddedWidth.Value) : UnitValue.Stretch())
             .Height(Height > 0 ? UnitValue.Pixels(Height) : UnitValue.Auto)
             .BorderColor(Origami.Current.BorderSoft).BorderWidth(1)
@@ -146,10 +146,10 @@ public sealed class DialogModal : IModal
 
     private void DrawInner(Paper paper, string idp, bool embedded, Action? onClose)
     {
-        var theme = Origami.Current;
-        var m = theme.Metrics;
-        var font = theme.Font!;
-        var ink = theme.Ink;
+        OrigamiTheme theme = Origami.Current;
+        OrigamiMetrics m = theme.Metrics;
+        Scribe.FontFile font = theme.Font!;
+        OrigamiRamp ink = theme.Ink;
         float radius = m.ContainerRounding;
         float headH = m.FontSize + 18f;
 
@@ -161,7 +161,7 @@ public sealed class DialogModal : IModal
         {
             if (Icon != null)
             {
-                var icon = Icon;
+                IOrigamiIcon icon = Icon;
                 paper.Box($"{idp}_hico").Width(15).Height(headH).IsNotInteractable()
                     .OnPostLayout((h, r) => paper.Draw(ref h, (canvas, rr) =>
                     {
@@ -178,7 +178,7 @@ public sealed class DialogModal : IModal
 
             if (onClose != null)
             {
-                var close = onClose;
+                Action close = onClose;
                 paper.Box($"{idp}_x").Width(18).Height(18)
                     .Margin(0, 0, UnitValue.Stretch(), UnitValue.Stretch())
                     .Rounded(m.SmallRounding)
@@ -223,8 +223,8 @@ public sealed class DialogModal : IModal
             {
                 for (int b = 0; b < Buttons.Count; b++)
                 {
-                    var (label, onClick, variant) = Buttons[b];
-                    var btn = Origami.Button(paper, $"{idp}_btn_{b}", label, onClick);
+                    (string? label, Action? onClick, OrigamiVariant variant) = Buttons[b];
+                    ButtonBuilder btn = Origami.Button(paper, $"{idp}_btn_{b}", label, onClick);
                     if (embedded) btn.Small();
                     bool primaryDefault = variant == OrigamiVariant.Primary
                         || (variant == OrigamiVariant.Default && b == Buttons.Count - 1);
@@ -327,16 +327,21 @@ public static class Modal
     /// <summary>Push a confirmation dialog with Yes/No buttons.</summary>
     public static void Confirm(string title, string message, Action onYes, Action? onNo = null)
     {
-        var theme = Origami.Current;
+        OrigamiTheme theme = Origami.Current;
         if (theme.Font == null) return;
 
-        var entry = new DialogModal { Title = title, Width = 380, CloseOnEscape = true };
-        entry.DrawContent = paper =>
+        var entry = new DialogModal
         {
-            paper.Box("modal_msg")
-                .Size(UnitValue.Auto)
-                .Wrap(Scribe.TextWrapMode.Wrap)
-                .Text(message, theme.Font);
+            Title = title,
+            Width = 380,
+            CloseOnEscape = true,
+            DrawContent = paper =>
+            {
+                paper.Box("modal_msg")
+                    .Size(UnitValue.Auto)
+                    .Wrap(Scribe.TextWrapMode.Wrap)
+                    .Text(message, theme.Font);
+            }
         };
         entry.Button("Yes", () => { onYes(); Pop(); }, OrigamiVariant.Primary);
         entry.Button("No", () => { onNo?.Invoke(); Pop(); });
@@ -346,16 +351,21 @@ public static class Modal
     /// <summary>Push a message dialog with an OK button.</summary>
     public static void Message(string title, string message)
     {
-        var theme = Origami.Current;
+        OrigamiTheme theme = Origami.Current;
         if (theme.Font == null) return;
 
-        var entry = new DialogModal { Title = title, Width = 380, CloseOnEscape = true };
-        entry.DrawContent = paper =>
+        var entry = new DialogModal
         {
-            paper.Box("modal_msg")
-                .Size(UnitValue.Auto)
-                .Wrap(Scribe.TextWrapMode.Wrap)
-                .Text(message, theme.Font);
+            Title = title,
+            Width = 380,
+            CloseOnEscape = true,
+            DrawContent = paper =>
+            {
+                paper.Box("modal_msg")
+                    .Size(UnitValue.Auto)
+                    .Wrap(Scribe.TextWrapMode.Wrap)
+                    .Text(message, theme.Font);
+            }
         };
         entry.Button("OK", Pop, OrigamiVariant.Primary);
         Push(entry);
@@ -378,9 +388,11 @@ public static class Modal
     /// <summary>Push a fully custom modal where the caller controls all rendering.</summary>
     public static CustomDrawModal PushCustomDraw(Action<Paper, int, int> draw, bool closeOnEscape = true, bool closeOnBackdrop = false)
     {
-        var modal = new CustomDrawModal(draw);
-        modal.CloseOnEscape = closeOnEscape;
-        modal.CloseOnBackdrop = closeOnBackdrop;
+        var modal = new CustomDrawModal(draw)
+        {
+            CloseOnEscape = closeOnEscape,
+            CloseOnBackdrop = closeOnBackdrop
+        };
         Push(modal);
         return modal;
     }
@@ -533,7 +545,7 @@ public sealed class ModalBuilder
             CloseOnEscape = _closeOnEscape,
             OnDismissed = _onDismissed,
         };
-        foreach (var (label, onClick, variant) in _buttons)
+        foreach ((string? label, Action? onClick, OrigamiVariant variant) in _buttons)
             entry.Button(label, onClick, variant);
         return entry;
     }
@@ -544,7 +556,7 @@ public sealed class ModalBuilder
     /// <summary>Render the configured modal's window chrome inline (embedded, no overlay/backdrop).</summary>
     public void ShowEmbedded(Paper paper, string id, float? width = null)
     {
-        var m = Build();
+        DialogModal m = Build();
         m.EmbeddedWidth = width;
         m.DrawEmbedded(paper, id);
     }

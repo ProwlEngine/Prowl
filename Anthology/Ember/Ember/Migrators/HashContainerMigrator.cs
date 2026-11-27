@@ -18,7 +18,7 @@ public sealed class HashContainerMigrator : IValueMigrator
 
     public MigrationPlan Plan(Type type, PlanContext context)
     {
-        var resolution = context.Types.Resolve(type);
+        TypeResolution resolution = context.Types.Resolve(type);
         if (resolution.IsRemoved) return MigrationPlan.Dropped;
 
         var shape = CollectionShape.Probe(type);
@@ -86,7 +86,7 @@ public sealed class HashContainerMigrator : IValueMigrator
 
         private bool IsDefault(object comparer)
         {
-            foreach (var known in _defaultComparers)
+            foreach (object? known in _defaultComparers)
                 if (ReferenceEquals(comparer, known)) return true;
             return false;
         }
@@ -101,7 +101,7 @@ public sealed class HashContainerMigrator : IValueMigrator
             // built without its comparer would hash differently from the one it replaces.
             if (_comparerConstructor != null && _comparerProperty?.GetValue(source) is { } comparer && !IsDefault(comparer))
             {
-                var migrated = context.Map(comparer);
+                object? migrated = context.Map(comparer);
                 if (migrated != null)
                     return Allocation.Replace(_comparerConstructor.Invoke(new[] { migrated }));
 
@@ -113,7 +113,7 @@ public sealed class HashContainerMigrator : IValueMigrator
             if (_target.GetConstructor(Type.EmptyTypes) == null)
                 return Allocation.Replace(CreateShell());
 
-            var created = Activator.CreateInstance(_target);
+            object? created = Activator.CreateInstance(_target);
             return created == null ? Allocation.Drop : Allocation.Replace(created);
         }
 
@@ -125,7 +125,7 @@ public sealed class HashContainerMigrator : IValueMigrator
         /// </summary>
         private object CreateShell()
         {
-            var shell = RuntimeHelpers.GetUninitializedObject(_target);
+            object shell = RuntimeHelpers.GetUninitializedObject(_target);
             if (_containerBase == null) return shell;
 
             object template;
@@ -142,8 +142,8 @@ public sealed class HashContainerMigrator : IValueMigrator
             const BindingFlags declared =
                 BindingFlags.Instance | BindingFlags.Public | BindingFlags.NonPublic | BindingFlags.DeclaredOnly;
 
-            for (var level = _containerBase; level != null && level != typeof(object); level = level.BaseType)
-                foreach (var field in level.GetFields(declared))
+            for (Type? level = _containerBase; level != null && level != typeof(object); level = level.BaseType)
+                foreach (FieldInfo field in level.GetFields(declared))
                     field.SetValue(shell, field.GetValue(template));
 
             return shell;
@@ -158,7 +158,7 @@ public sealed class HashContainerMigrator : IValueMigrator
         {
             _subclassState?.Fill(source, target, context);
 
-            foreach (var entry in _from.Entries(source))
+            foreach (KeyValuePair<object?, object?> entry in _from.Entries(source))
             {
                 try
                 {
@@ -187,7 +187,7 @@ public sealed class HashContainerMigrator : IValueMigrator
             bool inPlace = ReferenceEquals(source, target);
 
             // Reading has to finish before clearing when both sides are the same container.
-            var entries = inPlace
+            IEnumerable<KeyValuePair<object?, object?>> entries = inPlace
                 ? _from.Entries(source).ToArray()
                 : _from.Entries(source);
 
@@ -195,11 +195,11 @@ public sealed class HashContainerMigrator : IValueMigrator
 
             bool reportedCollision = false;
 
-            foreach (var entry in entries)
+            foreach (KeyValuePair<object?, object?> entry in entries)
             {
                 try
                 {
-                    var key = context.Map(entry.Key);
+                    object? key = context.Map(entry.Key);
                     if (key == null)
                     {
                         context.Report(ReloadCode.CollectionKeyNull, ReloadSeverity.Warning,
@@ -207,7 +207,7 @@ public sealed class HashContainerMigrator : IValueMigrator
                         continue;
                     }
 
-                    var value = ReferenceEquals(entry.Key, entry.Value) ? key : context.Map(entry.Value);
+                    object? value = ReferenceEquals(entry.Key, entry.Value) ? key : context.Map(entry.Value);
 
                     if (_to.Add(target, key, value)) continue;
 
@@ -230,9 +230,9 @@ public sealed class HashContainerMigrator : IValueMigrator
         {
             if (comparerType == null) return null;
 
-            foreach (var constructor in type.GetConstructors())
+            foreach (ConstructorInfo constructor in type.GetConstructors())
             {
-                var parameters = constructor.GetParameters();
+                ParameterInfo[] parameters = constructor.GetParameters();
                 if (parameters.Length == 1 && parameters[0].ParameterType == comparerType)
                     return constructor;
             }

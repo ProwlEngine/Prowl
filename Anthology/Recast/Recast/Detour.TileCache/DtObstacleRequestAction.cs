@@ -18,11 +18,10 @@ freely, subject to the following restrictions:
 3. This notice may not be removed or altered from any source distribution.
 */
 
-namespace Prowl.Recast.Detour.TileCache
+namespace Prowl.Recast.Detour.TileCache;
+
+public enum DtObstacleRequestAction
 {
-    public enum DtObstacleRequestAction
-    {
-        REQUEST_ADD,
-        REQUEST_REMOVE
-    }
+    REQUEST_ADD,
+    REQUEST_REMOVE
 }

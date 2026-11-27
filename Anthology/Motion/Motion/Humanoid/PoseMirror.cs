@@ -1,4 +1,5 @@
 using System.Runtime.CompilerServices;
+
 using Prowl.Vector;
 using Prowl.Vector.Spatial;
 
@@ -131,7 +132,7 @@ public static class PoseMirror
     {
         Skeleton skeleton = rig.Skeleton;
         int[] parents = skeleton.SanitizedParentIndices;
-        var mirror = new int[skeleton.BoneCount];
+        int[] mirror = new int[skeleton.BoneCount];
         Array.Fill(mirror, Skeleton.InvalidIndex);
 
         foreach (HumanBodyBone bone in HumanTrait.AllBones)
@@ -219,7 +220,7 @@ public static class PoseMirror
 
     private static Pose RebuiltPose(Skeleton skeleton)
     {
-        ConditionalWeakTable<Skeleton, Pose> cache = s_rebuilt ??= new ConditionalWeakTable<Skeleton, Pose>();
+        ConditionalWeakTable<Skeleton, Pose> cache = s_rebuilt ??= [];
         if (!cache.TryGetValue(skeleton, out Pose? pose))
         {
             pose = new Pose(skeleton);

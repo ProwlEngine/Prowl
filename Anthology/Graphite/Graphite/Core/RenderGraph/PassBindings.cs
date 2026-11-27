@@ -6,11 +6,11 @@ namespace Prowl.Graphite;
 
 internal sealed class PassBindings
 {
-    private readonly Dictionary<Framebuffer, TargetLoadStoreOps> _ops = new();
+    private readonly Dictionary<Framebuffer, TargetLoadStoreOps> _ops = [];
 
-    public HashSet<ResourceId> Known { get; } = new();
+    public HashSet<ResourceId> Known { get; } = [];
 
-    public HashSet<ResourceId> Declared { get; } = new();
+    public HashSet<ResourceId> Declared { get; } = [];
 
     public string PassName { get; set; } = "";
 

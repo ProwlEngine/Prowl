@@ -69,7 +69,7 @@ public sealed partial class ShaderSession : CodeLanguageSession
     internal List<ShaderSymbol> Visible(ShaderIndex index, int offset)
     {
         var result = new List<ShaderSymbol>();
-        foreach (var s in index.Symbols)
+        foreach (ShaderSymbol s in index.Symbols)
         {
             if (s.Kind == ShaderSymbolKind.Pass) continue;
             if (offset < s.ScopeStart || offset > s.ScopeEnd) continue;
@@ -77,7 +77,7 @@ public sealed partial class ShaderSession : CodeLanguageSession
         }
 
         var seen = new HashSet<string>(StringComparer.Ordinal);
-        foreach (var include in index.Includes)
+        foreach (IncludeRef include in index.Includes)
         {
             if (offset < include.ScopeStart || offset > include.ScopeEnd) continue;
             AddInclude(include.Name, index.Path ?? _path, result, seen);
@@ -87,12 +87,12 @@ public sealed partial class ShaderSession : CodeLanguageSession
         {
             // Lighting code is compiled right after the Surface block's own code.
             if (surface.Part == SurfacePart.Lighting && index.Surfaces.Find(s => s.Part == SurfacePart.Code && s.Model == surface.Model) is { } code)
-                foreach (var s in index.Symbols)
+                foreach (ShaderSymbol s in index.Symbols)
                     if (!s.IsLocal && s.ScopeStart >= code.Program.Start && s.ScopeEnd <= code.Program.End) result.Add(s);
 
             // Surface code sees what the model shader has in scope where the code is spliced in, after the file's own.
             if (_workspace.Surface(surface.Model) is { } model && model.Index != index && model.SpliceOffset(surface.Part) >= 0)
-                foreach (var s in Visible(model.Index, model.SpliceOffset(surface.Part)))
+                foreach (ShaderSymbol s in Visible(model.Index, model.SpliceOffset(surface.Part)))
                     if (s.Kind != ShaderSymbolKind.Property || !result.Exists(r => r.Kind == ShaderSymbolKind.Property && r.Name == s.Name))
                         result.Add(s);
         }
@@ -101,18 +101,18 @@ public sealed partial class ShaderSession : CodeLanguageSession
 
     private void AddInclude(string name, string? fromPath, List<ShaderSymbol> into, HashSet<string> seen)
     {
-        var child = _workspace.IncludeIndex(name, fromPath);
+        ShaderIndex? child = _workspace.IncludeIndex(name, fromPath);
         if (child?.Path == null || !seen.Add(child.Path)) return;
-        foreach (var s in child.Symbols)
+        foreach (ShaderSymbol s in child.Symbols)
             if (!s.IsLocal && s.Kind != ShaderSymbolKind.Pass) into.Add(s);
-        foreach (var include in child.Includes) AddInclude(include.Name, child.Path, into, seen);
+        foreach (IncludeRef include in child.Includes) AddInclude(include.Name, child.Path, into, seen);
     }
 
     /// <summary>The symbol a name refers to at an offset. The narrowest scope wins, so locals shadow globals.</summary>
     internal static ShaderSymbol? Lookup(List<ShaderSymbol> visible, string name)
     {
         ShaderSymbol? best = null;
-        foreach (var s in visible)
+        foreach (ShaderSymbol s in visible)
         {
             if (s.Name != name || s.Kind is ShaderSymbolKind.Field && s.Container != null) continue;
             if (best == null || Narrower(s, best)) best = s;
@@ -130,7 +130,7 @@ public sealed partial class ShaderSession : CodeLanguageSession
 
     internal static IEnumerable<ShaderSymbol> MembersOf(List<ShaderSymbol> visible, string type)
     {
-        foreach (var s in visible)
+        foreach (ShaderSymbol s in visible)
             if (s.Kind == ShaderSymbolKind.Field && s.Container == type) yield return s;
     }
 
@@ -157,14 +157,14 @@ public sealed partial class ShaderSession : CodeLanguageSession
         int j = i - 1;
         while (j >= 0)
         {
-            var t = index.Token(j);
+            Tok t = index.Token(j);
             // An unmatched closer has no opener to step back to.
             if (t.Text is "]" or ")" && index.CloseOf(j) is var opener && (opener >= j || opener < 1)) return null;
             if (t.Text == "]") { j = index.CloseOf(j) - 1; continue; }
             if (t.Text == ")")
             {
                 int open = index.CloseOf(j);
-                var callee = index.Token(open - 1);
+                Tok callee = index.Token(open - 1);
                 if (callee.Kind != TokKind.Ident) return null;
                 chain.Add((callee.Text, true));
                 j = open - 2;
@@ -193,12 +193,12 @@ public sealed partial class ShaderSession : CodeLanguageSession
         if (call)
         {
             if (GlslBuiltins.Types.Contains(name)) return name;
-            var fn = visible.FirstOrDefault(s => s.Kind == ShaderSymbolKind.Function && s.Name == name);
+            ShaderSymbol? fn = visible.FirstOrDefault(s => s.Kind == ShaderSymbolKind.Function && s.Name == name);
             if (fn != null) return fn.Type;
             if (visible.Any(s => s.Kind == ShaderSymbolKind.Struct && s.Name == name)) return name;
             return GlslBuiltins.Functions.FirstOrDefault(f => f.Name == name)?.ReturnType;
         }
-        var symbol = Lookup(visible, name);
+        ShaderSymbol? symbol = Lookup(visible, name);
         if (symbol != null) return symbol.Type.Length > 0 ? symbol.Type : null;
         return GlslBuiltins.Variables.FirstOrDefault(v => v.Name == name)?.Type;
     }
@@ -217,17 +217,17 @@ public sealed partial class ShaderSession : CodeLanguageSession
     /// <summary>What the identifier at an offset refers to: a user symbol, a member, or null for built ins and unknown names.</summary>
     internal ShaderSymbol? SymbolAt(ShaderIndex index, int offset, out string word, out bool isMember)
     {
-        var (a, b) = WordAt(index.Text, offset);
+        (int a, int b) = WordAt(index.Text, offset);
         string found = index.Text.Substring(a, b - a);
         word = found;
         isMember = false;
         if (found.Length == 0) return null;
 
-        var visible = Visible(index, a);
+        List<ShaderSymbol> visible = Visible(index, a);
         if (a > 0 && index.Text[a - 1] == '.')
         {
             isMember = true;
-            var receiver = ReceiverType(index, visible, a - 1);
+            string? receiver = ReceiverType(index, visible, a - 1);
             if (receiver == null) return null;
             return MembersOf(visible, receiver).FirstOrDefault(f => f.Name == found);
         }
@@ -245,8 +245,8 @@ public sealed partial class ShaderSession : CodeLanguageSession
 
     private CodeLocation Location(ShaderSymbol symbol)
     {
-        var owner = symbol.Owner;
-        var (line, column) = LineColumn(owner.Text, symbol.Offset);
+        ShaderIndex owner = symbol.Owner;
+        (int line, int column) = LineColumn(owner.Text, symbol.Offset);
         return new CodeLocation
         {
             IsCurrentDocument = owner.Path == null,
@@ -291,22 +291,22 @@ public sealed partial class ShaderSession : CodeLanguageSession
 
     public override Task<IReadOnlyList<CodeLocation>> GetDefinitionAsync(int offset, CancellationToken ct) => Run<IReadOnlyList<CodeLocation>>(() =>
     {
-        var index = Index();
+        ShaderIndex index = Index();
 
         // On an include, go to the included file.
-        foreach (var include in index.Includes)
+        foreach (IncludeRef include in index.Includes)
             if (offset >= include.Offset && offset <= include.Offset + include.Length)
             {
-                var source = _workspace.Resolve(include.Name, _path);
+                ShaderSource? source = _workspace.Resolve(include.Name, _path);
                 return source == null ? Array.Empty<CodeLocation>() : new[] { new CodeLocation { Path = source.Path, Display = source.Path } };
             }
 
-        var symbol = SymbolAt(index, offset, out string word, out _);
+        ShaderSymbol? symbol = SymbolAt(index, offset, out string word, out _);
         if (symbol != null) return new[] { Location(symbol) };
 
         var builtin = GlslBuiltins.Functions.Where(f => f.Name == word).ToList();
         if (builtin.Count > 0) return builtin.Select(f => new CodeLocation { Display = $"{f.ReturnType} {f.Name}({f.Parameters})", Kind = CodeSymbolKind.Method }).ToList();
-        var variable = GlslBuiltins.Variables.FirstOrDefault(v => v.Name == word);
+        GlslBuiltinVariable? variable = GlslBuiltins.Variables.FirstOrDefault(v => v.Name == word);
         if (variable != null) return new[] { new CodeLocation { Display = $"{variable.Type} {variable.Name}", Kind = CodeSymbolKind.Field } };
         return Array.Empty<CodeLocation>();
     }, ct);
@@ -319,12 +319,12 @@ public sealed partial class ShaderSession : CodeLanguageSession
         var files = new List<ShaderIndex> { index };
         if (symbol.Owner != index) files.Add(symbol.Owner);
         else if (!symbol.IsLocal)
-            foreach (var include in _workspace.WithIncludes(index).Skip(1))
+            foreach (ShaderIndex? include in _workspace.WithIncludes(index).Skip(1))
                 if (include.Symbols.All(s => s.Name != name)) files.Add(include);
 
-        foreach (var file in files.Distinct())
+        foreach (ShaderIndex? file in files.Distinct())
         {
-            foreach (var t in file.GlslTokens)
+            foreach (Tok t in file.GlslTokens)
             {
                 if (t.Kind != TokKind.Ident || t.Text != name) continue;
                 bool afterDot = t.Offset > 0 && file.Text[t.Offset - 1] == '.';
@@ -337,7 +337,7 @@ public sealed partial class ShaderSession : CodeLanguageSession
                     // Another declaration of the same name nearer to this use shadows the symbol.
                     if (file == index && symbol.Owner == index)
                     {
-                        var resolved = Lookup(Visible(index, t.Offset), name);
+                        ShaderSymbol? resolved = Lookup(Visible(index, t.Offset), name);
                         if (resolved != null && resolved != symbol && !(property && resolved.Kind == ShaderSymbolKind.Uniform)) continue;
                     }
                 }
@@ -346,7 +346,7 @@ public sealed partial class ShaderSession : CodeLanguageSession
 
             // A property and the uniform declared for it are one name across the wrapper and the GLSL.
             if (file == index && (symbol.Kind == ShaderSymbolKind.Property || IsPropertyUniform(index, symbol)))
-                foreach (var t in file.WrapperTokens)
+                foreach (Tok t in file.WrapperTokens)
                     if (t.Kind == TokKind.Ident && t.Text == name) result.Add((file, t.Offset, t.Length));
         }
 
@@ -361,14 +361,14 @@ public sealed partial class ShaderSession : CodeLanguageSession
 
     public override Task<IReadOnlyList<CodeLocation>> FindReferencesAsync(int offset, CancellationToken ct) => Run<IReadOnlyList<CodeLocation>>(() =>
     {
-        var index = Index();
-        var symbol = SymbolAt(index, offset, out _, out _);
+        ShaderIndex index = Index();
+        ShaderSymbol? symbol = SymbolAt(index, offset, out _, out _);
         if (symbol == null) return Array.Empty<CodeLocation>();
 
         var result = new List<CodeLocation>();
-        foreach (var (file, start, length) in Occurrences(index, symbol))
+        foreach ((ShaderIndex? file, int start, int length) in Occurrences(index, symbol))
         {
-            var (line, column) = LineColumn(file.Text, start);
+            (int line, int column) = LineColumn(file.Text, start);
             result.Add(new CodeLocation
             {
                 IsCurrentDocument = file == index,
@@ -386,8 +386,8 @@ public sealed partial class ShaderSession : CodeLanguageSession
 
     public override Task<IReadOnlyList<CodeClassifiedSpan>> GetHighlightsAsync(int offset, CancellationToken ct) => Run<IReadOnlyList<CodeClassifiedSpan>>(() =>
     {
-        var index = Index();
-        var symbol = SymbolAt(index, offset, out _, out _);
+        ShaderIndex index = Index();
+        ShaderSymbol? symbol = SymbolAt(index, offset, out _, out _);
         if (symbol == null) return Array.Empty<CodeClassifiedSpan>();
         return Occurrences(index, symbol).Where(o => o.Index == index)
             .Select(o => new CodeClassifiedSpan(o.Offset, o.Length, CodeTokenKind.Identifier)).ToList();
@@ -398,38 +398,38 @@ public sealed partial class ShaderSession : CodeLanguageSession
         if (newName.Length == 0 || !(char.IsLetter(newName[0]) || newName[0] == '_') || !newName.All(IsWordChar)) return null;
         if (GlslBuiltins.Keywords.Contains(newName) || GlslBuiltins.Types.Contains(newName)) return null;
 
-        var index = Index();
-        var symbol = SymbolAt(index, offset, out _, out _);
+        ShaderIndex index = Index();
+        ShaderSymbol? symbol = SymbolAt(index, offset, out _, out _);
         if (symbol == null) return null;
 
         var edits = new List<CodeTextEdit>();
         var others = new Dictionary<string, List<CodeTextEdit>>();
-        foreach (var (file, start, length) in Occurrences(index, symbol))
+        foreach ((ShaderIndex? file, int start, int length) in Occurrences(index, symbol))
         {
             var edit = new CodeTextEdit(start, length, newName);
             if (file == index) edits.Add(edit);
             // Library files such as Graphite/Core.glsl are read only, only files on disk are renamed in.
             else if (file.Path != null && System.IO.Path.IsPathRooted(file.Path))
-                (others.TryGetValue(file.Path, out var list) ? list : others[file.Path] = new List<CodeTextEdit>()).Add(edit);
+                (others.TryGetValue(file.Path, out List<CodeTextEdit>? list) ? list : others[file.Path] = []).Add(edit);
         }
         return new CodeRenameResult { Edits = edits, OtherDocuments = others.ToDictionary(p => p.Key, p => (IReadOnlyList<CodeTextEdit>)p.Value) };
     }, ct);
 
     public override Task<IReadOnlyList<CodeClassifiedSpan>> GetClassificationsAsync(int start, int length, CancellationToken ct) => Run<IReadOnlyList<CodeClassifiedSpan>>(() =>
     {
-        var index = Index();
+        ShaderIndex index = Index();
         var result = new List<CodeClassifiedSpan>();
         int end = start + length;
-        foreach (var t in index.GlslTokens)
+        foreach (Tok t in index.GlslTokens)
         {
             if (t.End < start) continue;
             if (t.Offset > end) break;
             if (t.Kind != TokKind.Ident || GlslBuiltins.Keywords.Contains(t.Text) || GlslBuiltins.Types.Contains(t.Text)) continue;
             if (t.Offset > 0 && index.Text[t.Offset - 1] == '.') continue;
 
-            var symbol = Lookup(Visible(index, t.Offset), t.Text);
+            ShaderSymbol? symbol = Lookup(Visible(index, t.Offset), t.Text);
             if (symbol == null) continue;
-            var kind = symbol.Kind switch
+            CodeTokenKind kind = symbol.Kind switch
             {
                 ShaderSymbolKind.Function => CodeTokenKind.Method,
                 ShaderSymbolKind.Struct or ShaderSymbolKind.Block => CodeTokenKind.Struct,

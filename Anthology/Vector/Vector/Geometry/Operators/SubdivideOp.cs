@@ -17,14 +17,14 @@ internal static class SubdivideOp
     /// </summary>
     internal static void Subdivide(GeometryData mesh)
     {
-        var originalEdges = mesh.Edges.ToArray();
+        GeometryData.Edge[] originalEdges = mesh.Edges.ToArray();
         var edgeCenters = new GeometryData.Vertex[originalEdges.Length];
         var edgeAttributes = new Dictionary<string, GeometryData.AttributeValue>[originalEdges.Length];
-        var loose = new bool[originalEdges.Length];
+        bool[] loose = new bool[originalEdges.Length];
 
         for (int i = 0; i < originalEdges.Length; i++)
         {
-            var e = originalEdges[i];
+            GeometryData.Edge e = originalEdges[i];
             edgeCenters[i] = mesh.AddVertex(e.Center());
             GeometryOperators.AttributeLerp(mesh, edgeCenters[i], e.Vert1, e.Vert2, 0.5f);
             edgeAttributes[i] = AttributeTransfer.Copy(e.Attributes);
@@ -32,19 +32,19 @@ internal static class SubdivideOp
             e.Id = i;
         }
 
-        foreach (var f in mesh.Faces.ToList())
+        foreach (GeometryData.Face? f in mesh.Faces.ToList())
         {
             if (f.Loop == null) continue;
             FaceSnapshot snapshot = FaceSnapshot.Capture(mesh, f);
             int count = snapshot.Vertices.Count;
 
-            var faceCenter = mesh.AddVertex(f.Center());
+            GeometryData.Vertex faceCenter = mesh.AddVertex(f.Center());
             for (int i = 0; i < count; i++)
                 GeometryOperators.AttributeLerp(mesh, faceCenter, i == 0 ? snapshot.Vertices[0] : faceCenter, snapshot.Vertices[i], i == 0 ? 1f : 1f / (i + 1));
-            var centerLoop = AttributeTransfer.Average(snapshot.Loops);
+            AttributeMap centerLoop = AttributeTransfer.Average(snapshot.Loops);
 
             var corners = new List<(GeometryData.Vertex[] Quad, int Edge, int PreviousEdge)>();
-            var it = f.Loop;
+            GeometryData.Loop it = f.Loop;
             do
             {
                 corners.Add((new[] { it.Vert, edgeCenters[it.Edge.Id], faceCenter, edgeCenters[it.Prev!.Edge.Id] }, it.Edge.Id, it.Prev.Edge.Id));
@@ -55,16 +55,16 @@ internal static class SubdivideOp
 
             for (int i = 0; i < corners.Count; i++)
             {
-                var (quad, edgeId, previousId) = corners[i];
-                var made = mesh.AddFace(quad);
+                (GeometryData.Vertex[]? quad, int edgeId, int previousId) = corners[i];
+                GeometryData.Face? made = mesh.AddFace(quad);
                 if (made == null) continue;
 
                 snapshot.ApplyFaceAttributes(made);
-                var here = snapshot.Loops[i];
-                var next = snapshot.Loops[(i + 1) % count];
-                var previous = snapshot.Loops[(i + count - 1) % count];
-                var towardsNext = AttributeTransfer.Lerp(here, next, 0.5f);
-                var towardsPrevious = AttributeTransfer.Lerp(previous, here, 0.5f);
+                AttributeMap here = snapshot.Loops[i];
+                AttributeMap next = snapshot.Loops[(i + 1) % count];
+                AttributeMap previous = snapshot.Loops[(i + count - 1) % count];
+                AttributeMap towardsNext = AttributeTransfer.Lerp(here, next, 0.5f);
+                AttributeMap towardsPrevious = AttributeTransfer.Lerp(previous, here, 0.5f);
                 FaceSnapshot.ApplyLoops(made, v =>
                     v == quad[0] ? here : v == quad[1] ? towardsNext : v == quad[3] ? towardsPrevious : centerLoop);
 
@@ -75,11 +75,11 @@ internal static class SubdivideOp
 
         for (int i = 0; i < originalEdges.Length; i++)
         {
-            var e = originalEdges[i];
+            GeometryData.Edge e = originalEdges[i];
             if (loose[i])
             {
-                var a = mesh.AddEdge(e.Vert1, edgeCenters[i]);
-                var b = mesh.AddEdge(edgeCenters[i], e.Vert2);
+                GeometryData.Edge a = mesh.AddEdge(e.Vert1, edgeCenters[i]);
+                GeometryData.Edge b = mesh.AddEdge(edgeCenters[i], e.Vert2);
                 AttributeTransfer.Apply(edgeAttributes[i], a.Attributes);
                 AttributeTransfer.Apply(edgeAttributes[i], b.Attributes);
             }
@@ -169,7 +169,7 @@ internal static class SubdivideOp
         for (int i = 0; i < n; i++)
             for (int j = 0; j < n; j++)
             {
-                var quad = mesh.AddFace(grid[i, j], grid[i + 1, j], grid[i + 1, j + 1], grid[i, j + 1]);
+                GeometryData.Face? quad = mesh.AddFace(grid[i, j], grid[i + 1, j], grid[i + 1, j + 1], grid[i, j + 1]);
                 if (quad == null) continue;
                 snapshot.ApplyFaceAttributes(quad);
                 FaceSnapshot.ApplyLoops(quad, v => loops.TryGetValue(v, out AttributeMap? inside) ? inside : snapshot.LoopOf(v));
@@ -183,16 +183,16 @@ internal static class SubdivideOp
     {
         FaceSnapshot snapshot = FaceSnapshot.Capture(mesh, face);
         List<GeometryData.Vertex> ring = snapshot.Vertices;
-        var centre = mesh.AddVertex(face.Center());
+        GeometryData.Vertex centre = mesh.AddVertex(face.Center());
         for (int i = 0; i < ring.Count; i++)
             GeometryOperators.AttributeLerp(mesh, centre, i == 0 ? ring[0] : centre, ring[i], i == 0 ? 1f : 1f / (i + 1));
-        var centreLoop = AttributeTransfer.Average(snapshot.Loops);
+        AttributeMap centreLoop = AttributeTransfer.Average(snapshot.Loops);
 
         mesh.RemoveFace(face);
         var made = new List<GeometryData.Face>();
         for (int i = 0; i < ring.Count; i++)
         {
-            var triangle = mesh.AddFace(ring[i], ring[(i + 1) % ring.Count], centre);
+            GeometryData.Face? triangle = mesh.AddFace(ring[i], ring[(i + 1) % ring.Count], centre);
             if (triangle == null) continue;
             snapshot.ApplyFaceAttributes(triangle);
             FaceSnapshot.ApplyLoops(triangle, v => v == centre ? centreLoop : snapshot.LoopOf(v));
@@ -219,7 +219,7 @@ internal static class SubdivideOp
         List<GeometryData.Vertex> ring = snapshot.Vertices;
         int count = ring.Count;
 
-        var centre = mesh.AddVertex(face.Center());
+        GeometryData.Vertex centre = mesh.AddVertex(face.Center());
         int corners = 0;
         for (int i = 0; i < count; i++)
         {
@@ -227,7 +227,7 @@ internal static class SubdivideOp
             corners++;
             GeometryOperators.AttributeLerp(mesh, centre, corners == 1 ? ring[i] : centre, ring[i], corners == 1 ? 1f : 1f / corners);
         }
-        var centreLoop = AttributeTransfer.Average(snapshot.Loops);
+        AttributeMap centreLoop = AttributeTransfer.Average(snapshot.Loops);
 
         var quads = new List<GeometryData.Vertex[]>();
         for (int i = 0; i < count; i++)
@@ -241,7 +241,7 @@ internal static class SubdivideOp
         mesh.RemoveFace(face);
         foreach (GeometryData.Vertex[] quad in quads)
         {
-            var quadFace = mesh.AddFace(quad);
+            GeometryData.Face? quadFace = mesh.AddFace(quad);
             if (quadFace == null) continue;
             snapshot.ApplyFaceAttributes(quadFace);
             FaceSnapshot.ApplyLoops(quadFace, v => v == centre ? centreLoop : snapshot.LoopOf(v));

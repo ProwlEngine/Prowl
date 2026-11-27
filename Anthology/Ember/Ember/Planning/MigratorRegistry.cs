@@ -11,21 +11,22 @@ namespace Prowl.Ember;
 /// </summary>
 public sealed class MigratorRegistry : IReadOnlyList<IValueMigrator>
 {
-    private readonly List<IValueMigrator> _migrators = new();
+    private readonly List<IValueMigrator> _migrators = [];
 
     public static MigratorRegistry CreateDefault()
     {
-        var registry = new MigratorRegistry();
-
-        registry.Add(new EnumMigrator());
-        registry.Add(new DelegateMigrator());
-        registry.Add(new ReflectionMigrator());
-        registry.Add(new ArrayMigrator());
-        registry.Add(new WeakReferenceMigrator());
-        registry.Add(new ImmutableMigrator());
-        registry.Add(new HashContainerMigrator());
-        registry.Add(new SequenceMigrator());
-        registry.Add(new JsonMetadataMigrator());
+        var registry = new MigratorRegistry
+        {
+            new EnumMigrator(),
+            new DelegateMigrator(),
+            new ReflectionMigrator(),
+            new ArrayMigrator(),
+            new WeakReferenceMigrator(),
+            new ImmutableMigrator(),
+            new HashContainerMigrator(),
+            new SequenceMigrator(),
+            new JsonMetadataMigrator()
+        };
 
         return registry;
     }

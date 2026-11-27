@@ -18,20 +18,19 @@ freely, subject to the following restrictions:
 3. This notice may not be removed or altered from any source distribution.
 */
 
-namespace Prowl.Recast.Detour
-{
-    public class DtDetourBuilder
-    {
-        public DtMeshData Build(DtNavMeshCreateParams option, int tileX, int tileY)
-        {
-            DtMeshData data = DtNavMeshBuilder.CreateNavMeshData(option);
-            if (data != null)
-            {
-                data.header.x = tileX;
-                data.header.y = tileY;
-            }
+namespace Prowl.Recast.Detour;
 
-            return data;
+public class DtDetourBuilder
+{
+    public DtMeshData Build(DtNavMeshCreateParams option, int tileX, int tileY)
+    {
+        DtMeshData data = DtNavMeshBuilder.CreateNavMeshData(option);
+        if (data != null)
+        {
+            data.header.x = tileX;
+            data.header.y = tileY;
         }
+
+        return data;
     }
 }

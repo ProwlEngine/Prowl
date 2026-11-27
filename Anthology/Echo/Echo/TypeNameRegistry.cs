@@ -64,7 +64,7 @@ public static class TypeNameRegistry
         return _compactNames.GetOrAdd(type, t =>
         {
             // Check predefined compact names first
-            if (_predefinedCompactNames.TryGetValue(t, out var predefined))
+            if (_predefinedCompactNames.TryGetValue(t, out string? predefined))
                 return predefined;
 
             // For enums, record the namespace-qualified name and assembly so two enums with the same
@@ -75,8 +75,8 @@ public static class TypeNameRegistry
             // For arrays, use special notation
             if (t.IsArray)
             {
-                var elementType = t.GetElementType()!;
-                var elementName = GetCompactTypeName(elementType);
+                Type elementType = t.GetElementType()!;
+                string elementName = GetCompactTypeName(elementType);
                 return t.GetArrayRank() == 1 ? $"{elementName}[]" : $"{elementName}[{new string(',', t.GetArrayRank() - 1)}]";
             }
 
@@ -94,7 +94,7 @@ public static class TypeNameRegistry
         return _compactNameLookup.GetOrAdd(name, n =>
         {
             // Check predefined types first
-            if (_predefinedTypeLookup.TryGetValue(n, out var predefined))
+            if (_predefinedTypeLookup.TryGetValue(n, out Type? predefined))
                 return predefined;
 
             // Handle enum notation
@@ -153,13 +153,13 @@ public static class TypeNameRegistry
 
     private static string GetCompactGenericTypeName(Type type)
     {
-        var definition = type.GetGenericTypeDefinition();
-        var args = type.GetGenericArguments();
-        var argNames = args.Select(GetCompactTypeName);
+        Type definition = type.GetGenericTypeDefinition();
+        Type[] args = type.GetGenericArguments();
+        IEnumerable<string> argNames = args.Select(GetCompactTypeName);
 
-        var baseName = definition.Name;
+        string baseName = definition.Name;
         // Remove the `1, `2 etc. from generic type names
-        var backtickIndex = baseName.IndexOf('`');
+        int backtickIndex = baseName.IndexOf('`');
         if (backtickIndex > 0)
             baseName = baseName[..backtickIndex];
 
@@ -209,17 +209,17 @@ public static class TypeNameRegistry
         try
         {
             // Parse array notation like "i[]" or "s[,]"
-            var bracketIndex = arrayName.IndexOf('[');
+            int bracketIndex = arrayName.IndexOf('[');
             if (bracketIndex == -1) return null;
 
-            var elementTypeName = arrayName[..bracketIndex];
-            var rankInfo = arrayName[bracketIndex..];
+            string elementTypeName = arrayName[..bracketIndex];
+            string rankInfo = arrayName[bracketIndex..];
 
-            var elementType = ResolveCompactTypeName(elementTypeName);
+            Type? elementType = ResolveCompactTypeName(elementTypeName);
             if (elementType == null) return null;
 
             // Count commas to determine rank
-            var rank = rankInfo.Count(c => c == ',') + 1;
+            int rank = rankInfo.Count(c => c == ',') + 1;
 
             return rank == 1 ? elementType.MakeArrayType() : elementType.MakeArrayType(rank);
         }
@@ -234,22 +234,22 @@ public static class TypeNameRegistry
         try
         {
             // Parse generic notation like "List<i>" or "Dictionary<s,i>"
-            var openIndex = genericName.IndexOf('<');
-            var closeIndex = genericName.LastIndexOf('>');
+            int openIndex = genericName.IndexOf('<');
+            int closeIndex = genericName.LastIndexOf('>');
 
             if (openIndex == -1 || closeIndex == -1) return null;
 
-            var baseName = genericName[..openIndex];
-            var argsString = genericName[(openIndex + 1)..closeIndex];
+            string baseName = genericName[..openIndex];
+            string argsString = genericName[(openIndex + 1)..closeIndex];
 
             // Split arguments by comma, but respect nested generics
-            var argTypeNames = SplitGenericArguments(argsString);
-            var argTypes = argTypeNames.Select(ResolveCompactTypeName).ToArray();
+            List<string> argTypeNames = SplitGenericArguments(argsString);
+            Type?[] argTypes = argTypeNames.Select(ResolveCompactTypeName).ToArray();
 
             if (argTypes.Any(t => t == null)) return null;
 
             // Find the generic type definition
-            var genericDefinition = FindGenericTypeDefinition(baseName, argTypes.Length);
+            Type? genericDefinition = FindGenericTypeDefinition(baseName, argTypes.Length);
             if (genericDefinition == null) return null;
 
             return genericDefinition.MakeGenericType(argTypes!);
@@ -303,7 +303,7 @@ public static class TypeNameRegistry
 
     private static Type? FindGenericTypeDefinition(string name, int arity)
     {
-        var fullName = $"{name}`{arity}";
+        string fullName = $"{name}`{arity}";
 
         return AppDomain.CurrentDomain.GetAssemblies()
             .SelectMany(a => a.GetTypes())

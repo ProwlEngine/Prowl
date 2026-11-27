@@ -1,9 +1,8 @@
-namespace Prowl.Recast.Detour.Extras.Jumplink
+namespace Prowl.Recast.Detour.Extras.Jumplink;
+
+public class DtJumpSegment
 {
-    public class DtJumpSegment
-    {
-        public int groundSegment;
-        public int startSample;
-        public int samples;
-    }
+    public int groundSegment;
+    public int startSample;
+    public int samples;
 }

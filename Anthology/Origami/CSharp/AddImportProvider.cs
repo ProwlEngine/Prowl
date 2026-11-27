@@ -19,30 +19,30 @@ internal static class AddImportProvider
 {
     private sealed class NameIndex
     {
-        public readonly Dictionary<string, List<(string Namespace, int Arity)>> Types = new();
+        public readonly Dictionary<string, List<(string Namespace, int Arity)>> Types = [];
 
         // Extension method name to the metadata names of the static classes declaring it.
-        public readonly Dictionary<string, List<string>> Extensions = new();
+        public readonly Dictionary<string, List<string>> Extensions = [];
     }
 
-    private static readonly ConditionalWeakTable<MetadataReference, NameIndex> s_referenceIndex = new();
+    private static readonly ConditionalWeakTable<MetadataReference, NameIndex> s_referenceIndex = [];
 
     public static IReadOnlyList<CodeAction> GetActions(SemanticModel model, TextSpan span, CancellationToken ct)
     {
         var root = (CompilationUnitSyntax)model.SyntaxTree.GetRoot(ct);
-        var text = model.SyntaxTree.GetText(ct);
+        SourceText text = model.SyntaxTree.GetText(ct);
         var actions = new List<CodeAction>();
         var titles = new HashSet<string>();
         List<NameIndex>? indexes = null;
 
-        foreach (var diagnostic in model.GetDiagnostics(cancellationToken: ct))
+        foreach (Diagnostic diagnostic in model.GetDiagnostics(cancellationToken: ct))
         {
-            var diagnosticSpan = diagnostic.Location.SourceSpan;
+            TextSpan diagnosticSpan = diagnostic.Location.SourceSpan;
             if (!diagnosticSpan.IntersectsWith(span)) continue;
             if (diagnostic.Id is not ("CS0246" or "CS0103" or "CS1061")) continue;
 
             indexes ??= BuildIndexes(model.Compilation, ct);
-            var node = root.FindNode(diagnosticSpan, getInnermostNodeForTie: true);
+            SyntaxNode node = root.FindNode(diagnosticSpan, getInnermostNodeForTie: true);
 
             if (diagnostic.Id == "CS1061")
             {
@@ -58,7 +58,7 @@ internal static class AddImportProvider
             bool inAttribute = name.FirstAncestorOrSelf<AttributeSyntax>()?.Name.Span.Contains(name.Span) == true;
 
             var namespaces = new SortedSet<string>(StringComparer.Ordinal);
-            foreach (var index in indexes)
+            foreach (NameIndex index in indexes)
             {
                 Collect(index, identifier, arity, namespaces);
                 if (inAttribute) Collect(index, identifier + "Attribute", arity, namespaces);
@@ -77,8 +77,8 @@ internal static class AddImportProvider
 
     private static void Collect(NameIndex index, string name, int arity, SortedSet<string> namespaces)
     {
-        if (!index.Types.TryGetValue(name, out var entries)) return;
-        foreach (var (ns, typeArity) in entries)
+        if (!index.Types.TryGetValue(name, out List<(string Namespace, int Arity)>? entries)) return;
+        foreach ((string? ns, int typeArity) in entries)
             if (typeArity == arity) namespaces.Add(ns);
     }
 
@@ -88,9 +88,9 @@ internal static class AddImportProvider
         if (model.GetTypeInfo(access.Expression, ct).Type is not { } receiver || receiver.TypeKind == TypeKind.Error) yield break;
 
         var seen = new HashSet<string>();
-        foreach (var index in indexes)
+        foreach (NameIndex index in indexes)
         {
-            if (!index.Extensions.TryGetValue(methodName, out var containers)) continue;
+            if (!index.Extensions.TryGetValue(methodName, out List<string>? containers)) continue;
             foreach (string container in containers)
             {
                 if (model.Compilation.GetTypeByMetadataName(container) is not { } type) continue;
@@ -105,7 +105,7 @@ internal static class AddImportProvider
     private static List<NameIndex> BuildIndexes(Compilation compilation, CancellationToken ct)
     {
         var indexes = new List<NameIndex>();
-        foreach (var reference in compilation.References)
+        foreach (MetadataReference reference in compilation.References)
         {
             ct.ThrowIfCancellationRequested();
             if (compilation.GetAssemblyOrModuleSymbol(reference) is IAssemblySymbol assembly)
@@ -123,28 +123,28 @@ internal static class AddImportProvider
         stack.Push(global);
         while (stack.Count > 0)
         {
-            var ns = stack.Pop();
-            foreach (var child in ns.GetNamespaceMembers()) stack.Push(child);
+            INamespaceSymbol ns = stack.Pop();
+            foreach (INamespaceSymbol child in ns.GetNamespaceMembers()) stack.Push(child);
             if (ns.IsGlobalNamespace) continue;
 
             string nsName = ns.ToDisplayString();
-            foreach (var type in ns.GetTypeMembers())
+            foreach (INamedTypeSymbol type in ns.GetTypeMembers())
             {
                 bool visible = source != null ? type.DeclaredAccessibility != Accessibility.Private : type.DeclaredAccessibility == Accessibility.Public;
                 if (!visible) continue;
 
-                if (!index.Types.TryGetValue(type.Name, out var list))
-                    index.Types[type.Name] = list = new List<(string, int)>();
+                if (!index.Types.TryGetValue(type.Name, out List<(string Namespace, int Arity)>? list))
+                    index.Types[type.Name] = list = [];
                 list.Add((nsName, type.Arity));
 
                 if (!type.MightContainExtensionMethods) continue;
                 string metadataName = nsName + "." + type.MetadataName;
-                foreach (var member in type.GetMembers())
+                foreach (ISymbol member in type.GetMembers())
                 {
                     if (member is not IMethodSymbol { IsExtensionMethod: true } method) continue;
                     if (source == null && method.DeclaredAccessibility != Accessibility.Public) continue;
-                    if (!index.Extensions.TryGetValue(method.Name, out var containers))
-                        index.Extensions[method.Name] = containers = new List<string>();
+                    if (!index.Extensions.TryGetValue(method.Name, out List<string>? containers))
+                        index.Extensions[method.Name] = containers = [];
                     if (!containers.Contains(metadataName)) containers.Add(metadataName);
                 }
             }
@@ -163,12 +163,12 @@ internal static class AddImportProvider
     private static CodeTextEdit UsingEdit(CompilationUnitSyntax root, SourceText text, string ns)
     {
         string directive = $"using {ns};";
-        var usings = root.Usings;
+        SyntaxList<UsingDirectiveSyntax> usings = root.Usings;
         if (usings.Count == 0)
         {
-            var first = root.GetFirstToken(includeZeroWidth: true);
+            SyntaxToken first = root.GetFirstToken(includeZeroWidth: true);
             int headerEnd = -1;
-            foreach (var trivia in first.LeadingTrivia)
+            foreach (SyntaxTrivia trivia in first.LeadingTrivia)
             {
                 if (trivia.IsKind(SyntaxKind.SingleLineCommentTrivia) || trivia.IsKind(SyntaxKind.MultiLineCommentTrivia)) headerEnd = trivia.Span.End;
                 else if (!trivia.IsKind(SyntaxKind.WhitespaceTrivia) && !trivia.IsKind(SyntaxKind.EndOfLineTrivia)) break;
@@ -177,7 +177,7 @@ internal static class AddImportProvider
             return new CodeTextEdit(0, 0, first.IsKind(SyntaxKind.EndOfFileToken) ? directive + "\n" : directive + "\n\n");
         }
 
-        foreach (var existing in usings)
+        foreach (UsingDirectiveSyntax existing in usings)
         {
             if (existing.Alias != null || !existing.StaticKeyword.IsKind(SyntaxKind.None) || existing.GlobalKeyword.IsKind(SyntaxKind.GlobalKeyword)) continue;
             if (CompareNamespaces(ns, existing.Name?.ToString() ?? "") < 0)

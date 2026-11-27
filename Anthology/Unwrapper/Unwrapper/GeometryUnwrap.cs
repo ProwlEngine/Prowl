@@ -34,7 +34,7 @@ public static class GeometryUnwrap
             }
 
         // Corners at one point are one point of the layout where their faces meet across an edge that is no seam
-        var parent = new int[corners.Count];
+        int[] parent = new int[corners.Count];
         for (int i = 0; i < parent.Length; i++) parent[i] = i;
         int Find(int i)
         {
@@ -54,7 +54,7 @@ public static class GeometryUnwrap
                 }
             }
 
-        var pointOf = new int[corners.Count];
+        int[] pointOf = new int[corners.Count];
         var positions = new List<Double3>();
         var pins = new Dictionary<int, Double2>();
         var rootPoint = new Dictionary<int, int>();

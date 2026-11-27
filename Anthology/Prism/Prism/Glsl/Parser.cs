@@ -68,7 +68,7 @@ public sealed class Parser
 
     static TranslationUnit ParseOnLane(string source, IReadOnlyDictionary<string, string>? defines, IncludeCallback? includes, Prowl.Prism.Compiler.ShaderStage? stage)
     {
-        var (tokens, version, isEs, extensions, pragmas, names, invariantAllFrom) = Preprocessor.ProcessPooled(source, defines, includes, stage);
+        (List<Token>? tokens, int version, bool isEs, List<string>? extensions, List<string>? pragmas, List<string?>? names, int invariantAllFrom) = Preprocessor.ProcessPooled(source, defines, includes, stage);
         try
         {
             return new Parser(tokens, version, isEs, extensions, pragmas) { _invariantAllFrom = invariantAllFrom }.ParseTranslationUnit() with { SourceNames = names };
@@ -90,10 +90,10 @@ public sealed class Parser
         {
             if (TryPrecisionStatement(ref defaultFloatRelaxed, ref intRelaxed)) continue;
             int ln = Cur.Line, first = decls.Count;
-            var d = ParseExternalDeclaration();
+            Decl d = ParseExternalDeclaration();
             if (d.Line == 0) d.Line = ln;
             // A struct defined inline with declarators yields its StructDef ahead of the variable.
-            foreach (var p in _pendingDecls) { if (p.Line == 0) p.Line = ln; decls.Add(p); }
+            foreach (Decl p in _pendingDecls) { if (p.Line == 0) p.Line = ln; decls.Add(p); }
             _pendingDecls.Clear();
             decls.Add(d);
             for (int i = first; i < decls.Count; i++)
@@ -108,7 +108,7 @@ public sealed class Parser
     bool TryPrecisionStatement(ref bool defaultFloatRelaxed, ref bool? intRelaxed)
     {
         if (!IsText("precision")) return false;
-        var p = ParsePrecisionStatement();
+        PrecisionStmt p = ParsePrecisionStatement();
         if (p.Type == "float") defaultFloatRelaxed = p.Qualifier is "mediump" or "lowp";
         if (p.Type == "int") intRelaxed = p.Qualifier is "mediump" or "lowp";
         return true;
@@ -118,11 +118,11 @@ public sealed class Parser
     {
         Advance();
         string qualifier = Expect(TokenKind.Identifier, "precision qualifier").Text;
-        var typeTok = Expect(TokenKind.Identifier, "type");
+        Token typeTok = Expect(TokenKind.Identifier, "type");
         string type = typeTok.Text;
         if (type == "atomic_uint")
             throw new GlslParseException("'atomic counter types' : not allowed when using GLSL for Vulkan", typeTok.Line);
-        var resolved = Types.Resolve(type)
+        GlslType resolved = Types.Resolve(type)
             ?? throw new GlslParseException("'' :  syntax error, unexpected IDENTIFIER", typeTok.Line);
         if (resolved is not (ScalarType { Kind: Scalar.Float or Scalar.Int } or SamplerType or TextureType or ImageType or PureSamplerType))
             throw new GlslParseException($"'{type}' : cannot apply precision statement to this type; use 'float', 'int' or a sampler type", typeTok.Line);
@@ -135,7 +135,7 @@ public sealed class Parser
         if (IsText("struct")) return ParseStructDef();
 
         int declStart = _i;
-        var quals = ParseQualifiers();
+        Qualifiers quals = ParseQualifiers();
         // After `#pragma STDGL invariant(all)`, glslang makes every user output declared from then on invariant.
         if (_invariantAllFrom >= 0 && declStart >= _invariantAllFrom && quals.Has("out") && !quals.Has("invariant"))
             quals = quals with { Words = [.. quals.Words, "invariant"] };
@@ -143,7 +143,7 @@ public sealed class Parser
         // A qualified inline struct definition, e.g. `const struct S { .. } v = S(..);`.
         if (IsText("struct"))
         {
-            var sd = ParseInlineStruct();
+            StructDef sd = ParseInlineStruct();
             _pendingDecls.Add(sd);
             var qt = new TypeRef(sd.Name);
             return new GlobalVar(quals, qt, ParseDeclaratorList(qt));
@@ -156,11 +156,11 @@ public sealed class Parser
 
         IReadOnlyList<Expr>? templateArgs = name == "coopmat" && IsOp("<") ? ParseTemplateArgs() : null;
         var type = new TypeRef(name, ParseArrayDims(), templateArgs);   // `float[4] f(...)` / `float[4] v;`
-        var name2Tok = ExpectName();
+        Token name2Tok = ExpectName();
         string name2 = name2Tok.Text;
         if (IsKind(TokenKind.LParen))
         {
-            var parameters = ParseParams();
+            List<Param> parameters = ParseParams();
             if (AcceptKind(TokenKind.Semicolon)) return new FunctionProto(quals, type, name2, parameters);   // prototype
             return new FunctionDef(quals, type, name2, parameters, ParseBlock());
         }
@@ -168,7 +168,7 @@ public sealed class Parser
         var declarators = new List<Declarator> { ParseDeclaratorTail(name2, type, name2Tok.Line) };
         while (AcceptKind(TokenKind.Comma))
         {
-            var nd = ExpectName();
+            Token nd = ExpectName();
             declarators.Add(ParseDeclaratorTail(nd.Text, type, nd.Line));
         }
         Expect(TokenKind.Semicolon);
@@ -177,7 +177,7 @@ public sealed class Parser
 
     Decl ParseStructDef()
     {
-        var def = ParseInlineStruct();
+        StructDef def = ParseInlineStruct();
         // `struct S { .. } a, b;` declares variables of the new type as well as defining it.
         if (!AcceptKind(TokenKind.Semicolon))
         {
@@ -197,11 +197,11 @@ public sealed class Parser
 
     List<Declarator> ParseDeclaratorList(TypeRef type)
     {
-        var first = ExpectName();
+        Token first = ExpectName();
         var declarators = new List<Declarator> { ParseDeclaratorTail(first.Text, type, first.Line) };
         while (AcceptKind(TokenKind.Comma))
         {
-            var nd = ExpectName();
+            Token nd = ExpectName();
             declarators.Add(ParseDeclaratorTail(nd.Text, type, nd.Line));
         }
         Expect(TokenKind.Semicolon);
@@ -210,11 +210,11 @@ public sealed class Parser
 
     InterfaceBlock ParseInterfaceBlock(Qualifiers quals, string blockName)
     {
-        var fields = ParseFieldBlock();
+        List<Field> fields = ParseFieldBlock();
         // An instance name must be a legal user identifier; a keyword here is simply not a name, so the
         // following ';' expectation produces the standard syntax error (glslang: "unexpected FLOAT").
         string? instance = IsKind(TokenKind.Identifier) && !ReservedWords.Contains(Cur.Text) ? Advance().Text : null;
-        var instanceArray = ParseArrayDims();
+        List<Expr?> instanceArray = ParseArrayDims();
         Expect(TokenKind.Semicolon);
         return new InterfaceBlock(quals, blockName, fields, instance, instanceArray);
     }
@@ -226,13 +226,13 @@ public sealed class Parser
         while (!IsKind(TokenKind.RBrace))
         {
             if (IsKind(TokenKind.End)) throw new GlslParseException("unexpected end of input in field list", Cur.Line);
-            var quals = ParseQualifiers();
-            var type = ParseType();
-            var nameTok = ExpectName("member name");
+            Qualifiers quals = ParseQualifiers();
+            TypeRef type = ParseType();
+            Token nameTok = ExpectName("member name");
             var declarators = new List<Declarator> { ParseDeclaratorTail(nameTok.Text, null, nameTok.Line) };
             while (AcceptKind(TokenKind.Comma))
             {
-                var nd = ExpectName("member name");
+                Token nd = ExpectName("member name");
                 declarators.Add(ParseDeclaratorTail(nd.Text, null, nd.Line));
             }
             Expect(TokenKind.Semicolon);
@@ -257,8 +257,8 @@ public sealed class Parser
 
     Param ParseParam()
     {
-        var quals = ParseQualifiers();
-        var type = ParseType();
+        Qualifiers quals = ParseQualifiers();
+        TypeRef type = ParseType();
         // Same rule as block instance names: a keyword cannot be a parameter name.
         string? name = IsKind(TokenKind.Identifier) && !ReservedWords.Contains(Cur.Text) ? Advance().Text : null;
         return new Param(quals, type, name, ParseArrayDims());
@@ -323,7 +323,7 @@ public sealed class Parser
 
     Declarator ParseDeclaratorTail(string name, TypeRef? type, int line = 0)
     {
-        var dims = ParseArrayDims();
+        List<Expr?> dims = ParseArrayDims();
         Expr? init = null;
         if (AcceptOp("="))
         {
@@ -347,9 +347,9 @@ public sealed class Parser
     // A nested brace initializes a member or element whose type only the semantic model knows, so it
     // parses into a nameless constructor that the lowerer resolves against the declared type. An array
     // element keeps the outer type, which is already correct for it.
-    Expr ParseNestedBraceInit(TypeRef type, int arrayDepth)
+    Call ParseNestedBraceInit(TypeRef type, int arrayDepth)
     {
-        var inner = ParseBraceInit(type, arrayDepth);
+        Call inner = ParseBraceInit(type, arrayDepth);
         return arrayDepth >= 0 ? inner : inner is Call c ? c with { Name = "" } : inner;
     }
 
@@ -402,7 +402,7 @@ public sealed class Parser
         var attrs = new List<(string Name, bool HasArg, int? Arg, int Line)>();
         do
         {
-            var nameTok = Expect(TokenKind.Identifier, "attribute name");
+            Token nameTok = Expect(TokenKind.Identifier, "attribute name");
             bool hasArg = false;
             int? arg = null;
             if (AcceptKind(TokenKind.LParen))
@@ -415,12 +415,12 @@ public sealed class Parser
         } while (AcceptKind(TokenKind.Comma));
         Expect(TokenKind.RBracket);
         Expect(TokenKind.RBracket);   // ]]
-        var inner = ParseStatement();
+        Stmt inner = ParseStatement();
 
         if (inner is IfStmt or SwitchStmt)
         {
             bool flatten = false, dontFlatten = false;
-            foreach (var a in attrs)
+            foreach ((string Name, bool HasArg, int? Arg, int Line) a in attrs)
             {
                 if (a.HasArg) continue;
                 if (a.Name == "flatten") flatten = true;
@@ -439,7 +439,7 @@ public sealed class Parser
         bool unroll = false, dontUnroll = false;
         int dependency = 0;
         uint minIter = 0, maxIter = uint.MaxValue, multiple = 1, peel = 0, partial = 0;
-        foreach (var a in attrs)
+        foreach ((string Name, bool HasArg, int? Arg, int Line) a in attrs)
         {
             bool noArg = !a.HasArg;
             bool intArg = a.Arg is not null;
@@ -493,7 +493,7 @@ public sealed class Parser
     {
         bool negate = false;
         if (IsKind(TokenKind.Operator) && Cur.Text == "-") { Advance(); negate = true; }
-        var argTok = Advance();
+        Token argTok = Advance();
         if (argTok.Kind == TokenKind.IntConst && TryParseIntLiteral(argTok.Text, out uint value))
             return unchecked(negate ? -(int)value : (int)value);
         if (argTok.Kind is TokenKind.UintConst or TokenKind.FloatConst or TokenKind.DoubleConst or TokenKind.HalfConst
@@ -557,24 +557,24 @@ public sealed class Parser
 
         if (IsDeclarationStart()) return ParseVarDecl();
 
-        var expr = ParseExpression();
+        Expr expr = ParseExpression();
         Expect(TokenKind.Semicolon);
         return new ExprStmt(expr);
     }
 
     VarDeclStmt ParseVarDecl()
     {
-        var quals = ParseQualifiers();
+        Qualifiers quals = ParseQualifiers();
         // A struct defined inline in a local declaration: the type is hoisted to module scope (SPIR-V types
         // are module-level anyway) and the statement declares variables of it.
         if (IsText("struct"))
         {
-            var sd = ParseInlineStruct();
+            StructDef sd = ParseInlineStruct();
             _pendingDecls.Add(sd);
             var st = new TypeRef(sd.Name);
             return new VarDeclStmt(quals, st, ParseDeclaratorList(st));
         }
-        var type = ParseType();
+        TypeRef type = ParseType();
         return new VarDeclStmt(quals, type, ParseDeclaratorList(type));
     }
 
@@ -602,9 +602,9 @@ public sealed class Parser
     {
         ExpectText("if");
         Expect(TokenKind.LParen);
-        var cond = ParseExpression();
+        Expr cond = ParseExpression();
         Expect(TokenKind.RParen);
-        var then = ParseStatement();
+        Stmt then = ParseStatement();
         Stmt? els = AcceptText("else") ? ParseStatement() : null;
         return new IfStmt(cond, then, els);
     }
@@ -616,7 +616,7 @@ public sealed class Parser
         Stmt? init;
         if (AcceptKind(TokenKind.Semicolon)) init = null;
         else if (IsDeclarationStart()) init = ParseVarDecl();       // consumes its ';'
-        else { var e = ParseExpression(); Expect(TokenKind.Semicolon); init = new ExprStmt(e); }
+        else { Expr e = ParseExpression(); Expect(TokenKind.Semicolon); init = new ExprStmt(e); }
         Expr? cond = IsKind(TokenKind.Semicolon) ? null : ParseExpression();
         Expect(TokenKind.Semicolon);
         Expr? update = IsKind(TokenKind.RParen) ? null : ParseExpression();
@@ -628,7 +628,7 @@ public sealed class Parser
     {
         ExpectText("while");
         Expect(TokenKind.LParen);
-        var cond = ParseExpression();
+        Expr cond = ParseExpression();
         Expect(TokenKind.RParen);
         return new WhileStmt(cond, ParseStatement());
     }
@@ -636,10 +636,10 @@ public sealed class Parser
     DoWhileStmt ParseDoWhile()
     {
         ExpectText("do");
-        var body = ParseStatement();
+        Stmt body = ParseStatement();
         ExpectText("while");
         Expect(TokenKind.LParen);
-        var cond = ParseExpression();
+        Expr cond = ParseExpression();
         Expect(TokenKind.RParen);
         Expect(TokenKind.Semicolon);
         return new DoWhileStmt(body, cond);
@@ -649,7 +649,7 @@ public sealed class Parser
     {
         ExpectText("switch");
         Expect(TokenKind.LParen);
-        var value = ParseExpression();
+        Expr value = ParseExpression();
         Expect(TokenKind.RParen);
         Expect(TokenKind.LBrace);
         var cases = new List<SwitchCase>();
@@ -686,7 +686,7 @@ public sealed class Parser
     // lists and initializers use ParseAssignment, so their commas stay separators, not this operator.
     Expr ParseExpression()
     {
-        var e = ParseAssignment();
+        Expr e = ParseAssignment();
         while (AcceptKind(TokenKind.Comma))
             e = new Binary(",", e, ParseAssignment());
         return e;
@@ -717,10 +717,10 @@ public sealed class Parser
     Expr ParseAssignmentCore()
     {
         int ln = Cur.Line;
-        var left = ParseConditional();
+        Expr left = ParseConditional();
         if (Cur.Kind == TokenKind.Operator && IsAssignOp(Cur.Text))
         {
-            var opToken = Advance();
+            Token opToken = Advance();
             return At(Mark(new Binary(opToken.Text, left, ParseAssignment()), opToken), ln);   // right-associative
         }
         return left;
@@ -729,10 +729,10 @@ public sealed class Parser
     Expr ParseConditional()
     {
         int ln = Cur.Line;
-        var cond = ParseBinary(1);
-        var question = Cur;
+        Expr cond = ParseBinary(1);
+        Token question = Cur;
         if (!AcceptKind(TokenKind.Question)) return cond;
-        var then = ParseExpression();
+        Expr then = ParseExpression();
         Expect(TokenKind.Colon);
         return At(Mark(new Conditional(cond, then, ParseAssignment()), question), ln);
     }
@@ -740,7 +740,7 @@ public sealed class Parser
     Expr ParseBinary(int minPrec)
     {
         int ln = Cur.Line;
-        var left = ParseUnary();
+        Expr left = ParseUnary();
         // The chain is built iteratively, so it does not grow the parser's stack -- but it does grow the AST
         // left spine, which every later recursive walk (type inference, lowering, reachability) descends. Cap
         // its length so the produced tree stays inside the depth every such walk can handle.
@@ -749,7 +749,7 @@ public sealed class Parser
             int prec = BinPrec(Cur.Text);
             if (prec < minPrec || prec == 0) break;
             if (_depth + chain >= MaxNestingDepth) throw new GlslParseException($"expression nesting is too deep (limit {MaxNestingDepth})", ln);
-            var opToken = Advance();
+            Token opToken = Advance();
             left = At(Mark(new Binary(opToken.Text, left, ParseBinary(prec + 1)), opToken), ln);   // left-associative
         }
         return left;
@@ -764,7 +764,7 @@ public sealed class Parser
             if (++_depth > MaxNestingDepth) { _depth--; throw new GlslParseException($"expression nesting is too deep (limit {MaxNestingDepth})", ln); }
             try
             {
-                var opToken = Advance();
+                Token opToken = Advance();
                 return At(Mark(new Unary(opToken.Text, ParseUnary(), Prefix: true), opToken), ln);
             }
             finally { _depth--; }
@@ -775,21 +775,21 @@ public sealed class Parser
     Expr ParsePostfix()
     {
         int ln = Cur.Line;
-        var e = At(ParsePrimary(), ln);
+        Expr e = At(ParsePrimary(), ln);
         // Postfix suffixes also chain iteratively into a deep left spine; bound it like the binary chain.
         for (int chain = 0; ; chain++)
         {
             if (_depth + chain >= MaxNestingDepth) throw new GlslParseException($"expression nesting is too deep (limit {MaxNestingDepth})", ln);
-            var suffix = Cur;
+            Token suffix = Cur;
             if (AcceptKind(TokenKind.LBracket))
             {
-                var idx = ParseExpression();
+                Expr idx = ParseExpression();
                 Expect(TokenKind.RBracket);
                 e = Mark(new Index(e, idx), suffix);
             }
             else if (AcceptKind(TokenKind.Dot))
             {
-                var member = Expect(TokenKind.Identifier, "member");
+                Token member = Expect(TokenKind.Identifier, "member");
                 e = IsKind(TokenKind.LParen) ? Mark(new Method(e, member.Text, ParseArgs()), member) : Mark(new Member(e, member.Text), member);
             }
             else if (Cur.Kind == TokenKind.Operator && Cur.Text is "++" or "--")
@@ -807,22 +807,22 @@ public sealed class Parser
         {
             case TokenKind.IntConst or TokenKind.UintConst or TokenKind.Int64Const or TokenKind.Uint64Const or TokenKind.Int16Const or TokenKind.Uint16Const
                 or TokenKind.FloatConst or TokenKind.DoubleConst or TokenKind.HalfConst or TokenKind.BoolConst or TokenKind.StringConst:
-                var lit = Advance();
+                Token lit = Advance();
                 return Mark(new Literal(lit.Kind, lit.Text), lit);
 
             case TokenKind.LParen:
                 Advance();
-                var inner = ParseExpression();
+                Expr inner = ParseExpression();
                 Expect(TokenKind.RParen);
                 return inner;
 
             case TokenKind.Identifier:
-                var nameToken = Advance();
+                Token nameToken = Advance();
                 string name = nameToken.Text;
                 if (IsKind(TokenKind.LParen)) return Mark(new Call(name, ParseArgs()), nameToken);
                 if (name == "coopmat" && IsOp("<"))
                 {
-                    var templateArgs = ParseTemplateArgs();
+                    List<Expr> templateArgs = ParseTemplateArgs();
                     return Mark(new Call(name, ParseArgs(), TemplateArgs: templateArgs), nameToken);
                 }
                 if (IsKind(TokenKind.LBracket))
@@ -840,7 +840,7 @@ public sealed class Parser
                     // T[N](...) / T[](...) / T[A][B](...) is an array constructor; otherwise it is indexing.
                     if (IsKind(TokenKind.LParen)) return Mark(new Call(name, ParseArgs(), dims[0], IsArray: true, ArrayDims: dims), nameToken);
                     Expr indexed = Mark(new Ident(name), nameToken);
-                    foreach (var d in dims) indexed = new Index(indexed, d ?? throw Error("array index expected"));
+                    foreach (Expr? d in dims) indexed = new Index(indexed, d ?? throw Error("array index expected"));
                     return indexed;
                 }
                 return Mark(new Ident(name), nameToken);
@@ -978,7 +978,7 @@ public sealed class Parser
     // Expects an identifier that is not a reserved keyword (used for user-declared names).
     Token ExpectName(string what = "name")
     {
-        var t = Expect(TokenKind.Identifier, what);
+        Token t = Expect(TokenKind.Identifier, what);
         if (ReservedWords.Contains(t.Text)) throw Error($"'{t.Text}' is a reserved keyword and cannot be a name");
         return t;
     }
@@ -989,7 +989,7 @@ public sealed class Parser
     // past the end produces a normal "expected X" diagnostic instead of an IndexOutOfRange escaping the API.
     Token Cur => _t[Math.Min(_i, _t.Count - 1)];
     Token Peek() => _t[Math.Min(_i + 1, _t.Count - 1)];
-    Token Advance() { var t = Cur; if (_i < _t.Count - 1) _i++; return t; }
+    Token Advance() { Token t = Cur; if (_i < _t.Count - 1) _i++; return t; }
     bool IsKind(TokenKind kind) => _t[_i].Kind == kind;
     bool IsText(string text) => _t[_i].Kind == TokenKind.Identifier && _t[_i].Text == text;
     bool IsOp(string op) => _t[_i].Kind == TokenKind.Operator && _t[_i].Text == op;

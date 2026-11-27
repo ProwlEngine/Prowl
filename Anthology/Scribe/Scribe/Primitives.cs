@@ -1,199 +1,199 @@
-﻿using Prowl.Scribe.Internal;
-using System;
+﻿using System;
 using System.Collections.Generic;
+
+using Prowl.Scribe.Internal;
 using Prowl.Vector;
 
-namespace Prowl.Scribe
+namespace Prowl.Scribe;
+
+
+/// <summary>
+/// Represents a node in the font atlas, typically a free rectangular space.
+/// For a skyline bottom-left bin packer, this might store skyline segments.
+/// </summary>
+internal struct AtlasNode
 {
+    public int X { get; set; }
+    public int Y { get; set; }
+    public int Width { get; set; }
+    public int Height { get; set; }
+
+    public AtlasNode(int x, int y, int width, int height = 0)
+    {
+        X = x;
+        Y = y;
+        Width = width;
+        Height = height;
+    }
+}
+
+/// <summary>
+/// Represents a rectangular area, typically in a texture atlas.
+/// </summary>
+public struct AtlasRect
+{
+    public int X;
+    public int Y;
+    public int Width;
+    public int Height;
+
+    public AtlasRect(int x, int y, int width, int height)
+    {
+        X = x;
+        Y = y;
+        Width = width;
+        Height = height;
+    }
+}
+
+public struct RectangleF
+{
+    public float X, Y, Width, Height;
+    public RectangleF(float x, float y, float w, float h) { X = x; Y = y; Width = w; Height = h; }
+}
+
+/// <summary>Lines drawn along a glyph. Resolved per character, so a run can be underlined on its own.</summary>
+[Flags]
+public enum TextDecoration : byte
+{
+    None = 0,
+    Underline = 1 << 0,
+    Strikethrough = 1 << 1
+}
+
+public enum TextWrapMode
+{
+    NoWrap,
+    Wrap
+}
+
+public enum TextAlignment
+{
+    Left,
+    Center,
+    Right,
+    //Justify
+}
+
+
+public enum FontStyle
+{
+    Regular,
+    Bold,
+    Italic,
+    BoldItalic
+}
+
+public struct TextLayoutSettings
+{
+    public float PixelSize;
+    public FontFile? Font;
+    public float LetterSpacing;
+    public float WordSpacing;
+    public float LineHeight; // multiplier (1.0 = normal, 1.2 = 20% larger)
+    public int TabSize; // in characters
+    public TextWrapMode WrapMode;
+    public TextAlignment Alignment;
+    public float MaxWidth; // for wrapping, 0 = no limit
+
+    /// <summary>Draw a line under the text, where the font's post table puts it.</summary>
+    public bool Underline;
+
+    /// <summary>Draw a line through the text, where the font's OS/2 table puts it.</summary>
+    public bool Strikethrough;
+
+    /// <summary>Turns off ligatures and contextual alternates, so every character keeps its own glyph.</summary>
+    public bool NoLigatures;
+
+    // Atlas rasterization quality. Independent of PixelSize - the distance field is generated
+    // once per quality and scaled to any display size at draw time.
+    public FontQuality Quality;
 
     /// <summary>
-    /// Represents a node in the font atlas, typically a free rectangular space.
-    /// For a skyline bottom-left bin packer, this might store skyline segments.
+    /// Optional hook called once per character, free to change the font, size, spacing, quality
+    /// or even the character itself. Whatever it returns is what the text is shaped, measured,
+    /// wrapped and drawn with.
     /// </summary>
-    internal struct AtlasNode
-    {
-        public int X { get; set; }
-        public int Y { get; set; }
-        public int Width { get; set; }
-        public int Height { get; set; }
+    public GlyphCustomizer? Customizer;
 
-        public AtlasNode(int x, int y, int width, int height = 0)
+    public static TextLayoutSettings Default => new TextLayoutSettings {
+        PixelSize = 16,
+        Font = null,
+        LetterSpacing = 0,
+        WordSpacing = 0,
+        LineHeight = 1.0f,
+        TabSize = 4,
+        WrapMode = TextWrapMode.NoWrap,
+        Alignment = TextAlignment.Left,
+        MaxWidth = 0,
+        Quality = FontQuality.Normal
+    };
+
+    /// <summary>How one character is laid out, after the customizer has had its say.</summary>
+    internal GlyphStyle StyleFor(int index, int codepoint)
+    {
+        var style = new GlyphStyle(index, codepoint, Font, PixelSize, LetterSpacing, WordSpacing, Quality)
         {
-            X = x;
-            Y = y;
-            Width = width;
-            Height = height;
-        }
-    }
-
-    /// <summary>
-    /// Represents a rectangular area, typically in a texture atlas.
-    /// </summary>
-    public struct AtlasRect
-    {
-        public int X;
-        public int Y;
-        public int Width;
-        public int Height;
-
-        public AtlasRect(int x, int y, int width, int height)
-        {
-            X = x;
-            Y = y;
-            Width = width;
-            Height = height;
-        }
-    }
-
-    public struct RectangleF
-    {
-        public float X, Y, Width, Height;
-        public RectangleF(float x, float y, float w, float h) { X = x; Y = y; Width = w; Height = h; }
-    }
-
-    /// <summary>Lines drawn along a glyph. Resolved per character, so a run can be underlined on its own.</summary>
-    [Flags]
-    public enum TextDecoration : byte
-    {
-        None = 0,
-        Underline = 1 << 0,
-        Strikethrough = 1 << 1
-    }
-
-    public enum TextWrapMode
-    {
-        NoWrap,
-        Wrap
-    }
-
-    public enum TextAlignment
-    {
-        Left,
-        Center,
-        Right,
-        //Justify
-    }
-
-
-    public enum FontStyle
-    {
-        Regular,
-        Bold,
-        Italic,
-        BoldItalic
-    }
-
-    public struct TextLayoutSettings
-    {
-        public float PixelSize;
-        public FontFile? Font;
-        public float LetterSpacing;
-        public float WordSpacing;
-        public float LineHeight; // multiplier (1.0 = normal, 1.2 = 20% larger)
-        public int TabSize; // in characters
-        public TextWrapMode WrapMode;
-        public TextAlignment Alignment;
-        public float MaxWidth; // for wrapping, 0 = no limit
-
-        /// <summary>Draw a line under the text, where the font's post table puts it.</summary>
-        public bool Underline;
-
-        /// <summary>Draw a line through the text, where the font's OS/2 table puts it.</summary>
-        public bool Strikethrough;
-
-        /// <summary>Turns off ligatures and contextual alternates, so every character keeps its own glyph.</summary>
-        public bool NoLigatures;
-
-        // Atlas rasterization quality. Independent of PixelSize - the distance field is generated
-        // once per quality and scaled to any display size at draw time.
-        public FontQuality Quality;
-
-        /// <summary>
-        /// Optional hook called once per character, free to change the font, size, spacing, quality
-        /// or even the character itself. Whatever it returns is what the text is shaped, measured,
-        /// wrapped and drawn with.
-        /// </summary>
-        public GlyphCustomizer? Customizer;
-
-        public static TextLayoutSettings Default => new TextLayoutSettings {
-            PixelSize = 16,
-            Font = null,
-            LetterSpacing = 0,
-            WordSpacing = 0,
-            LineHeight = 1.0f,
-            TabSize = 4,
-            WrapMode = TextWrapMode.NoWrap,
-            Alignment = TextAlignment.Left,
-            MaxWidth = 0,
-            Quality = FontQuality.Normal
+            Underline = Underline,
+            Strikethrough = Strikethrough
         };
+        Customizer?.Invoke(ref style);
 
-        /// <summary>How one character is laid out, after the customizer has had its say.</summary>
-        internal GlyphStyle StyleFor(int index, int codepoint)
-        {
-            var style = new GlyphStyle(index, codepoint, Font, PixelSize, LetterSpacing, WordSpacing, Quality)
-            {
-                Underline = Underline,
-                Strikethrough = Strikethrough
-            };
-            Customizer?.Invoke(ref style);
+        if (style.PixelSize <= 0f) style.PixelSize = PixelSize;
+        style.Font ??= Font;
+        return style;
+    }
+}
 
-            if (style.PixelSize <= 0f) style.PixelSize = PixelSize;
-            style.Font ??= Font;
-            return style;
-        }
+public struct GlyphInstance
+{
+    public AtlasGlyph Glyph;
+    public Float2 Position;
+    public char Character;
+    public float AdvanceWidth;
+    public float PixelSize;
+    public int CharIndex;
+
+    /// <summary>Underline and strikethrough for this glyph. Neighbours that share it are drawn as one bar.</summary>
+    public TextDecoration Decoration;
+
+    // Number of source characters this glyph's cluster covers. Normally 1, but a ligature (e.g.
+    // "fi") collapses several characters into one glyph - hit-testing interpolates within it.
+    public int CharCount;
+
+    public GlyphInstance(AtlasGlyph glyph, Float2 position, char character, float advanceWidth, float pixelSize, int charIndex)
+        : this(glyph, position, character, advanceWidth, pixelSize, charIndex, 1)
+    {
     }
 
-    public struct GlyphInstance
+    public GlyphInstance(AtlasGlyph glyph, Float2 position, char character, float advanceWidth, float pixelSize, int charIndex, int charCount)
     {
-        public AtlasGlyph Glyph;
-        public Float2 Position;
-        public char Character;
-        public float AdvanceWidth;
-        public float PixelSize;
-        public int CharIndex;
-
-        /// <summary>Underline and strikethrough for this glyph. Neighbours that share it are drawn as one bar.</summary>
-        public TextDecoration Decoration;
-
-        // Number of source characters this glyph's cluster covers. Normally 1, but a ligature (e.g.
-        // "fi") collapses several characters into one glyph - hit-testing interpolates within it.
-        public int CharCount;
-
-        public GlyphInstance(AtlasGlyph glyph, Float2 position, char character, float advanceWidth, float pixelSize, int charIndex)
-            : this(glyph, position, character, advanceWidth, pixelSize, charIndex, 1)
-        {
-        }
-
-        public GlyphInstance(AtlasGlyph glyph, Float2 position, char character, float advanceWidth, float pixelSize, int charIndex, int charCount)
-        {
-            Glyph = glyph;
-            Position = position;
-            Character = character;
-            AdvanceWidth = advanceWidth;
-            PixelSize = pixelSize;
-            CharIndex = charIndex;
-            CharCount = charCount < 1 ? 1 : charCount;
-        }
+        Glyph = glyph;
+        Position = position;
+        Character = character;
+        AdvanceWidth = advanceWidth;
+        PixelSize = pixelSize;
+        CharIndex = charIndex;
+        CharCount = charCount < 1 ? 1 : charCount;
     }
+}
 
-    public struct Line
+public struct Line
+{
+    public List<GlyphInstance> Glyphs;
+    public float Width;
+    public float Height;
+    public Float2 Position; // relative to layout origin
+    public int StartIndex; // character index in original string
+    public int EndIndex; // character index in original string
+
+    public Line(Float2 position, int startIndex)
     {
-        public List<GlyphInstance> Glyphs;
-        public float Width;
-        public float Height;
-        public Float2 Position; // relative to layout origin
-        public int StartIndex; // character index in original string
-        public int EndIndex; // character index in original string
-
-        public Line(Float2 position, int startIndex)
-        {
-            Glyphs = new List<GlyphInstance>();
-            Width = 0;
-            Height = 0;
-            Position = position;
-            StartIndex = startIndex;
-            EndIndex = startIndex;
-        }
+        Glyphs = [];
+        Width = 0;
+        Height = 0;
+        Position = position;
+        StartIndex = startIndex;
+        EndIndex = startIndex;
     }
 }

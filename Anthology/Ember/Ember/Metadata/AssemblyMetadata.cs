@@ -6,6 +6,8 @@ using System.Reflection;
 using System.Runtime.CompilerServices;
 
 using Mono.Cecil;
+using Mono.Cecil.Cil;
+
 
 // Prowl has its own AssemblyDefinition for .asmdef files, so Cecil's is referenced under an alias.
 using CecilAssembly = Mono.Cecil.AssemblyDefinition;
@@ -20,7 +22,7 @@ internal sealed class MetadataCache : IDisposable
 {
     private readonly Func<Assembly, byte[]?>? _bytes;
     private readonly ReportBuilder _report;
-    private readonly Dictionary<Assembly, AssemblyMetadata?> _assemblies = new();
+    private readonly Dictionary<Assembly, AssemblyMetadata?> _assemblies = [];
 
     public MetadataCache(Func<Assembly, byte[]?>? bytes, ReportBuilder report)
     {
@@ -30,10 +32,10 @@ internal sealed class MetadataCache : IDisposable
 
     public AssemblyMetadata? For(Assembly assembly)
     {
-        if (_assemblies.TryGetValue(assembly, out var cached)) return cached;
+        if (_assemblies.TryGetValue(assembly, out AssemblyMetadata? cached)) return cached;
 
         AssemblyMetadata? metadata = null;
-        var bytes = _bytes?.Invoke(assembly);
+        byte[]? bytes = _bytes?.Invoke(assembly);
 
         if (bytes == null)
         {
@@ -66,7 +68,7 @@ internal sealed class MetadataCache : IDisposable
         if (!type.IsNested)
             return For(type.Assembly)?.FindTopLevelType(type);
 
-        var declaring = FindType(type.DeclaringType!);
+        TypeDefinition? declaring = FindType(type.DeclaringType!);
         return declaring?.NestedTypes.SingleOrDefault(x => x.Name == type.Name);
     }
 
@@ -75,12 +77,12 @@ internal sealed class MetadataCache : IDisposable
         if (method is MethodInfo { IsConstructedGenericMethod: true } constructed)
             method = constructed.GetGenericMethodDefinition();
 
-        var declaring = FindType(method.DeclaringType!);
+        TypeDefinition? declaring = FindType(method.DeclaringType!);
         if (declaring == null) return null;
 
-        var parameters = method.GetParameters();
+        ParameterInfo[] parameters = method.GetParameters();
 
-        foreach (var candidate in declaring.Methods)
+        foreach (MethodDefinition? candidate in declaring.Methods)
         {
             if (candidate.Name != method.Name) continue;
             if (candidate.Parameters.Count != parameters.Length) continue;
@@ -88,7 +90,7 @@ internal sealed class MetadataCache : IDisposable
             bool matches = true;
             for (int i = 0; i < parameters.Length; i++)
             {
-                var parameterType = CecilSignature.Substitute(candidate, candidate.Parameters[i].ParameterType);
+                TypeReference parameterType = CecilSignature.Substitute(candidate, candidate.Parameters[i].ParameterType);
                 if (!CecilSignature.Matches(parameterType, parameters[i].ParameterType))
                 {
                     matches = false;
@@ -107,7 +109,7 @@ internal sealed class MetadataCache : IDisposable
 
     public void Dispose()
     {
-        foreach (var metadata in _assemblies.Values)
+        foreach (AssemblyMetadata? metadata in _assemblies.Values)
             metadata?.Dispose();
         _assemblies.Clear();
     }
@@ -120,8 +122,8 @@ internal sealed class AssemblyMetadata : IDisposable
     private readonly CecilAssembly _definition;
     private readonly ReportBuilder _report;
 
-    private readonly Dictionary<MethodBase, int> _scopeOrdinals = new();
-    private readonly Dictionary<FieldInfo, Func<object?>?> _fieldInitializers = new();
+    private readonly Dictionary<MethodBase, int> _scopeOrdinals = [];
+    private readonly Dictionary<FieldInfo, Func<object?>?> _fieldInitializers = [];
 
     public AssemblyMetadata(MetadataCache owner, CecilAssembly definition, ReportBuilder report)
     {
@@ -139,7 +141,7 @@ internal sealed class AssemblyMetadata : IDisposable
     /// </summary>
     public bool TryGetFieldInitializer(FieldInfo field, out Func<object?> factory)
     {
-        if (!_fieldInitializers.TryGetValue(field, out var cached))
+        if (!_fieldInitializers.TryGetValue(field, out Func<object?>? cached))
             _fieldInitializers[field] = cached = FieldInitializerReader.Build(_owner, field, _report);
 
         factory = cached!;
@@ -153,24 +155,24 @@ internal sealed class AssemblyMetadata : IDisposable
     /// </summary>
     public int GetLambdaScopeOrdinal(MethodBase method)
     {
-        if (_scopeOrdinals.TryGetValue(method, out var cached)) return cached;
+        if (_scopeOrdinals.TryGetValue(method, out int cached)) return cached;
 
         // An async or iterator method carries its state machine type; its ordinal is that type's ordinal.
         if (method.GetCustomAttribute<StateMachineAttribute>() is { } stateMachine
-            && SyntheticName.TryParse(stateMachine.StateMachineType.Name, out var machineName)
+            && SyntheticName.TryParse(stateMachine.StateMachineType.Name, out SyntheticName machineName)
             && machineName.Kind == SyntheticKind.StateMachine
             && machineName.Ordinal >= 0)
             return _scopeOrdinals[method] = machineName.Ordinal;
 
         int ordinal = -1;
-        var definition = _owner.FindMethod(method);
+        MethodDefinition? definition = _owner.FindMethod(method);
 
         if (definition is { HasBody: true })
         {
-            foreach (var instruction in definition.Body.Instructions)
+            foreach (Instruction? instruction in definition.Body.Instructions)
             {
                 if (instruction.Operand is not MethodReference reference) continue;
-                if (!SyntheticName.TryParse(reference.Name, out var name) || !name.IsLambdaLike) continue;
+                if (!SyntheticName.TryParse(reference.Name, out SyntheticName name) || !name.IsLambdaLike) continue;
 
                 // Case 3 puts the scope ordinal on the display class, not on the lambda method.
                 int candidate = name.SubOrdinal >= 0
@@ -185,7 +187,7 @@ internal sealed class AssemblyMetadata : IDisposable
     }
 
     private static int DisplayClassScopeOrdinal(MethodReference lambda)
-        => SyntheticName.TryParse(lambda.DeclaringType.Name, out var displayClass)
+        => SyntheticName.TryParse(lambda.DeclaringType.Name, out SyntheticName displayClass)
            && displayClass.Kind == SyntheticKind.LambdaDisplayClass
            && displayClass.Suffix == "DisplayClass"
            && displayClass.SubOrdinal >= 0

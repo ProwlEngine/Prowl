@@ -21,33 +21,32 @@ freely, subject to the following restrictions:
 using Prowl.Recast.Core;
 using Prowl.Recast.Core.Compression;
 
-namespace Prowl.Recast.Detour.TileCache.Io.Compress
+namespace Prowl.Recast.Detour.TileCache.Io.Compress;
+
+public class DtTileCacheFastLzCompressor : IRcCompressor
 {
-    public class DtTileCacheFastLzCompressor : IRcCompressor
+    public static readonly DtTileCacheFastLzCompressor Shared = new DtTileCacheFastLzCompressor();
+
+    private DtTileCacheFastLzCompressor()
     {
-        public static readonly DtTileCacheFastLzCompressor Shared = new DtTileCacheFastLzCompressor();
+    }
 
-        private DtTileCacheFastLzCompressor()
-        {
-        }
+    public byte[] Decompress(byte[] buf)
+    {
+        return Decompress(buf, 0, buf.Length, buf.Length * 3);
+    }
 
-        public byte[] Decompress(byte[] buf)
-        {
-            return Decompress(buf, 0, buf.Length, buf.Length * 3);
-        }
+    public byte[] Decompress(byte[] buf, int offset, int len, int outputlen)
+    {
+        byte[] output = new byte[outputlen];
+        FastLZ.Decompress(buf, offset, len, output, 0, outputlen);
+        return output;
+    }
 
-        public byte[] Decompress(byte[] buf, int offset, int len, int outputlen)
-        {
-            byte[] output = new byte[outputlen];
-            FastLZ.Decompress(buf, offset, len, output, 0, outputlen);
-            return output;
-        }
-
-        public byte[] Compress(byte[] buf)
-        {
-            byte[] output = new byte[FastLZ.EstimateCompressedSize(buf.Length)];
-            long len = FastLZ.CompressLevel(2, buf, 0, buf.Length, output);
-            return RcArrays.CopyOf(output, len);
-        }
+    public byte[] Compress(byte[] buf)
+    {
+        byte[] output = new byte[FastLZ.EstimateCompressedSize(buf.Length)];
+        long len = FastLZ.CompressLevel(2, buf, 0, buf.Length, output);
+        return RcArrays.CopyOf(output, len);
     }
 }

@@ -1,4 +1,5 @@
 using System;
+using System.Collections.Generic;
 
 using Prowl.Scribe;
 using Prowl.Vector;
@@ -136,7 +137,7 @@ public sealed class RichTextBlock
 
     private void Customize(ref GlyphStyle glyph)
     {
-        var style = StyleForIndex(glyph.CharIndex);
+        RichStyle style = StyleForIndex(glyph.CharIndex);
         glyph.Font = FontFor(style);
         glyph.PixelSize = SizeForIndex(glyph.CharIndex);
         glyph.Underline = (style & RichStyle.Underline) != 0;
@@ -145,8 +146,8 @@ public sealed class RichTextBlock
 
     private RichStyle StyleForIndex(int index)
     {
-        var style = RichStyle.None;
-        var spans = _parser.Styles;
+        RichStyle style = RichStyle.None;
+        IReadOnlyList<RichStyleSpan> spans = _parser.Styles;
         for (int i = 0; i < spans.Count; i++)
         {
             if (spans[i].Covers(index))
@@ -188,7 +189,7 @@ public sealed class RichTextBlock
     private float SizeForIndex(int index)
     {
         float scale = 1f;
-        var spans = _parser.Sizes;
+        IReadOnlyList<RichSizeSpan> spans = _parser.Sizes;
         // Nested sizes multiply, so <size 2> around <size 0.5> is back to the base.
         for (int i = 0; i < spans.Count; i++)
         {
@@ -203,8 +204,8 @@ public sealed class RichTextBlock
 
     private Color ColorForIndex(int index)
     {
-        var color = _settings.Color;
-        var spans = _parser.Colors;
+        Color color = _settings.Color;
+        IReadOnlyList<RichColorSpan> spans = _parser.Colors;
         // The innermost tag wins. It starts last, and when two start together it closes first,
         // which puts it earlier in the list.
         int innermost = int.MinValue;
@@ -223,7 +224,7 @@ public sealed class RichTextBlock
     /// <summary>The link at a character index, or null.</summary>
     public string? LinkAtIndex(int index)
     {
-        var spans = _parser.Links;
+        IReadOnlyList<RichLinkSpan> spans = _parser.Links;
         for (int i = 0; i < spans.Count; i++)
         {
             if (spans[i].Covers(index))
@@ -251,7 +252,7 @@ public sealed class RichTextBlock
         {
             if (i < 0 || i >= length) continue;
 
-            var rect = _layout.GetCharacterRect(i);
+            RectangleF rect = _layout.GetCharacterRect(i);
             if (rect.Width > 0f
                 && point.X >= rect.X && point.X < rect.X + rect.Width
                 && point.Y >= rect.Y && point.Y < rect.Y + rect.Height)
@@ -267,14 +268,14 @@ public sealed class RichTextBlock
     public void Draw(FontSystem fonts, Float2 position, float time)
     {
         _time = time;
-        var color = ToFontColor(_settings.Color);
+        FontColor color = ToFontColor(_settings.Color);
         bool needsModifier = _parser.HasAnimatedEffects || _parser.Colors.Count > 0;
         fonts.DrawLayout(_layout, position, color, needsModifier ? _modifier : null);
     }
 
     private void Modify(ref GlyphDraw glyph)
     {
-        var color = ColorForIndex(glyph.CharIndex);
+        Color color = ColorForIndex(glyph.CharIndex);
 
         // A bar spans many glyphs, so it takes its run's colour but none of the motion each glyph has.
         if (glyph.IsDecoration)
@@ -289,7 +290,7 @@ public sealed class RichTextBlock
             return;
         }
 
-        var fx = RichTextEffects.Evaluate(glyph.CharIndex, _parser.Effects, _time, glyph.PixelSize, color);
+        RichGlyphTransform fx = RichTextEffects.Evaluate(glyph.CharIndex, _parser.Effects, _time, glyph.PixelSize, color);
         glyph.Color = ToFontColor(fx.Color);
 
         if (fx.IsIdentity)
@@ -297,7 +298,7 @@ public sealed class RichTextBlock
             return;
         }
 
-        var centre = glyph.Centre;
+        Float2 centre = glyph.Centre;
         float width = glyph.Width;
         float height = glyph.Height;
 

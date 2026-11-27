@@ -48,7 +48,7 @@ public sealed class BlendShapeFrame
     /// <summary>A frame from deltas for every vertex, keeping the vertices any of them moves.</summary>
     public static BlendShapeFrame FromDense(float weight, ReadOnlySpan<Float3> positions, ReadOnlySpan<Float3> normals, ReadOnlySpan<Float3> tangents)
     {
-        List<uint> vertices = new();
+        List<uint> vertices = [];
         for (int v = 0; v < positions.Length; v++)
         {
             if (positions[v] != default || (v < normals.Length && normals[v] != default) || (v < tangents.Length && tangents[v] != default))
@@ -191,7 +191,7 @@ internal sealed class MeshLayout
             ? (SubMesh[])data.SubMeshes.Clone()
             : [new SubMesh { IndexStart = 0, IndexCount = (uint)Indices.Length, Topology = PrimitiveTopology.TriangleList }];
 
-        List<MeshChunk> chunks = new();
+        List<MeshChunk> chunks = [];
         AABB bounds = Empty;
         for (int s = 0; s < SubMeshes.Length; s++)
         {
@@ -213,7 +213,7 @@ internal sealed class MeshLayout
         Chunks = [.. chunks];
         Bounds = chunks.Count > 0 ? bounds : new AABB(Float3.Zero, Float3.Zero);
 
-        List<BlendFrameLayout> frames = new();
+        List<BlendFrameLayout> frames = [];
         BlendShapes = new (int, int)[data.BlendShapes.Length];
         for (int s = 0; s < data.BlendShapes.Length; s++)
         {

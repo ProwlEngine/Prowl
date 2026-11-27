@@ -93,10 +93,10 @@ public sealed class DatePickerBuilder
         if (_inline) { ShowInline(); return; }
 
         if (Origami.IsReadOnly) _readOnly = true;
-        var m = _theme.Metrics;
-        var font = _theme.Font;
-        var ink = _theme.Ink;
-        var ramp = _theme.Get(_variant);
+        OrigamiMetrics m = _theme.Metrics;
+        Scribe.FontFile? font = _theme.Font;
+        OrigamiRamp ink = _theme.Ink;
+        OrigamiRamp ramp = _theme.Get(_variant);
 
         string displayText = FormatDisplay();
 
@@ -107,7 +107,7 @@ public sealed class DatePickerBuilder
             : _success ? _theme.Green.C500
             : ramp.C500;
 
-        var trigger = _paper.Row(_id)
+        ElementBuilder trigger = _paper.Row(_id)
             .Width(_width).Height(m.RowHeight)
             .BackgroundColor(_theme.Glass)
             .BorderColor(borderColor).BorderWidth(1)
@@ -116,14 +116,14 @@ public sealed class DatePickerBuilder
 
         if (!_readOnly)
         {
-            var value = _value;
-            var setter = _setter;
-            var id = _id;
-            var mode = _mode;
-            var use24 = _use24Hour;
-            var disabled = _disabledDate;
-            var rangeEnd = _rangeEnd;
-            var rangeEndSetter = _rangeEndSetter;
+            DateTime value = _value;
+            Action<DateTime> setter = _setter;
+            string id = _id;
+            DatePickerMode mode = _mode;
+            bool use24 = _use24Hour;
+            Func<DateTime, bool>? disabled = _disabledDate;
+            DateTime? rangeEnd = _rangeEnd;
+            Action<DateTime>? rangeEndSetter = _rangeEndSetter;
 
             trigger.OnClick(e =>
             {
@@ -176,8 +176,8 @@ public sealed class DatePickerBuilder
 
     private void ShowInline()
     {
-        var m = _theme.Metrics;
-        var font = _theme.Font;
+        OrigamiMetrics m = _theme.Metrics;
+        Scribe.FontFile? font = _theme.Font;
         if (font == null) return;
         bool isRange = _rangeEndSetter != null;
 
@@ -189,7 +189,7 @@ public sealed class DatePickerBuilder
             .Padding(11, 11, 11, 11).Gap(m.SpacingMedium)
             .Enter())
         {
-            var h = _paper.CurrentParent;
+            ElementHandle h = _paper.CurrentParent;
             int baseCode = _value.Year * 12 + (_value.Month - 1);
             int viewCode = _paper.GetElementStorage(h, "vm", baseCode);
             int vy = viewCode / 12, vm = viewCode % 12 + 1;
@@ -239,7 +239,7 @@ public sealed class DatePickerBuilder
                         }
                         else
                         {
-                            var start = _value; var end = picked;
+                            DateTime start = _value; DateTime end = picked;
                             if (end < start) (start, end) = (end, start);
                             _setter(start);
                             _rangeEndSetter!(end);
@@ -293,10 +293,10 @@ public static class DatePicker
         int? selectedDay = null, Action<int>? onPick = null,
         int? today = null, float width = 260f)
     {
-        var theme = Origami.Current;
-        var font = theme.Font;
+        OrigamiTheme theme = Origami.Current;
+        Scribe.FontFile? font = theme.Font;
         if (font == null) return;
-        var m = theme.Metrics;
+        OrigamiMetrics m = theme.Metrics;
 
         int baseCode = month.Year * 12 + (month.Month - 1);
 
@@ -369,15 +369,15 @@ internal static class OrigamiCalendar
         Func<DateTime, CalDayFlags> stateOf,
         Action<DateTime>? onHover, Action<DateTime>? onPick)
     {
-        var m = theme.Metrics;
-        var ink = theme.Ink;
-        var accent = theme.Primary.C500;
+        OrigamiMetrics m = theme.Metrics;
+        OrigamiRamp ink = theme.Ink;
+        Color accent = theme.Primary.C500;
 
         float cell = (contentWidth - Gap * 6f) / 7f;
         float titleSize = m.FontSize - 1f;
         float dowSize = MathF.Max(9f, m.FontSizeSmall - 2f);
         float daySize = m.FontSizeSmall;
-        var titleFont = theme.SemiBold ?? font;
+        Scribe.FontFile titleFont = theme.SemiBold ?? font;
 
         using (paper.Column($"{id}_cal").Width(contentWidth).Height(UnitValue.Auto).Enter())
         {
@@ -387,7 +387,7 @@ internal static class OrigamiCalendar
             {
                 Chevron(paper, $"{id}_prev", true, m.HeaderHeight, ink.C300, onPrev);
 
-                var title = paper.Box("title")
+                ElementBuilder title = paper.Box("title")
                     .Width(UnitValue.Stretch()).Height(m.HeaderHeight)
                     .Text($"{MonthName(viewMonth)} {viewYear}", titleFont)
                     .TextColor(ink.C500).FontSize(titleSize)
@@ -426,7 +426,7 @@ internal static class OrigamiCalendar
                         for (int c = 0; c < 7; c++)
                         {
                             int idx = r * 7 + c;
-                            var date = first.AddDays(idx - firstDow);
+                            DateTime date = first.AddDays(idx - firstDow);
                             string cid = $"{id}_d{r}_{c}";
                             bool inMonth = date.Month == viewMonth && date.Year == viewYear;
 
@@ -439,7 +439,7 @@ internal static class OrigamiCalendar
                                 continue;
                             }
 
-                            var f = stateOf(date);
+                            CalDayFlags f = stateOf(date);
                             bool onAccent = f.Selected || f.RangeStart || f.RangeEnd;
 
                             Color bg = onAccent ? accent
@@ -449,7 +449,7 @@ internal static class OrigamiCalendar
                                 : onAccent ? ink.C700
                                 : ink.C400;
 
-                            var day = paper.Box(cid).Width(cell).Height(cell)
+                            ElementBuilder day = paper.Box(cid).Width(cell).Height(cell)
                                 .BackgroundColor(bg).Rounded(DayRound)
                                 .Text(date.Day.ToString(), font).TextColor(fg)
                                 .FontSize(daySize).Alignment(TextAlignment.MiddleCenter);
@@ -475,7 +475,7 @@ internal static class OrigamiCalendar
 
     private static void Chevron(Paper paper, string id, bool left, float size, Color color, Action? onClick)
     {
-        var b = paper.Box(id).Width(size).Height(size).Rounded(DayRound);
+        ElementBuilder b = paper.Box(id).Width(size).Height(size).Rounded(DayRound);
         if (onClick != null) b.Hovered.BackgroundColor(Origami.Current.Hover).End().OnClick(_ => onClick());
         else b.IsNotInteractable();
 
@@ -601,9 +601,9 @@ internal sealed class DatePickerModal : IModal
 
     public void Draw(Paper paper, int layer, int stackIndex)
     {
-        var theme = Origami.Current;
-        var m = theme.Metrics;
-        var font = theme.Font;
+        OrigamiTheme theme = Origami.Current;
+        OrigamiMetrics m = theme.Metrics;
+        Scribe.FontFile? font = theme.Font;
         if (font == null) return;
 
         using (paper.Column($"{_id}_dpop")
@@ -638,7 +638,7 @@ internal sealed class DatePickerModal : IModal
             {
                 Origami.Button(paper, $"{_id}_today", "Today", () =>
                 {
-                    var now = System.DateTime.Now;
+                    DateTime now = System.DateTime.Now;
                     _value = new System.DateTime(now.Year, now.Month, now.Day,
                         _value.Hour, _value.Minute, _value.Second);
                     _viewYear = now.Year;
@@ -713,8 +713,8 @@ internal sealed class DatePickerModal : IModal
             }
             else
             {
-                var start = _value;
-                var end = newDate;
+                DateTime start = _value;
+                DateTime end = newDate;
                 if (end < start) (start, end) = (end, start);
                 _value = start;
                 _setter(start);
@@ -736,7 +736,7 @@ internal sealed class DatePickerModal : IModal
 
     private void DrawTimePicker(Paper paper, Scribe.FontFile font, OrigamiTheme theme, OrigamiMetrics m)
     {
-        var ink = theme.Ink;
+        OrigamiRamp ink = theme.Ink;
 
         paper.Box($"{_id}_tsep").Height(1).Margin(0, 0, m.Spacing, m.Spacing).BackgroundColor(ink.C200);
 
@@ -789,8 +789,8 @@ internal sealed class DatePickerModal : IModal
 
     private void DrawYearPicker(Paper paper, Scribe.FontFile font, OrigamiTheme theme, OrigamiMetrics m, float popW)
     {
-        var ink = theme.Ink;
-        var accent = theme.Primary.C500;
+        OrigamiRamp ink = theme.Ink;
+        Color accent = theme.Primary.C500;
 
         // Header with back button
         using (paper.Row($"{_id}_yh").Height(m.RowHeight).Enter())

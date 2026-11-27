@@ -139,7 +139,7 @@ public sealed class AutoExposure : PostEffect
 
     private sealed class ViewState
     {
-        public readonly List<TextureHandle> Levels = new();
+        public readonly List<TextureHandle> Levels = [];
         public TextureHandle Histogram;
         public TextureHandle Adapted;
         public TextureHandle Exposure;
@@ -254,8 +254,8 @@ public sealed class Bloom : PostEffect
 
     private sealed class ViewState
     {
-        public readonly List<TextureHandle> Down = new();
-        public readonly List<TextureHandle> Up = new();
+        public readonly List<TextureHandle> Down = [];
+        public readonly List<TextureHandle> Up = [];
     }
 
     public Bloom(Renderer renderer) : base(renderer, RenderSlot.HdrPost)

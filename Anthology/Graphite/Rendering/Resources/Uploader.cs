@@ -30,7 +30,7 @@ internal sealed class Uploader : IDisposable
     private sealed class Destination
     {
         public required DeviceBuffer Buffer;
-        public readonly List<Item> Items = new();
+        public readonly List<Item> Items = [];
         public int Epoch;
     }
 
@@ -42,10 +42,10 @@ internal sealed class Uploader : IDisposable
 
     private readonly GraphicsDevice _device;
     private readonly LazyCompute _scatter;
-    private readonly Dictionary<DeviceBuffer, Destination> _destinations = new();
-    private readonly List<Destination> _order = new();
+    private readonly Dictionary<DeviceBuffer, Destination> _destinations = [];
+    private readonly List<Destination> _order = [];
     private readonly Stack<Destination> _spare = new();
-    private readonly List<SlotBuffers> _slots = new();
+    private readonly List<SlotBuffers> _slots = [];
     private readonly PropertySet _properties = new();
     private uint[] _words = new uint[1 << 16];
     private uint _wordCount;
@@ -238,7 +238,7 @@ internal sealed class GpuTable
     private readonly PersistentBuffer _persistent;
     private uint[] _words;
     private bool[] _dirtyFlags;
-    private readonly List<uint> _dirty = new();
+    private readonly List<uint> _dirty = [];
     private uint _count;
 
     public GpuTable(GraphicsDevice device, RenderStore store, string name, uint strideWords, uint initialCapacity = 256)

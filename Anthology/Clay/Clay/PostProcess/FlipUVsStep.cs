@@ -22,7 +22,7 @@ internal sealed class FlipUVsStep : IPostProcess
 
     public void Execute(IntermediateScene scene, ImportContext context)
     {
-        foreach (var mesh in scene.Meshes)
+        foreach (IntermediateMesh mesh in scene.Meshes)
         {
             for (int uv = 0; uv < Mesh.MaxUVChannels; uv++)
             {
@@ -35,7 +35,7 @@ internal sealed class FlipUVsStep : IPostProcess
             {
                 for (int i = 0; i < tangents.Count; i++)
                 {
-                    var t = tangents[i];
+                    Float4 t = tangents[i];
                     tangents[i] = new Float4(t.X, t.Y, t.Z, -t.W);
                 }
             }

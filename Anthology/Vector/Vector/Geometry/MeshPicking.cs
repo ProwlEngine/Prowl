@@ -82,11 +82,11 @@ public sealed class MeshBvh
 
     private readonly GeometryData.Face[] _faces;
     private readonly GeometryData.Vertex[] _a, _b, _c;
-    private readonly List<Node> _nodes = new();
+    private readonly List<Node> _nodes = [];
     private readonly int _version;
     private ulong _stamp;
 
-    private static readonly ConditionalWeakTable<GeometryData, MeshBvh> s_trees = new();
+    private static readonly ConditionalWeakTable<GeometryData, MeshBvh> s_trees = [];
 
     /// <summary>The tree of a mesh, fitted again when points moved and built again when faces changed since the last.</summary>
     public static MeshBvh For(GeometryData mesh)
@@ -142,7 +142,7 @@ public sealed class MeshBvh
             }
 
         int[] order = new int[faces.Count];
-        var centres = new float[3][];
+        float[][] centres = new float[3][];
         for (int axis = 0; axis < 3; axis++) centres[axis] = new float[faces.Count];
         var mins = new Float3[faces.Count];
         var maxs = new Float3[faces.Count];

@@ -23,11 +23,11 @@ internal static class SplitEdgeOp
         GeometryData.Vertex made = mesh.AddVertex(Maths.Lerp(fromVertex.Point, otherVertex.Point, factor));
         GeometryOperators.AttributeLerp(mesh, made, fromVertex, otherVertex, factor);
 
-        var edgeAttributes = AttributeTransfer.Copy(edge.Attributes);
+        Dictionary<string, GeometryData.AttributeValue> edgeAttributes = AttributeTransfer.Copy(edge.Attributes);
         List<GeometryData.Face> faces = edge.NeighborFaces().Distinct().ToList();
         List<FaceSnapshot> snapshots = faces.Select(f => FaceSnapshot.Capture(mesh, f)).ToList();
 
-        foreach (var face in faces) mesh.RemoveFace(face);
+        foreach (GeometryData.Face face in faces) mesh.RemoveFace(face);
         mesh.RemoveEdge(edge);
 
         GeometryData.Edge firstHalf = mesh.AddEdge(fromVertex, made);
@@ -51,8 +51,8 @@ internal static class SplitEdgeOp
             if (created == null) continue;
 
             snapshot.ApplyFaceAttributes(created);
-            var fromLoop = snapshot.LoopOf(fromVertex);
-            var otherLoop = snapshot.LoopOf(otherVertex);
+            Dictionary<string, GeometryData.AttributeValue>? fromLoop = snapshot.LoopOf(fromVertex);
+            Dictionary<string, GeometryData.AttributeValue>? otherLoop = snapshot.LoopOf(otherVertex);
             FaceSnapshot.ApplyLoops(created, v =>
                 v != made ? snapshot.LoopOf(v) : fromLoop != null && otherLoop != null ? AttributeTransfer.Lerp(fromLoop, otherLoop, factor) : fromLoop ?? otherLoop);
         }

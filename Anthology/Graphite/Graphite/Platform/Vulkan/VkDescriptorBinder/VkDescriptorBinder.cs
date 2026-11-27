@@ -17,7 +17,7 @@ internal interface IVkDescriptorProgram
 
 // Owns the per-command-buffer descriptor resolve/cache/bind pipeline.
 // Each command buffer has one, and its bind state is cleared at the start of every recording.
-internal unsafe sealed partial class VkDescriptorBinder
+internal sealed unsafe partial class VkDescriptorBinder
 {
     internal const int MaxSetElements = ResourceLayoutDescription.MaxElementsPerSet;
 

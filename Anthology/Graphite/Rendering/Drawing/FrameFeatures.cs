@@ -93,13 +93,13 @@ public abstract class FrameFeature : RenderExtension
 /// </summary>
 internal sealed class FrameExports
 {
-    public readonly Dictionary<RenderResourceID, BufferHandle> Buffers = new();
-    public readonly Dictionary<RenderResourceID, TextureHandle> Textures = new();
+    public readonly Dictionary<RenderResourceID, BufferHandle> Buffers = [];
+    public readonly Dictionary<RenderResourceID, TextureHandle> Textures = [];
 
     /// <summary>The exported textures materials sample, which every pass drawing renderables reads.</summary>
-    public readonly List<TextureHandle> DrawTextures = new();
-    private readonly HashSet<(RenderResourceID Name, RenderWorld? World)> _provided = new();
-    private readonly Dictionary<(RenderResourceID Name, RenderWorld World), int> _required = new();
+    public readonly List<TextureHandle> DrawTextures = [];
+    private readonly HashSet<(RenderResourceID Name, RenderWorld? World)> _provided = [];
+    private readonly Dictionary<(RenderResourceID Name, RenderWorld World), int> _required = [];
 
     public void Clear()
     {
@@ -292,11 +292,11 @@ internal sealed class FrameFeaturePass(FramePipeline frame, FrameFeature feature
 /// <summary>Copies the instance counts frame features wrote into every view's commands, so indirect items draw what this frame made.</summary>
 internal sealed class ProviderCountsPass(FramePipeline frame)
 {
-    private readonly Dictionary<RenderResourceID, BufferHandle> _sources = new();
-    private readonly Dictionary<DeviceBuffer, BufferHandle> _targets = new();
+    private readonly Dictionary<RenderResourceID, BufferHandle> _sources = [];
+    private readonly Dictionary<DeviceBuffer, BufferHandle> _targets = [];
 
     /// <summary>The copies this frame, as each source, its byte offset, the view whose commands it lands in and the byte offset there.</summary>
-    public readonly List<(RenderResourceID Source, uint Offset, CameraFrame Target, uint Destination)> Copies = new();
+    public readonly List<(RenderResourceID Source, uint Offset, CameraFrame Target, uint Destination)> Copies = [];
 
     public void Add(FrameGraph graph)
     {

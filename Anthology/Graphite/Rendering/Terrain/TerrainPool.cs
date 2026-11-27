@@ -34,23 +34,23 @@ internal sealed class TerrainPool : IDisposable
 
     public sealed class Snapshot
     {
-        public readonly Dictionary<TerrainPageKey, int> Pages = new();
-        public readonly HashSet<TerrainPageKey> Holes = new();
-        public readonly List<(int Slice, TerrainPage Page, int Detail)> Uploads = new();
-        public readonly List<TerrainPageKey> Arrived = new();
+        public readonly Dictionary<TerrainPageKey, int> Pages = [];
+        public readonly HashSet<TerrainPageKey> Holes = [];
+        public readonly List<(int Slice, TerrainPage Page, int Detail)> Uploads = [];
+        public readonly List<TerrainPageKey> Arrived = [];
         public float[]? Table;
         public float[]? DetailTable;
         public volatile bool Uploaded;
     }
 
     private readonly TerrainData _data;
-    private readonly Dictionary<TerrainPageKey, Slot> _resident = new();
+    private readonly Dictionary<TerrainPageKey, Slot> _resident = [];
     private readonly Stack<int> _free = new();
-    private readonly HashSet<TerrainPageKey> _loading = new();
+    private readonly HashSet<TerrainPageKey> _loading = [];
     private readonly ConcurrentQueue<(TerrainPageKey Key, TerrainPage? Page)> _ready = new();
-    private readonly List<(TerrainPageKey Key, double Priority)> _wanted = new();
-    private readonly HashSet<TerrainPageKey> _wantedSet = new();
-    private readonly HashSet<TerrainPageKey> _refresh = new();
+    private readonly List<(TerrainPageKey Key, double Priority)> _wanted = [];
+    private readonly HashSet<TerrainPageKey> _wantedSet = [];
+    private readonly HashSet<TerrainPageKey> _refresh = [];
     private readonly Stack<int> _freeDetails = new();
     private readonly GraphicsDevice _device;
     private readonly byte[] _noSplat, _noHoles = new byte[TerrainPage.Samples];
@@ -190,8 +190,8 @@ internal sealed class TerrainPool : IDisposable
         List<(int Slice, TerrainPage Page, int Detail)> carried = previous.Uploaded ? [] : previous.Uploads;
 
         int assigned = 0;
-        List<(int, TerrainPage, int)> uploads = new(carried);
-        List<TerrainPageKey> arrived = new();
+        List<(int, TerrainPage, int)> uploads = [with(carried)];
+        List<TerrainPageKey> arrived = [];
         while (assigned < UploadsPerFrame && _ready.TryDequeue(out (TerrainPageKey Key, TerrainPage? Page) item))
         {
             _loading.Remove(item.Key);

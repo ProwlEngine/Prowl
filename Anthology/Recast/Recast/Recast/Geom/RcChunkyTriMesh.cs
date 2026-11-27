@@ -20,12 +20,11 @@ freely, subject to the following restrictions:
 
 using System.Collections.Generic;
 
-namespace Prowl.Recast.Geom
+namespace Prowl.Recast.Geom;
+
+public class RcChunkyTriMesh
 {
-    public class RcChunkyTriMesh
-    {
-        public List<RcChunkyTriMeshNode> nodes;
-        public int ntris;
-        public int maxTrisPerChunk;
-    }
+    public List<RcChunkyTriMeshNode> nodes;
+    public int ntris;
+    public int maxTrisPerChunk;
 }

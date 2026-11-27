@@ -18,58 +18,58 @@ freely, subject to the following restrictions:
 */
 
 using System.Collections.Generic;
+
 using Prowl.Recast.Core;
 using Prowl.Recast.Core.Numerics;
 using Prowl.Recast.Geom;
 
-namespace Prowl.Recast
+namespace Prowl.Recast;
+
+public static class RcVoxelizations
 {
-    public static class RcVoxelizations
+    public static RcHeightfield BuildSolidHeightfield(RcContext ctx, IRcInputGeomProvider geomProvider, RcBuilderConfig builderCfg)
     {
-        public static RcHeightfield BuildSolidHeightfield(RcContext ctx, IRcInputGeomProvider geomProvider, RcBuilderConfig builderCfg)
+        RcConfig cfg = builderCfg.cfg;
+
+        // Allocate voxel heightfield where we rasterize our input data to.
+        RcHeightfield solid = new RcHeightfield(builderCfg.width, builderCfg.height, builderCfg.bmin, builderCfg.bmax, cfg.Cs, cfg.Ch, cfg.BorderSize);
+
+        // Allocate array that can hold triangle area types.
+        // If you have multiple meshes you need to process, allocate
+        // and array which can hold the max number of triangles you need to process.
+
+        // Find triangles which are walkable based on their slope and rasterize them.
+        // If your input data is multiple meshes, you can transform them here, calculate
+        // the are type for each of the meshes and rasterize them.
+        foreach (RcTriMesh geom in geomProvider.Meshes())
         {
-            RcConfig cfg = builderCfg.cfg;
-
-            // Allocate voxel heightfield where we rasterize our input data to.
-            RcHeightfield solid = new RcHeightfield(builderCfg.width, builderCfg.height, builderCfg.bmin, builderCfg.bmax, cfg.Cs, cfg.Ch, cfg.BorderSize);
-
-            // Allocate array that can hold triangle area types.
-            // If you have multiple meshes you need to process, allocate
-            // and array which can hold the max number of triangles you need to process.
-
-            // Find triangles which are walkable based on their slope and rasterize them.
-            // If your input data is multiple meshes, you can transform them here, calculate
-            // the are type for each of the meshes and rasterize them.
-            foreach (RcTriMesh geom in geomProvider.Meshes())
+            float[] verts = geom.GetVerts();
+            if (cfg.UseTiles)
             {
-                float[] verts = geom.GetVerts();
-                if (cfg.UseTiles)
+                RcVec2f tbmin;
+                RcVec2f tbmax;
+                tbmin.X = builderCfg.bmin.X;
+                tbmin.Y = builderCfg.bmin.Z;
+                tbmax.X = builderCfg.bmax.X;
+                tbmax.Y = builderCfg.bmax.Z;
+                List<RcChunkyTriMeshNode> nodes = geom.GetChunksOverlappingRect(tbmin, tbmax);
+                foreach (RcChunkyTriMeshNode node in nodes)
                 {
-                    RcVec2f tbmin;
-                    RcVec2f tbmax;
-                    tbmin.X = builderCfg.bmin.X;
-                    tbmin.Y = builderCfg.bmin.Z;
-                    tbmax.X = builderCfg.bmax.X;
-                    tbmax.Y = builderCfg.bmax.Z;
-                    List<RcChunkyTriMeshNode> nodes = geom.GetChunksOverlappingRect(tbmin, tbmax);
-                    foreach (RcChunkyTriMeshNode node in nodes)
-                    {
-                        int[] tris = node.tris;
-                        int ntris = tris.Length / 3;
-                        int[] m_triareas = RcRecast.MarkWalkableTriangles(ctx, cfg.WalkableSlopeAngle, verts, tris, ntris, cfg.WalkableAreaMod);
-                        RcRasterizations.RasterizeTriangles(ctx, verts, tris, m_triareas, ntris, solid, cfg.WalkableClimb);
-                    }
-                }
-                else
-                {
-                    int[] tris = geom.GetTris();
+                    int[] tris = node.tris;
                     int ntris = tris.Length / 3;
                     int[] m_triareas = RcRecast.MarkWalkableTriangles(ctx, cfg.WalkableSlopeAngle, verts, tris, ntris, cfg.WalkableAreaMod);
                     RcRasterizations.RasterizeTriangles(ctx, verts, tris, m_triareas, ntris, solid, cfg.WalkableClimb);
                 }
             }
-
-            return solid;
+            else
+            {
+                int[] tris = geom.GetTris();
+                int ntris = tris.Length / 3;
+                int[] m_triareas = RcRecast.MarkWalkableTriangles(ctx, cfg.WalkableSlopeAngle, verts, tris, ntris, cfg.WalkableAreaMod);
+                RcRasterizations.RasterizeTriangles(ctx, verts, tris, m_triareas, ntris, solid, cfg.WalkableClimb);
+            }
         }
+
+        return solid;
     }
 }

@@ -28,13 +28,13 @@ public partial class Paper
 
     // Composed animation keys are the same string every frame for a given call site, so memoize them
     // instead of rebuilding "prefix + callerLine.ToString()" (two string allocations) every call.
-    private readonly System.Collections.Generic.Dictionary<(string prefix, int line), string> _animKeyCache = new();
+    private readonly System.Collections.Generic.Dictionary<(string prefix, int line), string> _animKeyCache = [];
 
     private string AnimKey(string prefix, string? id, int callerLine)
     {
         if (id != null) return prefix + id; // explicit id (loops/wrappers) - not cacheable by line
-        var k = (prefix, callerLine);
-        if (!_animKeyCache.TryGetValue(k, out var key))
+        (string prefix, int callerLine) k = (prefix, callerLine);
+        if (!_animKeyCache.TryGetValue(k, out string? key))
         {
             key = prefix + callerLine.ToString();
             _animKeyCache[k] = key;
@@ -140,7 +140,7 @@ public partial class Paper
         [CallerLineNumber] int callerLine = 0)
     {
         string key = AnimKey(AnimateSpringKey, id, callerLine);
-        var state = GetElementStorage<(float pos, float vel)>(key, (target, 0f));
+        (float pos, float vel) state = GetElementStorage<(float pos, float vel)>(key, (target, 0f));
 
         if (DeltaTime > 0f && frequency > 0f)
         {
@@ -169,7 +169,7 @@ public partial class Paper
         [CallerLineNumber] int callerLine = 0)
     {
         string key = AnimKey(OneShotKey, id, callerLine);
-        var state = GetElementStorage<(bool prev, float t)>(key, (false, 0f));
+        (bool prev, float t) state = GetElementStorage<(bool prev, float t)>(key, (false, 0f));
 
         if (trigger && !state.prev) state.t = 0f;          // (re)start on rising edge
         if (!trigger) state.t = 0f;                        // reset on release
@@ -265,7 +265,7 @@ public partial class Paper
         [CallerLineNumber] int callerLine = 0)
     {
         string key = AnimKey(StableForKey, id, callerLine);
-        var state = GetElementStorage<(bool last, float t)>(key, (current, 0f));
+        (bool last, float t) state = GetElementStorage<(bool last, float t)>(key, (current, 0f));
         if (state.last == current)
             state.t += DeltaTime;
         else
@@ -295,7 +295,7 @@ public partial class Paper
         [CallerLineNumber] int callerLine = 0)
     {
         string key = AnimKey(ShakeKey, id, callerLine);
-        var state = GetElementStorage<(bool prev, float amp)>(key, (false, 0f));
+        (bool prev, float amp) state = GetElementStorage<(bool prev, float amp)>(key, (false, 0f));
 
         if (trigger && !state.prev) state.amp = 1f;
         if (DeltaTime > 0f) state.amp *= Maths.Exp(-decay * DeltaTime);

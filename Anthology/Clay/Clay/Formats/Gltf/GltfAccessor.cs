@@ -31,7 +31,7 @@ internal sealed class GltfAccessorReader
 
     public uint[] ReadUInts(int index)
     {
-        var a = Get(index);
+        GltfAccessorJson a = Get(index);
         if (a.Type != "SCALAR")
             throw new ImportException($"Accessor {index} expected SCALAR for index reads, got {a.Type}.");
         uint[] result = new uint[a.Count];
@@ -41,7 +41,7 @@ internal sealed class GltfAccessorReader
 
     public Float2[] ReadVec2(int index)
     {
-        var a = Get(index);
+        GltfAccessorJson a = Get(index);
         EnsureType(a, "VEC2");
         Float2[] result = new Float2[a.Count];
         DecodeFloats(a, 2, MemoryMarshal.Cast<Float2, float>(result.AsSpan()));
@@ -50,7 +50,7 @@ internal sealed class GltfAccessorReader
 
     public Float3[] ReadVec3(int index)
     {
-        var a = Get(index);
+        GltfAccessorJson a = Get(index);
         EnsureType(a, "VEC3");
         Float3[] result = new Float3[a.Count];
         DecodeFloats(a, 3, MemoryMarshal.Cast<Float3, float>(result.AsSpan()));
@@ -59,7 +59,7 @@ internal sealed class GltfAccessorReader
 
     public Float4[] ReadVec4(int index)
     {
-        var a = Get(index);
+        GltfAccessorJson a = Get(index);
         EnsureType(a, "VEC4");
         Float4[] result = new Float4[a.Count];
         DecodeFloats(a, 4, MemoryMarshal.Cast<Float4, float>(result.AsSpan()));
@@ -74,7 +74,7 @@ internal sealed class GltfAccessorReader
 
     private List<T> ReadList<T>(int index, string type, int components) where T : unmanaged
     {
-        var a = Get(index);
+        GltfAccessorJson a = Get(index);
         EnsureType(a, type);
         var result = new List<T>(a.Count);
         CollectionsMarshal.SetCount(result, a.Count);
@@ -84,7 +84,7 @@ internal sealed class GltfAccessorReader
 
     public Color[] ReadColor(int index)
     {
-        var a = Get(index);
+        GltfAccessorJson a = Get(index);
         int comps = a.Type switch
         {
             "VEC3" => 3,
@@ -109,7 +109,7 @@ internal sealed class GltfAccessorReader
     /// <summary>Reads a SCALAR float accessor as a packed float array.</summary>
     public float[] ReadFloats1D(int index)
     {
-        var a = Get(index);
+        GltfAccessorJson a = Get(index);
         if (a.Type != "SCALAR")
             throw new ImportException($"Accessor {index} expected SCALAR for ReadFloats1D, got {a.Type}.");
         float[] result = new float[a.Count];
@@ -122,7 +122,7 @@ internal sealed class GltfAccessorReader
     /// from the channel path.</summary>
     public float[] ReadFloats1DComponents(int index, int expectedComponents)
     {
-        var a = Get(index);
+        GltfAccessorJson a = Get(index);
         int comps = a.Type switch
         {
             "SCALAR" => 1,
@@ -141,7 +141,7 @@ internal sealed class GltfAccessorReader
 
     public Float4x4[] ReadMat4(int index)
     {
-        var a = Get(index);
+        GltfAccessorJson a = Get(index);
         EnsureType(a, "MAT4");
         float[] tmp = new float[a.Count * 16];
         DecodeFloats(a, 16, tmp);
@@ -175,7 +175,7 @@ internal sealed class GltfAccessorReader
 
         if (a.BufferView is { } viewIndex)
         {
-            var view = _buffers.GetBufferView(viewIndex);
+            GltfBufferView view = _buffers.GetBufferView(viewIndex);
             ReadOnlySpan<byte> data = _buffers.GetBufferView(view);
             int compBytes = ComponentByteSize(a.ComponentType);
             int elementBytes = compBytes * componentsPerElement;
@@ -210,7 +210,7 @@ internal sealed class GltfAccessorReader
     {
         if (a.BufferView is { } viewIndex)
         {
-            var view = _buffers.GetBufferView(viewIndex);
+            GltfBufferView view = _buffers.GetBufferView(viewIndex);
             ReadOnlySpan<byte> data = _buffers.GetBufferView(view);
             int compBytes = ComponentByteSize(a.ComponentType);
             int stride = view.ByteStride is { } s && s > 0 ? s : compBytes;
@@ -222,7 +222,7 @@ internal sealed class GltfAccessorReader
             }
             else if (stride == compBytes && BitConverter.IsLittleEndian && a.ComponentType == GltfComponentType.UnsignedShort)
             {
-                var src = MemoryMarshal.Cast<byte, ushort>(data.Slice(byteOffset, a.Count * 2));
+                ReadOnlySpan<ushort> src = MemoryMarshal.Cast<byte, ushort>(data.Slice(byteOffset, a.Count * 2));
                 for (int i = 0; i < src.Length; i++)
                     dst[i] = src[i];
             }
@@ -246,8 +246,8 @@ internal sealed class GltfAccessorReader
 
     private void ApplySparseFloat(GltfAccessorJson parent, GltfAccessorSparse sparse, int componentsPerElement, Span<float> dst)
     {
-        var indicesView = _buffers.GetBufferView(sparse.Indices.BufferView);
-        var valuesView = _buffers.GetBufferView(sparse.Values.BufferView);
+        GltfBufferView indicesView = _buffers.GetBufferView(sparse.Indices.BufferView);
+        GltfBufferView valuesView = _buffers.GetBufferView(sparse.Values.BufferView);
         ReadOnlySpan<byte> idxData = _buffers.GetBufferView(indicesView);
         ReadOnlySpan<byte> valData = _buffers.GetBufferView(valuesView);
         int idxCompBytes = ComponentByteSize(sparse.Indices.ComponentType);
@@ -269,8 +269,8 @@ internal sealed class GltfAccessorReader
 
     private void ApplySparseScalarUInt(GltfAccessorJson parent, GltfAccessorSparse sparse, Span<uint> dst)
     {
-        var indicesView = _buffers.GetBufferView(sparse.Indices.BufferView);
-        var valuesView = _buffers.GetBufferView(sparse.Values.BufferView);
+        GltfBufferView indicesView = _buffers.GetBufferView(sparse.Indices.BufferView);
+        GltfBufferView valuesView = _buffers.GetBufferView(sparse.Values.BufferView);
         ReadOnlySpan<byte> idxData = _buffers.GetBufferView(indicesView);
         ReadOnlySpan<byte> valData = _buffers.GetBufferView(valuesView);
         int idxCompBytes = ComponentByteSize(sparse.Indices.ComponentType);

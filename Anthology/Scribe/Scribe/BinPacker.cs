@@ -17,7 +17,7 @@ internal class BinPacker
     {
         currentAtlasWidth = initialWidth;
         currentAtlasHeight = initialHeight;
-        skyline = new List<AtlasNode> { new AtlasNode(0, 0, initialWidth) };
+        skyline = [new AtlasNode(0, 0, initialWidth)];
     }
 
     public void Clear(int newWidth, int newHeight)
@@ -39,12 +39,12 @@ internal class BinPacker
         int bestHeight = int.MaxValue;
         int bestWastage = int.MaxValue;
         int bestIndex = -1;
-        var bestPosition = (X: 0, Y: 0);
+        (int X, int Y) bestPosition = (X: 0, Y: 0);
 
         // Try Best-Fit heuristic: minimize wasted area
         for (int i = 0; i < skyline.Count; i++)
         {
-            var fit = RectangleFits(i, rectWidth, rectHeight);
+            (int X, int Y) fit = RectangleFits(i, rectWidth, rectHeight);
             if (fit.Y == -1) continue;
 
             // Calculate horizontal wastage
@@ -115,7 +115,7 @@ internal class BinPacker
         if (skyline[skylineNodeIndex].X < x)
         {
             // Split the first node
-            var left = skyline[skylineNodeIndex];
+            AtlasNode left = skyline[skylineNodeIndex];
             int oldWidth = left.Width;
             int leftX = left.X;
             int originalY = left.Y;

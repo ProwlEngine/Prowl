@@ -1,8 +1,8 @@
 ﻿using static Prowl.Scribe.Internal.Common;
 
-namespace Prowl.Scribe.Internal
-{
-    internal class CharStringContext
+namespace Prowl.Scribe.Internal;
+
+internal class CharStringContext
 	{
 		public int bounds;
 		public float first_x;
@@ -77,13 +77,12 @@ namespace Prowl.Scribe.Internal
 		public void stbtt__csctx_rccurve_to(float dx1, float dy1, float dx2, float dy2,
 			float dx3, float dy3)
 		{
-			var cx1 = x + dx1;
-			var cy1 = y + dy1;
-			var cx2 = cx1 + dx2;
-			var cy2 = cy1 + dy2;
+        float cx1 = x + dx1;
+        float cy1 = y + dy1;
+        float cx2 = cx1 + dx2;
+        float cy2 = cy1 + dy2;
 			x = cx2 + dx3;
 			y = cy2 + dy3;
 			stbtt__csctx_v(STBTT_vcubic, (int)x, (int)y, (int)cx1, (int)cy1, (int)cx2, (int)cy2);
 		}
 	}
-}

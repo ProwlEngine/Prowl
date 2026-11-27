@@ -1,22 +1,22 @@
 using System.Runtime.InteropServices;
 
-namespace Prowl.Scribe.Internal
+namespace Prowl.Scribe.Internal;
+
+
+[StructLayout(LayoutKind.Sequential)]
+public struct GlyphVertex
 {
+    public short x;
+    public short y;
+    public short cx;
+    public short cy;
+    public short cx1;
+    public short cy1;
+    public byte type;
+    public byte padding;
+}
 
-    [StructLayout(LayoutKind.Sequential)]
-    public struct GlyphVertex
-    {
-        public short x;
-        public short y;
-        public short cx;
-        public short cy;
-        public short cx1;
-        public short cy1;
-        public byte type;
-        public byte padding;
-    }
-
-    internal static partial class Common
+internal static partial class Common
 	{
 		public const int STBTT_vmove = 1;
 		public const int STBTT_vline = 2;
@@ -180,20 +180,20 @@ namespace Prowl.Scribe.Internal
 
 		public static int stbtt__GetCoverageIndex(FakePtr<byte> coverageTable, int glyph)
 		{
-			var coverageFormat = ttUSHORT(coverageTable);
+        ushort coverageFormat = ttUSHORT(coverageTable);
 			switch (coverageFormat)
 			{
 				case 1:
 				{
-					var glyphCount = ttUSHORT(coverageTable + 2);
-					var l = 0;
-					var r = glyphCount - 1;
-					var m = 0;
-					var straw = 0;
-					var needle = glyph;
+                    ushort glyphCount = ttUSHORT(coverageTable + 2);
+                    int l = 0;
+                    int r = glyphCount - 1;
+                    int m = 0;
+                    int straw = 0;
+                    int needle = glyph;
 					while (l <= r)
 					{
-						var glyphArray = coverageTable + 4;
+                        FakePtr<byte> glyphArray = coverageTable + 4;
 						ushort glyphID = 0;
 						m = (l + r) >> 1;
 						glyphID = ttUSHORT(glyphArray + 2 * m);
@@ -209,14 +209,14 @@ namespace Prowl.Scribe.Internal
 				break;
 				case 2:
 				{
-					var rangeCount = ttUSHORT(coverageTable + 2);
-					var rangeArray = coverageTable + 4;
-					var l = 0;
-					var r = rangeCount - 1;
-					var m = 0;
-					var strawStart = 0;
-					var strawEnd = 0;
-					var needle = glyph;
+                    ushort rangeCount = ttUSHORT(coverageTable + 2);
+                    FakePtr<byte> rangeArray = coverageTable + 4;
+                    int l = 0;
+                    int r = rangeCount - 1;
+                    int m = 0;
+                    int strawStart = 0;
+                    int strawEnd = 0;
+                    int needle = glyph;
 					while (l <= r)
 					{
 						FakePtr<byte> rangeRecord;
@@ -234,7 +234,7 @@ namespace Prowl.Scribe.Internal
 						}
 						else
 						{
-							var startCoverageIndex = ttUSHORT(rangeRecord + 4);
+                            ushort startCoverageIndex = ttUSHORT(rangeRecord + 4);
 							return startCoverageIndex + glyph - strawStart;
 						}
 					}
@@ -251,14 +251,14 @@ namespace Prowl.Scribe.Internal
 
 		public static int stbtt__GetGlyphClass(FakePtr<byte> classDefTable, int glyph)
 		{
-			var classDefFormat = ttUSHORT(classDefTable);
+        ushort classDefFormat = ttUSHORT(classDefTable);
 			switch (classDefFormat)
 			{
 				case 1:
 				{
-					var startGlyphID = ttUSHORT(classDefTable + 2);
-					var glyphCount = ttUSHORT(classDefTable + 4);
-					var classDef1ValueArray = classDefTable + 6;
+                    ushort startGlyphID = ttUSHORT(classDefTable + 2);
+                    ushort glyphCount = ttUSHORT(classDefTable + 4);
+                    FakePtr<byte> classDef1ValueArray = classDefTable + 6;
 					if (glyph >= startGlyphID && glyph < startGlyphID + glyphCount)
 						return ttUSHORT(classDef1ValueArray + 2 * (glyph - startGlyphID));
 					classDefTable = classDef1ValueArray + 2 * glyphCount;
@@ -266,14 +266,14 @@ namespace Prowl.Scribe.Internal
 				break;
 				case 2:
 				{
-					var classRangeCount = ttUSHORT(classDefTable + 2);
-					var classRangeRecords = classDefTable + 4;
-					var l = 0;
-					var r = classRangeCount - 1;
-					var m = 0;
-					var strawStart = 0;
-					var strawEnd = 0;
-					var needle = glyph;
+                    ushort classRangeCount = ttUSHORT(classDefTable + 2);
+                    FakePtr<byte> classRangeRecords = classDefTable + 4;
+                    int l = 0;
+                    int r = classRangeCount - 1;
+                    int m = 0;
+                    int strawStart = 0;
+                    int strawEnd = 0;
+                    int needle = glyph;
 					while (l <= r)
 					{
 						FakePtr<byte> classRangeRecord;
@@ -320,10 +320,10 @@ namespace Prowl.Scribe.Internal
 		public static int stbtt__CompareUTF8toUTF16_bigendian_prefix(FakePtr<byte> s1, int len1, FakePtr<byte> s2,
 			int len2)
 		{
-			var i = 0;
+        int i = 0;
 			while (len2 != 0)
 			{
-				var ch = (ushort)(s2[0] * 256 + s2[1]);
+            ushort ch = (ushort)(s2[0] * 256 + s2[1]);
 				if (ch < 0x80)
 				{
 					if (i >= len1)
@@ -343,7 +343,7 @@ namespace Prowl.Scribe.Internal
 				else if (ch >= 0xd800 && ch < 0xdc00)
 				{
 					uint c = 0;
-					var ch2 = (ushort)(s2[2] * 256 + s2[3]);
+                ushort ch2 = (ushort)(s2[2] * 256 + s2[3]);
 					if (i + 3 >= len1)
 						return -1;
 					c = (uint)(((ch - 0xd800) << 10) + (ch2 - 0xdc00) + 0x10000);
@@ -390,23 +390,23 @@ namespace Prowl.Scribe.Internal
 		public static int stbtt__matchpair(FakePtr<byte> fc, uint nm, FakePtr<byte> name, int nlen, int target_id,
 			int next_id)
 		{
-			var i = 0;
-			var count = (int)ttUSHORT(fc + nm + 2);
-			var stringOffset = (int)(nm + ttUSHORT(fc + nm + 4));
+        int i = 0;
+        int count = (int)ttUSHORT(fc + nm + 2);
+        int stringOffset = (int)(nm + ttUSHORT(fc + nm + 4));
 			for (i = 0; i < count; ++i)
 			{
-				var loc = (uint)(nm + 6 + 12 * i);
-				var id = (int)ttUSHORT(fc + loc + 6);
+            uint loc = (uint)(nm + 6 + 12 * i);
+            int id = (int)ttUSHORT(fc + loc + 6);
 				if (id == target_id)
 				{
-					var platform = (int)ttUSHORT(fc + loc + 0);
-					var encoding = (int)ttUSHORT(fc + loc + 2);
-					var language = (int)ttUSHORT(fc + loc + 4);
+                int platform = (int)ttUSHORT(fc + loc + 0);
+                int encoding = (int)ttUSHORT(fc + loc + 2);
+                int language = (int)ttUSHORT(fc + loc + 4);
 					if (platform == 0 || platform == 3 && encoding == 1 || platform == 3 && encoding == 10)
 					{
-						var slen = (int)ttUSHORT(fc + loc + 8);
-						var off = (int)ttUSHORT(fc + loc + 10);
-						var matchlen =
+                    int slen = (int)ttUSHORT(fc + loc + 8);
+                    int off = (int)ttUSHORT(fc + loc + 10);
+                    int matchlen =
 							stbtt__CompareUTF8toUTF16_bigendian_prefix(name, nlen, fc + stringOffset + off, slen);
 						if (matchlen >= 0)
 						{
@@ -444,8 +444,8 @@ namespace Prowl.Scribe.Internal
 
 		public static int stbtt__matches(byte[] data, uint offset, FakePtr<byte> name, int flags)
 		{
-			var nlen = 0;
-			var ptr = name;
+        int nlen = 0;
+        FakePtr<byte> ptr = name;
 
 			while (ptr.GetAndIncrease() != '\0')
 				ptr++;
@@ -488,14 +488,14 @@ namespace Prowl.Scribe.Internal
 
 			return 0;
 
-			uint FindTable(FakePtr<byte> data, uint fontstart, string tag)
+        static uint FindTable(FakePtr<byte> data, uint fontstart, string tag)
 			{
 			    int num_tables = ttUSHORT(data + fontstart + 4);
-			    var tabledir = fontstart + 12;
+            uint tabledir = fontstart + 12;
 			    int i;
 			    for (i = 0; i < num_tables; ++i)
 			    {
-			        var loc = (uint)(tabledir + 16 * i);
+                uint loc = (uint)(tabledir + 16 * i);
 			        if ((data + loc + 0)[0] == tag[0] && (data + loc + 0)[1] == tag[1] &&
 			            (data + loc + 0)[2] == tag[2] && (data + loc + 0)[3] == tag[3])
 			            return ttULONG(data + loc + 8);
@@ -507,10 +507,10 @@ namespace Prowl.Scribe.Internal
 
 		public static int stbtt_FindMatchingFont_internal(byte[] font_collection, FakePtr<byte> name_utf8, int flags)
 		{
-			var i = 0;
+        int i = 0;
 			for (i = 0; ; ++i)
 			{
-				var off = stbtt_GetFontOffsetForIndex(font_collection, i);
+            int off = stbtt_GetFontOffsetForIndex(font_collection, i);
 				if (off < 0)
 					return off;
 				if (stbtt__matches(font_collection, (uint)off, name_utf8, flags) != 0)
@@ -538,4 +538,3 @@ namespace Prowl.Scribe.Internal
 			return stbtt_CompareUTF8toUTF16_bigendian_internal(s1, len1, s2, len2);
 		}
 	}
-}

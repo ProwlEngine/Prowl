@@ -19,10 +19,10 @@ public sealed class BakedVariants : IShaderCompiler
     {
         public required VariantSpace[] Axes;
         public required ShaderGlobal[] Globals;
-        public List<Variant> Variants = new();
+        public List<Variant> Variants = [];
 
         /// <summary>Compute variants by backend and variant key.</summary>
-        public Dictionary<(GraphicsBackend Backend, VariantKey Key), ComputeDescription> Compute = new();
+        public Dictionary<(GraphicsBackend Backend, VariantKey Key), ComputeDescription> Compute = [];
     }
 
     private const uint Magic = 0x56424750; // PGBV
@@ -252,8 +252,8 @@ public sealed class BakedVariants : IShaderCompiler
         {
             VertexLayouts = vertex,
             ResourceLayouts = ReadLayouts(reader),
+            PushConstants = new PushConstantRange((ShaderStages)reader.ReadByte(), reader.ReadUInt32())
         };
-        description.PushConstants = new PushConstantRange((ShaderStages)reader.ReadByte(), reader.ReadUInt32());
         return description;
     }
 

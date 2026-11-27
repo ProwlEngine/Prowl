@@ -25,7 +25,7 @@ public sealed class XmlFileFormat : IFileFormat
     public EchoObject ReadFrom(Stream stream)
     {
         using var reader = new StreamReader(stream, Encoding.UTF8, true, 1024, leaveOpen: true);
-        var xml = reader.ReadToEnd();
+        string xml = reader.ReadToEnd();
         int index = 0;
 
         // Skip XML declaration if present
@@ -47,7 +47,7 @@ public sealed class XmlFileFormat : IFileFormat
 
     private static void WriteElement(TextWriter writer, EchoObject tag, string name, int indent)
     {
-        var sanitized = SanitizeElementName(name);
+        string sanitized = SanitizeElementName(name);
         WriteIndent(writer, indent);
         writer.Write('<');
         writer.Write(sanitized);
@@ -122,7 +122,7 @@ public sealed class XmlFileFormat : IFileFormat
             case EchoType.List:
                 writer.Write(" type=\"list\">");
                 writer.WriteLine();
-                foreach (var item in tag.List)
+                foreach (EchoObject item in tag.List)
                     WriteElement(writer, item, "item", indent + 1);
                 WriteIndent(writer, indent);
                 writer.Write("</");
@@ -133,7 +133,7 @@ public sealed class XmlFileFormat : IFileFormat
             case EchoType.Compound:
                 writer.Write(" type=\"compound\">");
                 writer.WriteLine();
-                foreach (var kvp in tag.Tags)
+                foreach (KeyValuePair<string, EchoObject> kvp in tag.Tags)
                     WriteElement(writer, kvp.Value, kvp.Key, indent + 1);
                 WriteIndent(writer, indent);
                 writer.Write("</");
@@ -211,7 +211,7 @@ public sealed class XmlFileFormat : IFileFormat
 
     private static void WriteAttrValue(TextWriter writer, string value)
     {
-        foreach (var c in value)
+        foreach (char c in value)
         {
             if (IsForbiddenXmlChar(c)) continue; // strip forbidden XML 1.0 control chars
             switch (c)
@@ -281,8 +281,8 @@ public sealed class XmlFileFormat : IFileFormat
             throw new InvalidDataException($"Expected '<' at position {index}");
         index++;
 
-        var elemName = ReadName(xml, ref index);
-        var attrs = ReadAttributes(xml, ref index);
+        string elemName = ReadName(xml, ref index);
+        XmlAttributes attrs = ReadAttributes(xml, ref index);
 
         SkipWhitespace(xml, ref index);
 
@@ -367,7 +367,7 @@ public sealed class XmlFileFormat : IFileFormat
                     continue;
                 }
 
-                (children ??= new List<ParsedElement>()).Add(ReadElementFull(xml, ref index));
+                (children ??= []).Add(ReadElementFull(xml, ref index));
             }
             else
             {
@@ -384,7 +384,7 @@ public sealed class XmlFileFormat : IFileFormat
     private static string ReadName(string xml, ref int index)
     {
         int start = SkipName(xml, ref index);
-        var name = xml.AsSpan(start, index - start);
+        ReadOnlySpan<char> name = xml.AsSpan(start, index - start);
         if (name.SequenceEqual("item")) return "item";
         if (name.SequenceEqual("type")) return "type";
         if (name.SequenceEqual("key")) return "key";
@@ -413,7 +413,7 @@ public sealed class XmlFileFormat : IFileFormat
             if (index >= xml.Length || xml[index] == '>' || xml[index] == '/')
                 break;
 
-            var attrName = ReadName(xml, ref index);
+            string attrName = ReadName(xml, ref index);
             SkipWhitespace(xml, ref index);
 
             if (index >= xml.Length || xml[index] != '=')
@@ -488,7 +488,7 @@ public sealed class XmlFileFormat : IFileFormat
             index++;
         if (index >= xml.Length)
             throw new InvalidDataException("Unterminated entity reference");
-        var entity = xml.Substring(start, index - start);
+        string entity = xml.Substring(start, index - start);
         index++; // skip ';'
 
         if (entity == "amp") return "&";
@@ -510,7 +510,7 @@ public sealed class XmlFileFormat : IFileFormat
 
     private static EchoObject ConvertFromAttributes(XmlAttributes attrs, string textContent, string elemName)
     {
-        var typeAttr = attrs.Type;
+        string? typeAttr = attrs.Type;
 
         if (typeAttr != null)
         {
@@ -543,12 +543,12 @@ public sealed class XmlFileFormat : IFileFormat
 
     private static EchoObject ConvertFromChildElements(XmlAttributes attrs, List<ParsedElement> children)
     {
-        var typeAttr = attrs.Type;
+        string? typeAttr = attrs.Type;
 
         if (typeAttr == "list")
         {
             var list = EchoObject.NewList();
-            foreach (var child in children)
+            foreach (ParsedElement child in children)
                 list.ListAdd(child.Value);
             return list;
         }
@@ -556,9 +556,9 @@ public sealed class XmlFileFormat : IFileFormat
         if (typeAttr == "compound")
         {
             var compound = EchoObject.NewCompound();
-            foreach (var child in children)
+            foreach (ParsedElement child in children)
             {
-                var key = child.Attrs.Key ?? child.Name;
+                string key = child.Attrs.Key ?? child.Name;
                 compound.Add(key, child.Value);
             }
             return compound;
@@ -568,16 +568,16 @@ public sealed class XmlFileFormat : IFileFormat
         if (children.All(c => c.Name == "item"))
         {
             var list = EchoObject.NewList();
-            foreach (var child in children)
+            foreach (ParsedElement child in children)
                 list.ListAdd(child.Value);
             return list;
         }
 
         // Otherwise compound
         var comp = EchoObject.NewCompound();
-        foreach (var child in children)
+        foreach (ParsedElement child in children)
         {
-            var key = child.Attrs.Key ?? child.Name;
+            string key = child.Attrs.Key ?? child.Name;
             comp.Add(key, child.Value);
         }
         return comp;
@@ -628,7 +628,7 @@ public sealed class XmlFileFormat : IFileFormat
         if (!char.IsLetter(name[0]) && name[0] != '_')
             sb.Append('_');
 
-        foreach (var c in name)
+        foreach (char c in name)
         {
             if (IsNameChar(c))
                 sb.Append(c);

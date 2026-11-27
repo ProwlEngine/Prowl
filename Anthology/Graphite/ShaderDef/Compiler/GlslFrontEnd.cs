@@ -43,9 +43,9 @@ internal sealed class GlslDeclaration
     public List<int> Tokens = [];
     public List<(int Open, int Close)> Layouts = [];
     public List<string> LayoutItems = [];
-    public Dictionary<string, string?> LayoutKeys = new(StringComparer.Ordinal);
+    public Dictionary<string, string?> LayoutKeys = [with(StringComparer.Ordinal)];
     public List<int> QualifierTokens = [];
-    public HashSet<string> Qualifiers = new(StringComparer.Ordinal);
+    public HashSet<string> Qualifiers = [with(StringComparer.Ordinal)];
     public string? TypeName;
     public string TypeText = "";
     public List<GlslMember> Declarators = [];
@@ -63,14 +63,15 @@ internal sealed class GlslDeclaration
 /// </summary>
 internal sealed class GlslStageSource
 {
-    private static readonly HashSet<string> s_qualifiers = new(StringComparer.Ordinal)
-    {
+    private static readonly HashSet<string> s_qualifiers =
+    [
+        with(StringComparer.Ordinal),
         "uniform", "in", "out", "inout", "buffer", "shared", "const", "attribute", "varying",
         "flat", "smooth", "noperspective", "centroid", "sample", "patch",
         "highp", "mediump", "lowp",
         "coherent", "volatile", "restrict", "readonly", "writeonly",
         "invariant", "precise",
-    };
+    ];
 
     private static readonly HashSet<string> s_opaqueTypes = BuildOpaqueTypes();
 
@@ -79,7 +80,7 @@ internal sealed class GlslStageSource
     public readonly List<GlslToken> Tokens = [];
     public readonly List<GlslDeclaration> Declarations = [];
     public readonly List<int> Directives = [];
-    public readonly Dictionary<string, (GlslDeclaration Declaration, List<GlslMember> Members)> Structs = new(StringComparer.Ordinal);
+    public readonly Dictionary<string, (GlslDeclaration Declaration, List<GlslMember> Members)> Structs = [with(StringComparer.Ordinal)];
 
 
     public GlslStageSource(GlslStage stage, string text)
@@ -660,7 +661,7 @@ internal sealed class GlslStageSource
     /// <summary>Declares each global the stage reads as a loose uniform, ahead of its first declaration.</summary>
     public string DeclareGlobals(IReadOnlyList<ShaderGlobal> globals)
     {
-        HashSet<string> read = new(StringComparer.Ordinal);
+        HashSet<string> read = [with(StringComparer.Ordinal)];
         for (int k = 0; k < Tokens.Count; k++)
         {
             if (Tokens[k].Kind == TokenKind.Identifier)
@@ -690,7 +691,7 @@ internal sealed class GlslStageSource
     public string ApplyMaterial(MaterialAbi abi, IReadOnlyList<ShaderGlobal> globals, out bool readsProperties)
     {
         readsProperties = false;
-        HashSet<string> globalNames = new(StringComparer.Ordinal);
+        HashSet<string> globalNames = [with(StringComparer.Ordinal)];
         foreach (ShaderGlobal global in globals)
             globalNames.Add(global.Name);
 
@@ -778,7 +779,7 @@ internal sealed class GlslStageSource
             if (!layout.IsStruct(uniform.TypeName))
                 continue;
 
-            if (!Structs.TryGetValue(uniform.TypeName, out var def) || def.Declaration.First > at.First)
+            if (!Structs.TryGetValue(uniform.TypeName, out (GlslDeclaration Declaration, List<GlslMember> Members) def) || def.Declaration.First > at.First)
                 throw Error(Tokens[at.First].Start, $"struct '{uniform.TypeName}' of uniform '{uniform.Name}' must be declared before the first uniform of every stage, put it in the Shared section");
         }
     }
@@ -842,12 +843,13 @@ internal sealed class GlslStageSource
     private static HashSet<string> BuildOpaqueTypes()
     {
         string[] dims = ["1D", "2D", "3D", "Cube", "2DRect", "1DArray", "2DArray", "CubeArray", "Buffer", "2DMS", "2DMSArray"];
-        HashSet<string> set = new(StringComparer.Ordinal)
-        {
+        HashSet<string> set =
+        [
+            with(StringComparer.Ordinal),
             "sampler", "samplerShadow", "accelerationStructureEXT", "atomic_uint",
             "sampler1DShadow", "sampler2DShadow", "samplerCubeShadow", "sampler2DRectShadow",
             "sampler1DArrayShadow", "sampler2DArrayShadow", "samplerCubeArrayShadow",
-        };
+        ];
 
         foreach (string prefix in new[] { "", "i", "u" })
         {
@@ -899,8 +901,8 @@ internal sealed class GlslProgramLayout
     public readonly Dictionary<int, string> VertexInputs = [];
     public readonly Dictionary<(GlslStage Stage, string Name), int> Locations = [];
 
-    private readonly Dictionary<string, GlslResource> _byName = new(StringComparer.Ordinal);
-    private readonly Dictionary<string, List<GlslMember>> _structs = new(StringComparer.Ordinal);
+    private readonly Dictionary<string, GlslResource> _byName = [with(StringComparer.Ordinal)];
+    private readonly Dictionary<string, List<GlslMember>> _structs = [with(StringComparer.Ordinal)];
     private GlslResource? _global;
 
 
@@ -908,7 +910,7 @@ internal sealed class GlslProgramLayout
     {
         foreach (GlslStageSource stage in stages)
         {
-            foreach ((string name, var def) in stage.Structs)
+            foreach ((string name, (GlslDeclaration Declaration, List<GlslMember> Members) def) in stage.Structs)
                 _structs.TryAdd(name, def.Members);
         }
 
@@ -1091,7 +1093,7 @@ internal sealed class GlslProgramLayout
             if (Classify(d, stage.Stage) != GlslUsage.Interface)
                 continue;
 
-            var list = d.Has("out") ? outputs : inputs;
+            List<(GlslDeclaration Declaration, string Name, int Count)> list = d.Has("out") ? outputs : inputs;
             if (d.Kind == DeclKind.Block)
             {
                 int count = 0;
@@ -1111,7 +1113,7 @@ internal sealed class GlslProgramLayout
             case GlslStage.Vertex:
                 Allocate(stage, inputs, GlslStage.Vertex, isInput: true, shared: null);
                 Allocate(stage, outputs, GlslStage.Vertex, isInput: false, shared: VaryingsOf(stages));
-                foreach (var input in inputs)
+                foreach ((GlslDeclaration Declaration, string Name, int Count) input in inputs)
                     VertexInputs[Locations[(GlslStage.Vertex, "in " + input.Name)]] = input.Name;
                 break;
 
@@ -1150,9 +1152,9 @@ internal sealed class GlslProgramLayout
             }
         }
 
-        Dictionary<string, int> map = new(StringComparer.Ordinal);
+        Dictionary<string, int> map = [with(StringComparer.Ordinal)];
         List<(int From, int Count)> used = [];
-        foreach (var v in all)
+        foreach ((GlslStageSource Stage, GlslDeclaration Declaration, string Name, int Count) v in all)
         {
             if (!GlslStageSource.TryLayoutInt(v.Declaration, "location", out int location) || DeclaratorCount(v.Declaration) > 1)
                 continue;
@@ -1164,7 +1166,7 @@ internal sealed class GlslProgramLayout
             used.Add((location, v.Count));
         }
 
-        foreach (var v in all)
+        foreach ((GlslStageSource Stage, GlslDeclaration Declaration, string Name, int Count) v in all)
         {
             if (map.ContainsKey(v.Name))
                 continue;
@@ -1187,13 +1189,13 @@ internal sealed class GlslProgramLayout
         string prefix = isInput ? "in " : "out ";
         if (shared != null)
         {
-            foreach (var item in items)
+            foreach ((GlslDeclaration Declaration, string Name, int Count) item in items)
                 Locations[(key, prefix + item.Name)] = shared[item.Name];
             return;
         }
 
         List<(int From, int Count)> used = [];
-        foreach (var item in items)
+        foreach ((GlslDeclaration Declaration, string Name, int Count) item in items)
         {
             if (DeclaratorCount(item.Declaration) == 1 && GlslStageSource.TryLayoutInt(item.Declaration, "location", out int location))
             {
@@ -1202,7 +1204,7 @@ internal sealed class GlslProgramLayout
             }
         }
 
-        foreach (var item in items)
+        foreach ((GlslDeclaration Declaration, string Name, int Count) item in items)
         {
             if (Locations.ContainsKey((key, prefix + item.Name)))
                 continue;

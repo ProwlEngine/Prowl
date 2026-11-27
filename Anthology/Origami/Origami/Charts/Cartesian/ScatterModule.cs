@@ -50,8 +50,8 @@ public sealed class ScatterModule<T> : CartesianModule<ScatterModule<T>, T>
             if (!Visible(s)) continue;
 
             int n = s.Points.Count;
-            var keys = new float[n];
-            var order = new int[n];
+            float[] keys = new float[n];
+            int[] order = new int[n];
             for (int i = 0; i < n; i++) { keys[i] = -DiameterOf(s.Points[i].Payload); order[i] = i; }
             if (_size != null) Array.Sort(keys, order);
 

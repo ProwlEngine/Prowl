@@ -62,7 +62,7 @@ internal sealed class LambdaMatcher
     }
 
     public static bool IsSynthetic(MethodBase method)
-        => SyntheticName.TryParse(method.Name, out var name) && name.IsLambdaLike;
+        => SyntheticName.TryParse(method.Name, out SyntheticName name) && name.IsLambdaLike;
 
     /// <summary>
     /// Reads a lambda method's identity: which user type it belongs to, how it captures, and its position
@@ -71,17 +71,17 @@ internal sealed class LambdaMatcher
     public static LambdaIdentity Identify(MethodInfo lambda)
     {
         if (lambda.DeclaringType is not { } declaring) return default;
-        if (!SyntheticName.TryParse(lambda.Name, out var name) || !name.IsLambdaLike) return default;
+        if (!SyntheticName.TryParse(lambda.Name, out SyntheticName name) || !name.IsLambdaLike) return default;
         if (name.Ordinal < 0) return default;
 
-        var home = HomeOf(declaring);
+        LambdaHome home = HomeOf(declaring);
 
         switch (home)
         {
             case LambdaHome.DisplayClass:
             {
                 // The display class name carries the scope ordinal; the method name carries only its own.
-                if (!SyntheticName.TryParse(declaring.Name, out var closure)) return default;
+                if (!SyntheticName.TryParse(declaring.Name, out SyntheticName closure)) return default;
                 if (closure.Ordinal < 0 || closure.SubOrdinal < 0) return default;
                 if (declaring.DeclaringType is not { } userType) return default;
 
@@ -102,8 +102,8 @@ internal sealed class LambdaMatcher
             {
                 if (name.SubOrdinal < 0) return default;
 
-                // A static local function needs no target; an instance lambda captures "this".
-                var capture = lambda.IsStatic ? CaptureMode.None : CaptureMode.Instance;
+                    // A static local function needs no target; an instance lambda captures "this".
+                    CaptureMode capture = lambda.IsStatic ? CaptureMode.None : CaptureMode.Instance;
                 return new LambdaIdentity(declaring, home, capture, name.Scope, name.Ordinal, name.SubOrdinal);
             }
 
@@ -114,7 +114,7 @@ internal sealed class LambdaMatcher
 
     private static LambdaHome HomeOf(Type declaring)
     {
-        if (!SyntheticName.TryParse(declaring.Name, out var name)) return LambdaHome.UserType;
+        if (!SyntheticName.TryParse(declaring.Name, out SyntheticName name)) return LambdaHome.UserType;
         if (name.Kind != SyntheticKind.LambdaDisplayClass) return LambdaHome.UserType;
         return name.Suffix == "DisplayClass" ? LambdaHome.DisplayClass : LambdaHome.CacheClass;
     }
@@ -126,7 +126,7 @@ internal sealed class LambdaMatcher
         if (!closure.IsConstructedGenericType) return userType;
         if (!userType.IsGenericTypeDefinition) return userType;
 
-        var arguments = closure.GenericTypeArguments;
+        Type[] arguments = closure.GenericTypeArguments;
         return arguments.Length == userType.GetGenericArguments().Length
             ? userType.MakeGenericType(arguments)
             : userType;
@@ -135,10 +135,10 @@ internal sealed class LambdaMatcher
     /// <summary>The counterpart of a lambda method after the reload, or null when there is none.</summary>
     public MethodInfo? Match(MethodInfo previous)
     {
-        var identity = Identify(previous);
+        LambdaIdentity identity = Identify(previous);
         if (!identity.IsValid) return null;
 
-        var userType = _types.Resolve(identity.UserType);
+        TypeResolution userType = _types.Resolve(identity.UserType);
         if (userType.Target is not { } currentUserType) return null;
 
         // The lambda's own definition is untouched, so its counterpart is that same method, re-closed over the
@@ -146,7 +146,7 @@ internal sealed class LambdaMatcher
         // not replace still owns lambdas, and reaching the index would demand metadata nobody has to supply.
         if (userType.IsUnchanged) return Reuse(previous);
 
-        var scope = _indexes.For(identity.UserType.Assembly)
+        MethodBase? scope = _indexes.For(identity.UserType.Assembly)
             .FindScopeMethod(Definition(identity.UserType), identity.ScopeName, identity.ScopeOrdinal);
 
         if (scope == null)
@@ -159,14 +159,14 @@ internal sealed class LambdaMatcher
 
         if (_members.ResolveMethod(scope) is not { } currentScope) return null;
 
-        var index = _indexes.For(currentUserType.Assembly);
+        SyntheticIndex index = _indexes.For(currentUserType.Assembly);
         var key = new LambdaKey(
             Definition(currentUserType).FullName ?? currentUserType.Name,
             identity.ScopeName,
             index.ScopeOrdinalOf(currentScope),
             identity.LambdaOrdinal);
 
-        if (!index.TryGetLambda(key, out var entry)) return null;
+        if (!index.TryGetLambda(key, out LambdaEntry entry)) return null;
 
         return Close(entry, previous, currentUserType);
     }
@@ -180,12 +180,12 @@ internal sealed class LambdaMatcher
     /// </summary>
     private MethodInfo? Reuse(MethodInfo previous)
     {
-        var declaring = previous.DeclaringType!;
-        var container = declaring;
+        Type declaring = previous.DeclaringType!;
+        Type container = declaring;
 
         if (declaring.IsConstructedGenericType)
         {
-            var resolved = _types.Resolve(declaring);
+            TypeResolution resolved = _types.Resolve(declaring);
             if (resolved.Target is not { } target) return null;
             container = target;
         }
@@ -193,10 +193,10 @@ internal sealed class LambdaMatcher
         bool sameContainer = ReferenceEquals(container, declaring);
         if (sameContainer && !previous.IsGenericMethod) return previous;
 
-        var method = sameContainer ? previous : container.GetMethod(previous.Name, AllDeclared);
+        MethodInfo? method = sameContainer ? previous : container.GetMethod(previous.Name, AllDeclared);
         if (method == null || !previous.IsGenericMethod) return method;
 
-        var arguments = previous.GetGenericArguments();
+        Type[] arguments = previous.GetGenericArguments();
         var mapped = new Type[arguments.Length];
 
         for (int i = 0; i < arguments.Length; i++)
@@ -217,14 +217,14 @@ internal sealed class LambdaMatcher
     /// </summary>
     private MethodInfo? Close(in LambdaEntry entry, MethodInfo previous, Type currentUserType)
     {
-        var container = entry.DeclaringType;
+        Type container = entry.DeclaringType;
         if (!container.IsGenericTypeDefinition) return container.GetMethod(entry.MethodName, AllDeclared);
 
         Type[] mapped;
 
         if (previous.DeclaringType is { IsConstructedGenericType: true } source)
         {
-            var arguments = source.GenericTypeArguments;
+            Type[] arguments = source.GenericTypeArguments;
             mapped = new Type[arguments.Length];
 
             for (int i = 0; i < arguments.Length; i++)

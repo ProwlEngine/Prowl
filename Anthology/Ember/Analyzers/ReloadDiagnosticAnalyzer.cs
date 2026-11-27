@@ -65,7 +65,7 @@ public sealed class ReloadDiagnosticAnalyzer : DiagnosticAnalyzer
         var type = (INamedTypeSymbol)context.Symbol;
         if (!HasAttribute(type, IgnoreAttribute)) return;
 
-        var implemented = type.AllInterfaces
+        string[] implemented = type.AllInterfaces
             .Where(x => x.ToDisplayString() is AwareInterface or ObserverInterface)
             .Select(x => x.Name)
             .ToArray();
@@ -78,7 +78,7 @@ public sealed class ReloadDiagnosticAnalyzer : DiagnosticAnalyzer
 
     private static void AnalyzeMember(SymbolAnalysisContext context)
     {
-        var symbol = context.Symbol;
+        ISymbol symbol = context.Symbol;
 
         if (symbol is IFieldSymbol field)
         {
@@ -128,7 +128,7 @@ public sealed class ReloadDiagnosticAnalyzer : DiagnosticAnalyzer
 
     private static void ReportInvalidInitializer(SymbolAnalysisContext context, IFieldSymbol field)
     {
-        var attribute = field.GetAttributes()
+        AttributeData? attribute = field.GetAttributes()
             .FirstOrDefault(a => a.AttributeClass?.ToDisplayString() == InitializerAttribute);
 
         if (attribute == null) return;

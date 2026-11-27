@@ -20,21 +20,20 @@ freely, subject to the following restrictions:
 
 using Prowl.Recast.Core.Numerics;
 
-namespace Prowl.Recast.Detour.TileCache
+namespace Prowl.Recast.Detour.TileCache;
+
+public class DtTileCacheLayerHeader
 {
-    public class DtTileCacheLayerHeader
-    {
-        public const int DT_TILECACHE_MAGIC = 'D' << 24 | 'T' << 16 | 'L' << 8 | 'R'; // < 'DTLR';
-        public const int DT_TILECACHE_VERSION = 1;
+    public const int DT_TILECACHE_MAGIC = 'D' << 24 | 'T' << 16 | 'L' << 8 | 'R'; // < 'DTLR';
+    public const int DT_TILECACHE_VERSION = 1;
 
-        public int magic; // < Data magic
-        public int version; // < Data version
-        public int tx, ty, tlayer;
+    public int magic; // < Data magic
+    public int version; // < Data version
+    public int tx, ty, tlayer;
 
-        public RcVec3f bmin = new RcVec3f();
-        public RcVec3f bmax = new RcVec3f();
-        public int hmin, hmax; // < Height min/max range
-        public int width, height; // < Dimension of the layer.
-        public int minx, maxx, miny, maxy; // < Usable sub-region.
-    }
+    public RcVec3f bmin = new RcVec3f();
+    public RcVec3f bmax = new RcVec3f();
+    public int hmin, hmax; // < Height min/max range
+    public int width, height; // < Dimension of the layer.
+    public int minx, maxx, miny, maxy; // < Usable sub-region.
 }

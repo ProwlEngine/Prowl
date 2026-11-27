@@ -32,17 +32,17 @@ internal static class PdbSourceLocator
         symbol = symbol.OriginalDefinition;
         if (symbol.ContainingAssembly == null) return null;
         if (compilation.GetMetadataReference(symbol.ContainingAssembly) is not PortableExecutableReference { FilePath: { } dll }) return null;
-        var reader = Reader(dll);
+        MetadataReader? reader = Reader(dll);
         if (reader == null) return null;
 
         // Where the symbol's methods were compiled from, first point of each method.
         var points = new List<(string Path, int Line, int Column)>();
-        foreach (var method in MethodsOf(symbol))
+        foreach (IMethodSymbol method in MethodsOf(symbol))
         {
             if (method.MetadataToken == 0) continue;
-            var handle = MetadataTokens.EntityHandle(method.MetadataToken);
+            EntityHandle handle = MetadataTokens.EntityHandle(method.MetadataToken);
             if (handle.Kind != HandleKind.MethodDefinition) continue;
-            foreach (var point in reader.GetMethodDebugInformation((MethodDefinitionHandle)handle).GetSequencePoints())
+            foreach (SequencePoint point in reader.GetMethodDebugInformation((MethodDefinitionHandle)handle).GetSequencePoints())
             {
                 if (point.IsHidden || point.Document.IsNil) continue;
                 string path = reader.GetString(reader.GetDocument(point.Document).Name);
@@ -51,15 +51,15 @@ internal static class PdbSourceLocator
             }
         }
 
-        foreach (var file in points.Select(p => p.Path).Distinct(StringComparer.OrdinalIgnoreCase))
+        foreach (string? file in points.Select(p => p.Path).Distinct(StringComparer.OrdinalIgnoreCase))
         {
-            var near = points.First(p => string.Equals(p.Path, file, StringComparison.OrdinalIgnoreCase));
+            (string Path, int Line, int Column) near = points.First(p => string.Equals(p.Path, file, StringComparison.OrdinalIgnoreCase));
             if (Declaration(file, symbol, near.Line, near.Column) is { } at)
                 return new CodeLocation { Path = file, Line = at.Line, Column = at.Character, Display = display, Kind = kind };
         }
 
         if (points.Count == 0) return null;
-        var first = points[0];
+        (string Path, int Line, int Column) first = points[0];
         return new CodeLocation { Path = first.Path, Line = first.Line - 1, Column = first.Column - 1, Display = display, Kind = kind };
     }
 
@@ -69,7 +69,7 @@ internal static class PdbSourceLocator
         try { stamp = File.GetLastWriteTimeUtc(dll); }
         catch (IOException) { return null; }
 
-        var pdb = s_pdbs.AddOrUpdate(dll, path => Open(path, stamp), (path, old) => old.Stamp == stamp ? old : Open(path, stamp));
+        Pdb pdb = s_pdbs.AddOrUpdate(dll, path => Open(path, stamp), (path, old) => old.Stamp == stamp ? old : Open(path, stamp));
         return pdb.Provider?.GetMetadataReader();
     }
 
@@ -79,7 +79,7 @@ internal static class PdbSourceLocator
         try
         {
             using var pe = new PEReader(File.OpenRead(dll));
-            pe.TryOpenAssociatedPortablePdb(dll, path => File.Exists(path) ? File.OpenRead(path) : null, out var provider, out _);
+            pe.TryOpenAssociatedPortablePdb(dll, path => File.Exists(path) ? File.OpenRead(path) : null, out MetadataReaderProvider? provider, out _);
             return new Pdb(stamp, provider);
         }
         catch (Exception e) when (e is IOException or BadImageFormatException or UnauthorizedAccessException)
@@ -105,14 +105,14 @@ internal static class PdbSourceLocator
         SourceText text;
         try { text = SourceText.From(File.ReadAllText(path)); }
         catch (IOException) { return null; }
-        var tree = CSharpSyntaxTree.ParseText(text, path: path);
-        var root = tree.GetRoot();
+        SyntaxTree tree = CSharpSyntaxTree.ParseText(text, path: path);
+        SyntaxNode root = tree.GetRoot();
 
         SyntaxToken? name = null;
         if (symbol is IMethodSymbol && line > 0 && line <= text.Lines.Count)
         {
             int position = Math.Min(text.Lines[line - 1].Start + Math.Max(0, column - 1), text.Length);
-            var member = root.FindToken(position).Parent?.AncestorsAndSelf().FirstOrDefault(n => n is MemberDeclarationSyntax or AccessorDeclarationSyntax);
+            SyntaxNode? member = root.FindToken(position).Parent?.AncestorsAndSelf().FirstOrDefault(n => n is MemberDeclarationSyntax or AccessorDeclarationSyntax);
             name = member switch
             {
                 MethodDeclarationSyntax m => m.Identifier,
@@ -129,14 +129,14 @@ internal static class PdbSourceLocator
 
     private static SyntaxToken? NamedDeclaration(SyntaxNode root, ISymbol symbol)
     {
-        var type = symbol as INamedTypeSymbol ?? symbol.ContainingType;
+        INamedTypeSymbol type = symbol as INamedTypeSymbol ?? symbol.ContainingType;
         if (type == null) return null;
-        foreach (var declaration in root.DescendantNodes().OfType<BaseTypeDeclarationSyntax>())
+        foreach (BaseTypeDeclarationSyntax declaration in root.DescendantNodes().OfType<BaseTypeDeclarationSyntax>())
         {
             if (declaration.Identifier.ValueText != type.Name) continue;
             if (ReferenceEquals(symbol, type) || symbol is INamedTypeSymbol) return declaration.Identifier;
 
-            foreach (var member in declaration.ChildNodes())
+            foreach (SyntaxNode member in declaration.ChildNodes())
             {
                 SyntaxToken? token = member switch
                 {

@@ -198,7 +198,7 @@ public sealed class NumericFieldBuilder<T> where T : struct, INumber<T>
         // Positive and negative zero compare equal but print differently, so zero is never cached.
         if (T.IsZero(value)) return FormatValue(value, format, culture);
 
-        var all = s_texts ??= new();
+        List<(string Format, CultureInfo Culture, Dictionary<T, string> Texts)> all = s_texts ??= [];
         Dictionary<T, string>? texts = null;
         for (int i = 0; i < all.Count; i++)
         {
@@ -206,9 +206,9 @@ public sealed class NumericFieldBuilder<T> where T : struct, INumber<T>
             texts = all[i].Texts;
             break;
         }
-        if (texts == null) all.Add((format, culture, texts = new Dictionary<T, string>()));
+        if (texts == null) all.Add((format, culture, texts = []));
 
-        if (!texts.TryGetValue(value, out var text))
+        if (!texts.TryGetValue(value, out string? text))
         {
             if (texts.Count >= MaxCachedTexts) texts.Clear();
             texts[value] = text = FormatValue(value, format, culture);
@@ -236,7 +236,7 @@ public sealed class NumericFieldBuilder<T> where T : struct, INumber<T>
         Func<string, (bool, string?)>? stringValidator = null;
         if (_validator != null)
         {
-            var captured = _validator;
+            Func<T, (bool ok, string? message)> captured = _validator;
             stringValidator = s =>
             {
                 if (!TryParse(s, out T parsed)) return (false, "Invalid number");
@@ -244,7 +244,7 @@ public sealed class NumericFieldBuilder<T> where T : struct, INumber<T>
             };
         }
 
-        var tb = new TextFieldBuilder(_paper, _id, text, raw => HandleChange(raw), _theme)
+        TextFieldBuilder tb = new TextFieldBuilder(_paper, _id, text, raw => HandleChange(raw), _theme)
             .Variant(_variant)
             .Width(_width)
             .Height(_height)
@@ -283,7 +283,7 @@ public sealed class NumericFieldBuilder<T> where T : struct, INumber<T>
 
     private void DrawStepper()
     {
-        var ink = _theme.Ink;
+        OrigamiRamp ink = _theme.Ink;
         Color bdSoft = _theme.BorderSoft;
         Color hover = _theme.Hover;
         float h = _height;
@@ -299,7 +299,7 @@ public sealed class NumericFieldBuilder<T> where T : struct, INumber<T>
     private void StepBtn(string bid, bool up, float bh, Color hover, Color icon)
     {
         float r = MathF.Max(0f, _theme.Metrics.Rounding - 1f);
-        var b = _paper.Box(bid).Width(22).Height(bh)
+        ElementBuilder b = _paper.Box(bid).Width(22).Height(bh)
             .Rounded(0f, up ? r : 0f, up ? 0f : r, 0f)   // round the outer corner against the field
             .Hovered.BackgroundColor(hover).End()
             .OnClick(0, (_, _) => Increment(up ? 1 : -1))
@@ -345,7 +345,7 @@ public sealed class NumericFieldBuilder<T> where T : struct, INumber<T>
 
     private void EndScrub()
     {
-        var state = _paper.GetRootStorage<ScrubState?>(ScrubKey);
+        ScrubState? state = _paper.GetRootStorage<ScrubState?>(ScrubKey);
         _paper.SetRootStorage<ScrubState?>(ScrubKey, null);
         if (state is { Changed: true }) _onCommit?.Invoke();
     }
@@ -364,7 +364,7 @@ public sealed class NumericFieldBuilder<T> where T : struct, INumber<T>
     private void AddDelta(float dx)
     {
         // Normally created by BeginScrub; if the drag-start event hasn't fired yet, start one now.
-        var state = _paper.GetRootStorage<ScrubState?>(ScrubKey);
+        ScrubState? state = _paper.GetRootStorage<ScrubState?>(ScrubKey);
         if (state == null)
         {
             state = new ScrubState { PerPixel = ScrubRate() };
@@ -396,7 +396,7 @@ public sealed class NumericFieldBuilder<T> where T : struct, INumber<T>
 
     private bool NumericCharFilter(char c, string current)
     {
-        var nf = _culture.NumberFormat;
+        NumberFormatInfo nf = _culture.NumberFormat;
 
         if (char.IsDigit(c)) return true;
 
@@ -424,7 +424,7 @@ public sealed class NumericFieldBuilder<T> where T : struct, INumber<T>
     {
         if (string.IsNullOrWhiteSpace(s)) { result = default; return s == string.Empty; };
 
-        var styles = s_isFloatingPoint
+        NumberStyles styles = s_isFloatingPoint
             ? NumberStyles.Float | NumberStyles.AllowThousands
             : NumberStyles.Integer | NumberStyles.AllowThousands;
 

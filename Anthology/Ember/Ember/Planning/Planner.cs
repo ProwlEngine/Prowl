@@ -38,9 +38,9 @@ internal sealed class Planner
     private readonly MigratorRegistry _migrators;
     private readonly ReportBuilder _report;
 
-    private readonly Dictionary<Type, MigrationPlan> _plans = new();
-    private readonly HashSet<Type> _planning = new();
-    private readonly Dictionary<Type, (IValueMigrator? Migrator, string Reason)> _reasons = new();
+    private readonly Dictionary<Type, MigrationPlan> _plans = [];
+    private readonly HashSet<Type> _planning = [];
+    private readonly Dictionary<Type, (IValueMigrator? Migrator, string Reason)> _reasons = [];
 
     public Planner(PlanContext context, TypeMap types, TypeAnalyzer analyzer, ScopeRules scope,
         MigratorRegistry migrators, ReportBuilder report)
@@ -57,7 +57,7 @@ internal sealed class Planner
 
     public MigrationPlan For(Type type)
     {
-        if (_plans.TryGetValue(type, out var cached)) return cached;
+        if (_plans.TryGetValue(type, out MigrationPlan? cached)) return cached;
 
         // A plan that asks for the plan of its own type. Preserving is the only safe answer, but it is a bug in
         // whichever migrator asked, so it is reported rather than absorbed.
@@ -71,7 +71,7 @@ internal sealed class Planner
 
         try
         {
-            var plan = Choose(type, out var migrator, out var reason);
+            MigrationPlan plan = Choose(type, out IValueMigrator? migrator, out string? reason);
 
             _plans[type] = plan;
             _reasons[type] = (migrator, reason);
@@ -85,8 +85,8 @@ internal sealed class Planner
 
     public PlanExplanation Explain(Type type)
     {
-        var plan = For(type);
-        var reason = _reasons.TryGetValue(type, out var found) ? found : (null, "unknown");
+        MigrationPlan plan = For(type);
+        (IValueMigrator?, string) reason = _reasons.TryGetValue(type, out (IValueMigrator? Migrator, string Reason) found) ? found : (null, "unknown");
         return new PlanExplanation(type, _analyzer.For(type), plan, reason.Item1, reason.Item2);
     }
 
@@ -94,7 +94,7 @@ internal sealed class Planner
     {
         migrator = null;
 
-        var resolution = _types.Resolve(type);
+        TypeResolution resolution = _types.Resolve(type);
 
         if (resolution.IsRemoved)
         {
@@ -125,7 +125,7 @@ internal sealed class Planner
             return PreservePlan.Instance;
         }
 
-        foreach (var candidate in _migrators)
+        foreach (IValueMigrator candidate in _migrators)
         {
             if (!candidate.Handles(type)) continue;
 

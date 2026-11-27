@@ -6,9 +6,9 @@ using System.Reflection.Emit;
 using Mono.Cecil;
 using Mono.Cecil.Cil;
 
+using CecilOpCode = Mono.Cecil.Cil.OpCode;
 using EmitOpCode = System.Reflection.Emit.OpCode;
 using EmitOpCodes = System.Reflection.Emit.OpCodes;
-using CecilOpCode = Mono.Cecil.Cil.OpCode;
 
 namespace Prowl.Ember;
 
@@ -26,7 +26,7 @@ internal static class ILTranslator
         var opCodes = new List<EmitOpCode>();
         int max = 0;
 
-        foreach (var field in typeof(EmitOpCodes).GetFields(BindingFlags.Public | BindingFlags.Static))
+        foreach (FieldInfo field in typeof(EmitOpCodes).GetFields(BindingFlags.Public | BindingFlags.Static))
         {
             var value = (EmitOpCode)field.GetValue(null)!;
             opCodes.Add(value);
@@ -34,7 +34,7 @@ internal static class ILTranslator
         }
 
         var table = new EmitOpCode[max];
-        foreach (var opCode in opCodes)
+        foreach (EmitOpCode opCode in opCodes)
             if (opCode.Value >= 0)
                 table[opCode.Value] = opCode;
         return table;
@@ -51,7 +51,7 @@ internal static class ILTranslator
         Type[]? genericTypeArguments, Type[]? genericMethodArguments)
     {
         var instructions = new List<Instruction>();
-        for (var inst = first; inst != until; inst = inst.Next)
+        for (Instruction inst = first; inst != until; inst = inst.Next)
         {
             if (inst == null) throw new InvalidOperationException("Instruction slice ran past the end of the method body.");
             instructions.Add(inst);
@@ -59,7 +59,7 @@ internal static class ILTranslator
 
         var labels = new Dictionary<Instruction, Label>();
         var locals = new Dictionary<VariableDefinition, LocalBuilder>();
-        var operands = new object?[instructions.Count];
+        object?[] operands = new object?[instructions.Count];
 
         for (int i = 0; i < instructions.Count; i++)
         {
@@ -77,7 +77,7 @@ internal static class ILTranslator
 
         for (int i = 0; i < instructions.Count; i++)
         {
-            if (labels.TryGetValue(instructions[i], out var label))
+            if (labels.TryGetValue(instructions[i], out Label label))
                 il.MarkLabel(label);
 
             Emit(il, Convert(instructions[i].OpCode), operands[i]);
@@ -110,7 +110,7 @@ internal static class ILTranslator
 
     private static Label DefineLabel(ILGenerator il, Dictionary<Instruction, Label> labels, Instruction target)
     {
-        if (labels.TryGetValue(target, out var label)) return label;
+        if (labels.TryGetValue(target, out Label label)) return label;
         label = il.DefineLabel();
         labels.Add(target, label);
         return label;
@@ -127,7 +127,7 @@ internal static class ILTranslator
     private static LocalBuilder DeclareLocal(ILGenerator il, Module context, Dictionary<VariableDefinition, LocalBuilder> locals,
         VariableDefinition variable, Type[]? genericTypeArguments, Type[]? genericMethodArguments)
     {
-        if (locals.TryGetValue(variable, out var local)) return local;
+        if (locals.TryGetValue(variable, out LocalBuilder? local)) return local;
         local = il.DeclareLocal(ResolveType(context, variable.VariableType, genericTypeArguments, genericMethodArguments), variable.IsPinned);
         locals.Add(variable, local);
         return local;

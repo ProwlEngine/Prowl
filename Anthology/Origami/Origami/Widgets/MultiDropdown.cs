@@ -68,7 +68,7 @@ public sealed class MultiDropdownBuilder<T>
         _height = _theme.Metrics.RowHeight;
         _selected = selected != null
             ? new HashSet<T>(selected, comparer ?? EqualityComparer<T>.Default)
-            : new HashSet<T>(comparer ?? EqualityComparer<T>.Default);
+            : [with(comparer ?? EqualityComparer<T>.Default)];
     }
 
     // ── Variant ────────────────────────────────────────────────────────
@@ -127,11 +127,11 @@ public sealed class MultiDropdownBuilder<T>
     public void Show()
     {
         if (Origami.IsReadOnly) _disabled = true;
-        var ramp = _theme.Get(_variant);
-        var ink = _theme.Ink;
-        var font = _theme.Font;
-        var icons = _theme.Icons;
-        var disp = _display ?? (t => t?.ToString() ?? string.Empty);
+        OrigamiRamp ramp = _theme.Get(_variant);
+        OrigamiRamp ink = _theme.Ink;
+        Scribe.FontFile? font = _theme.Font;
+        OrigamiIcons icons = _theme.Icons;
+        Func<T, string> disp = _display ?? (t => t?.ToString() ?? string.Empty);
 
         bool isEmpty = _selected.Count == 0;
         string triggerText = BuildSummary(disp, isEmpty);
@@ -143,7 +143,7 @@ public sealed class MultiDropdownBuilder<T>
         Color trigBorder = subtle ? Color.Transparent : _theme.BorderSoft;
         Color trigBorderHover = _theme.BorderStrong;
         // Flex-wrap field (prototype .w2field: height auto, minHeight 32, padding 4, gap 4).
-        var trigger = _paper.Row(_id)
+        ElementBuilder trigger = _paper.Row(_id)
             .Width(_width).Height(UnitValue.Auto).MinHeight(_height)
             .WrapContent().Gap(4).LineGap(4).Padding(4, 4, 4, 4)
             .BackgroundColor(trigBg)
@@ -175,9 +175,9 @@ public sealed class MultiDropdownBuilder<T>
                 if (!isEmpty)
                 {
                     int ci = 0;
-                    foreach (var item in _selected)
+                    foreach (T? item in _selected)
                     {
-                        var captured = item;
+                        T? captured = item;
                         MultiChip($"{_id}_chip_{ci}", disp(item), () => { _selected.Remove(captured); _setter(_selected.ToList()); });
                         ci++;
                     }
@@ -241,7 +241,7 @@ public sealed class MultiDropdownBuilder<T>
     // A removable selection chip inside the trigger (prototype .w2chip: accent-tint fill + rim + x).
     private void MultiChip(string id, string label, Action onRemove)
     {
-        var font = _theme.Font;
+        Scribe.FontFile? font = _theme.Font;
         Color bg = _theme.Selected;   // acc-dim (0.16)
         Color bd = Color.FromArgb(115, _theme.Primary.C500.R, _theme.Primary.C500.G, _theme.Primary.C500.B);  // ~0.45 — reads brighter, matches prototype
         Color tx = _theme.Primary.C700;                 // acc-300
@@ -256,8 +256,8 @@ public sealed class MultiDropdownBuilder<T>
                 .IsNotInteractable()
                 .Text(label, font!).TextColor(tx).FontSize(_theme.Metrics.FontSize - 2f).Alignment(TextAlignment.MiddleLeft);
 
-            var rm = onRemove;
-            var xcol = tx;
+            Action rm = onRemove;
+            Color xcol = tx;
             using (_paper.Box("x").Size(15).Rounded(_theme.Metrics.SmallRounding).Margin(3, 0, UnitValue.Stretch(), UnitValue.Stretch())
                 .Hovered.BackgroundColor(Color.FromArgb(64, _theme.Primary.C500.R, _theme.Primary.C500.G, _theme.Primary.C500.B)).End()
                 .StopEventPropagation().OnClick(_ => rm())
@@ -289,7 +289,7 @@ public sealed class MultiDropdownBuilder<T>
         {
             var sb = new StringBuilder();
             int written = 0;
-            foreach (var item in _items)
+            foreach (T? item in _items)
             {
                 if (!_selected.Contains(item)) continue;
                 if (written++ > 0) sb.Append(", ");

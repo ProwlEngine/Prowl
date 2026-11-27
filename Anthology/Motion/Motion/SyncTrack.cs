@@ -141,7 +141,7 @@ public sealed class SyncTrack
         offsetDelta -= MathF.Round(offsetDelta);
 
         if (!ReferenceEquals(events, _events) && _events.Length > 0)
-            (_buffers ??= new List<SyncEvent[]>()).Add(_events);
+            (_buffers ??= []).Add(_events);
         _events = events;
         _startEventOffset = 0;
         _timeOffset = first0 + offsetDelta * weight;

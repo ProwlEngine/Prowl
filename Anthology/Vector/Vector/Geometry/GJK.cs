@@ -78,17 +78,13 @@ public static class GJK
     /// <returns>True if the origin is contained in the simplex.</returns>
     private static bool HandleSimplex(ref Simplex simplex, ref Float3 direction)
     {
-        switch (simplex.Count)
+        return simplex.Count switch
         {
-            case 2:
-                return HandleLine(ref simplex, ref direction);
-            case 3:
-                return HandleTriangle(ref simplex, ref direction);
-            case 4:
-                return HandleTetrahedron(ref simplex, ref direction);
-            default:
-                return false;
-        }
+            2 => HandleLine(ref simplex, ref direction),
+            3 => HandleTriangle(ref simplex, ref direction),
+            4 => HandleTetrahedron(ref simplex, ref direction),
+            _ => false,
+        };
     }
 
     /// <summary>
@@ -278,14 +274,14 @@ public static class GJK
         {
             get
             {
-                switch (index)
+                return index switch
                 {
-                    case 0: return _p0;
-                    case 1: return _p1;
-                    case 2: return _p2;
-                    case 3: return _p3;
-                    default: throw new IndexOutOfRangeException();
-                }
+                    0 => _p0,
+                    1 => _p1,
+                    2 => _p2,
+                    3 => _p3,
+                    _ => throw new IndexOutOfRangeException(),
+                };
             }
         }
 

@@ -134,7 +134,7 @@ public sealed class EchoTextFormat : IFileFormat
             case EchoType.List:
                 string indent = Indent(indentLevel);
                 writer.WriteLine("[");
-                var list = prop.List;
+                List<EchoObject> list = prop.List;
                 for (int i = 0; i < list.Count; i++)
                 {
                     writer.Write(indent);
@@ -198,9 +198,9 @@ public sealed class EchoTextFormat : IFileFormat
         bool wroteAny = false;
 
         // Write "$id", "$type", "$dependencies" keys first, if they exist
-        foreach (var key in SpecialKeys)
+        foreach (string key in SpecialKeys)
         {
-            if (!dict.TryGetValue(key, out var special))
+            if (!dict.TryGetValue(key, out EchoObject? special))
                 continue;
 
             if (wroteAny)
@@ -213,7 +213,7 @@ public sealed class EchoTextFormat : IFileFormat
         }
 
         // Write the remaining key-value pairs
-        foreach (var kvp in dict)
+        foreach (KeyValuePair<string, EchoObject> kvp in dict)
         {
             if (kvp.Key == "$id" || kvp.Key == "$type" || kvp.Key == "$dependencies")
                 continue;
@@ -258,7 +258,7 @@ public sealed class EchoTextFormat : IFileFormat
 
     private static EchoObject ReadCompoundTag(StringTagTokenizer parser)
     {
-        var startPosition = parser.TokenPosition;
+        int startPosition = parser.TokenPosition;
 
         var compound = EchoObject.NewCompound();
         while (parser.MoveNext())
@@ -270,7 +270,7 @@ public sealed class EchoTextFormat : IFileFormat
                 case TextTokenType.Separator:
                     continue;
                 case TextTokenType.Value:
-                    var name = parser.Token[0] is '"' or '\'' ? parser.ParseQuotedStringValue() : new string(parser.Token);
+                    string name = parser.Token[0] is '"' or '\'' ? parser.ParseQuotedStringValue() : new string(parser.Token);
 
                     if (!parser.MoveNext())
                         throw new InvalidDataException($"End of input reached while reading a compound property starting at position {startPosition}");
@@ -281,7 +281,7 @@ public sealed class EchoTextFormat : IFileFormat
                     if (!parser.MoveNext())
                         throw new InvalidDataException($"End of input reached while reading a compound property starting at position {startPosition}");
 
-                    var value = ReadTag(parser);
+                    EchoObject value = ReadTag(parser);
 
                     compound.Add(name, value);
 
@@ -296,7 +296,7 @@ public sealed class EchoTextFormat : IFileFormat
 
     private static EchoObject ReadListTag(StringTagTokenizer parser)
     {
-        var startPosition = parser.TokenPosition;
+        int startPosition = parser.TokenPosition;
 
         var items = new List<EchoObject>();
 
@@ -310,7 +310,7 @@ public sealed class EchoTextFormat : IFileFormat
                     continue;
             }
 
-            var tag = ReadTag(parser);
+            EchoObject tag = ReadTag(parser);
 
             items.Add(tag);
         }
@@ -329,7 +329,7 @@ public sealed class EchoTextFormat : IFileFormat
 
     private static EchoObject ReadByteArrayTag(StringTagTokenizer parser)
     {
-        var startPosition = parser.TokenPosition;
+        int startPosition = parser.TokenPosition;
 
         byte[] arr = [];
         while (parser.MoveNext())
@@ -368,7 +368,7 @@ public sealed class EchoTextFormat : IFileFormat
         // before the letter-first string fallback would misread them as a string.
         if (parser.Token[^1] is 'F' or 'D')
         {
-            var body = parser.Token[..^1];
+            ReadOnlySpan<char> body = parser.Token[..^1];
             if (body.SequenceEqual("NaN") || body.SequenceEqual("Infinity") || body.SequenceEqual("-Infinity"))
                 return ReadNumberTag(parser);
         }
@@ -388,9 +388,9 @@ public sealed class EchoTextFormat : IFileFormat
     {
         const NumberStyles Integer = NumberStyles.Integer;
         const NumberStyles Float = NumberStyles.Float | NumberStyles.AllowThousands;
-        var invariant = CultureInfo.InvariantCulture;
-        var token = parser.Token;
-        var body = token[..^1];
+        CultureInfo invariant = CultureInfo.InvariantCulture;
+        ReadOnlySpan<char> token = parser.Token;
+        ReadOnlySpan<char> body = token[..^1];
 
         return token[^1] switch
         {
@@ -514,18 +514,18 @@ public sealed class EchoTextFormat : IFileFormat
 
         public string ParseQuotedStringValue()
         {
-            var token = Token;
-            var quote = token[0];
+            ReadOnlySpan<char> token = Token;
+            char quote = token[0];
             if (token[^1] != quote)
                 throw new InvalidDataException($"Missing ending quote from string \"{token.ToString()}\" at position {TokenPosition}");
 
-            var inner = token[1..^1];
+            ReadOnlySpan<char> inner = token[1..^1];
             if (inner.IndexOf('\\') < 0 && inner.IndexOf(quote) < 0)
                 return inner.ToString();
 
-            var s = new char[inner.Length];
-            var len = 0;
-            var rest = inner;
+            char[] s = new char[inner.Length];
+            int len = 0;
+            ReadOnlySpan<char> rest = inner;
             while (!rest.IsEmpty)
             {
                 if (rest[0] == quote)

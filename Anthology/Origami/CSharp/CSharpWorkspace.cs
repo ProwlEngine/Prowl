@@ -24,9 +24,9 @@ public sealed class CSharpWorkspace : IDisposable
     private static readonly StringComparer s_pathComparer = OperatingSystem.IsWindows() ? StringComparer.OrdinalIgnoreCase : StringComparer.Ordinal;
 
     private readonly object _lock = new();
-    private readonly Dictionary<string, DocumentId> _documentsByPath = new(s_pathComparer);
-    private readonly Dictionary<string, SourceText> _extraTexts = new(s_pathComparer);
-    private readonly HashSet<DocumentId> _openDocuments = new();
+    private readonly Dictionary<string, DocumentId> _documentsByPath = [with(s_pathComparer)];
+    private readonly Dictionary<string, SourceText> _extraTexts = [with(s_pathComparer)];
+    private readonly HashSet<DocumentId> _openDocuments = [];
     private Solution _solution;
     private int _untitledCount;
 
@@ -73,7 +73,7 @@ public sealed class CSharpWorkspace : IDisposable
 
     public void SetPreprocessorSymbols(IEnumerable<string> symbols)
     {
-        var list = symbols.ToArray();
+        string[] list = symbols.ToArray();
         Mutate(s => s.WithProjectParseOptions(ProjectId, ((CSharpParseOptions)s.GetProject(ProjectId)!.ParseOptions!).WithPreprocessorSymbols(list)));
     }
 
@@ -86,7 +86,7 @@ public sealed class CSharpWorkspace : IDisposable
 
     public void SetReferences(IEnumerable<MetadataReference> references)
     {
-        var list = references.ToArray();
+        MetadataReference[] list = references.ToArray();
         Mutate(s => s.WithProjectMetadataReferences(ProjectId, list));
     }
 
@@ -103,7 +103,7 @@ public sealed class CSharpWorkspace : IDisposable
         lock (_lock)
         {
             _extraTexts[path] = source;
-            if (_documentsByPath.TryGetValue(path, out var id))
+            if (_documentsByPath.TryGetValue(path, out DocumentId? id))
             {
                 if (!_openDocuments.Contains(id))
                     _solution = _solution.WithDocumentText(id, source);
@@ -119,7 +119,7 @@ public sealed class CSharpWorkspace : IDisposable
     {
         lock (_lock)
         {
-            if (!_extraTexts.Remove(path) || !_documentsByPath.TryGetValue(path, out var id) || _openDocuments.Contains(id))
+            if (!_extraTexts.Remove(path) || !_documentsByPath.TryGetValue(path, out DocumentId? id) || _openDocuments.Contains(id))
                 return;
             _documentsByPath.Remove(path);
             _solution = _solution.RemoveDocument(id);
@@ -139,7 +139,7 @@ public sealed class CSharpWorkspace : IDisposable
         lock (_lock)
         {
             path ??= $"Untitled{++_untitledCount}.cs";
-            if (_documentsByPath.TryGetValue(path, out var id))
+            if (_documentsByPath.TryGetValue(path, out DocumentId? id))
             {
                 if (_openDocuments.Contains(id))
                     throw new InvalidOperationException($"'{path}' is already open in another session.");
@@ -172,7 +172,7 @@ public sealed class CSharpWorkspace : IDisposable
         {
             if (!_openDocuments.Remove(id)) return;
             string? path = _documentsByPath.FirstOrDefault(p => p.Value == id).Key;
-            if (path != null && _extraTexts.TryGetValue(path, out var text))
+            if (path != null && _extraTexts.TryGetValue(path, out SourceText? text))
             {
                 _solution = _solution.WithDocumentText(id, text);
                 return;
@@ -198,7 +198,7 @@ public sealed class CSharpWorkspace : IDisposable
     public static MetadataReference CreateReference(string path)
     {
         string xml = Path.ChangeExtension(path, ".xml");
-        var docs = File.Exists(xml) ? XmlDocumentationProvider.CreateFromFile(xml) : null;
+        XmlDocumentationProvider? docs = File.Exists(xml) ? XmlDocumentationProvider.CreateFromFile(xml) : null;
         return MetadataReference.CreateFromFile(path, documentation: docs);
     }
 

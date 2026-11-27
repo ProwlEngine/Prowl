@@ -19,97 +19,96 @@ freely, subject to the following restrictions:
 */
 
 using System;
+
 using Prowl.Recast.Core.Numerics;
 
-namespace Prowl.Recast.Detour
+using static Prowl.Recast.Detour.DtDetour;
+
+namespace Prowl.Recast.Detour;
+/**
+* <b>The Default Implementation</b>
+*
+* At construction: All area costs default to 1.0. All flags are included and none are excluded.
+*
+* If a polygon has both an include and an exclude flag, it will be excluded.
+*
+* The way filtering works, a navigation mesh polygon must have at least one flag set to ever be considered by a query.
+* So a polygon with no flags will never be considered.
+*
+* Setting the include flags to 0 will result in all polygons being excluded.
+*
+* <b>Custom Implementations</b>
+*
+* Implement a custom query filter by overriding the virtual PassFilter() and GetCost() functions. If this is done, both
+* functions should be as fast as possible. Use cached local copies of data rather than accessing your own objects where
+* possible.
+*
+* Custom implementations do not need to adhere to the flags or cost logic used by the default implementation.
+*
+* In order for A* searches to work properly, the cost should be proportional to the travel distance. Implementing a
+* cost modifier less than 1.0 is likely to lead to problems during pathfinding.
+*
+* @see NavMeshQuery
+*/
+public class DtQueryDefaultFilter : IDtQueryFilter
 {
-    using static DtDetour;
+    private readonly float[] m_areaCost = new float[DT_MAX_AREAS]; //< Cost per area type. (Used by default implementation.)
+    private int m_includeFlags; //< Flags for polygons that can be visited. (Used by default implementation.) 
+    private int m_excludeFlags; //< Flags for polygons that should not be visited. (Used by default implementation.) 
 
-    /**
- * <b>The Default Implementation</b>
- *
- * At construction: All area costs default to 1.0. All flags are included and none are excluded.
- *
- * If a polygon has both an include and an exclude flag, it will be excluded.
- *
- * The way filtering works, a navigation mesh polygon must have at least one flag set to ever be considered by a query.
- * So a polygon with no flags will never be considered.
- *
- * Setting the include flags to 0 will result in all polygons being excluded.
- *
- * <b>Custom Implementations</b>
- *
- * Implement a custom query filter by overriding the virtual PassFilter() and GetCost() functions. If this is done, both
- * functions should be as fast as possible. Use cached local copies of data rather than accessing your own objects where
- * possible.
- *
- * Custom implementations do not need to adhere to the flags or cost logic used by the default implementation.
- *
- * In order for A* searches to work properly, the cost should be proportional to the travel distance. Implementing a
- * cost modifier less than 1.0 is likely to lead to problems during pathfinding.
- *
- * @see NavMeshQuery
- */
-    public class DtQueryDefaultFilter : IDtQueryFilter
+    public DtQueryDefaultFilter()
     {
-        private readonly float[] m_areaCost = new float[DT_MAX_AREAS]; //< Cost per area type. (Used by default implementation.)
-        private int m_includeFlags; //< Flags for polygons that can be visited. (Used by default implementation.) 
-        private int m_excludeFlags; //< Flags for polygons that should not be visited. (Used by default implementation.) 
-
-        public DtQueryDefaultFilter()
+        m_includeFlags = 0xffff;
+        m_excludeFlags = 0;
+        for (int i = 0; i < DT_MAX_AREAS; ++i)
         {
-            m_includeFlags = 0xffff;
-            m_excludeFlags = 0;
-            for (int i = 0; i < DT_MAX_AREAS; ++i)
-            {
-                m_areaCost[i] = 1.0f;
-            }
+            m_areaCost[i] = 1.0f;
+        }
+    }
+
+    public DtQueryDefaultFilter(int includeFlags, int excludeFlags, float[] areaCost)
+    {
+        m_includeFlags = includeFlags;
+        m_excludeFlags = excludeFlags;
+        for (int i = 0; i < Math.Min(DT_MAX_AREAS, areaCost.Length); ++i)
+        {
+            m_areaCost[i] = areaCost[i];
         }
 
-        public DtQueryDefaultFilter(int includeFlags, int excludeFlags, float[] areaCost)
+        for (int i = areaCost.Length; i < DT_MAX_AREAS; ++i)
         {
-            m_includeFlags = includeFlags;
-            m_excludeFlags = excludeFlags;
-            for (int i = 0; i < Math.Min(DT_MAX_AREAS, areaCost.Length); ++i)
-            {
-                m_areaCost[i] = areaCost[i];
-            }
-
-            for (int i = areaCost.Length; i < DT_MAX_AREAS; ++i)
-            {
-                m_areaCost[i] = 1.0f;
-            }
+            m_areaCost[i] = 1.0f;
         }
+    }
 
-        public bool PassFilter(long refs, DtMeshTile tile, DtPoly poly)
-        {
-            return (poly.flags & m_includeFlags) != 0 && (poly.flags & m_excludeFlags) == 0;
-        }
+    public bool PassFilter(long refs, DtMeshTile tile, DtPoly poly)
+    {
+        return (poly.flags & m_includeFlags) != 0 && (poly.flags & m_excludeFlags) == 0;
+    }
 
-        public float GetCost(RcVec3f pa, RcVec3f pb, long prevRef, DtMeshTile prevTile, DtPoly prevPoly, long curRef,
-            DtMeshTile curTile, DtPoly curPoly, long nextRef, DtMeshTile nextTile, DtPoly nextPoly)
-        {
-            return RcVec3f.Distance(pa, pb) * m_areaCost[curPoly.GetArea()];
-        }
+    public float GetCost(RcVec3f pa, RcVec3f pb, long prevRef, DtMeshTile prevTile, DtPoly prevPoly, long curRef,
+        DtMeshTile curTile, DtPoly curPoly, long nextRef, DtMeshTile nextTile, DtPoly nextPoly)
+    {
+        return RcVec3f.Distance(pa, pb) * m_areaCost[curPoly.GetArea()];
+    }
 
-        public int GetIncludeFlags()
-        {
-            return m_includeFlags;
-        }
+    public int GetIncludeFlags()
+    {
+        return m_includeFlags;
+    }
 
-        public void SetIncludeFlags(int flags)
-        {
-            m_includeFlags = flags;
-        }
+    public void SetIncludeFlags(int flags)
+    {
+        m_includeFlags = flags;
+    }
 
-        public int GetExcludeFlags()
-        {
-            return m_excludeFlags;
-        }
+    public int GetExcludeFlags()
+    {
+        return m_excludeFlags;
+    }
 
-        public void SetExcludeFlags(int flags)
-        {
-            m_excludeFlags = flags;
-        }
+    public void SetExcludeFlags(int flags)
+    {
+        m_excludeFlags = flags;
     }
 }

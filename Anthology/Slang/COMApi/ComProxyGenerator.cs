@@ -179,7 +179,7 @@ public sealed class ComProxyGenerator : IIncrementalGenerator
 
     private static List<(IMethodSymbol Method, int Slot)> GetAllMethodsWithSlots(INamedTypeSymbol iface)
     {
-        List<INamedTypeSymbol> chain = new();
+        List<INamedTypeSymbol> chain = [];
         INamedTypeSymbol? current = iface;
 
         while (current != null && current.Name != "IUnknown")
@@ -190,7 +190,7 @@ public sealed class ComProxyGenerator : IIncrementalGenerator
 
         chain.Reverse();
 
-        List<(IMethodSymbol, int)> result = new();
+        List<(IMethodSymbol, int)> result = [];
         int slot = 3;
 
         foreach (INamedTypeSymbol level in chain)
@@ -211,7 +211,7 @@ public sealed class ComProxyGenerator : IIncrementalGenerator
 
     private static List<INamedTypeSymbol> GetGuidChain(INamedTypeSymbol iface)
     {
-        List<INamedTypeSymbol> chain = new();
+        List<INamedTypeSymbol> chain = [];
         INamedTypeSymbol? current = iface;
 
         while (current != null)

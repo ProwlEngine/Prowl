@@ -3,6 +3,7 @@
 
 using System.Globalization;
 using System.Text;
+
 using Prowl.Aperture.Decoders.Hdr;
 using Prowl.Aperture.Metadata;
 

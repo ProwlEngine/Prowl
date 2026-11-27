@@ -4,14 +4,14 @@ namespace Prowl.Graphite;
 
 internal sealed class GraphTextureStates
 {
-    private static readonly Dictionary<Texture, TextureState> s_none = new();
+    private static readonly Dictionary<Texture, TextureState> s_none = [];
 
     private readonly Dictionary<Texture, TextureState> _states;
     private readonly Dictionary<Texture, TextureState> _allowed;
 
     internal GraphTextureStates(Dictionary<Texture, TextureState> states, Dictionary<Texture, TextureState>? allowed = null)
     {
-        _states = new Dictionary<Texture, TextureState>(states);
+        _states = [with(states)];
         _allowed = allowed ?? s_none;
     }
 

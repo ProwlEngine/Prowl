@@ -7,6 +7,7 @@ using System.Collections.Generic;
 using Prowl.PaperUI;
 using Prowl.PaperUI.LayoutEngine;
 using Prowl.Quill;
+using Prowl.Scribe;
 using Prowl.Vector;
 
 using Color = System.Drawing.Color;
@@ -44,7 +45,7 @@ public sealed class ButtonGroupBuilder
     private bool _disabled;
     private Func<int, bool>? _isSelected;
 
-    private readonly List<ButtonGroupItem> _items = new();
+    private readonly List<ButtonGroupItem> _items = [];
 
     // Prototype glass-in surface (rgba(8,6,14,0.6)) — the recessed track / segment well.
 
@@ -115,21 +116,21 @@ public sealed class ButtonGroupBuilder
         if (Origami.IsReadOnly) _disabled = true;
         if (_items.Count == 0) return;
 
-        var ramp = _theme.Get(_variant);
-        var ink = _theme.Ink;
-        var font = _theme.Font;
-        var metrics = _theme.Metrics;
+        OrigamiRamp ramp = _theme.Get(_variant);
+        OrigamiRamp ink = _theme.Ink;
+        FontFile? font = _theme.Font;
+        OrigamiMetrics metrics = _theme.Metrics;
         bool isDefault = _variant == OrigamiVariant.Default;
         bool isSubtle = _variant == OrigamiVariant.Subtle;
         // Default/Subtle groups select with the accent so the on-state pops (like the prototype).
-        var selRamp = (isDefault || isSubtle) ? _theme.Primary : ramp;
+        OrigamiRamp selRamp = (isDefault || isSubtle) ? _theme.Primary : ramp;
         float rounding = _roundingOverride ?? metrics.Rounding;
         bool seg = _style == ButtonGroupStyle.Segmented;
         float padX = seg ? 12f : 13f;
         float segRound = MathF.Max(0f, rounding - 2f);
 
         UnitValue widthValue = _width ?? UnitValue.Auto;
-        var groupBox = _paper.Row(_id).Width(widthValue).Height(_height).Rounded(rounding);
+        ElementBuilder groupBox = _paper.Row(_id).Width(widthValue).Height(_height).Rounded(rounding);
 
         if (seg)
             groupBox.BackgroundColor(_theme.Glass).BorderWidth(1).BorderColor(_theme.Neutral.C200).Padding(3, 3, 3, 3);
@@ -141,7 +142,7 @@ public sealed class ButtonGroupBuilder
             int count = _items.Count;
             for (int i = 0; i < count; i++)
             {
-                var item = _items[i];
+                ButtonGroupItem item = _items[i];
                 bool isSelected = _isSelected?.Invoke(i) ?? i == _selectedIndex;
                 bool itemEnabled = !_disabled && item.Enabled;
 
@@ -150,7 +151,7 @@ public sealed class ButtonGroupBuilder
                 bool isLast = i == count - 1;
 
                 float segW = _stretch ? 0 : MeasureSeg(item, font, metrics.FontSize, padX);
-                var segBox = _paper.Box("seg", i)
+                ElementBuilder segBox = _paper.Box("seg", i)
                     .Width(_stretch ? UnitValue.Stretch() : segW)
                     .Height(UnitValue.Stretch());
 
@@ -167,7 +168,7 @@ public sealed class ButtonGroupBuilder
 
                 using (segBox.Enter())
                 {
-                    var handle = _paper.CurrentParent;
+                    ElementHandle handle = _paper.CurrentParent;
                     bool isHovered = itemEnabled && _paper.IsParentHovered;
                     bool isPressed = itemEnabled && _paper.IsParentActive;
                     bool isFocused = itemEnabled && _paper.IsElementFocused(handle.Data.ID);
@@ -257,8 +258,8 @@ public sealed class ButtonGroupBuilder
         float x = (float)rect.Min.X, y = (float)rect.Min.Y;
         float w = (float)rect.Size.X, h = (float)rect.Size.Y;
 
-        var neutral = s.Theme.Neutral;
-        var accent = s.SelRamp;
+        OrigamiRamp neutral = s.Theme.Neutral;
+        OrigamiRamp accent = s.SelRamp;
         float rr = s.Segmented ? s.SegRound : 0f;
         // Corner radii: segmented pills round all corners; joined rounds only the outer ends.
         float tl = s.Segmented ? rr : (s.IsFirst ? s.Rounding : 0f);
@@ -344,12 +345,12 @@ public sealed class ButtonGroupBuilder
 
             _paper.Draw((canvas, _) =>
             {
-                var tr = segHandle.Data.LayoutRect;
+                Rect tr = segHandle.Data.LayoutRect;
                 float trX = (float)tr.Min.X;
                 float trY = (float)tr.Min.Y;
                 float trW = (float)tr.Size.X;
 
-                var ts = canvas.MeasureText(text, fontSize, font);
+                Float2 ts = canvas.MeasureText(text, fontSize, font);
                 float padX = 6f, padY = 2f;
                 float bw = (float)ts.X + padX * 2f;
                 float bh = (float)ts.Y + padY * 2f;

@@ -5,11 +5,11 @@ using System;
 using System.Collections.Generic;
 using System.Linq;
 
+using static Prowl.Vector.Geometry.Operators.EditingCommon;
+
 using Edge = Prowl.Vector.Geometry.GeometryData.Edge;
 using Face = Prowl.Vector.Geometry.GeometryData.Face;
 using Vertex = Prowl.Vector.Geometry.GeometryData.Vertex;
-
-using static Prowl.Vector.Geometry.Operators.EditingCommon;
 
 namespace Prowl.Vector.Geometry.Operators;
 
@@ -43,7 +43,7 @@ internal static class OrientOp
             for (int i = 0; i < component.Count; i++)
             {
                 Face f = component[i];
-                var loop = f.Loop!;
+                GeometryData.Loop loop = f.Loop!;
                 do
                 {
                     Edge e = loop.Edge;

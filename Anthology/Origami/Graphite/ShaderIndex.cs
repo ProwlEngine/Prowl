@@ -89,17 +89,17 @@ public sealed class ShaderIndex
 
     public bool IsShaderFile { get; }
 
-    public List<ShaderSymbol> Symbols { get; } = new();
+    public List<ShaderSymbol> Symbols { get; } = [];
 
-    internal List<Tok> GlslTokens { get; } = new();
-    internal List<Tok> WrapperTokens { get; } = new();
-    internal List<IncludeRef> Includes { get; } = new();
-    internal List<ShaderSection> Sections { get; } = new();
-    internal List<ShaderProgram> Programs { get; } = new();
-    internal List<Directive> Directives { get; } = new();
-    internal List<SurfaceBlock> Surfaces { get; } = new();
+    internal List<Tok> GlslTokens { get; } = [];
+    internal List<Tok> WrapperTokens { get; } = [];
+    internal List<IncludeRef> Includes { get; } = [];
+    internal List<ShaderSection> Sections { get; } = [];
+    internal List<ShaderProgram> Programs { get; } = [];
+    internal List<Directive> Directives { get; } = [];
+    internal List<SurfaceBlock> Surfaces { get; } = [];
 
-    private Dictionary<int, int> _match = new();
+    private Dictionary<int, int> _match = [];
 
     public ShaderIndex(string text, string? path, bool isShaderFile)
     {
@@ -110,7 +110,7 @@ public sealed class ShaderIndex
         MatchBrackets();
         FindSurfaces();
         FindSections();
-        foreach (var program in Programs) ParseProgram(program);
+        foreach (ShaderProgram program in Programs) ParseProgram(program);
         ParseWrapper();
         ParseDirectives();
     }
@@ -226,7 +226,7 @@ public sealed class ShaderIndex
         var stack = new Stack<int>();
         for (int i = 0; i < GlslTokens.Count; i++)
         {
-            var t = GlslTokens[i];
+            Tok t = GlslTokens[i];
             if (t.Kind != TokKind.Punct) continue;
             char c = t.Text[0];
             if (c is '{' or '(' or '[') stack.Push(i);
@@ -253,12 +253,12 @@ public sealed class ShaderIndex
     private void FindSections()
     {
         if (!IsShaderFile) return;
-        foreach (var program in Programs)
+        foreach (ShaderProgram program in Programs)
         {
             int depth = 0;
             for (int i = 0; i < GlslTokens.Count; i++)
             {
-                var t = GlslTokens[i];
+                Tok t = GlslTokens[i];
                 if (t.Offset < program.Start || t.Offset >= program.End) continue;
                 if (t.Kind == TokKind.Punct)
                 {
@@ -283,7 +283,7 @@ public sealed class ShaderIndex
     /// <summary>The section an offset is in, or null outside every section.</summary>
     internal ShaderSection? SectionAt(int offset)
     {
-        foreach (var s in Sections)
+        foreach (ShaderSection s in Sections)
             if (offset >= s.BodyStart && offset <= s.BodyEnd) return s;
         return null;
     }
@@ -291,7 +291,7 @@ public sealed class ShaderIndex
     /// <summary>The Surface block an offset is in, or null.</summary>
     internal SurfaceBlock? SurfaceAt(int offset)
     {
-        foreach (var s in Surfaces)
+        foreach (SurfaceBlock s in Surfaces)
             if (offset >= s.Program.Start && offset <= s.Program.End) return s;
         return null;
     }
@@ -301,16 +301,16 @@ public sealed class ShaderIndex
     {
         for (int i = 0; i + 2 < WrapperTokens.Count; i++)
         {
-            var name = WrapperTokens[i + 1];
+            Tok name = WrapperTokens[i + 1];
             if (WrapperTokens[i].Kind != TokKind.Ident || !string.Equals(WrapperTokens[i].Text, "Surface", StringComparison.OrdinalIgnoreCase)) continue;
             if (name.Kind != TokKind.String || WrapperTokens[i + 2].Text != "{") continue;
 
             string model = name.Text.Trim('"');
-            var part = SurfacePart.Code;
+            SurfacePart part = SurfacePart.Code;
             int depth = 0;
             for (int k = i + 2; k < WrapperTokens.Count; k++)
             {
-                var t = WrapperTokens[k];
+                Tok t = WrapperTokens[k];
                 if (t.Text == "{") depth++;
                 else if (t.Text == "}" && --depth == 0) break;
                 else if (t.Kind != TokKind.Ident) continue;
@@ -324,7 +324,7 @@ public sealed class ShaderIndex
 
     internal ShaderProgram? ProgramAt(int offset)
     {
-        foreach (var p in Programs)
+        foreach (ShaderProgram p in Programs)
             if (offset >= p.Start && offset <= p.End) return p;
         return null;
     }
@@ -332,9 +332,9 @@ public sealed class ShaderIndex
     /// <summary>Where a top level declaration at the offset is visible: its section, or the whole program for Shared and unsectioned code.</summary>
     private (int Start, int End) GlobalScopeAt(int offset)
     {
-        var section = SectionAt(offset);
+        ShaderSection? section = SectionAt(offset);
         if (section != null && section.Name != "Shared") return (section.BodyStart, section.BodyEnd);
-        var program = ProgramAt(offset);
+        ShaderProgram? program = ProgramAt(offset);
         return program != null ? (program.Start, program.End) : (0, Text.Length);
     }
 
@@ -356,11 +356,11 @@ public sealed class ShaderIndex
 
     #region Declarations
 
-    private static readonly HashSet<string> s_storage = new(StringComparer.Ordinal) { "uniform", "in", "out", "buffer", "shared", "inout", "attribute", "varying" };
+    private static readonly HashSet<string> s_storage = [with(StringComparer.Ordinal), "uniform", "in", "out", "buffer", "shared", "inout", "attribute", "varying"];
 
     private bool IsTypeName(string word) => GlslBuiltins.Types.Contains(word) || word == "void" || _structs.Contains(word);
 
-    private readonly HashSet<string> _structs = new(StringComparer.Ordinal);
+    private readonly HashSet<string> _structs = [with(StringComparer.Ordinal)];
 
     private Tok T(int i) => i >= 0 && i < GlslTokens.Count ? GlslTokens[i] : default;
 
@@ -373,7 +373,7 @@ public sealed class ShaderIndex
 
         while (i < GlslTokens.Count && GlslTokens[i].Offset < program.End)
         {
-            var t = GlslTokens[i];
+            Tok t = GlslTokens[i];
             // Section headers open a new top level.
             if (IsShaderFile && t.Kind == TokKind.Ident && ShaderSyntax.Sections.ContainsKey(t.Text) && Is(i + 1, "{"))
             {
@@ -394,7 +394,7 @@ public sealed class ShaderIndex
 
         while (i < GlslTokens.Count)
         {
-            var t = GlslTokens[i];
+            Tok t = GlslTokens[i];
             if (t.Text == "layout" && Is(i + 1, "("))
             {
                 int close = Close(i + 1);
@@ -413,7 +413,7 @@ public sealed class ShaderIndex
         }
 
         if (i >= GlslTokens.Count) return i;
-        var head = GlslTokens[i];
+        Tok head = GlslTokens[i];
 
         if (head.Text == "struct") return ParseStruct(i, start);
 
@@ -445,7 +445,7 @@ public sealed class ShaderIndex
     {
         while (i < GlslTokens.Count)
         {
-            var t = GlslTokens[i];
+            Tok t = GlslTokens[i];
             if (t.Text == ";") return i + 1;
             if (t.Text == "{" ) return Close(i) + 1;
             if (t.Text == "}") return i;
@@ -486,11 +486,11 @@ public sealed class ShaderIndex
 
     private int ParseStruct(int i, int start)
     {
-        var name = T(i + 1);
+        Tok name = T(i + 1);
         if (name.Kind != TokKind.Ident) return SkipStatement(i + 1);
-        var (s0, s1) = GlobalScopeAt(name.Offset);
+        (int s0, int s1) = GlobalScopeAt(name.Offset);
         _structs.Add(name.Text);
-        var symbol = Add(ShaderSymbolKind.Struct, name, name.Text, "struct " + name.Text, s0, s1);
+        ShaderSymbol symbol = Add(ShaderSymbolKind.Struct, name, name.Text, "struct " + name.Text, s0, s1);
         symbol.Doc = Doc(T(start).Offset);
 
         if (!Is(i + 2, "{")) return SkipStatement(i + 2);
@@ -517,12 +517,12 @@ public sealed class ShaderIndex
                 int j = i + 1;
                 while (j < to)
                 {
-                    var name = T(j);
+                    Tok name = T(j);
                     if (name.Kind != TokKind.Ident) break;
                     string array = "";
                     int k = j + 1;
                     if (Is(k, "[")) { int c = Close(k); array = Text.Substring(T(k).Offset, T(c).End - T(k).Offset); k = c + 1; }
-                    var f = Add(kind, name, type, $"{type} {name.Text}{array}", s0, s1, container);
+                    ShaderSymbol f = Add(kind, name, type, $"{type} {name.Text}{array}", s0, s1, container);
                     f.Doc = Doc(T(i).Offset);
                     if (Is(k, ",")) { j = k + 1; continue; }
                     j = k;
@@ -537,21 +537,21 @@ public sealed class ShaderIndex
 
     private int ParseBlock(int i, string storage, string qualifiers)
     {
-        var name = T(i);
+        Tok name = T(i);
         int close = Close(i + 1);
-        var (s0, s1) = GlobalScopeAt(name.Offset);
+        (int s0, int s1) = GlobalScopeAt(name.Offset);
         int j = close + 1;
-        var instance = T(j).Kind == TokKind.Ident ? T(j) : default;
+        Tok instance = T(j).Kind == TokKind.Ident ? T(j) : default;
 
-        var block = Add(ShaderSymbolKind.Block, name, name.Text, $"{qualifiers.Trim()} {name.Text}".Trim(), s0, s1);
+        ShaderSymbol block = Add(ShaderSymbolKind.Block, name, name.Text, $"{qualifiers.Trim()} {name.Text}".Trim(), s0, s1);
         block.Doc = Doc(name.Offset);
         _structs.Add(name.Text);
 
         // Without an instance name the members are globals, otherwise they are reached through the instance.
-        var memberKind = instance.Length > 0 ? ShaderSymbolKind.Field : KindFor(storage);
+        ShaderSymbolKind memberKind = instance.Length > 0 ? ShaderSymbolKind.Field : KindFor(storage);
         ParseMembers(i + 2, close, name.Text, memberKind, s0, s1);
         if (instance.Length == 0)
-            foreach (var s in Symbols)
+            foreach (ShaderSymbol s in Symbols)
                 if (s.Container == name.Text && s.Owner == this && s.Kind == memberKind) s.Container = null;
 
         if (instance.Length > 0)
@@ -577,7 +577,7 @@ public sealed class ShaderIndex
         string type = T(typeIndex).Text;
         int nameIndex = (typeEnd >= 0 ? typeEnd : typeIndex) + 1;
         if (!local) (scopeStart, scopeEnd) = GlobalScopeAt(T(typeIndex).Offset);
-        var kind = local ? ShaderSymbolKind.Local : KindFor(storage);
+        ShaderSymbolKind kind = local ? ShaderSymbolKind.Local : KindFor(storage);
         string prefix = qualifiers.Trim();
         return ParseDeclarators(nameIndex, type, kind, prefix, scopeStart, scopeEnd, T(start).Offset, local);
     }
@@ -586,12 +586,12 @@ public sealed class ShaderIndex
     {
         while (i < GlslTokens.Count)
         {
-            var name = T(i);
+            Tok name = T(i);
             if (name.Kind != TokKind.Ident) break;
             int k = i + 1;
             string array = "";
             if (Is(k, "[")) { int c = Close(k); array = Text.Substring(T(k).Offset, T(c).End - T(k).Offset); k = c + 1; }
-            var symbol = Add(kind, name, type, $"{(prefix.Length > 0 ? prefix + " " : "")}{type} {name.Text}{array}", local ? name.Offset : s0, s1);
+            ShaderSymbol symbol = Add(kind, name, type, $"{(prefix.Length > 0 ? prefix + " " : "")}{type} {name.Text}{array}", local ? name.Offset : s0, s1);
             if (docOffset >= 0) symbol.Doc = Doc(docOffset);
 
             // Skip an initializer up to the next declarator or the end of the statement.
@@ -605,10 +605,10 @@ public sealed class ShaderIndex
 
     private int ParseFunction(int typeIndex, int nameIndex, int start)
     {
-        var name = T(nameIndex);
+        Tok name = T(nameIndex);
         int open = nameIndex + 1;
         int close = Close(open);
-        var (s0, s1) = GlobalScopeAt(name.Offset);
+        (int s0, int s1) = GlobalScopeAt(name.Offset);
         string returnType = T(typeIndex).Text;
 
         var parameters = new List<(string Type, string Name)>();
@@ -626,7 +626,7 @@ public sealed class ShaderIndex
                 string type = T(idents[0]).Text;
                 if (idents.Count >= 2)
                 {
-                    var pname = T(idents[1]);
+                    Tok pname = T(idents[1]);
                     parameters.Add((type, pname.Text));
                     paramTokens.Add((pname, type));
                 }
@@ -640,11 +640,11 @@ public sealed class ShaderIndex
         bool isDefinition = Is(after, "{");
 
         // A prototype and its definition are one function, the definition wins.
-        var existing = Symbols.Find(s => s.Kind == ShaderSymbolKind.Function && s.Name == name.Text && s.Detail == detail && s.Owner == this);
+        ShaderSymbol? existing = Symbols.Find(s => s.Kind == ShaderSymbolKind.Function && s.Name == name.Text && s.Detail == detail && s.Owner == this);
         if (existing == null || isDefinition)
         {
             if (existing != null) Symbols.Remove(existing);
-            var fn = Add(ShaderSymbolKind.Function, name, returnType, detail, s0, s1);
+            ShaderSymbol fn = Add(ShaderSymbolKind.Function, name, returnType, detail, s0, s1);
             fn.Parameters = parameters;
             fn.Doc = Doc(T(start).Offset);
         }
@@ -653,7 +653,7 @@ public sealed class ShaderIndex
 
         int bodyClose = Close(after);
         int bodyEnd = T(bodyClose).End;
-        foreach (var (pname, type) in paramTokens)
+        foreach ((Tok pname, string? type) in paramTokens)
             Add(ShaderSymbolKind.Parameter, pname, type, $"{type} {pname.Text}", T(after).Offset, bodyEnd);
         ParseBody(after + 1, bodyClose);
         return bodyClose + 1;
@@ -668,7 +668,7 @@ public sealed class ShaderIndex
         bool statementStart = true;
         while (i < to)
         {
-            var t = T(i);
+            Tok t = T(i);
             if (t.Text == "{") { blockEnds.Push(T(Close(i)).End); i++; statementStart = true; continue; }
             if (t.Text == "}") { if (blockEnds.Count > 1) blockEnds.Pop(); i++; statementStart = true; continue; }
             if (t.Text is ";") { i++; statementStart = true; continue; }
@@ -716,9 +716,9 @@ public sealed class ShaderIndex
 
     private void ParseDirectives()
     {
-        foreach (var d in Directives)
+        foreach (Directive d in Directives)
         {
-            var (s0, s1) = GlobalScopeAt(d.Offset);
+            (int s0, int s1) = GlobalScopeAt(d.Offset);
             switch (d.Name)
             {
                 case "include":
@@ -739,15 +739,15 @@ public sealed class ShaderIndex
                     if (i == nameStart) break;
                     string name = Text.Substring(nameStart, i - nameStart);
                     string rest = Text.Substring(i, Math.Max(0, d.Offset + (d.ArgsOffset - d.Offset) + d.Args.Length - i)).Trim();
-                    var macro = Add(ShaderSymbolKind.Macro, new Tok(nameStart, name.Length, TokKind.Ident, name), "", $"#define {name}{(rest.Length > 0 && rest[0] == '(' ? "" : " ")}{rest}", d.Offset, s1);
+                        ShaderSymbol macro = Add(ShaderSymbolKind.Macro, new Tok(nameStart, name.Length, TokKind.Ident, name), "", $"#define {name}{(rest.Length > 0 && rest[0] == '(' ? "" : " ")}{rest}", d.Offset, s1);
                     macro.Doc = Doc(d.Offset);
                     if (i < d.End && Text[i] == '(')
                     {
                         int pc = Text.IndexOf(')', i);
                         if (pc > i)
                         {
-                            macro.Parameters = new List<(string, string)>();
-                            foreach (var p in Text.Substring(i + 1, pc - i - 1).Split(','))
+                            macro.Parameters = [];
+                            foreach (string p in Text.Substring(i + 1, pc - i - 1).Split(','))
                                 if (p.Trim().Length > 0) macro.Parameters.Add(("", p.Trim()));
                         }
                     }
@@ -755,9 +755,9 @@ public sealed class ShaderIndex
                 }
                 case "pragma":
                 {
-                    var parts = d.Args.Split((char[]?)null, StringSplitOptions.RemoveEmptyEntries);
+                        string[] parts = d.Args.Split((char[]?)null, StringSplitOptions.RemoveEmptyEntries);
                     if (parts.Length < 2) break;
-                    var program = ProgramAt(d.Offset);
+                        ShaderProgram? program = ProgramAt(d.Offset);
                     int p0 = program?.Start ?? 0, p1 = program?.End ?? Text.Length;
                     if (parts[0] == "variant")
                     {
@@ -780,7 +780,7 @@ public sealed class ShaderIndex
                         {
                             int at = Text.IndexOf(parts[v], search, StringComparison.Ordinal);
                             search = at + parts[v].Length;
-                            var g = Add(ShaderSymbolKind.Global, new Tok(at, parts[v].Length, TokKind.Ident, parts[v]), type, $"global {type} {parts[v]}", p0, p1);
+                                ShaderSymbol g = Add(ShaderSymbolKind.Global, new Tok(at, parts[v].Length, TokKind.Ident, parts[v]), type, $"global {type} {parts[v]}", p0, p1);
                             g.Doc = "Set globally by the renderer, not per material.";
                         }
                     }
@@ -792,7 +792,7 @@ public sealed class ShaderIndex
 
     private void AddVariant(string name, string axis, int offset, string detail, int s0, int s1)
     {
-        var symbol = Add(ShaderSymbolKind.Variant, new Tok(offset, axis.Length, TokKind.Ident, name), "", detail, s0, s1);
+        ShaderSymbol symbol = Add(ShaderSymbolKind.Variant, new Tok(offset, axis.Length, TokKind.Ident, name), "", detail, s0, s1);
         symbol.Doc = "Defined while the variant is on.";
     }
 
@@ -800,12 +800,12 @@ public sealed class ShaderIndex
     private void ParseWrapper()
     {
         if (!IsShaderFile) return;
-        var w = WrapperTokens;
+        List<Tok> w = WrapperTokens;
         int depth = 0;
         int propertiesDepth = -1;
         for (int i = 0; i < w.Count; i++)
         {
-            var t = w[i];
+            Tok t = w[i];
             if (t.Text == "{") { depth++; continue; }
             if (t.Text == "}") { depth--; if (depth < propertiesDepth) propertiesDepth = -1; continue; }
 
@@ -821,7 +821,7 @@ public sealed class ShaderIndex
             {
                 string display = w[i + 2].Text.Trim('"');
                 string type = w[i + 4].Text;
-                var p = Add(ShaderSymbolKind.Property, t, type, $"{t.Text}(\"{display}\", {type})", 0, Text.Length);
+                ShaderSymbol p = Add(ShaderSymbolKind.Property, t, type, $"{t.Text}(\"{display}\", {type})", 0, Text.Length);
                 p.Doc = $"Material property \"{display}\". Declare uniform {GlslTypeFor(type)} {t.Text}; to use it.";
                 if (type.StartsWith("Texture", StringComparison.Ordinal))
                 {
@@ -834,7 +834,7 @@ public sealed class ShaderIndex
 
             if (t.Kind == TokKind.Ident && string.Equals(t.Text, "Name", StringComparison.OrdinalIgnoreCase) && i + 1 < w.Count && w[i + 1].Kind == TokKind.String)
             {
-                var name = w[i + 1];
+                Tok name = w[i + 1];
                 Add(ShaderSymbolKind.Pass, new Tok(name.Offset + 1, Math.Max(0, name.Length - 2), TokKind.String, name.Text.Trim('"')), "", $"Pass \"{name.Text.Trim('"')}\"", 0, Text.Length);
             }
         }
@@ -842,7 +842,7 @@ public sealed class ShaderIndex
 
     private void AddHelper(Tok property, string suffix, string type, string doc)
     {
-        var s = Add(ShaderSymbolKind.Macro, property, type, $"{type} {property.Text}{suffix}", 0, Text.Length);
+        ShaderSymbol s = Add(ShaderSymbolKind.Macro, property, type, $"{type} {property.Text}{suffix}", 0, Text.Length);
         s.Name = property.Text + suffix;
         s.Doc = doc;
     }
@@ -884,7 +884,7 @@ public sealed class ShaderIndex
 
     internal Directive? DirectiveAt(int offset)
     {
-        foreach (var d in Directives)
+        foreach (Directive d in Directives)
             if (offset >= d.Offset && offset <= d.End) return d;
         return null;
     }

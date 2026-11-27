@@ -21,7 +21,7 @@ internal sealed class RenderableTree(RenderWorld.RenderSide world, Func<int, boo
     private sealed class Tree(bool morton)
     {
         public readonly bool Morton = morton;
-        public readonly List<int> Members = new();
+        public readonly List<int> Members = [];
         public readonly LightTreeBuilder Builder = new();
         public int[] Leaves = [];
         public Double3 Origin;
@@ -218,16 +218,16 @@ internal readonly record struct DrawProgram(Shader Shader, int PassIndex, ulong 
 /// </summary>
 internal sealed class DrawPrograms
 {
-    private readonly Dictionary<DrawProgram, ushort> _ids = new();
-    private readonly List<DrawProgram> _programs = new();
-    private readonly List<int> _references = new();
+    private readonly Dictionary<DrawProgram, ushort> _ids = [];
+    private readonly List<DrawProgram> _programs = [];
+    private readonly List<int> _references = [];
     private readonly Stack<ushort> _free = new();
-    private readonly HashSet<ushort> _idle = new();
-    private readonly List<ushort> _expired = new();
-    private List<ushort> _held = new(), _releasing = new();
-    private readonly Dictionary<ushort, int> _prepassed = new();
+    private readonly HashSet<ushort> _idle = [];
+    private readonly List<ushort> _expired = [];
+    private List<ushort> _held = [], _releasing = [];
+    private readonly Dictionary<ushort, int> _prepassed = [];
 
-    private readonly Dictionary<ushort, (bool Draws, bool Cutout)> _earlyDepth = new();
+    private readonly Dictionary<ushort, (bool Draws, bool Cutout)> _earlyDepth = [];
 
     public DrawPrograms() => Freed += _ =>
     {
@@ -716,7 +716,7 @@ internal sealed class DrawList
     public IndirectDrawIndexedArguments[] Commands = new IndirectDrawIndexedArguments[64];
     public DrawRecord[] Records = new DrawRecord[64];
     public int CommandCount;
-    public readonly List<DrawCall> Calls = new();
+    public readonly List<DrawCall> Calls = [];
 
     /// <summary>The commands the GPU cull fills, after those the CPU wrote, or null.</summary>
     public GpuSegment? Gpu;
@@ -872,45 +872,45 @@ internal sealed class BucketSet
 
     private readonly RenderWorld.RenderSide _world;
     private readonly DrawPrograms _programs;
-    private readonly Dictionary<BucketId, Bucket> _buckets = new();
-    private readonly List<List<Bucket>> _ordered = [new(), new(), new()];
+    private readonly Dictionary<BucketId, Bucket> _buckets = [];
+    private readonly List<List<Bucket>> _ordered = [[], [], []];
     private readonly List<bool> _orderDirty = [true, true, true];
     private List<Membership>[] _members = [];
     private MemberRange[]?[] _ranges = [];
-    private readonly Dictionary<Material, HashSet<int>> _materialUsers = new();
+    private readonly Dictionary<Material, HashSet<int>> _materialUsers = [];
     private List<Material>?[] _objectMaterials = [];
-    private readonly Dictionary<int, int> _queueRanks = new();
-    private readonly Dictionary<int, int> _queueUse = new();
-    private readonly HashSet<int> _unionQueues = new();
-    private readonly Dictionary<int, int> _unionRanks = new();
+    private readonly Dictionary<int, int> _queueRanks = [];
+    private readonly Dictionary<int, int> _queueUse = [];
+    private readonly HashSet<int> _unionQueues = [];
+    private readonly Dictionary<int, int> _unionRanks = [];
     private bool _ranksDirty;
-    private readonly HashSet<int> _rebuild = new();
-    private readonly List<(ulong Key, int Bucket, ushort Program, int FirstInstance, int Count)> _prepass = new();
-    private readonly List<ItemDraw> _transparent = new();
+    private readonly HashSet<int> _rebuild = [];
+    private readonly List<(ulong Key, int Bucket, ushort Program, int FirstInstance, int Count)> _prepass = [];
+    private readonly List<ItemDraw> _transparent = [];
     private List<ItemDraw>?[] _transparentOf = [];
-    private readonly List<SortEntry> _sorted = new();
-    private readonly List<ulong> _sortLevels = new();
+    private readonly List<SortEntry> _sorted = [];
+    private readonly List<ulong> _sortLevels = [];
     private Comparison<SortEntry>? _compareSort;
     private bool[] _visible = [];
     private byte[] _level = [];
     private byte[] _from = [];
     private byte[] _fade = [];
     private const byte NoLevel = byte.MaxValue;
-    private readonly List<int> _visibleList = new();
-    private readonly List<int> _candidates = new();
-    private readonly List<Bucket> _touched = new();
+    private readonly List<int> _visibleList = [];
+    private readonly List<int> _candidates = [];
+    private readonly List<Bucket> _touched = [];
     private int _buildStamp;
     private readonly RenderableTree _tree;
 
     // Renderables the GPU culls stay out of this tree, which the CPU culls the rest by
     private readonly RenderableTree _cpuTree;
     private bool[] _onGpu = [];
-    private readonly List<int> _rebuilt = new();
+    private readonly List<int> _rebuilt = [];
     private GpuCullView? _gpuView;
     private int _gpuIds;
     private readonly Stack<int> _freeGpuIds = new();
     private Shape?[] _shapeOf = [];
-    private readonly Dictionary<uint[], Shape> _shapes = new(new WordsComparer());
+    private readonly Dictionary<uint[], Shape> _shapes = [with(new WordsComparer())];
     private readonly RangeAllocator _shapeSpace = new(1u << 28);
     private int[] _chunkStamp = [];
     private int[] _chunkStart = [];
@@ -949,7 +949,7 @@ internal sealed class BucketSet
 
         pass = _passes.Count;
         _passes.Add(type);
-        _ordered.Add(new List<Bucket>());
+        _ordered.Add([]);
         _orderDirty.Add(true);
         for (int index = 0; index < _world.Capacity; index++)
         {
@@ -1643,8 +1643,8 @@ internal sealed class BucketSet
                     SubMesh = (uint)chunk.SubMesh,
                     MultiChunk = placement.Chunks.Length > 1,
                     Own = own,
+                    GpuId = _freeGpuIds.Count > 0 ? _freeGpuIds.Pop() : _gpuIds++
                 };
-                bucket.GpuId = _freeGpuIds.Count > 0 ? _freeGpuIds.Pop() : _gpuIds++;
                 _buckets[id] = bucket;
                 _programs.Acquire(program);
                 UseQueue(bucket.Queue, 1);
@@ -1669,7 +1669,7 @@ internal sealed class BucketSet
                 continue;
             int back = draw.Sides is { } sides && _programs.TryGet(sides.Back, _passes[pass], out ushort backProgram) ? backProgram : -1;
 
-            List<ChunkRef> chunks = new();
+            List<ChunkRef> chunks = [];
             for (int c = 0; c < placement.Chunks.Length; c++)
             {
                 MeshChunk chunk = placement.Chunks[c];
@@ -1703,7 +1703,7 @@ internal sealed class BucketSet
             UseQueue(item.Queue, 1);
             if (index >= _transparentOf.Length)
                 Array.Resize(ref _transparentOf, Math.Max(index + 1, _transparentOf.Length * 2));
-            (_transparentOf[index] ??= new List<ItemDraw>()).Add(item);
+            (_transparentOf[index] ??= []).Add(item);
         }
     }
 
@@ -1787,7 +1787,7 @@ internal sealed class BucketSet
     {
         if (!_materialUsers.TryGetValue(material, out HashSet<int>? users))
         {
-            users = new HashSet<int>();
+            users = [];
             _materialUsers[material] = users;
         }
         if (!users.Add(index))
@@ -1795,7 +1795,7 @@ internal sealed class BucketSet
 
         if (index >= _objectMaterials.Length)
             Array.Resize(ref _objectMaterials, Math.Max(index + 1, _objectMaterials.Length * 2));
-        (_objectMaterials[index] ??= new List<Material>()).Add(material);
+        (_objectMaterials[index] ??= []).Add(material);
     }
 
     /// <summary>
@@ -1870,7 +1870,7 @@ internal sealed class BucketSet
     {
         int levels = _world.LevelCount(index), passes = _passes.Count;
         LodSet? lods = levels > 1 ? _world.Lods[index] : null;
-        List<uint> words = new() { (uint)levels | (uint)passes << 8, BitConverter.SingleToUInt32Bits(lods?.CullScreenSize ?? 0) };
+        List<uint> words = [(uint)levels | (uint)passes << 8, BitConverter.SingleToUInt32Bits(lods?.CullScreenSize ?? 0)];
         for (int level = 0; level < LodSet.MaxLevels; level++)
             words.Add(BitConverter.SingleToUInt32Bits(level < levels - 1 ? lods!.Levels[level].ScreenSize : 0));
         uint placed = 0;
@@ -1909,7 +1909,7 @@ internal sealed class BucketSet
         if (index >= _members.Length || _members[index] is not { Count: > 0 } members)
             return;
         members.Sort(static (a, b) => a.Pass != b.Pass ? a.Pass.CompareTo(b.Pass) : a.Level.CompareTo(b.Level));
-        List<MemberRange> ranges = new();
+        List<MemberRange> ranges = [];
         int start = 0;
         for (int m = 1; m <= members.Count; m++)
         {
@@ -1927,7 +1927,7 @@ internal sealed class BucketSet
     {
         if (index >= _members.Length)
             Array.Resize(ref _members, Math.Max(index + 1, _members.Length * 2));
-        return _members[index] ??= new List<Membership>();
+        return _members[index] ??= [];
     }
 
     private void Order(int pass)

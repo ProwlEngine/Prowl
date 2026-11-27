@@ -42,9 +42,9 @@ internal static class SquarifyOp
         float lengthSum = 0;
         float weightSum = 0;
 
-        foreach (var f in mesh.Faces)
+        foreach (GeometryData.Face f in mesh.Faces)
         {
-            var verts = f.NeighborVertices();
+            List<GeometryData.Vertex> verts = f.NeighborVertices();
             if (verts.Count != 4) continue;
 
             Float3 c = f.Center();
@@ -53,7 +53,7 @@ internal static class SquarifyOp
             Float3 r2 = verts[2].Point - c;
             Float3 r3 = verts[3].Point - c;
 
-            var localToGlobal = ComputeLocalAxis(r0, r1, r2, r3);
+            Float4x4 localToGlobal = ComputeLocalAxis(r0, r1, r2, r3);
             var globalToLocal = Float4x4.Transpose(localToGlobal);
 
             // Transform to local coordinates
@@ -82,11 +82,11 @@ internal static class SquarifyOp
         float avg = uniformLength ? AverageRadiusLength(mesh) : 0;
 
         var pointUpdates = new Float3[mesh.Vertices.Count];
-        var weights = new float[mesh.Vertices.Count];
+        float[] weights = new float[mesh.Vertices.Count];
 
         // Initialize with rest positions if available
         int i = 0;
-        foreach (var v in mesh.Vertices)
+        foreach (GeometryData.Vertex v in mesh.Vertices)
         {
             if (mesh.HasVertexAttribute("restpos"))
             {
@@ -94,7 +94,7 @@ internal static class SquarifyOp
                     ? (v.Attributes["weight"] as GeometryData.FloatAttributeValue)?.Data[0] ?? 1.0f
                     : 1.0f;
 
-                var restpos = (v.Attributes["restpos"] as GeometryData.FloatAttributeValue)?.AsVector3() ?? v.Point;
+                Float3 restpos = (v.Attributes["restpos"] as GeometryData.FloatAttributeValue)?.AsVector3() ?? v.Point;
                 pointUpdates[i] = (restpos - v.Point) * weights[i];
             }
             else
@@ -106,9 +106,9 @@ internal static class SquarifyOp
         }
 
         // Accumulate squarification updates
-        foreach (var f in mesh.Faces)
+        foreach (GeometryData.Face f in mesh.Faces)
         {
-            var verts = f.NeighborVertices();
+            List<GeometryData.Vertex> verts = f.NeighborVertices();
             if (verts.Count != 4) continue;
 
             Float3 c = f.Center();
@@ -117,7 +117,7 @@ internal static class SquarifyOp
             Float3 r2 = verts[2].Point - c;
             Float3 r3 = verts[3].Point - c;
 
-            var localToGlobal = ComputeLocalAxis(r0, r1, r2, r3);
+            Float4x4 localToGlobal = ComputeLocalAxis(r0, r1, r2, r3);
             var globalToLocal = Float4x4.Transpose(localToGlobal);
 
             // Transform to local coordinates
@@ -131,7 +131,7 @@ internal static class SquarifyOp
             if (Float3.Normalize(l1).Y < Float3.Normalize(l3).Y)
             {
                 switch03 = true;
-                var tmp = l3;
+                Float3 tmp = l3;
                 l3 = l1;
                 l1 = tmp;
             }
@@ -156,7 +156,7 @@ internal static class SquarifyOp
 
             if (switch03)
             {
-                var tmp = lt3;
+                Float3 tmp = lt3;
                 lt3 = lt1;
                 lt1 = tmp;
             }
@@ -180,7 +180,7 @@ internal static class SquarifyOp
 
         // Apply accumulated updates
         i = 0;
-        foreach (var v in mesh.Vertices)
+        foreach (GeometryData.Vertex v in mesh.Vertices)
         {
             if (weights[i] > 0)
             {

@@ -63,7 +63,7 @@ public static class NodeGraphPreview
         if (nodes == null || nodes.Count == 0) return false;
 
         float minX = float.MaxValue, minY = float.MaxValue, maxX = float.MinValue, maxY = float.MinValue;
-        foreach (var n in nodes)
+        foreach (GraphNode n in nodes)
         {
             minX = Math.Min(minX, n.Position.X); minY = Math.Min(minY, n.Position.Y);
             maxX = Math.Max(maxX, n.Position.X + MeasureWidth(n, metrics));
@@ -97,7 +97,7 @@ public static class NodeGraphPreview
         if (groups is { Count: > 0 })
         {
             Float2 max = min + size;
-            foreach (var g in groups)
+            foreach (GraphGroup g in groups)
             {
                 min = new Float2(Math.Min(min.X, g.Position.X), Math.Min(min.Y, g.Position.Y));
                 max = new Float2(Math.Max(max.X, g.Position.X + g.Size.X), Math.Max(max.Y, g.Position.Y + g.Size.Y));
@@ -118,7 +118,7 @@ public static class NodeGraphPreview
 
         if (groups is { Count: > 0 })
         {
-            foreach (var g in groups)
+            foreach (GraphGroup g in groups)
             {
                 Float2 p = Place(g.Position);
                 float gw = g.Size.X * scale, gh = g.Size.Y * scale;
@@ -133,7 +133,7 @@ public static class NodeGraphPreview
             canvas.SaveState();
             canvas.SetStrokeWidth(1f);
             canvas.SetStrokeColor(ToColor32(theme.BorderStrong, 1f));
-            foreach (var c in wires)
+            foreach (GraphConnection c in wires)
             {
                 if (!TryCentre(nodes, c.FromNode, theme.Metrics, out Float2 a) ||
                     !TryCentre(nodes, c.ToNode, theme.Metrics, out Float2 b)) continue;
@@ -147,7 +147,7 @@ public static class NodeGraphPreview
             canvas.RestoreState();
         }
 
-        foreach (var n in nodes)
+        foreach (GraphNode n in nodes)
         {
             Float2 p = Place(n.Position);
             float bw = Math.Max(minBoxSize, MeasureWidth(n, theme.Metrics) * scale);
@@ -158,7 +158,7 @@ public static class NodeGraphPreview
 
     private static bool TryCentre(IReadOnlyList<GraphNode> nodes, string id, OrigamiMetrics metrics, out Float2 centre)
     {
-        foreach (var n in nodes)
+        foreach (GraphNode n in nodes)
         {
             if (n.Id != id) continue;
             centre = new Float2(n.Position.X + MeasureWidth(n, metrics) * 0.5f, n.Position.Y + MeasureHeight(n, metrics) * 0.5f);
@@ -171,8 +171,8 @@ public static class NodeGraphPreview
     private static void CountSides(GraphNode n, out int left, out int right, out int top, out int bottom)
     {
         int l = 0, r = 0, t = 0, b = 0;
-        foreach (var p in n.Inputs) Count(p, false);
-        foreach (var p in n.Outputs) Count(p, true);
+        foreach (GraphPort p in n.Inputs) Count(p, false);
+        foreach (GraphPort p in n.Outputs) Count(p, true);
         left = l; right = r; top = t; bottom = b;
 
         void Count(GraphPort p, bool output)

@@ -45,7 +45,7 @@ public sealed partial class TerrainData
     {
         lock (_editLock)
         {
-            Dictionary<TerrainPageKey, TerrainPage> edited = new();
+            Dictionary<TerrainPageKey, TerrainPage> edited = [];
             foreach (TerrainPageKey key in _edited.Keys)
                 edited[key] = _pages[key]!;
             Dictionary<TerrainPageKey, ushort[]> bounds = _entries.ToDictionary(e => e.Key, e => (ushort[])e.Value.Bounds.Clone());
@@ -59,7 +59,7 @@ public sealed partial class TerrainData
         TerrainEdited? result = null;
         lock (_editLock)
         {
-            HashSet<TerrainPageKey> changed = new(_edited.Keys);
+            HashSet<TerrainPageKey> changed = [with(_edited.Keys)];
             changed.UnionWith(state.Edited.Keys);
             changed.RemoveWhere(key => state.Edited.TryGetValue(key, out TerrainPage? page) && _pages.TryGetValue(key, out TerrainPage? now) && ReferenceEquals(page, now));
             foreach (TerrainPageKey key in changed)
@@ -136,7 +136,7 @@ public sealed partial class TerrainData
 
     private List<TerrainPageKey> SortedKeys()
     {
-        List<TerrainPageKey> keys = new(_entries.Keys);
+        List<TerrainPageKey> keys = [with(_entries.Keys)];
         keys.Sort((a, b) => a.Level != b.Level ? a.Level.CompareTo(b.Level) : a.Z != b.Z ? a.Z.CompareTo(b.Z) : a.X.CompareTo(b.X));
         return keys;
     }

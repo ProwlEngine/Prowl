@@ -131,7 +131,7 @@ public sealed class EchoBinaryFormat : IFileFormat
     // Compresses the UTF-8 bytes rather than the chars, so any Unicode text works with a 256 symbol dictionary.
     private static void WriteLZWCompressed(BinaryWriter writer, string input)
     {
-        var lzw = Lzw;
+        LzwBuffers lzw = Lzw;
         int byteCount = Encoding.UTF8.GetByteCount(input);
         if (byteCount == 0)
         {
@@ -197,7 +197,7 @@ public sealed class EchoBinaryFormat : IFileFormat
         if (codesCount == 0)
             return string.Empty;
 
-        var lzw = Lzw;
+        LzwBuffers lzw = Lzw;
         byte[] output = lzw.Bytes;
         int outLength = 0;
         int nextCode = InitialDictionarySize;
@@ -265,7 +265,7 @@ public sealed class EchoBinaryFormat : IFileFormat
     // Length prefixed UTF-8, as an Int32 byte count followed by the bytes.
     private static void WriteUtf8(BinaryWriter writer, string value)
     {
-        var lzw = Lzw;
+        LzwBuffers lzw = Lzw;
         int byteCount = Encoding.UTF8.GetByteCount(value);
         if (lzw.Bytes.Length < byteCount)
             lzw.Bytes = new byte[Math.Max(byteCount, lzw.Bytes.Length * 2)];
@@ -276,7 +276,7 @@ public sealed class EchoBinaryFormat : IFileFormat
 
     public static void WriteToFile(EchoObject tag, FileInfo file, BinarySerializationOptions? options = null)
     {
-        using var stream = file.Create();
+        using FileStream stream = file.Create();
         WriteToFile(tag, stream, options);
     }
 
@@ -350,7 +350,7 @@ public sealed class EchoBinaryFormat : IFileFormat
     {
 
         writer.Write(tag.Count);
-        foreach (var subTag in tag.Tags)
+        foreach (KeyValuePair<string, EchoObject> subTag in tag.Tags)
         {
             WriteUtf8(writer, subTag.Key);
             WriteTag_Performance(subTag.Value, writer, options);
@@ -361,7 +361,7 @@ public sealed class EchoBinaryFormat : IFileFormat
     {
         LEB128.WriteUnsigned(writer, (ulong)tag.Count);
 
-        foreach (var subTag in tag.Tags)
+        foreach (KeyValuePair<string, EchoObject> subTag in tag.Tags)
         {
             WriteLZWCompressed(writer, subTag.Key);
             WriteTag_Size(subTag.Value, writer, options);
@@ -370,7 +370,7 @@ public sealed class EchoBinaryFormat : IFileFormat
 
     private static void WriteTag_Performance(EchoObject tag, BinaryWriter writer, BinarySerializationOptions options)
     {
-        var type = tag.TagType;
+        EchoType type = tag.TagType;
         writer.Write((byte)type);
 
         if (type == EchoType.Null) { } // Nothing for Null
@@ -394,9 +394,9 @@ public sealed class EchoBinaryFormat : IFileFormat
         else if (type == EchoType.Bool) writer.Write(tag.BoolValue);
         else if (type == EchoType.List)
         {
-            var listTag = tag;
+            EchoObject listTag = tag;
             writer.Write(listTag.Count);
-            foreach (var subTag in listTag.List)
+            foreach (EchoObject subTag in listTag.List)
                 WriteTag_Performance(subTag, writer, options);
         }
         else if (type == EchoType.Compound) WriteCompound_Performance(tag, writer, options);
@@ -405,7 +405,7 @@ public sealed class EchoBinaryFormat : IFileFormat
 
     private static void WriteTag_Size(EchoObject tag, BinaryWriter writer, BinarySerializationOptions options)
     {
-        var type = tag.TagType;
+        EchoType type = tag.TagType;
         writer.Write((byte)type);
 
         if (type == EchoType.Null) { } // Nothing for Null
@@ -432,9 +432,9 @@ public sealed class EchoBinaryFormat : IFileFormat
         else if (type == EchoType.Bool) writer.Write(tag.BoolValue);
         else if (type == EchoType.List)
         {
-            var listTag = tag;
+            EchoObject listTag = tag;
             LEB128.WriteUnsigned(writer, (ulong)listTag.Count);
-            foreach (var subTag in listTag.List)
+            foreach (EchoObject subTag in listTag.List)
                 WriteTag_Size(subTag, writer, options);
         }
         else if (type == EchoType.Compound) WriteCompound_Size(tag, writer, options);
@@ -451,7 +451,7 @@ public sealed class EchoBinaryFormat : IFileFormat
         if (length == 0)
             return string.Empty;
 
-        var lzw = Lzw;
+        LzwBuffers lzw = Lzw;
         if (lzw.Bytes.Length < length)
             lzw.Bytes = new byte[Math.Max(length, lzw.Bytes.Length * 2)];
 
@@ -473,7 +473,7 @@ public sealed class EchoBinaryFormat : IFileFormat
 
     public static EchoObject ReadFromFile(FileInfo file, BinarySerializationOptions? options = null)
     {
-        using var stream = file.OpenRead();
+        using FileStream stream = file.OpenRead();
         return ReadFromFile(stream, options);
     }
 

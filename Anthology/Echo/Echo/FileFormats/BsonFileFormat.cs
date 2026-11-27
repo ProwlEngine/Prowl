@@ -39,7 +39,7 @@ public sealed class BsonFileFormat : IFileFormat
 
     public void WriteTo(EchoObject tag, Stream stream)
     {
-        var buffer = _documentBuffer ??= new MemoryStream();
+        MemoryStream buffer = _documentBuffer ??= new MemoryStream();
         buffer.SetLength(0);
 
         using (var writer = new BinaryWriter(buffer, Encoding.UTF8, leaveOpen: true))
@@ -65,10 +65,10 @@ public sealed class BsonFileFormat : IFileFormat
     public EchoObject ReadFrom(Stream stream)
     {
         using var reader = new BinaryReader(stream, Encoding.UTF8, leaveOpen: true);
-        var result = ReadDocument(reader);
+        EchoObject result = ReadDocument(reader);
 
         // Unwrap if it was a non-compound value we wrapped during writing
-        if (result.TagType == EchoType.Compound && result.Count == 1 && result.TryGet("__echo_wrapped_value__", out var inner))
+        if (result.TagType == EchoType.Compound && result.Count == 1 && result.TryGet("__echo_wrapped_value__", out EchoObject? inner))
             return inner;
 
         return result;
@@ -80,7 +80,7 @@ public sealed class BsonFileFormat : IFileFormat
     private static void WriteDocument(BinaryWriter writer, EchoObject compound)
     {
         long start = BeginDocument(writer);
-        foreach (var kvp in compound.Tags)
+        foreach (KeyValuePair<string, EchoObject> kvp in compound.Tags)
         {
             WriteElementType(writer, kvp.Value);
             WriteCString(writer, kvp.Key);
@@ -92,7 +92,7 @@ public sealed class BsonFileFormat : IFileFormat
     private static void WriteArray(BinaryWriter writer, EchoObject list)
     {
         long start = BeginDocument(writer);
-        var items = list.List;
+        List<EchoObject> items = list.List;
         for (int i = 0; i < items.Count; i++)
         {
             WriteElementType(writer, items[i]);
@@ -112,7 +112,7 @@ public sealed class BsonFileFormat : IFileFormat
     private static void EndDocument(BinaryWriter writer, long start)
     {
         writer.Write((byte)0x00);
-        var stream = writer.BaseStream;
+        Stream stream = writer.BaseStream;
         long end = stream.Position;
         stream.Position = start;
         writer.Write((int)(end - start));
@@ -178,7 +178,7 @@ public sealed class BsonFileFormat : IFileFormat
                 break;
 
             case EchoType.ByteArray:
-                var bytes = tag.ByteArrayValue;
+                byte[] bytes = tag.ByteArrayValue;
                 writer.Write(bytes.Length);
                 writer.Write((byte)0x00); // Generic binary subtype
                 writer.Write(bytes);
@@ -205,7 +205,7 @@ public sealed class BsonFileFormat : IFileFormat
     private static int WriteUtf8(BinaryWriter writer, string value)
     {
         int count = Encoding.UTF8.GetByteCount(value);
-        var bytes = Scratch(count);
+        byte[] bytes = Scratch(count);
         Encoding.UTF8.GetBytes(value, 0, value.Length, bytes, 0);
         writer.Write(bytes, 0, count);
         return count;
@@ -238,7 +238,7 @@ public sealed class BsonFileFormat : IFileFormat
             if (type == 0x00) break;
 
             string name = ReadCString(reader);
-            var value = ReadValue(reader, type);
+            EchoObject value = ReadValue(reader, type);
             compound.Add(name, value);
         }
 
@@ -256,7 +256,7 @@ public sealed class BsonFileFormat : IFileFormat
             if (type == 0x00) break;
 
             SkipCString(reader); // discard index key
-            var value = ReadValue(reader, type);
+            EchoObject value = ReadValue(reader, type);
             list.ListAdd(value);
         }
 
@@ -309,7 +309,7 @@ public sealed class BsonFileFormat : IFileFormat
 
     private static string ReadCString(BinaryReader reader)
     {
-        var bytes = Scratch(64);
+        byte[] bytes = Scratch(64);
         int count = 0;
         byte b;
         while ((b = reader.ReadByte()) != 0x00)
@@ -337,7 +337,7 @@ public sealed class BsonFileFormat : IFileFormat
             reader.ReadBytes(count); // throws like it always has
 
         // Like ReadBytes, a short stream yields what it has and the terminator read below throws.
-        var bytes = Scratch(count);
+        byte[] bytes = Scratch(count);
         int read = 0;
         while (read < count)
         {

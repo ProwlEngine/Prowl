@@ -37,14 +37,14 @@ public static partial class GeometryGenerator
         if (segments.X == 1 && segments.Y == 1 && segments.Z == 1)
         {
             // Create 8 corner vertices
-            var v0 = geometryData.AddVertex(center + new Float3(-halfSize.X, -halfSize.Y, -halfSize.Z));
-            var v1 = geometryData.AddVertex(center + new Float3(halfSize.X, -halfSize.Y, -halfSize.Z));
-            var v2 = geometryData.AddVertex(center + new Float3(halfSize.X, halfSize.Y, -halfSize.Z));
-            var v3 = geometryData.AddVertex(center + new Float3(-halfSize.X, halfSize.Y, -halfSize.Z));
-            var v4 = geometryData.AddVertex(center + new Float3(-halfSize.X, -halfSize.Y, halfSize.Z));
-            var v5 = geometryData.AddVertex(center + new Float3(halfSize.X, -halfSize.Y, halfSize.Z));
-            var v6 = geometryData.AddVertex(center + new Float3(halfSize.X, halfSize.Y, halfSize.Z));
-            var v7 = geometryData.AddVertex(center + new Float3(-halfSize.X, halfSize.Y, halfSize.Z));
+            GeometryData.Vertex v0 = geometryData.AddVertex(center + new Float3(-halfSize.X, -halfSize.Y, -halfSize.Z));
+            GeometryData.Vertex v1 = geometryData.AddVertex(center + new Float3(halfSize.X, -halfSize.Y, -halfSize.Z));
+            GeometryData.Vertex v2 = geometryData.AddVertex(center + new Float3(halfSize.X, halfSize.Y, -halfSize.Z));
+            GeometryData.Vertex v3 = geometryData.AddVertex(center + new Float3(-halfSize.X, halfSize.Y, -halfSize.Z));
+            GeometryData.Vertex v4 = geometryData.AddVertex(center + new Float3(-halfSize.X, -halfSize.Y, halfSize.Z));
+            GeometryData.Vertex v5 = geometryData.AddVertex(center + new Float3(halfSize.X, -halfSize.Y, halfSize.Z));
+            GeometryData.Vertex v6 = geometryData.AddVertex(center + new Float3(halfSize.X, halfSize.Y, halfSize.Z));
+            GeometryData.Vertex v7 = geometryData.AddVertex(center + new Float3(-halfSize.X, halfSize.Y, halfSize.Z));
 
             // Create 6 faces
             geometryData.AddFace(v1, v0, v3, v2); // Front (-Z)
@@ -252,10 +252,10 @@ public static partial class GeometryGenerator
             {
                 int nextLon = (lon + 1) % segments;
 
-                var v0 = vertices[lat, lon];
-                var v1 = vertices[lat, nextLon];
-                var v2 = vertices[lat + 1, nextLon];
-                var v3 = vertices[lat + 1, lon];
+                GeometryData.Vertex v0 = vertices[lat, lon];
+                GeometryData.Vertex v1 = vertices[lat, nextLon];
+                GeometryData.Vertex v2 = vertices[lat + 1, nextLon];
+                GeometryData.Vertex v3 = vertices[lat + 1, lon];
 
                 geometryData.AddFace(v0, v1, v2, v3);
             }
@@ -284,8 +284,8 @@ public static partial class GeometryGenerator
         // Create icosahedron vertices
         float t = (1.0f + Maths.Sqrt(5.0f)) / 2.0f; // Golden ratio
 
-        List<Float3> positions = new List<Float3>
-        {
+        List<Float3> positions =
+        [
             Float3.Normalize(new Float3(-1,  t,  0)) * radius + center,
             Float3.Normalize(new Float3( 1,  t,  0)) * radius + center,
             Float3.Normalize(new Float3(-1, -t,  0)) * radius + center,
@@ -298,16 +298,16 @@ public static partial class GeometryGenerator
             Float3.Normalize(new Float3( t,  0,  1)) * radius + center,
             Float3.Normalize(new Float3(-t,  0, -1)) * radius + center,
             Float3.Normalize(new Float3(-t,  0,  1)) * radius + center
-        };
+        ];
 
         // Create icosahedron faces (20 triangles)
-        List<(int, int, int)> indices = new List<(int, int, int)>
-        {
+        List<(int, int, int)> indices =
+        [
             (0, 11, 5), (0, 5, 1), (0, 1, 7), (0, 7, 10), (0, 10, 11),
             (1, 5, 9), (5, 11, 4), (11, 10, 2), (10, 7, 6), (7, 1, 8),
             (3, 9, 4), (3, 4, 2), (3, 2, 6), (3, 6, 8), (3, 8, 9),
             (4, 9, 5), (2, 4, 11), (6, 2, 10), (8, 6, 7), (9, 8, 1)
-        };
+        ];
 
         // Subdivide
         for (int i = 0; i < subdivisions; i++)
@@ -317,7 +317,7 @@ public static partial class GeometryGenerator
 
             int GetMidPoint(int i1, int i2)
             {
-                var key = i1 < i2 ? (i1, i2) : (i2, i1);
+                (int, int) key = i1 < i2 ? (i1, i2) : (i2, i1);
                 if (midPointCache.TryGetValue(key, out int cached))
                     return cached;
 
@@ -328,7 +328,7 @@ public static partial class GeometryGenerator
                 return index;
             }
 
-            foreach (var (i0, i1, i2) in indices)
+            foreach ((int i0, int i1, int i2) in indices)
             {
                 int m0 = GetMidPoint(i0, i1);
                 int m1 = GetMidPoint(i1, i2);
@@ -345,12 +345,12 @@ public static partial class GeometryGenerator
 
         // Build GeometryData
         var vertices = new List<GeometryData.Vertex>();
-        foreach (var pos in positions)
+        foreach (Float3 pos in positions)
         {
             vertices.Add(geometryData.AddVertex(pos));
         }
 
-        foreach (var (i0, i1, i2) in indices)
+        foreach ((int i0, int i1, int i2) in indices)
         {
             geometryData.AddFace(vertices[i0], vertices[i1], vertices[i2]);
         }
@@ -420,7 +420,7 @@ public static partial class GeometryGenerator
         // Top cap (reuse top ring vertices from side)
         if (capTop)
         {
-            var topCenter = geometryData.AddVertex(center + new Float3(0, halfHeight, 0));
+            GeometryData.Vertex topCenter = geometryData.AddVertex(center + new Float3(0, halfHeight, 0));
 
             for (int seg = 0; seg < segments; seg++)
             {
@@ -432,7 +432,7 @@ public static partial class GeometryGenerator
         // Bottom cap (reuse bottom ring vertices from side)
         if (capBottom)
         {
-            var bottomCenter = geometryData.AddVertex(center + new Float3(0, -halfHeight, 0));
+            GeometryData.Vertex bottomCenter = geometryData.AddVertex(center + new Float3(0, -halfHeight, 0));
 
             for (int seg = 0; seg < segments; seg++)
             {
@@ -465,7 +465,7 @@ public static partial class GeometryGenerator
         var geometryData = new GeometryData();
 
         // Apex
-        var apex = geometryData.AddVertex(center + new Float3(0, height, 0));
+        GeometryData.Vertex apex = geometryData.AddVertex(center + new Float3(0, height, 0));
 
         // Base ring
         var baseRing = new GeometryData.Vertex[segments];
@@ -576,10 +576,10 @@ public static partial class GeometryGenerator
 
         float a = size / Maths.Sqrt(3.0f);
 
-        var v0 = geometryData.AddVertex(center + new Float3(a, a, a));
-        var v1 = geometryData.AddVertex(center + new Float3(-a, -a, a));
-        var v2 = geometryData.AddVertex(center + new Float3(-a, a, -a));
-        var v3 = geometryData.AddVertex(center + new Float3(a, -a, -a));
+        GeometryData.Vertex v0 = geometryData.AddVertex(center + new Float3(a, a, a));
+        GeometryData.Vertex v1 = geometryData.AddVertex(center + new Float3(-a, -a, a));
+        GeometryData.Vertex v2 = geometryData.AddVertex(center + new Float3(-a, a, -a));
+        GeometryData.Vertex v3 = geometryData.AddVertex(center + new Float3(a, -a, -a));
 
         geometryData.AddFace(v0, v2, v1);
         geometryData.AddFace(v0, v1, v3);
@@ -601,12 +601,12 @@ public static partial class GeometryGenerator
 
         float s = size / Maths.Sqrt(2.0f);
 
-        var v0 = geometryData.AddVertex(center + new Float3(s, 0, 0));
-        var v1 = geometryData.AddVertex(center + new Float3(-s, 0, 0));
-        var v2 = geometryData.AddVertex(center + new Float3(0, s, 0));
-        var v3 = geometryData.AddVertex(center + new Float3(0, -s, 0));
-        var v4 = geometryData.AddVertex(center + new Float3(0, 0, s));
-        var v5 = geometryData.AddVertex(center + new Float3(0, 0, -s));
+        GeometryData.Vertex v0 = geometryData.AddVertex(center + new Float3(s, 0, 0));
+        GeometryData.Vertex v1 = geometryData.AddVertex(center + new Float3(-s, 0, 0));
+        GeometryData.Vertex v2 = geometryData.AddVertex(center + new Float3(0, s, 0));
+        GeometryData.Vertex v3 = geometryData.AddVertex(center + new Float3(0, -s, 0));
+        GeometryData.Vertex v4 = geometryData.AddVertex(center + new Float3(0, 0, s));
+        GeometryData.Vertex v5 = geometryData.AddVertex(center + new Float3(0, 0, -s));
 
         // Upper pyramid
         geometryData.AddFace(v2, v4, v0);
@@ -687,7 +687,7 @@ public static partial class GeometryGenerator
             new int[] { 6, 15, 7, 19, 18 }
         };
 
-        foreach (var face in faces)
+        foreach (int[] face in faces)
         {
             geometryData.AddFace(
                 vertices[face[0]],

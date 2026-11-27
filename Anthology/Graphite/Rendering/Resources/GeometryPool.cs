@@ -240,16 +240,16 @@ internal sealed class GeometryPool(GraphicsDevice device, RenderStore store, uin
     private const uint MaxChunks = 1u << 26;
 
     private readonly object _lock = new();
-    private readonly List<(GpuMesh Mesh, MeshLayout? Layout)> _pending = new();
-    private readonly List<(GpuMesh Mesh, int Stream, uint[] Words)> _streamWrites = new();
+    private readonly List<(GpuMesh Mesh, MeshLayout? Layout)> _pending = [];
+    private readonly List<(GpuMesh Mesh, int Stream, uint[] Words)> _streamWrites = [];
     private readonly Stack<int> _freeIds = new();
     private int _nextId;
 
     private readonly RangeAllocator _chunkSpace = new(MaxChunks);
-    private readonly List<(ulong Execution, MeshPlacement Placement)> _retiringRanges = new();
-    private readonly List<(ulong Execution, int Id)> _retiringIds = new();
+    private readonly List<(ulong Execution, MeshPlacement Placement)> _retiringRanges = [];
+    private readonly List<(ulong Execution, int Id)> _retiringIds = [];
 
-    public List<GeometryPage> Pages { get; } = new();
+    public List<GeometryPage> Pages { get; } = [];
 
     public GpuTable Chunks { get; } = GpuTable.Of<ChunkRecord>(device, store, "Graphite.ChunkTable", 1024);
 
@@ -288,14 +288,14 @@ internal sealed class GeometryPool(GraphicsDevice device, RenderStore store, uin
     {
         if (_streamWrites.Count == 0)
             return 0;
-        HashSet<GpuMesh> waiting = new(placedNow);
-        foreach (var (mesh, _) in _pending)
+        HashSet<GpuMesh> waiting = [with(placedNow)];
+        foreach ((GpuMesh? mesh, MeshLayout _) in _pending)
             waiting.Add(mesh);
         long bytes = 0;
         int kept = 0;
         for (int i = 0; i < _streamWrites.Count; i++)
         {
-            var write = _streamWrites[i];
+            (GpuMesh Mesh, int Stream, uint[] Words) write = _streamWrites[i];
             if (write.Mesh.IsDisposed)
                 continue;
             if (write.Mesh.Placement is not { } placement || waiting.Contains(write.Mesh))

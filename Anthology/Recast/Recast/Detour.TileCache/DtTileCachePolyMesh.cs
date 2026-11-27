@@ -18,21 +18,20 @@ freely, subject to the following restrictions:
 3. This notice may not be removed or altered from any source distribution.
 */
 
-namespace Prowl.Recast.Detour.TileCache
-{
-    public class DtTileCachePolyMesh
-    {
-        public int nvp;
-        public int nverts; // < Number of vertices.
-        public int npolys; // < Number of polygons.
-        public int[] verts; // < Vertices of the mesh, 3 elements per vertex.
-        public int[] polys; // < Polygons of the mesh, nvp*2 elements per polygon.
-        public int[] flags; // < Per polygon flags.
-        public int[] areas; // < Area ID of polygons.
+namespace Prowl.Recast.Detour.TileCache;
 
-        public DtTileCachePolyMesh(int nvp)
-        {
-            this.nvp = nvp;
-        }
+public class DtTileCachePolyMesh
+{
+    public int nvp;
+    public int nverts; // < Number of vertices.
+    public int npolys; // < Number of polygons.
+    public int[] verts; // < Vertices of the mesh, 3 elements per vertex.
+    public int[] polys; // < Polygons of the mesh, nvp*2 elements per polygon.
+    public int[] flags; // < Per polygon flags.
+    public int[] areas; // < Area ID of polygons.
+
+    public DtTileCachePolyMesh(int nvp)
+    {
+        this.nvp = nvp;
     }
 }

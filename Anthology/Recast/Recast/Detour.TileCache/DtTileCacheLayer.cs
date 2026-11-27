@@ -18,18 +18,17 @@ freely, subject to the following restrictions:
 3. This notice may not be removed or altered from any source distribution.
 */
 
-namespace Prowl.Recast.Detour.TileCache
-{
-    public class DtTileCacheLayer
-    {
-        // This value specifies how many layers (or "floors") each navmesh tile is expected to have.
-        public const int EXPECTED_LAYERS_PER_TILE = 4;
+namespace Prowl.Recast.Detour.TileCache;
 
-        public DtTileCacheLayerHeader header;
-        public byte regCount; // < Region count.
-        public byte[] heights; // unsigned char
-        public byte[] areas; // unsigned char
-        public byte[] cons; // unsigned char
-        public byte[] regs; // unsigned char
-    }
+public class DtTileCacheLayer
+{
+    // This value specifies how many layers (or "floors") each navmesh tile is expected to have.
+    public const int EXPECTED_LAYERS_PER_TILE = 4;
+
+    public DtTileCacheLayerHeader header;
+    public byte regCount; // < Region count.
+    public byte[] heights; // unsigned char
+    public byte[] areas; // unsigned char
+    public byte[] cons; // unsigned char
+    public byte[] regs; // unsigned char
 }

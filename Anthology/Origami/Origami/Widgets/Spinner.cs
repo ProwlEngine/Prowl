@@ -6,6 +6,7 @@ using System;
 using Prowl.PaperUI;
 using Prowl.PaperUI.LayoutEngine;
 using Prowl.Quill;
+using Prowl.Scribe;
 using Prowl.Vector;
 using Prowl.Vector.Spatial;
 
@@ -116,7 +117,7 @@ public sealed class SpinnerBuilder
 
     public void Show()
     {
-        var font = _theme.Font;
+        FontFile? font = _theme.Font;
         float diameter = ResolveDiameter();
         float rowH = MathF.Max(diameter, _theme.Metrics.HeaderHeight);
         Color color = _colorOverride ?? ResolveVariantColor();
@@ -274,7 +275,7 @@ public sealed class SpinnerBuilder
         {
             // Tail starts faint, head is full alpha.
             byte alpha = (byte)Math.Clamp((int)(255 * ((i + 1) / (float)segments)), 32, 255);
-            var col = Color32.FromArgb(alpha, color.R, color.G, color.B);
+            Vector.Color col = Color32.FromArgb(alpha, color.R, color.G, color.B);
 
             float a0 = i * segLen;
             float a1 = a0 + segLen + 0.02f;          // tiny overlap to avoid gaps

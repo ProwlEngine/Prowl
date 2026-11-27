@@ -30,7 +30,7 @@ internal sealed class GltfBufferStore
 
         for (int i = 0; i < n; i++)
         {
-            var buf = dom.Buffers![i];
+            GltfBuffer buf = dom.Buffers![i];
             if (buf.Uri is null)
             {
                 if (i != 0)
@@ -56,12 +56,9 @@ internal sealed class GltfBufferStore
                     $"Buffer {i} references external file '{buf.Uri}' but no source path is set.",
                     ctx.SourcePath, ctx.Format);
 
-            string? resolved = ctx.Resolver.Resolve(ctx.SourcePath, Uri.UnescapeDataString(buf.Uri));
-            if (resolved is null)
-                throw new ImportException(
+            string? resolved = ctx.Resolver.Resolve(ctx.SourcePath, Uri.UnescapeDataString(buf.Uri)) ?? throw new ImportException(
                     $"Could not resolve external buffer file '{buf.Uri}' referenced by buffer {i}.",
                     ctx.SourcePath, ctx.Format);
-
             byte[] read = ctx.Resolver.ReadAllBytes(resolved);
             _bytes[i] = SizedSlice(read, buf.ByteLength, $"external buffer '{buf.Uri}'", ctx);
         }
@@ -86,7 +83,7 @@ internal sealed class GltfBufferStore
 
     public GltfBufferView GetBufferView(int index)
     {
-        var views = _dom.BufferViews;
+        GltfBufferView[]? views = _dom.BufferViews;
         if (views is null || (uint)index >= (uint)views.Length)
             throw new ImportException($"Missing bufferView index {index}.");
         return views[index];

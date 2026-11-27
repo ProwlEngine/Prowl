@@ -128,7 +128,7 @@ public static class ContextMenu
 
     // Keyboard navigation. The path holds the highlighted item at each open menu depth, so a submenu
     // is open by keyboard while the path runs deeper than its parent menu.
-    private static readonly List<int> s_keyPath = new();
+    private static readonly List<int> s_keyPath = [];
     private static string s_keyRoot = "";
     private static int s_depth;
     private static bool s_keysOn, s_keyHandled;
@@ -152,7 +152,7 @@ public static class ContextMenu
     /// <summary>Up and Down move the highlight, Right or Enter opens a submenu, Left closes it and Enter picks an item.</summary>
     private static void HandleKeys(Paper paper, ContextBuilder builder, int depth, Action close)
     {
-        var items = builder.Items;
+        List<ContextItem> items = builder.Items;
         if (depth < s_keyPath.Count && s_keyPath[depth] >= items.Count)
             s_keyPath.RemoveRange(depth, s_keyPath.Count - depth);
         int current = depth < s_keyPath.Count ? s_keyPath[depth] : -1;
@@ -180,7 +180,7 @@ public static class ContextMenu
         switch (items[current])
         {
             case CtxSubmenu { Sub: not null } submenu when enter || paper.IsKeyPressed(PaperKey.Right):
-                var subItems = submenu.Sub.Items;
+                List<ContextItem> subItems = submenu.Sub.Items;
                 int first = KeyNav.Edge(subItems.Count, last: false, i => IsNavigable(subItems[i]));
                 if (first < 0) break;
                 s_keyPath.Add(first);
@@ -266,8 +266,8 @@ public static class ContextMenu
     internal static void RenderMenu(Paper paper, string id, ContextBuilder builder, Rect parentRect,
         Action close, int layer = Layer.Topmost + 501)
     {
-        var theme = Origami.Current;
-        var font = theme.Font;
+        OrigamiTheme theme = Origami.Current;
+        Scribe.FontFile? font = theme.Font;
         if (font == null) return;
 
         // For top-level context menus, parentRect is a zero-size rectangle: in which case just position the context
@@ -277,7 +277,7 @@ public static class ContextMenu
         // Countries with right-to-left languages expect submenus to open on the left.
         bool openOnRight = SystemInformation.SubmenuSide != SubmenuSide.Left;
 
-        var menuBox = paper.Column($"{id}_menu")
+        ElementBuilder menuBox = paper.Column($"{id}_menu")
             .PositionType(PositionType.SelfDirected)
             .Left(parentRect.Size.X == 0 ? parentRect.Max.X : (openOnRight ? UnitValue.Percentage(100, RowPadX) : UnitValue.Auto))
             .AnchorRight(parentRect.Size.X == 0 || openOnRight ? UnitValue.Auto : UnitValue.Percentage(100, RowPadX))
@@ -304,14 +304,14 @@ public static class ContextMenu
     /// </summary>
     public static void Preview(Paper paper, string id, Action<ContextBuilder> build)
     {
-        var theme = Origami.Current;
-        var font = theme.Font;
+        OrigamiTheme theme = Origami.Current;
+        Scribe.FontFile? font = theme.Font;
         if (font == null) return;
 
         var builder = new ContextBuilder();
         build(builder);
 
-        var menuBox = paper.Column($"{id}_menu")
+        ElementBuilder menuBox = paper.Column($"{id}_menu")
             .Size(UnitValue.Auto, UnitValue.Auto)
             .AlignItems(LayoutAlignment.Stretch)
             .BackgroundColor(theme.Popover)
@@ -482,10 +482,10 @@ public static class ContextMenu
 
         public override void Draw(Paper paper, string id, int index, Scribe.FontFile font, OrigamiTheme theme, Action close, int layer)
         {
-            var ink = theme.Ink;
+            OrigamiRamp ink = theme.Ink;
 
             bool keyOn = Enabled && IsKeyHighlighted(index);
-            var row = paper.Row($"{id}_i_{index}")
+            ElementBuilder row = paper.Row($"{id}_i_{index}")
                 .Size(UnitValue.Auto, RowHeight)
                 .Padding(RowPadX, RowPadX, 0, 0)
                 .Gap(RowGap)
@@ -556,7 +556,7 @@ public static class ContextMenu
                 .Enter())
             {
                 // Draw the label.
-                var label = DrawLabel(paper, index, font: theme.SemiBold ?? theme.Bold ?? font,
+                ElementBuilder label = DrawLabel(paper, index, font: theme.SemiBold ?? theme.Bold ?? font,
                     label: Text.ToUpperInvariant(), color: theme.Ink.C100 /* t-dim */, size: SubFontSize);
                 label.Height(14);
                 label.LetterSpacing(0.5f);
@@ -573,10 +573,10 @@ public static class ContextMenu
 
         public override void Draw(Paper paper, string id, int index, Scribe.FontFile font, OrigamiTheme theme, Action close, int layer)
         {
-            var ink = theme.Ink;
+            OrigamiRamp ink = theme.Ink;
 
             bool keyOn = Enabled && IsKeyHighlighted(index);
-            var row = paper.Row($"{id}_i_{index}")
+            ElementBuilder row = paper.Row($"{id}_i_{index}")
                 .Size(UnitValue.Auto, RowHeight)
                 .Padding(RowPadX, RowPadX, 0, 0)
                 .Gap(RowGap)
@@ -600,7 +600,7 @@ public static class ContextMenu
                 DrawLabel(paper, index, font, Label, txt, RowFontSize);
 
                 // Pill toggle on the right (matches the Nebula .tg switch).
-                var acc = theme.Primary.C500;
+                Color acc = theme.Primary.C500;
                 using (paper.Box("tg", index)
                     .Size(32, 18).Rounded(9)
                     .Margin(left: UnitValue.StretchOne + AffordanceMargin, 0, UnitValue.StretchOne, UnitValue.StretchOne)
@@ -652,10 +652,10 @@ public static class ContextMenu
 
         public override void Draw(Paper paper, string id, int index, Scribe.FontFile font, OrigamiTheme theme, Action close, int layer)
         {
-            var ink = theme.Ink;
+            OrigamiRamp ink = theme.Ink;
 
             // Check if the submenu should remain open for a short time, even if not hovering.
-            var submenuState = paper.GetElementStorage(paper.CurrentParent, $"{id}_submenu", new OpenSubmenuState { Index = -1 });
+            OpenSubmenuState submenuState = paper.GetElementStorage(paper.CurrentParent, $"{id}_submenu", new OpenSubmenuState { Index = -1 });
             bool submenuIsOpen = submenuState.Index == index && submenuState.RemainingTime >= 0 || IsKeyOpened(index);
             bool keyOn = IsKeyHighlighted(index);
             ElementHandle rowHandle = default;
@@ -692,7 +692,7 @@ public static class ContextMenu
                     paper.Draw((canvas, rect) => DrawChevron(canvas, rect, txt));
 
                 // Accumulate a hover time. The submenu can only open after the threshold has been reached.
-                var hoverTime = hovered ? paper.GetElementStorage(paper.CurrentParent, "hover_time", 0f) + paper.DeltaTime : 0f;
+                float hoverTime = hovered ? paper.GetElementStorage(paper.CurrentParent, "hover_time", 0f) + paper.DeltaTime : 0f;
                 paper.SetElementStorage(paper.CurrentParent, "hover_time", hoverTime);
                 if (hoverTime >= SystemInformation.MenuShowDelay)
                     submenuIsOpen = true;
@@ -700,7 +700,7 @@ public static class ContextMenu
                 if (submenuIsOpen && Sub != null)
                 {
                     // Use the menu item's bounds (captured last frame) to position the submenu.
-                    var parentRect = paper.GetElementStorage<Rect>(paper.CurrentParent, "srect", default);
+                    Rect parentRect = paper.GetElementStorage<Rect>(paper.CurrentParent, "srect", default);
                     RenderMenu(paper, $"{id}_s_{index}", Sub, parentRect, close, layer + 1);
 
                     // If the mouse is actually hovering over the context menu (or the submenu), continually

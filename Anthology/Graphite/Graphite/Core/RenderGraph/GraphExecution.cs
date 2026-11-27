@@ -6,13 +6,13 @@ namespace Prowl.Graphite;
 
 internal sealed partial class GraphExecution
 {
-    private readonly Dictionary<Texture, TextureState> _textureStates = new();
+    private readonly Dictionary<Texture, TextureState> _textureStates = [];
     private GraphTextureStates? _stateSnapshot;
     private GraphTextureStates? _passStates;
-    private readonly Dictionary<DeviceBuffer, BufferSync> _bufferSyncs = new();
-    private readonly List<TextureBarrier> _barriers = new();
-    private readonly HashSet<Texture> _enteredTransients = new();
-    private readonly HashSet<Texture> _discardedTextures = new();
+    private readonly Dictionary<DeviceBuffer, BufferSync> _bufferSyncs = [];
+    private readonly List<TextureBarrier> _barriers = [];
+    private readonly HashSet<Texture> _enteredTransients = [];
+    private readonly HashSet<Texture> _discardedTextures = [];
     private readonly RenderTexture?[] _textures;
     private readonly DeviceBuffer?[] _buffers;
     private BufferAccess _pendingBufferSrc;
@@ -416,7 +416,7 @@ internal sealed partial class GraphExecution
 
     private static void Allow(ref Dictionary<Texture, TextureState>? allowed, Texture texture, TextureState states)
     {
-        allowed ??= new Dictionary<Texture, TextureState>();
+        allowed ??= [];
         allowed[texture] = allowed.TryGetValue(texture, out TextureState existing) ? existing | states : states;
     }
 

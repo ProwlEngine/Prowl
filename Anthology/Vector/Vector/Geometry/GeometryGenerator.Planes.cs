@@ -72,7 +72,7 @@ public static partial class GeometryGenerator
 
         // A duplicate would clip to a full face of its own, leaving two coincident faces sharing
         // every edge - non-manifold output CSG cannot categorise against.
-        var usable = new bool[planes.Count];
+        bool[] usable = new bool[planes.Count];
         for (int i = 0; i < planes.Count; i++)
         {
             Float3 n = planes[i].Normal;
@@ -106,7 +106,7 @@ public static partial class GeometryGenerator
         // the same from every face that has them, however large the solid
         for (int i = 0; i < planes.Count; i++)
         {
-            if (!usable[i]) { faces.Add(new List<Float3>()); continue; }
+            if (!usable[i]) { faces.Add([]); continue; }
 
             List<Double3>? poly = BuildFaceQuad(planes[i], extent);
 
@@ -119,7 +119,7 @@ public static partial class GeometryGenerator
             if (poly == null || poly.Count < 3)
             {
                 redundant.Add(i);
-                faces.Add(new List<Float3>());
+                faces.Add([]);
                 continue;
             }
 
@@ -141,7 +141,7 @@ public static partial class GeometryGenerator
             return new ConvexSolidResult(null, ConvexSolidStatus.Unbounded, redundant);
 
         int realFaces = 0;
-        foreach (var f in faces) if (f.Count >= 3) realFaces++;
+        foreach (List<Float3> f in faces) if (f.Count >= 3) realFaces++;
         if (realFaces < 4)
             return new ConvexSolidResult(null, ConvexSolidStatus.Empty, redundant);
 
@@ -239,25 +239,25 @@ public static partial class GeometryGenerator
                 for (int y = cy - 1; y <= cy + 1; y++)
                     for (int z = cz - 1; z <= cz + 1; z++)
                     {
-                        if (!cells.TryGetValue((x, y, z), out var near)) continue;
-                        foreach (var v in near)
+                        if (!cells.TryGetValue((x, y, z), out List<GeometryData.Vertex>? near)) continue;
+                        foreach (GeometryData.Vertex v in near)
                             if (Float3.DistanceSquared(v.Point, p) <= tolerance * tolerance) return v;
                     }
 
-            var vert = mesh.AddVertex(p);
-            if (!cells.TryGetValue((cx, cy, cz), out var list)) cells[(cx, cy, cz)] = list = new List<GeometryData.Vertex>();
+            GeometryData.Vertex vert = mesh.AddVertex(p);
+            if (!cells.TryGetValue((cx, cy, cz), out List<GeometryData.Vertex>? list)) cells[(cx, cy, cz)] = list = [];
             list.Add(vert);
             return vert;
         }
 
-        foreach (var ring in faces)
+        foreach (List<Float3> ring in faces)
         {
             if (ring.Count < 3) continue;
 
             var verts = new List<GeometryData.Vertex>(ring.Count);
             foreach (Float3 p in ring)
             {
-                var vert = Weld(p);
+                GeometryData.Vertex vert = Weld(p);
                 // Clipping can leave near-duplicate corners; a face must not reference one twice.
                 if (verts.Count == 0 || !ReferenceEquals(verts[^1], vert))
                     verts.Add(vert);

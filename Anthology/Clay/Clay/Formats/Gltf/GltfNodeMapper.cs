@@ -31,7 +31,7 @@ internal static class GltfNodeMapper
         IntermediateScene scene,
         ImportContext ctx)
     {
-        var sourceNodes = dom.Nodes ?? Array.Empty<GltfNode>();
+        GltfNode[] sourceNodes = dom.Nodes ?? Array.Empty<GltfNode>();
         var built = new IntermediateNode[sourceNodes.Length];
 
         for (int i = 0; i < sourceNodes.Length; i++)
@@ -39,7 +39,7 @@ internal static class GltfNodeMapper
 
         for (int i = 0; i < sourceNodes.Length; i++)
         {
-            var children = sourceNodes[i].Children;
+            int[]? children = sourceNodes[i].Children;
             if (children is null) continue;
             foreach (int childIdx in children)
             {
@@ -48,7 +48,7 @@ internal static class GltfNodeMapper
                 if (childIdx == i)
                     throw new ImportException($"Node {i} lists itself as a child.");
 
-                var childNode = built[childIdx];
+                IntermediateNode childNode = built[childIdx];
                 // glTF nodes form a tree, so a second parent means the file is malformed. Linking it
                 // anyway leaves the node in two children lists with one Parent pointer, which the
                 // depth-first walk then visits twice under conflicting transforms.
@@ -146,7 +146,7 @@ internal static class GltfNodeMapper
         };
 
         if (GltfExtras.Read(src.Extras) is { } extras)
-            foreach (var entry in extras)
+            foreach (KeyValuePair<string, object?> entry in extras)
                 node.Metadata[entry.Key] = entry.Value;
 
         if (src.Matrix is { Length: 16 } m)

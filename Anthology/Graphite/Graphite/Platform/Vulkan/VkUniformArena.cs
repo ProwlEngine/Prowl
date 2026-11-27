@@ -6,7 +6,7 @@ namespace Prowl.Graphite.Vk;
 /// <summary>
 /// Per-ring-slot transient uniform memory
 /// </summary>
-internal unsafe sealed class VkUniformArena
+internal sealed unsafe class VkUniformArena
 {
     private readonly VkGraphicsDevice _gd;
     private readonly VkBuffer _primary;

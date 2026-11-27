@@ -11,7 +11,7 @@ namespace Prowl.Graphite.Vk;
 internal unsafe partial class VkGraphicsDevice
 {
     private readonly object _pendingLock = new();
-    private readonly Dictionary<ulong, ExecutionRecord> _executionRecords = new();
+    private readonly Dictionary<ulong, ExecutionRecord> _executionRecords = [];
     private readonly Queue<PendingSubmission> _pending = new();
     private VkSemaphore _timelineSemaphore;
     private int _graphicsQueueSubmitCount;
@@ -480,8 +480,8 @@ internal unsafe partial class VkGraphicsDevice
     private sealed class ExecutionRecord
     {
         public readonly ProfilerSet Profilers;
-        public readonly List<(CommandBufferInfo Info, double Milliseconds)> Timings = new();
-        public readonly List<(CommandBufferInfo Info, GpuVertexStats Stats)> VertexStats = new();
+        public readonly List<(CommandBufferInfo Info, double Milliseconds)> Timings = [];
+        public readonly List<(CommandBufferInfo Info, GpuVertexStats Stats)> VertexStats = [];
         public int Outstanding;
         public ulong FinalSerial;
 

@@ -31,8 +31,8 @@ public class SerializationContext
 {
     internal TypeMode TypeMode = TypeMode.Auto;
 
-    public Dictionary<object, int> objectToId = new(ReferenceEqualityComparer.Instance);
-    public Dictionary<int, object> idToObject = new();
+    public Dictionary<object, int> objectToId = [with(ReferenceEqualityComparer.Instance)];
+    public Dictionary<int, object> idToObject = [];
     public int nextId = 1;
 
     /// <summary>
@@ -47,13 +47,13 @@ public class SerializationContext
     /// forward-reference placeholder (still awaiting its definition) apart from an already-populated
     /// instance, and detect a duplicate definition for the same id.
     /// </summary>
-    public HashSet<int> fullyDefinedIds = new();
+    public HashSet<int> fullyDefinedIds = [];
 
     /// <summary>
     /// Definitions whose <c>$type</c> could not be resolved, by reference id. Lets a caller that can
     /// stand in for a missing type recover the data when only a reference to it reached that caller.
     /// </summary>
-    public Dictionary<int, EchoObject> unresolvedDefinitions = new();
+    public Dictionary<int, EchoObject> unresolvedDefinitions = [];
 
     private List<Action>? _deferredActions;
     private int _deserializeDepth;
@@ -88,7 +88,7 @@ public class SerializationContext
     /// Runs automatically before the root object's OnAfterDeserialize, or when the outermost
     /// Deserialize/DeserializeInto call using this context returns.
     /// </summary>
-    public void Defer(Action action) => (_deferredActions ??= new()).Add(action);
+    public void Defer(Action action) => (_deferredActions ??= []).Add(action);
 
     // Called by the deserializer around every call so deferred actions can fire once the OUTERMOST call
     // (whichever overload, whatever context) unwinds - not per nested field, and not re-entrantly while

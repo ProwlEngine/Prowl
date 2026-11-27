@@ -19,48 +19,50 @@ freely, subject to the following restrictions:
 */
 
 using System.IO;
+
 using Prowl.Recast.Core;
 
-namespace Prowl.Recast.Detour.TileCache.Io
+namespace Prowl.Recast.Detour.TileCache.Io;
+
+public static class DtTileCacheLayerHeaderReader
 {
-    public static class DtTileCacheLayerHeaderReader
+    public static DtTileCacheLayerHeader Read(RcByteBuffer data, bool cCompatibility)
     {
-        public static DtTileCacheLayerHeader Read(RcByteBuffer data, bool cCompatibility)
+        DtTileCacheLayerHeader header = new DtTileCacheLayerHeader
         {
-            DtTileCacheLayerHeader header = new DtTileCacheLayerHeader();
-            header.magic = data.GetInt();
-            header.version = data.GetInt();
+            magic = data.GetInt(),
+            version = data.GetInt()
+        };
 
-            if (header.magic != DtTileCacheLayerHeader.DT_TILECACHE_MAGIC)
-                throw new IOException("Invalid magic");
-            if (header.version != DtTileCacheLayerHeader.DT_TILECACHE_VERSION)
-                throw new IOException("Invalid version");
+        if (header.magic != DtTileCacheLayerHeader.DT_TILECACHE_MAGIC)
+            throw new IOException("Invalid magic");
+        if (header.version != DtTileCacheLayerHeader.DT_TILECACHE_VERSION)
+            throw new IOException("Invalid version");
 
-            header.tx = data.GetInt();
-            header.ty = data.GetInt();
-            header.tlayer = data.GetInt();
+        header.tx = data.GetInt();
+        header.ty = data.GetInt();
+        header.tlayer = data.GetInt();
 
-            header.bmin.X = data.GetFloat();
-            header.bmin.Y = data.GetFloat();
-            header.bmin.Z = data.GetFloat();
-            header.bmax.X = data.GetFloat();
-            header.bmax.Y = data.GetFloat();
-            header.bmax.Z = data.GetFloat();
+        header.bmin.X = data.GetFloat();
+        header.bmin.Y = data.GetFloat();
+        header.bmin.Z = data.GetFloat();
+        header.bmax.X = data.GetFloat();
+        header.bmax.Y = data.GetFloat();
+        header.bmax.Z = data.GetFloat();
 
-            header.hmin = data.GetShort() & 0xFFFF;
-            header.hmax = data.GetShort() & 0xFFFF;
-            header.width = data.Get() & 0xFF;
-            header.height = data.Get() & 0xFF;
-            header.minx = data.Get() & 0xFF;
-            header.maxx = data.Get() & 0xFF;
-            header.miny = data.Get() & 0xFF;
-            header.maxy = data.Get() & 0xFF;
-            if (cCompatibility)
-            {
-                data.GetShort(); // C struct padding
-            }
-
-            return header;
+        header.hmin = data.GetShort() & 0xFFFF;
+        header.hmax = data.GetShort() & 0xFFFF;
+        header.width = data.Get() & 0xFF;
+        header.height = data.Get() & 0xFF;
+        header.minx = data.Get() & 0xFF;
+        header.maxx = data.Get() & 0xFF;
+        header.miny = data.Get() & 0xFF;
+        header.maxy = data.Get() & 0xFF;
+        if (cCompatibility)
+        {
+            data.GetShort(); // C struct padding
         }
+
+        return header;
     }
 }

@@ -21,7 +21,7 @@ public sealed class HumanPoseMask
 {
     private readonly float[] _bones = new float[HumanTrait.BoneCount];
     private readonly float[] _goals = new float[HumanPose.GoalCount];
-    private readonly Dictionary<StringID, float> _channels = new();
+    private readonly Dictionary<StringID, float> _channels = [];
     private float _channelWeight = 1f;
 
     public float RootWeight { get; set; }

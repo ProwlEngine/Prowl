@@ -3,9 +3,8 @@
 
 using System.Collections.Generic;
 
-using Prowl.PaperUI;
-
 using Prowl.OrigamiUI;
+using Prowl.PaperUI;
 
 namespace Prowl.OrigamiUI.Charts;
 

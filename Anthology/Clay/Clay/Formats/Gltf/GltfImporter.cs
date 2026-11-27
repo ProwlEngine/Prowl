@@ -60,7 +60,7 @@ internal static class GltfImporter
 
         if (dom.Extensions is not null)
         {
-            foreach (var kvp in dom.Extensions)
+            foreach (KeyValuePair<string, JsonElement> kvp in dom.Extensions)
                 scene.RawExtensions[kvp.Key] = kvp.Value.Clone();
         }
 
@@ -68,8 +68,8 @@ internal static class GltfImporter
         GltfCameraLightMapper.MapLights(dom, scene, context);
         GltfTextureMapper.MapAll(dom, buffers, scene, context);
         GltfMaterialMapper.MapAll(dom, scene, context);
-        var meshMapping = GltfMeshMapper.MapAll(dom, accessor, scene, context);
-        var nodeMapping = GltfNodeMapper.Map(dom, meshMapping, scene, context);
+        GltfMeshMapper.Result meshMapping = GltfMeshMapper.MapAll(dom, accessor, scene, context);
+        GltfNodeMapper.Result nodeMapping = GltfNodeMapper.Map(dom, meshMapping, scene, context);
         scene.Root = nodeMapping.Root;
 
         GltfSkinMapper.MapAll(dom, nodeMapping.SourceNodeToIntermediate, accessor, scene, context);
@@ -89,7 +89,7 @@ internal static class GltfImporter
         if (dom.ExtensionsRequired is null) return;
 
         var missing = new List<string>();
-        foreach (var ext in dom.ExtensionsRequired)
+        foreach (string ext in dom.ExtensionsRequired)
             if (!IsKnown(ext) && !missing.Contains(ext))
                 missing.Add(ext);
 
@@ -115,17 +115,17 @@ internal static class GltfImporter
         string? found = null;
 
         if (dom.ExtensionsUsed is { } used)
-            foreach (var ext in used)
+            foreach (string ext in used)
                 if (IsMeshCompression(ext)) { found = ext; break; }
 
         if (found is null && dom.Meshes is { } meshes)
         {
-            foreach (var mesh in meshes)
+            foreach (GltfMesh mesh in meshes)
             {
-                foreach (var prim in mesh.Primitives)
+                foreach (GltfPrimitive prim in mesh.Primitives)
                 {
                     if (prim.Extensions is null) continue;
-                    foreach (var key in prim.Extensions.Keys)
+                    foreach (string key in prim.Extensions.Keys)
                         if (IsMeshCompression(key)) { found = key; break; }
                     if (found is not null) break;
                 }

@@ -20,23 +20,22 @@ freely, subject to the following restrictions:
 using Prowl.Recast.Core.Numerics;
 
 
-namespace Prowl.Recast.Detour
+namespace Prowl.Recast.Detour;
+
+public class DtDefaultQueryHeuristic : IDtQueryHeuristic
 {
-    public class DtDefaultQueryHeuristic : IDtQueryHeuristic
+    public const float H_SCALE = 0.999f; // Search heuristic scale.
+    public static readonly DtDefaultQueryHeuristic Default = new DtDefaultQueryHeuristic(H_SCALE);
+
+    private readonly float scale;
+
+    public DtDefaultQueryHeuristic(float scale)
     {
-        public const float H_SCALE = 0.999f; // Search heuristic scale.
-        public static readonly DtDefaultQueryHeuristic Default = new DtDefaultQueryHeuristic(H_SCALE);
+        this.scale = scale;
+    }
 
-        private readonly float scale;
-
-        public DtDefaultQueryHeuristic(float scale)
-        {
-            this.scale = scale;
-        }
-
-        public float GetCost(RcVec3f neighbourPos, RcVec3f endPos)
-        {
-            return RcVec3f.Distance(neighbourPos, endPos) * scale;
-        }
+    public float GetCost(RcVec3f neighbourPos, RcVec3f endPos)
+    {
+        return RcVec3f.Distance(neighbourPos, endPos) * scale;
     }
 }

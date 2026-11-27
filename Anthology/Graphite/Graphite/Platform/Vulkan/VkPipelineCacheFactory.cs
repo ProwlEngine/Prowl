@@ -30,15 +30,17 @@ internal static unsafe class VkPipelineCacheFactory
             BlendAttachmentDescription vdDesc = declaredCount == 0
                 ? BlendAttachmentDescription.Disabled
                 : programBlendState.AttachmentStates[Math.Min(i, declaredCount - 1)];
-            PipelineColorBlendAttachmentState attachmentState = new();
-            attachmentState.SrcColorBlendFactor = VkFormats.ToVkBlendFactor(vdDesc.SourceColorFactor);
-            attachmentState.DstColorBlendFactor = VkFormats.ToVkBlendFactor(vdDesc.DestinationColorFactor);
-            attachmentState.ColorBlendOp = VkFormats.ToVkBlendOp(vdDesc.ColorFunction);
-            attachmentState.SrcAlphaBlendFactor = VkFormats.ToVkBlendFactor(vdDesc.SourceAlphaFactor);
-            attachmentState.DstAlphaBlendFactor = VkFormats.ToVkBlendFactor(vdDesc.DestinationAlphaFactor);
-            attachmentState.AlphaBlendOp = VkFormats.ToVkBlendOp(vdDesc.AlphaFunction);
-            attachmentState.ColorWriteMask = VkFormats.ToVkColorWriteMask(vdDesc.ColorWriteMask);
-            attachmentState.BlendEnable = vdDesc.BlendEnabled;
+            PipelineColorBlendAttachmentState attachmentState = new()
+            {
+                SrcColorBlendFactor = VkFormats.ToVkBlendFactor(vdDesc.SourceColorFactor),
+                DstColorBlendFactor = VkFormats.ToVkBlendFactor(vdDesc.DestinationColorFactor),
+                ColorBlendOp = VkFormats.ToVkBlendOp(vdDesc.ColorFunction),
+                SrcAlphaBlendFactor = VkFormats.ToVkBlendFactor(vdDesc.SourceAlphaFactor),
+                DstAlphaBlendFactor = VkFormats.ToVkBlendFactor(vdDesc.DestinationAlphaFactor),
+                AlphaBlendOp = VkFormats.ToVkBlendOp(vdDesc.AlphaFunction),
+                ColorWriteMask = VkFormats.ToVkColorWriteMask(vdDesc.ColorWriteMask),
+                BlendEnable = vdDesc.BlendEnabled
+            };
             attachmentsPtr[i] = attachmentState;
         }
 
@@ -49,16 +51,19 @@ internal static unsafe class VkPipelineCacheFactory
 
         // Rasterizer State
         RasterizerStateDescription rsDesc = program.RasterizerState;
-        PipelineRasterizationStateCreateInfo rsCI = new() { SType = StructureType.PipelineRasterizationStateCreateInfo };
-        rsCI.CullMode = VkFormats.ToVkCullMode(rsDesc.CullMode);
-        rsCI.PolygonMode = PolygonMode.Fill;
-        rsCI.DepthClampEnable = !rsDesc.DepthClipEnabled;
-        rsCI.FrontFace = rsDesc.FrontFace == FrontFace.Clockwise ? Silk.NET.Vulkan.FrontFace.Clockwise : Silk.NET.Vulkan.FrontFace.CounterClockwise;
-        rsCI.DepthBiasEnable = rsDesc.DepthBiasEnabled;
-        rsCI.DepthBiasConstantFactor = rsDesc.DepthBiasConstantFactor;
-        rsCI.DepthBiasSlopeFactor = rsDesc.DepthBiasSlopeFactor;
-        rsCI.DepthBiasClamp = rsDesc.DepthBiasClamp;
-        rsCI.LineWidth = 1f;
+        PipelineRasterizationStateCreateInfo rsCI = new()
+        {
+            SType = StructureType.PipelineRasterizationStateCreateInfo,
+            CullMode = VkFormats.ToVkCullMode(rsDesc.CullMode),
+            PolygonMode = PolygonMode.Fill,
+            DepthClampEnable = !rsDesc.DepthClipEnabled,
+            FrontFace = rsDesc.FrontFace == FrontFace.Clockwise ? Silk.NET.Vulkan.FrontFace.Clockwise : Silk.NET.Vulkan.FrontFace.CounterClockwise,
+            DepthBiasEnable = rsDesc.DepthBiasEnabled,
+            DepthBiasConstantFactor = rsDesc.DepthBiasConstantFactor,
+            DepthBiasSlopeFactor = rsDesc.DepthBiasSlopeFactor,
+            DepthBiasClamp = rsDesc.DepthBiasClamp,
+            LineWidth = 1f
+        };
 
         pipelineCI.PRasterizationState = &rsCI;
 
@@ -76,11 +81,14 @@ internal static unsafe class VkPipelineCacheFactory
 
         // Depth Stencil State
         DepthStencilStateDescription vdDssDesc = program.DepthStencilState;
-        PipelineDepthStencilStateCreateInfo dssCI = new() { SType = StructureType.PipelineDepthStencilStateCreateInfo };
-        dssCI.DepthWriteEnable = vdDssDesc.DepthWriteEnabled;
-        dssCI.DepthTestEnable = vdDssDesc.DepthTestEnabled;
-        dssCI.DepthCompareOp = VkFormats.ToVkCompareOp(vdDssDesc.DepthComparison);
-        dssCI.StencilTestEnable = vdDssDesc.StencilTestEnabled;
+        PipelineDepthStencilStateCreateInfo dssCI = new()
+        {
+            SType = StructureType.PipelineDepthStencilStateCreateInfo,
+            DepthWriteEnable = vdDssDesc.DepthWriteEnabled,
+            DepthTestEnable = vdDssDesc.DepthTestEnabled,
+            DepthCompareOp = VkFormats.ToVkCompareOp(vdDssDesc.DepthComparison),
+            StencilTestEnable = vdDssDesc.StencilTestEnabled
+        };
 
         dssCI.Front.FailOp = VkFormats.ToVkStencilOp(vdDssDesc.StencilFront.Fail);
         dssCI.Front.PassOp = VkFormats.ToVkStencilOp(vdDssDesc.StencilFront.Pass);
@@ -107,8 +115,11 @@ internal static unsafe class VkPipelineCacheFactory
         pipelineCI.PMultisampleState = &multisampleCI;
 
         // Input Assembly
-        PipelineInputAssemblyStateCreateInfo inputAssemblyCI = new() { SType = StructureType.PipelineInputAssemblyStateCreateInfo };
-        inputAssemblyCI.Topology = VkFormats.ToVkPrimitiveTopology(key.Topology);
+        PipelineInputAssemblyStateCreateInfo inputAssemblyCI = new()
+        {
+            SType = StructureType.PipelineInputAssemblyStateCreateInfo,
+            Topology = VkFormats.ToVkPrimitiveTopology(key.Topology)
+        };
 
         pipelineCI.PInputAssemblyState = &inputAssemblyCI;
 
@@ -184,9 +195,12 @@ internal static unsafe class VkPipelineCacheFactory
 
         foreach (KeyValuePair<ShaderStages, ShaderModule> kvp in program.Modules)
         {
-            PipelineShaderStageCreateInfo stageCI = new() { SType = StructureType.PipelineShaderStageCreateInfo };
-            stageCI.Module = kvp.Value;
-            stageCI.Stage = VkFormats.ToVkShaderStages(kvp.Key);
+            PipelineShaderStageCreateInfo stageCI = new()
+            {
+                SType = StructureType.PipelineShaderStageCreateInfo,
+                Module = kvp.Value,
+                Stage = VkFormats.ToVkShaderStages(kvp.Key)
+            };
             if (constants.Length > 0)
                 stageCI.PSpecializationInfo = &specialization;
 
@@ -203,9 +217,12 @@ internal static unsafe class VkPipelineCacheFactory
         pipelineCI.PStages = stages;
 
         // ViewportState
-        PipelineViewportStateCreateInfo viewportStateCI = new() { SType = StructureType.PipelineViewportStateCreateInfo };
-        viewportStateCI.ViewportCount = 1;
-        viewportStateCI.ScissorCount = 1;
+        PipelineViewportStateCreateInfo viewportStateCI = new()
+        {
+            SType = StructureType.PipelineViewportStateCreateInfo,
+            ViewportCount = 1,
+            ScissorCount = 1
+        };
 
         pipelineCI.PViewportState = &viewportStateCI;
 
@@ -255,10 +272,12 @@ internal static unsafe class VkPipelineCacheFactory
             depthAttachmentRef.Layout = ImageLayout.DepthStencilAttachmentOptimal;
         }
 
-        SubpassDescription subpass = new();
-        subpass.PipelineBindPoint = PipelineBindPoint.Graphics;
-        subpass.ColorAttachmentCount = (uint)outputDesc.ColorFormats.Length;
-        subpass.PColorAttachments = colorAttachmentRefs;
+        SubpassDescription subpass = new()
+        {
+            PipelineBindPoint = PipelineBindPoint.Graphics,
+            ColorAttachmentCount = (uint)outputDesc.ColorFormats.Length,
+            PColorAttachments = colorAttachmentRefs
+        };
 
         if (outputDesc.DepthFormat != null)
         {

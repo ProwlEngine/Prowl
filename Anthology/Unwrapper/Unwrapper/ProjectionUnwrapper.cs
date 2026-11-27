@@ -80,7 +80,7 @@ internal static class ProjectionUnwrapper
         progress?.Invoke($"[pack] {charts.Length} charts packed in {sw.ElapsedMilliseconds} ms");
 
         for (int i = 0; i < outputUV.Length; ++i) outputUV[i] = default;
-        foreach (var chart in charts)
+        foreach (UvChart chart in charts)
         {
             for (int f = 0; f < chart.Region!.Triangles.Length; ++f)
             {
@@ -94,7 +94,7 @@ internal static class ProjectionUnwrapper
 
     private static int[] AssignDirections(HalfEdgeMesh mesh, Double3[] directions)
     {
-        var faceDirection = new int[mesh.Triangles.Count];
+        int[] faceDirection = new int[mesh.Triangles.Count];
         for (int faceI = 0; faceI < faceDirection.Length; ++faceI)
         {
             Double3 normal = mesh.FaceAttributes[faceI].Normal;
@@ -120,10 +120,10 @@ internal static class ProjectionUnwrapper
         if (minTriangles <= 1) return;
 
         int faceCount = mesh.Triangles.Count;
-        var clusterId = new int[faceCount];
+        int[] clusterId = new int[faceCount];
         int clusterCount = LabelClusters(mesh, faceDirection, clusterId);
 
-        var clusterSize = new int[clusterCount];
+        int[] clusterSize = new int[clusterCount];
         for (int faceI = 0; faceI < faceCount; ++faceI) ++clusterSize[clusterId[faceI]];
 
         // Shared border length per (small cluster, candidate direction), keyed on the cluster.
@@ -148,11 +148,11 @@ internal static class ProjectionUnwrapper
         }
 
         var bestDirection = new Dictionary<int, (int Direction, double Length)>();
-        foreach (var kv in borderLength)
+        foreach (KeyValuePair<long, double> kv in borderLength)
         {
             int cluster = (int)(kv.Key >> 32);
             int direction = (int)(uint)kv.Key;
-            if (!bestDirection.TryGetValue(cluster, out var cur) || kv.Value > cur.Length)
+            if (!bestDirection.TryGetValue(cluster, out (int Direction, double Length) cur) || kv.Value > cur.Length)
                 bestDirection[cluster] = (direction, kv.Value);
         }
 
@@ -162,7 +162,7 @@ internal static class ProjectionUnwrapper
         for (int faceI = 0; faceI < faceCount; ++faceI)
         {
             int cluster = clusterId[faceI];
-            if (!bestDirection.TryGetValue(cluster, out var pick)) continue;
+            if (!bestDirection.TryGetValue(cluster, out (int Direction, double Length) pick)) continue;
             if (Double3.Dot(mesh.FaceAttributes[faceI].Normal, directions[pick.Direction]) < DiagonalComponent)
                 rejected.Add(cluster);
         }
@@ -170,7 +170,7 @@ internal static class ProjectionUnwrapper
         for (int faceI = 0; faceI < faceCount; ++faceI)
         {
             int cluster = clusterId[faceI];
-            if (bestDirection.TryGetValue(cluster, out var pick) && !rejected.Contains(cluster))
+            if (bestDirection.TryGetValue(cluster, out (int Direction, double Length) pick) && !rejected.Contains(cluster))
                 faceDirection[faceI] = pick.Direction;
         }
     }
@@ -212,10 +212,10 @@ internal static class ProjectionUnwrapper
     private static void BuildCharts(HalfEdgeMesh mesh, int[] faceDirection, List<MeshRegion> regions, List<int> regionDirection)
     {
         int faceCount = mesh.Triangles.Count;
-        var clusterId = new int[faceCount];
+        int[] clusterId = new int[faceCount];
         int clusterCount = LabelClusters(mesh, faceDirection, clusterId);
 
-        var clusterSize = new int[clusterCount];
+        int[] clusterSize = new int[clusterCount];
         for (int faceI = 0; faceI < faceCount; ++faceI) ++clusterSize[clusterId[faceI]];
 
         for (int c = 0; c < clusterCount; ++c)

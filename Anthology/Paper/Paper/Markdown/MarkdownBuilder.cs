@@ -7,9 +7,10 @@ using Prowl.PaperUI.Events;
 using Prowl.PaperUI.LayoutEngine;
 using Prowl.PaperUI.RichText;
 using Prowl.Quire;
+using Prowl.Vector;
+
 using FontFile = Prowl.Scribe.FontFile;
 using TextWrapMode = Prowl.Scribe.TextWrapMode;
-using Prowl.Vector;
 
 namespace Prowl.PaperUI.Markdown;
 
@@ -20,10 +21,10 @@ public sealed class MarkdownBuilder
 {
     private readonly MarkdownDocument _document = new();
     // Per block, the string it is drawn from: rich text for prose or the body of a code block.
-    private readonly List<string?> _blockText = new();
+    private readonly List<string?> _blockText = [];
     // Per block, the source of a paragraph that is only an image. Kept apart from the text so a
     // paragraph whose image does not resolve still falls back to its alt text.
-    private readonly List<string?> _imageSource = new();
+    private readonly List<string?> _imageSource = [];
     private readonly StringBuilder _scratch = new();
     private readonly Action<ClickEvent> _linkClick;
     private readonly Action<ElementEvent> _linkHover;
@@ -125,12 +126,10 @@ public sealed class MarkdownBuilder
     /// <summary>Creates the document as a column of elements in the current context.</summary>
     public ElementBuilder Build(Paper paper, string stringID, int intID = 0, [CallerLineNumber] int lineID = 0)
     {
-        if (paper == null) throw new ArgumentNullException(nameof(paper));
-
         EnsureParsed();
-        _paper = paper;
+        _paper = paper ?? throw new ArgumentNullException(nameof(paper));
 
-        var root = paper.Column(stringID, intID, lineID)
+        ElementBuilder root = paper.Column(stringID, intID, lineID)
             .Width(UnitValue.Stretch())
             .Height(UnitValue.Auto)
             .Gap(_spacing);
@@ -168,7 +167,7 @@ public sealed class MarkdownBuilder
 
     private void BuildBlock(Paper paper, int index, Color color)
     {
-        var block = _document.GetBlock(index);
+        Block block = _document.GetBlock(index);
         switch (block.Kind)
         {
             case BlockKind.Paragraph:
@@ -228,7 +227,7 @@ public sealed class MarkdownBuilder
 
     private void Paragraph(Paper paper, int index, string rich, float size, Color color)
     {
-        var element = paper.Box("md", index)
+        ElementBuilder element = paper.Box("md", index)
             .Width(UnitValue.Stretch())
             .Height(UnitValue.Auto)
             .Text(rich, _regular)
@@ -250,7 +249,7 @@ public sealed class MarkdownBuilder
 
     private void ListItem(Paper paper, int item, bool ordered, Color color)
     {
-        var node = _document.GetBlock(item);
+        Block node = _document.GetBlock(item);
         using (paper.Row("md", item).Width(UnitValue.Stretch()).Height(UnitValue.Auto).Gap(_spacing * 0.5f).Enter())
         {
             float markerWidth = _fontSize * 1.5f;
@@ -261,7 +260,7 @@ public sealed class MarkdownBuilder
                 float box = _fontSize * 0.8f;
                 using (paper.Box("md-marker", item).Width(markerWidth).Height(_fontSize * 1.2f).Enter())
                 {
-                    var outline = paper.Box("md-check", item)
+                    ElementBuilder outline = paper.Box("md-check", item)
                         .Width(box).Height(box)
                         .BorderWidth(1.5f).BorderColor(color).Rounded(2f);
                     if (node.Flag) outline.BackgroundColor(color);
@@ -294,14 +293,14 @@ public sealed class MarkdownBuilder
             foreach (int row in _document.ChildrenOf(table))
             {
                 bool header = _document.GetBlock(row).Flag;
-                var rowElement = paper.Row("md", row).Width(UnitValue.Stretch()).Height(UnitValue.Auto);
+                ElementBuilder rowElement = paper.Row("md", row).Width(UnitValue.Stretch()).Height(UnitValue.Auto);
                 if (header) rowElement.BackgroundColor(_codeBackground);
 
                 using (rowElement.Enter())
                 {
                     foreach (int cell in _document.ChildrenOf(row))
                     {
-                        var cellElement = paper.Box("md", cell)
+                        ElementBuilder cellElement = paper.Box("md", cell)
                             .Width(UnitValue.Stretch())
                             .Height(UnitValue.Auto)
                             .Padding(_spacing * 0.75f, _spacing * 0.5f)
@@ -329,7 +328,7 @@ public sealed class MarkdownBuilder
         object? texture = _images(_imageSource[index]);
         if (texture == null) return false;
 
-        var size = paper.Renderer.GetTextureSize(texture);
+        Int2 size = paper.Renderer.GetTextureSize(texture);
         if (size.X <= 0 || size.Y <= 0) return false;
 
         paper.Box("md", index)
@@ -347,7 +346,7 @@ public sealed class MarkdownBuilder
         int image = -1;
         for (int i = first; i >= 0; i = _document.GetInline(i).NextSibling)
         {
-            var node = _document.GetInline(i);
+            Inline node = _document.GetInline(i);
             if (node.Kind == InlineKind.Image)
             {
                 if (image >= 0) return -1;
@@ -366,7 +365,7 @@ public sealed class MarkdownBuilder
     {
         for (int i = first; i >= 0; i = _document.GetInline(i).NextSibling)
         {
-            var node = _document.GetInline(i);
+            Inline node = _document.GetInline(i);
             if (node.Kind == InlineKind.Link || HasLink(node.FirstChild)) return true;
         }
 
@@ -388,15 +387,15 @@ public sealed class MarkdownBuilder
 
     private string? LinkUnder(ElementEvent e)
     {
-        var paper = _paper;
+        Paper? paper = _paper;
         if (paper == null) return null;
 
-        var block = paper.GetElementStorageById<RichTextBlock>(e.Source.Data.ID, Paper.RichTextBlockKey, null);
+        RichTextBlock? block = paper.GetElementStorageById<RichTextBlock>(e.Source.Data.ID, Paper.RichTextBlockKey, null);
         if (block == null) return null;
 
         // Text is drawn inside the padding, and the block is laid out in physical pixels while the
         // event is in logical ones.
-        var content = e.Source.Data.ContentRect.Min;
+        Float2 content = e.Source.Data.ContentRect.Min;
         float scale = paper.Canvas.FramebufferScale;
         return block.LinkAt(new Float2((e.RelativePosition.X - content.X) * scale, (e.RelativePosition.Y - content.Y) * scale));
     }
@@ -408,7 +407,7 @@ public sealed class MarkdownBuilder
 
     private string RichTextOf(int block, bool bold)
     {
-        var cached = _blockText[block];
+        string? cached = _blockText[block];
         if (cached != null) return cached;
 
         _scratch.Clear();
@@ -425,7 +424,7 @@ public sealed class MarkdownBuilder
     {
         for (int i = first; i >= 0; i = _document.GetInline(i).NextSibling)
         {
-            var node = _document.GetInline(i);
+            Inline node = _document.GetInline(i);
             switch (node.Kind)
             {
                 case InlineKind.Text:
@@ -533,7 +532,7 @@ public sealed class MarkdownBuilder
 
     private static string[] BuildOrdinals()
     {
-        var ordinals = new string[100];
+        string[] ordinals = new string[100];
         for (int i = 0; i < ordinals.Length; i++) ordinals[i] = i + ".";
         return ordinals;
     }

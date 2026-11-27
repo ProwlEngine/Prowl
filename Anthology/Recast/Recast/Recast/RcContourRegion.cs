@@ -1,9 +1,8 @@
-namespace Prowl.Recast
+namespace Prowl.Recast;
+
+public class RcContourRegion
 {
-    public class RcContourRegion
-    {
-        public RcContour outline;
-        public RcContourHole[] holes;
-        public int nholes;
-    }
+    public RcContour outline;
+    public RcContourHole[] holes;
+    public int nholes;
 }

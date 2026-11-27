@@ -63,7 +63,7 @@ public sealed class Toasts
             return;
         }
 
-        var toast = s_toasts[index];
+        ToastEntry toast = s_toasts[index];
         s_toasts.RemoveAt(index);
         toast.Count++;
         toast.Duration = _duration;
@@ -123,11 +123,11 @@ public sealed class Toasts
     {
         if (s_toasts.Count == 0) return;
 
-        var theme = Origami.Current;
-        var metrics = theme.Metrics;
-        var font = theme.Font;
+        OrigamiTheme theme = Origami.Current;
+        OrigamiMetrics metrics = theme.Metrics;
+        Scribe.FontFile? font = theme.Font;
         if (font == null) return;
-        var titleFace = theme.Medium ?? font;   // .w2toast title is weight 500
+        Scribe.FontFile titleFace = theme.Medium ?? font;   // .w2toast title is weight 500
 
         float dt = paper.DeltaTime;
         float screenW = (float)paper.ScreenRect.Size.X;
@@ -136,7 +136,7 @@ public sealed class Toasts
 
         for (int i = s_toasts.Count - 1; i >= 0; i--)
         {
-            var toast = s_toasts[i];
+            ToastEntry toast = s_toasts[i];
             toast.Elapsed += dt;
 
             if (toast.Elapsed >= toast.Duration)
@@ -156,16 +156,16 @@ public sealed class Toasts
 
             Color Fade(Color c) => Color.FromArgb(Math.Clamp((int)(c.A * fade), 0, 255), c.R, c.G, c.B);
 
-            var semantic = GetSemantic(toast.Type, theme);
+            Color semantic = GetSemantic(toast.Type, theme);
             bool hasSub = !string.IsNullOrEmpty(toast.Message);
 
-            var bg = Fade(theme.Popover);
-            var border = Fade(theme.BorderStrong);
-            var shadow = Fade(theme.Shadow);
-            var titleColor = Fade(theme.Ink.C500);
-            var subColor = Fade(theme.Ink.C200);
-            var badgeBg = Fade(OrigamiTheme.WithAlpha(semantic, 38));
-            var iconColor = Fade(semantic);
+            Color bg = Fade(theme.Popover);
+            Color border = Fade(theme.BorderStrong);
+            Color shadow = Fade(theme.Shadow);
+            Color titleColor = Fade(theme.Ink.C500);
+            Color subColor = Fade(theme.Ink.C200);
+            Color badgeBg = Fade(OrigamiTheme.WithAlpha(semantic, 38));
+            Color iconColor = Fade(semantic);
             string title = toast.Count > 1 ? $"{toast.Title} (x{toast.Count})" : toast.Title;
 
             float mainH = metrics.FontSize + 2f;
@@ -244,22 +244,22 @@ public sealed class Toasts
     /// </summary>
     public static void Preview(Paper paper, string id, string title, ToastType type, string message = "")
     {
-        var theme = Origami.Current;
-        var metrics = theme.Metrics;
-        var font = theme.Font;
+        OrigamiTheme theme = Origami.Current;
+        OrigamiMetrics metrics = theme.Metrics;
+        Scribe.FontFile? font = theme.Font;
         if (font == null) return;
-        var titleFace = theme.Medium ?? font;
+        Scribe.FontFile titleFace = theme.Medium ?? font;
 
-        var semantic = GetSemantic(type, theme);
+        Color semantic = GetSemantic(type, theme);
         bool hasSub = !string.IsNullOrEmpty(message);
 
-        var bg = theme.Popover;
-        var border = theme.BorderStrong;
-        var shadow = theme.Shadow;
-        var titleColor = theme.Ink.C500;
-        var subColor = theme.Ink.C200;
+        Color bg = theme.Popover;
+        Color border = theme.BorderStrong;
+        Color shadow = theme.Shadow;
+        Color titleColor = theme.Ink.C500;
+        Color subColor = theme.Ink.C200;
         var badgeBg = Color.FromArgb(38, semantic.R, semantic.G, semantic.B);
-        var iconColor = semantic;
+        Color iconColor = semantic;
 
         float mainH = metrics.FontSize + 2f;
         float subH = metrics.FontSizeSmall;

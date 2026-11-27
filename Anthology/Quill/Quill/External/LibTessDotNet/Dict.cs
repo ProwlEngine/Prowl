@@ -75,9 +75,12 @@ namespace LibTessDotNet
                 node = node._prev;
             } while (node._key != null && !_leq(node._key, key));
 
-            var newNode = new Node { _key = key };
-            newNode._next = node._next;
-            node._next._prev = newNode;
+                var newNode = new Node
+                {
+                    _key = key,
+                    _next = node._next
+                };
+                node._next._prev = newNode;
             newNode._prev = node;
             node._next = newNode;
 
@@ -86,7 +89,7 @@ namespace LibTessDotNet
 
         public Node Find(TValue key)
         {
-            var node = _head;
+                Node node = _head;
             do {
                 node = node._next;
             } while (node._key != null && !_leq(key, node._key));

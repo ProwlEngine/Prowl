@@ -20,55 +20,54 @@ freely, subject to the following restrictions:
 
 using Prowl.Recast.Core.Collections;
 
-namespace Prowl.Recast.Toolset.Builder
+namespace Prowl.Recast.Toolset.Builder;
+
+public class SampleAreaModifications
 {
-    public class SampleAreaModifications
+    public const int SAMPLE_POLYAREA_TYPE_GROUND = 0x0;
+    public const int SAMPLE_POLYAREA_TYPE_WATER = 0x1;
+    public const int SAMPLE_POLYAREA_TYPE_ROAD = 0x2;
+    public const int SAMPLE_POLYAREA_TYPE_DOOR = 0x3;
+    public const int SAMPLE_POLYAREA_TYPE_GRASS = 0x4;
+    public const int SAMPLE_POLYAREA_TYPE_JUMP = 0x5;
+    public const int SAMPLE_POLYAREA_TYPE_JUMP_AUTO = 0x6;
+    public const int SAMPLE_POLYAREA_TYPE_WALKABLE = 0x3f;
+
+    public const int SAMPLE_POLYFLAGS_WALK = 0x01; // Ability to walk (ground, grass, road)
+    public const int SAMPLE_POLYFLAGS_SWIM = 0x02; // Ability to swim (water).
+    public const int SAMPLE_POLYFLAGS_DOOR = 0x04; // Ability to move through doors.
+    public const int SAMPLE_POLYFLAGS_JUMP = 0x08; // Ability to jump.
+    public const int SAMPLE_POLYFLAGS_DISABLED = 0x10; // Disabled polygon
+    public const int SAMPLE_POLYFLAGS_ALL = 0xffff; // All abilities.
+
+    public static readonly RcAreaModification SAMPLE_AREAMOD_WALKABLE = new RcAreaModification(SAMPLE_POLYAREA_TYPE_WALKABLE);
+    public static readonly RcAreaModification SAMPLE_AREAMOD_GROUND = new RcAreaModification(SAMPLE_POLYAREA_TYPE_GROUND);
+    public static readonly RcAreaModification SAMPLE_AREAMOD_WATER = new RcAreaModification(SAMPLE_POLYAREA_TYPE_WATER);
+    public static readonly RcAreaModification SAMPLE_AREAMOD_ROAD = new RcAreaModification(SAMPLE_POLYAREA_TYPE_ROAD);
+    public static readonly RcAreaModification SAMPLE_AREAMOD_GRASS = new RcAreaModification(SAMPLE_POLYAREA_TYPE_GRASS);
+    public static readonly RcAreaModification SAMPLE_AREAMOD_DOOR = new RcAreaModification(SAMPLE_POLYAREA_TYPE_DOOR);
+    public static readonly RcAreaModification SAMPLE_AREAMOD_JUMP = new RcAreaModification(SAMPLE_POLYAREA_TYPE_JUMP);
+
+    public static readonly RcImmutableArray<RcAreaModification> Values = RcImmutableArray.Create(
+        SAMPLE_AREAMOD_WALKABLE,
+        SAMPLE_AREAMOD_GROUND,
+        SAMPLE_AREAMOD_WATER,
+        SAMPLE_AREAMOD_ROAD,
+        SAMPLE_AREAMOD_GRASS,
+        SAMPLE_AREAMOD_DOOR,
+        SAMPLE_AREAMOD_JUMP
+    );
+
+    public static RcAreaModification OfValue(int value)
     {
-        public const int SAMPLE_POLYAREA_TYPE_GROUND = 0x0;
-        public const int SAMPLE_POLYAREA_TYPE_WATER = 0x1;
-        public const int SAMPLE_POLYAREA_TYPE_ROAD = 0x2;
-        public const int SAMPLE_POLYAREA_TYPE_DOOR = 0x3;
-        public const int SAMPLE_POLYAREA_TYPE_GRASS = 0x4;
-        public const int SAMPLE_POLYAREA_TYPE_JUMP = 0x5;
-        public const int SAMPLE_POLYAREA_TYPE_JUMP_AUTO = 0x6;
-        public const int SAMPLE_POLYAREA_TYPE_WALKABLE = 0x3f;
-
-        public const int SAMPLE_POLYFLAGS_WALK = 0x01; // Ability to walk (ground, grass, road)
-        public const int SAMPLE_POLYFLAGS_SWIM = 0x02; // Ability to swim (water).
-        public const int SAMPLE_POLYFLAGS_DOOR = 0x04; // Ability to move through doors.
-        public const int SAMPLE_POLYFLAGS_JUMP = 0x08; // Ability to jump.
-        public const int SAMPLE_POLYFLAGS_DISABLED = 0x10; // Disabled polygon
-        public const int SAMPLE_POLYFLAGS_ALL = 0xffff; // All abilities.
-
-        public static readonly RcAreaModification SAMPLE_AREAMOD_WALKABLE = new RcAreaModification(SAMPLE_POLYAREA_TYPE_WALKABLE);
-        public static readonly RcAreaModification SAMPLE_AREAMOD_GROUND = new RcAreaModification(SAMPLE_POLYAREA_TYPE_GROUND);
-        public static readonly RcAreaModification SAMPLE_AREAMOD_WATER = new RcAreaModification(SAMPLE_POLYAREA_TYPE_WATER);
-        public static readonly RcAreaModification SAMPLE_AREAMOD_ROAD = new RcAreaModification(SAMPLE_POLYAREA_TYPE_ROAD);
-        public static readonly RcAreaModification SAMPLE_AREAMOD_GRASS = new RcAreaModification(SAMPLE_POLYAREA_TYPE_GRASS);
-        public static readonly RcAreaModification SAMPLE_AREAMOD_DOOR = new RcAreaModification(SAMPLE_POLYAREA_TYPE_DOOR);
-        public static readonly RcAreaModification SAMPLE_AREAMOD_JUMP = new RcAreaModification(SAMPLE_POLYAREA_TYPE_JUMP);
-
-        public static readonly RcImmutableArray<RcAreaModification> Values = RcImmutableArray.Create(
-            SAMPLE_AREAMOD_WALKABLE,
-            SAMPLE_AREAMOD_GROUND,
-            SAMPLE_AREAMOD_WATER,
-            SAMPLE_AREAMOD_ROAD,
-            SAMPLE_AREAMOD_GRASS,
-            SAMPLE_AREAMOD_DOOR,
-            SAMPLE_AREAMOD_JUMP
-        );
-
-        public static RcAreaModification OfValue(int value)
+        foreach (RcAreaModification v in Values)
         {
-            foreach (var v in Values)
+            if (v.Value == value)
             {
-                if (v.Value == value)
-                {
-                    return v;
-                }
+                return v;
             }
-
-            return SAMPLE_AREAMOD_GRASS;
         }
+
+        return SAMPLE_AREAMOD_GRASS;
     }
 }

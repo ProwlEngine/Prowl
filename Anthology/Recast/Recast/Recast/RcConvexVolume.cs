@@ -18,13 +18,12 @@ freely, subject to the following restrictions:
 3. This notice may not be removed or altered from any source distribution.
 */
 
-namespace Prowl.Recast
+namespace Prowl.Recast;
+
+public class RcConvexVolume
 {
-    public class RcConvexVolume
-    {
-        public float[] verts;
-        public float hmin;
-        public float hmax;
-        public RcAreaModification areaMod;
-    }
+    public float[] verts;
+    public float hmin;
+    public float hmax;
+    public RcAreaModification areaMod;
 }

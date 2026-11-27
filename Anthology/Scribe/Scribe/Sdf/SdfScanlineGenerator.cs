@@ -66,16 +66,16 @@ internal static class SdfScanlineGenerator
         // Flatten edges and their bounds once. A scanline skips any edge it can't reach, which
         // avoids the unconditional curve solve in ScanlineIntersections for non-spanning edges.
         int ec = 0;
-        foreach (var c in shape.Contours) ec += c.Edges.Count;
+        foreach (Contour c in shape.Contours) ec += c.Edges.Count;
         var edges = new EdgeSegment[ec];
         var tedges = new EdgeSegment[ec];
-        var eMinX = new double[ec];
-        var eMinY = new double[ec];
-        var eMaxX = new double[ec];
-        var eMaxY = new double[ec];
+        double[] eMinX = new double[ec];
+        double[] eMinY = new double[ec];
+        double[] eMaxX = new double[ec];
+        double[] eMaxY = new double[ec];
         int ei = 0;
-        foreach (var c in shape.Contours)
-            foreach (var ed in c.Edges)
+        foreach (Contour c in shape.Contours)
+            foreach (EdgeSegment ed in c.Edges)
             {
                 edges[ei] = ed;
                 tedges[ei] = ed.Transposed();
@@ -190,7 +190,7 @@ internal static class SdfScanlineGenerator
         double start = 0;
         for (int i = 0; i < crossings.Count; ++i)
         {
-            var cr = crossings[i];
+            (double pos, int dy) cr = crossings[i];
             int before = wnd;
             wnd += cr.dy;
             if (before == 0 && wnd != 0)
@@ -215,7 +215,7 @@ internal static class SdfScanlineGenerator
 
         if (si < spans.Count && p >= spans[si].start)
         {
-            var sp = spans[si];
+            (double start, double end) sp = spans[si];
             dist = Math.Min(p - sp.start, sp.end - p);
             return true;
         }
@@ -238,7 +238,7 @@ internal static class SdfScanlineGenerator
 
         for (int i = 0; i < count; ++i)
         {
-            var v = verts[i];
+            GlyphVertex v = verts[i];
             Double2 to = new Double2(v.x, v.y);
             switch ((int)v.type)
             {

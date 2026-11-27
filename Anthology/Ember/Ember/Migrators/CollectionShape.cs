@@ -38,7 +38,7 @@ internal sealed class CollectionShape
 
     // Probing walks every interface a type implements, and every migrator asks about every type it is offered,
     // so the answer is memoised. Keyed weakly so an unloaded assembly's types are not pinned.
-    private static readonly ConditionalWeakTable<Type, CollectionShape> s_probed = new();
+    private static readonly ConditionalWeakTable<Type, CollectionShape> s_probed = [];
 
     public static CollectionShape Probe(Type type) => s_probed.GetValue(type, static t => ProbeUncached(t));
 
@@ -53,11 +53,11 @@ internal sealed class CollectionShape
 
         Type[]? dictionary = null, set = null, producerConsumer = null, list = null;
 
-        foreach (var contract in Interfaces(type))
+        foreach (Type contract in Interfaces(type))
         {
             if (!contract.IsConstructedGenericType) continue;
 
-            var definition = contract.GetGenericTypeDefinition();
+            Type definition = contract.GetGenericTypeDefinition();
 
             if (definition == typeof(IDictionary<,>)) dictionary ??= contract.GetGenericArguments();
             else if (definition == typeof(ISet<>)) set ??= contract.GetGenericArguments();
@@ -86,18 +86,18 @@ internal sealed class CollectionShape
 
         // Immutable and frozen collections implement IList and IDictionary with throwing mutators. The two
         // whose hash trees genuinely have to be rebuilt are claimed by ImmutableMigrator, ahead of this one.
-        var space = type.Namespace;
+        string? space = type.Namespace;
         if (space is "System.Collections.Immutable" or "System.Collections.Frozen") return true;
 
         // A stack hands back its contents top first, so refilling in that order would invert it.
-        var definition = Definition(type);
+        Type? definition = Definition(type);
         return definition == typeof(ConcurrentStack<>) || definition == typeof(Stack<>);
     }
 
     private static IEnumerable<Type> Interfaces(Type type)
     {
         if (type.IsInterface) yield return type;
-        foreach (var contract in type.GetInterfaces())
+        foreach (Type contract in type.GetInterfaces())
             yield return contract;
     }
 
@@ -110,7 +110,7 @@ internal sealed class CollectionShape
 
     public IKeyedAccessor CreateKeyedAccessor()
     {
-        var accessor = Kind switch
+        Type accessor = Kind switch
         {
             CollectionKind.WeakTable => typeof(WeakTableAccessor<,>).MakeGenericType(ItemTypes),
             _ when ItemTypes.Length == 2 => typeof(DictionaryAccessor<,>).MakeGenericType(ItemTypes),
@@ -122,7 +122,7 @@ internal sealed class CollectionShape
 
     public ISequenceAccessor CreateSequenceAccessor()
     {
-        var accessor = Kind == CollectionKind.ProducerConsumer
+        Type accessor = Kind == CollectionKind.ProducerConsumer
             ? typeof(ProducerConsumerAccessor<>).MakeGenericType(ItemTypes)
             : typeof(ListAccessor<>).MakeGenericType(ItemTypes);
 
@@ -228,7 +228,7 @@ internal sealed class ProducerConsumerAccessor<T> : ISequenceAccessor
     {
         var target = (IProducerConsumerCollection<T>)collection;
 
-        var clear = collection.GetType().GetMethod("Clear", BindingFlags.Instance | BindingFlags.Public, Type.EmptyTypes);
+        MethodInfo? clear = collection.GetType().GetMethod("Clear", BindingFlags.Instance | BindingFlags.Public, Type.EmptyTypes);
         if (clear != null)
         {
             clear.Invoke(collection, null);

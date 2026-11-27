@@ -1,4 +1,5 @@
 using System.Collections.Generic;
+
 using Prowl.Vector;
 using Prowl.Vector.Spatial;
 
@@ -92,7 +93,7 @@ public sealed class HumanoidClip
         int frames = clip.FrameCount;
         int muscleCount = HumanTrait.MuscleCount;
 
-        var muscles = new float[frames * muscleCount];
+        float[] muscles = new float[frames * muscleCount];
         var bodyPosition = new Float3[frames];
         var bodyRotation = new Quaternion[frames];
         var goals = new HumanGoalState[frames * HumanPose.GoalCount];
@@ -102,7 +103,7 @@ public sealed class HumanoidClip
         var channelIds = new StringID[channelCount];
         for (int c = 0; c < channelCount; c++)
             channelIds[c] = source.GetFloatChannelID(c);
-        var channels = new float[frames * channelCount];
+        float[] channels = new float[frames * channelCount];
 
         var pose = new Pose(source);
         var human = new HumanPose();
@@ -143,7 +144,7 @@ public sealed class HumanoidClip
             throw new ArgumentException("A humanoid clip needs at least one frame.", nameof(frames));
 
         StringID[] channelIds = floatChannelIds is null ? Array.Empty<StringID>() : floatChannelIds.ToArray();
-        var channels = new float[frames.Count * channelIds.Length];
+        float[] channels = new float[frames.Count * channelIds.Length];
         if (channelIds.Length > 0)
         {
             if (floatValues is null || floatValues.Count != channels.Length)
@@ -153,7 +154,7 @@ public sealed class HumanoidClip
         }
 
         int muscleCount = HumanTrait.MuscleCount;
-        var muscles = new float[frames.Count * muscleCount];
+        float[] muscles = new float[frames.Count * muscleCount];
         var bodyPosition = new Float3[frames.Count];
         var bodyRotation = new Quaternion[frames.Count];
         var goals = new HumanGoalState[frames.Count * HumanPose.GoalCount];

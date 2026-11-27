@@ -40,7 +40,7 @@ public abstract class ShaderProgram : GraphicsResource
 
     private static (PropertyID Name, ResourceKind Kind)[] FindStorageWriteElements(ResourceLayoutDescription[] layouts)
     {
-        List<(PropertyID, ResourceKind)> found = new();
+        List<(PropertyID, ResourceKind)> found = [];
         foreach (ResourceLayoutDescription layout in layouts)
         {
             if (layout.Elements == null) continue;

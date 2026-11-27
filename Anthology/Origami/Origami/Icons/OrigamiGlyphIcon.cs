@@ -4,6 +4,7 @@
 using System;
 
 using Prowl.Quill;
+using Prowl.Scribe;
 using Prowl.Vector;
 
 using Color = System.Drawing.Color;
@@ -34,7 +35,7 @@ public sealed class OrigamiGlyphIcon : IOrigamiIcon
     {
         if (string.IsNullOrEmpty(_glyph)) return;
 
-        var font = _weight switch
+        FontFile? font = _weight switch
         {
             GlyphWeight.Solid => OrigamiFonts.IconSolid,
             GlyphWeight.Outline => OrigamiFonts.IconOutline,
@@ -43,7 +44,7 @@ public sealed class OrigamiGlyphIcon : IOrigamiIcon
         if (font == null) return;
 
         float size = MathF.Min((float)rect.Size.X, (float)rect.Size.Y) * _scale * Origami.IconScale;
-        var m = canvas.MeasureText(_glyph, size, font);
+        Float2 m = canvas.MeasureText(_glyph, size, font);
         float tx = (float)(rect.Min.X + (rect.Size.X - m.X) / 2.0);
         float ty = (float)(rect.Min.Y + (rect.Size.Y - m.Y) / 2.0);
         canvas.DrawText(_glyph, tx, ty, Color32.FromArgb(color.A, color.R, color.G, color.B), size, font);

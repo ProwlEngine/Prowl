@@ -51,7 +51,7 @@ internal ref struct ObjTokenizer
     /// <summary>Parses the next token as an invariant-culture single-precision float.</summary>
     public float NextFloat()
     {
-        var tok = NextToken();
+        ReadOnlySpan<char> tok = NextToken();
         if (tok.IsEmpty)
             throw new FormatException("Expected float but reached end of line.");
         if (!float.TryParse(tok, NumberStyles.Float, CultureInfo.InvariantCulture, out float v))
@@ -62,7 +62,7 @@ internal ref struct ObjTokenizer
     /// <summary>Parses the next token as an integer.</summary>
     public int NextInt()
     {
-        var tok = NextToken();
+        ReadOnlySpan<char> tok = NextToken();
         if (tok.IsEmpty)
             throw new FormatException("Expected int but reached end of line.");
         if (!int.TryParse(tok, NumberStyles.Integer, CultureInfo.InvariantCulture, out int v))

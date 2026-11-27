@@ -18,18 +18,17 @@ freely, subject to the following restrictions:
 3. This notice may not be removed or altered from any source distribution.
 */
 
-namespace Prowl.Recast
+namespace Prowl.Recast;
+
+/// Contains triangle meshes that represent detailed height data associated 
+/// with the polygons in its associated polygon mesh object.
+/// @ingroup recast
+public class RcPolyMeshDetail
 {
-    /// Contains triangle meshes that represent detailed height data associated 
-    /// with the polygons in its associated polygon mesh object.
-    /// @ingroup recast
-    public class RcPolyMeshDetail
-    {
-        public int[] meshes; //< The sub-mesh data. [Size: 4*#nmeshes] 
-        public float[] verts; //< The mesh vertices. [Size: 3*#nverts] 
-        public int[] tris; //< The mesh triangles. [Size: 4*#ntris] 
-        public int nmeshes; //< The number of sub-meshes defined by #meshes.
-        public int nverts; //< The number of vertices in #verts.
-        public int ntris; //< The number of triangles in #tris.
-    }
+    public int[] meshes; //< The sub-mesh data. [Size: 4*#nmeshes] 
+    public float[] verts; //< The mesh vertices. [Size: 3*#nverts] 
+    public int[] tris; //< The mesh triangles. [Size: 4*#ntris] 
+    public int nmeshes; //< The number of sub-meshes defined by #meshes.
+    public int nverts; //< The number of vertices in #verts.
+    public int ntris; //< The number of triangles in #tris.
 }

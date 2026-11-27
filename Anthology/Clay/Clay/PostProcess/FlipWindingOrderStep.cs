@@ -16,11 +16,11 @@ internal sealed class FlipWindingOrderStep : IPostProcess
 
     public void Execute(IntermediateScene scene, ImportContext context)
     {
-        foreach (var mesh in scene.Meshes)
+        foreach (IntermediateMesh mesh in scene.Meshes)
         {
-            foreach (var face in mesh.Faces)
+            foreach (IntermediateFace face in mesh.Faces)
             {
-                var indices = mesh.Faces.IndicesOf(face);
+                Span<int> indices = mesh.Faces.IndicesOf(face);
                 if (indices.Length == 3)
                 {
                     (indices[1], indices[2]) = (indices[2], indices[1]);

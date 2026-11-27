@@ -247,8 +247,8 @@ public sealed partial class RenderWorld : IDisposable
     /// <summary>The page the static copies of local light shadows live in as of the last frame. Null until one is made.</summary>
     public Texture? StaticShadowAtlas { get => _staticShadowAtlas; internal set => _staticShadowAtlas = value; }
 
-    private readonly List<Action> _hostSetExtracts = new();
-    private readonly List<SpatialIndex> _hostSets = new();
+    private readonly List<Action> _hostSetExtracts = [];
+    private readonly List<SpatialIndex> _hostSets = [];
     private readonly GraphicsDevice _device;
     private readonly Action<RendererError> _report;
 
@@ -284,8 +284,8 @@ public sealed partial class RenderWorld : IDisposable
         return set;
     }
 
-    private readonly HashSet<string> _hostSetNames = new(StringComparer.Ordinal);
-    private readonly List<SpatialIndex> _newHostSets = new();
+    private readonly HashSet<string> _hostSetNames = [with(StringComparer.Ordinal)];
+    private readonly List<SpatialIndex> _newHostSets = [];
     private readonly SpatialSlots SpatialSlots = new();
 
     /// <summary>How the world's local light shadows are stored and sized. Host thread, read at SubmitFrame.</summary>
@@ -369,7 +369,7 @@ public sealed partial class RenderWorld : IDisposable
     private Float4x4[]?[] _bones = [];
     private float[]?[] _shapeWeights = [];
     private Dirt[] _dirt = [];
-    private readonly List<int> _dirty = new();
+    private readonly List<int> _dirty = [];
 
     private readonly RangeAllocator _sliceSpace = new(MaxSliceEntries);
     private Material?[] _sliceMaterials = new Material?[256];
@@ -389,9 +389,9 @@ public sealed partial class RenderWorld : IDisposable
     {
         _owner = owner;
         _device = device;
-        Features = new ExtensionSet<RenderFeature>(this);
-        Providers = new ExtensionSet<RenderProvider>(this);
-        FrameFeatures = new ExtensionSet<FrameFeature>(this) { new LightProbeFeature(), new LocalShadowFeature(), new VoxelizationFeature(), new CaptureFillFeature() };
+        Features = [with(this)];
+        Providers = [with(this)];
+        FrameFeatures = [with(this), new LightProbeFeature(), new LocalShadowFeature(), new VoxelizationFeature(), new CaptureFillFeature()];
         int id = System.Threading.Interlocked.Increment(ref s_nextId);
         Id = id;
         Name = $"World {id}";
@@ -842,13 +842,13 @@ public sealed partial class RenderWorld : IDisposable
     /// </summary>
     internal sealed class RenderSide
     {
-        private readonly HashSet<int> _drawChangedSet = new();
-        private readonly Dictionary<GpuMesh, HashSet<int>> _meshUsers = new();
-        private readonly Dictionary<Material, HashSet<uint>> _materialEntries = new();
+        private readonly HashSet<int> _drawChangedSet = [];
+        private readonly Dictionary<GpuMesh, HashSet<int>> _meshUsers = [];
+        private readonly Dictionary<Material, HashSet<uint>> _materialEntries = [];
         private readonly Stack<uint> _freePrevious = new();
         private uint _nextPrevious;
-        private List<int> _movedLastFrame = new();
-        private List<int> _movedThisFrame = new();
+        private List<int> _movedLastFrame = [];
+        private List<int> _movedThisFrame = [];
         private bool[] _moved = [];
         private ObjectAttributes[] _attributes = [];
         private readonly RangeAllocator _sliceSpace = new(MaxSliceEntries);
@@ -859,7 +859,7 @@ public sealed partial class RenderWorld : IDisposable
         private readonly RangeAllocator _boneSpace = new(MaxSliceEntries);
         private RangeAllocation[] _boneRange = [];
         private MeshPlacement?[] _deformSource = [];
-        private readonly HashSet<int> _deformDirty = new();
+        private readonly HashSet<int> _deformDirty = [];
 
         public RenderSide(TableHost tables, WorldProbes probes, Action<RendererError> report)
         {
@@ -892,7 +892,7 @@ public sealed partial class RenderWorld : IDisposable
         public uint DeformStamp { get; private set; }
 
         /// <summary>Renderables with a deformed copy.</summary>
-        public HashSet<int> Deforming { get; } = new();
+        public HashSet<int> Deforming { get; } = [];
 
         /// <summary>Copies deforming this frame, decided by <see cref="PrepareDeformation"/>.</summary>
         public bool[] DeformNow = [];
@@ -911,7 +911,7 @@ public sealed partial class RenderWorld : IDisposable
         public (int Frame, float Weight)[][] ActiveFrames = [];
 
         /// <summary>Copies made this frame, each of a renderable, whose data the GPU copies from their mesh.</summary>
-        public List<(int Index, MeshPlacement From, MeshPlacement To)> NewCopies { get; } = new();
+        public List<(int Index, MeshPlacement From, MeshPlacement To)> NewCopies { get; } = [];
 
         /// <summary>The placement a renderable draws: its deformed copy, else its mesh's.</summary>
         public MeshPlacement? PlacementOf(int index) => Deformed[index] ?? Mesh[index]?.Placement;
@@ -972,14 +972,14 @@ public sealed partial class RenderWorld : IDisposable
         public GpuTable MaterialSlots { get; }
 
         /// <summary>Renderables whose draws changed this frame: added, removed, new mesh or mesh data, materials, flags or mirroring.</summary>
-        public List<int> DrawChanged { get; } = new();
+        public List<int> DrawChanged { get; } = [];
 
         /// <summary>Renderables whose world bounds changed this frame.</summary>
-        public List<int> BoundsChanged { get; } = new();
-        private readonly HashSet<int> _boundsChangedSet = new();
+        public List<int> BoundsChanged { get; } = [];
+        private readonly HashSet<int> _boundsChangedSet = [];
 
         /// <summary>Where shadow casters changed since the shadows last looked, each before and after, static ones apart.</summary>
-        public List<(Double3 Center, float Radius, bool Static)> ShadowChanges { get; } = new();
+        public List<(Double3 Center, float Radius, bool Static)> ShadowChanges { get; } = [];
 
         private void ShadowChanged(int index)
         {
@@ -1260,7 +1260,7 @@ public sealed partial class RenderWorld : IDisposable
         {
             if (weights == null || mesh.BlendShapes.Length == 0)
                 return [];
-            List<(int, float)> picked = new();
+            List<(int, float)> picked = [];
             void Pick(int frame, float weight)
             {
                 if (MathF.Abs(weight) >= 1e-5f)
@@ -1482,7 +1482,7 @@ public sealed partial class RenderWorld : IDisposable
                 SliceMaterials[entry] = material;
                 if (!_materialEntries.TryGetValue(material, out HashSet<uint>? entries))
                 {
-                    entries = new HashSet<uint>();
+                    entries = [];
                     _materialEntries[material] = entries;
                 }
                 entries.Add(entry);
@@ -1563,7 +1563,7 @@ public sealed partial class RenderWorld : IDisposable
             {
                 if (!_meshUsers.TryGetValue(mesh, out HashSet<int>? users))
                 {
-                    users = new HashSet<int>();
+                    users = [];
                     _meshUsers[mesh] = users;
                 }
                 users.Add(index);

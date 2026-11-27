@@ -77,8 +77,8 @@ internal sealed class AnonymousTypeFormat : ISerializationFormat
     /// </summary>
     private static string GetAnonymousTypeSignature(Type anonymousType)
     {
-        var properties = anonymousType.GetProperties(BindingFlags.Public | BindingFlags.Instance);
-        var propertySignatures = properties.Select(p => $"{p.PropertyType.Name} {p.Name}");
+        PropertyInfo[] properties = anonymousType.GetProperties(BindingFlags.Public | BindingFlags.Instance);
+        IEnumerable<string> propertySignatures = properties.Select(p => $"{p.PropertyType.Name} {p.Name}");
         return $"{{ {string.Join(", ", propertySignatures)} }}";
     }
 }

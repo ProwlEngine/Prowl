@@ -5,14 +5,13 @@ using System;
 using System.Collections.Generic;
 using System.Linq;
 
+using Prowl.OrigamiUI;
 using Prowl.PaperUI;
 using Prowl.PaperUI.LayoutEngine;
 using Prowl.Quill;
 using Prowl.Vector;
 
 using Color = System.Drawing.Color;
-
-using Prowl.OrigamiUI;
 
 namespace Prowl.OrigamiUI.Charts;
 
@@ -30,7 +29,7 @@ public sealed class PieChart<T> : ChartCore<PieChart<T>, T>
         public float A0, A1;
     }
 
-    private readonly List<Slice> _slices = new();
+    private readonly List<Slice> _slices = [];
 
     private Func<T, string>? _nameSelector;
     private Func<T, double>? _valueSelector;

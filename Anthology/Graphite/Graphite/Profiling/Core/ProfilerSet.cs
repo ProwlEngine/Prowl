@@ -22,7 +22,7 @@ internal sealed class ProfilerSet
 
     public ProfilerSet(IReadOnlyList<IProfiler> profilers)
     {
-        List<IProfiler> distinct = new(profilers.Count);
+        List<IProfiler> distinct = [with(profilers.Count)];
         foreach (IProfiler profiler in profilers)
         {
             if (!distinct.Contains(profiler))
@@ -50,7 +50,7 @@ internal sealed class ProfilerSet
 
     private static T? Resolve<T>(List<IProfiler> profilers, System.Func<T[], T> composite) where T : class, IProfiler
     {
-        List<T> matches = new();
+        List<T> matches = [];
         foreach (IProfiler profiler in profilers)
         {
             if (profiler is T match)

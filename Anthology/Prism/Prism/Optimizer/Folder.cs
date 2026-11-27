@@ -37,7 +37,7 @@ internal sealed class Folder
         _m = m;
         _def = m.DefMapForFolder();   // held for this Folder's lifetime, so it must not be the pass's DefMap() scratch
         _nextId = m.Header[3];
-        foreach (var ins in m.Instrs)
+        foreach (SpvInstr ins in m.Instrs)
         {
             switch (ins.Opcode)
             {
@@ -74,11 +74,11 @@ internal sealed class Folder
 
     // ---- ConstantManager: value inspection ----
 
-    public bool IsConst(uint id) => _def.TryGetValue(id, out var d) && d.Opcode is OpConstant or OpConstantTrue or OpConstantFalse or OpConstantNull or OpConstantComposite;
+    public bool IsConst(uint id) => _def.TryGetValue(id, out SpvInstr? d) && d.Opcode is OpConstant or OpConstantTrue or OpConstantFalse or OpConstantNull or OpConstantComposite;
     /// <summary>Whether <paramref name="id"/> is a boolean constant (incl. ones created this run), and its value.</summary>
     public bool AsBool(uint id, out bool v) => BoolVal(id, out v);
-    SpvInstr? Def(uint id) => _def.TryGetValue(id, out var d) ? d : null;
-    public uint TypeOf(uint id) => _def.TryGetValue(id, out var d) && d.Operands.Length > 0 ? d.Operands[0] : 0;
+    SpvInstr? Def(uint id) => _def.TryGetValue(id, out SpvInstr? d) ? d : null;
+    public uint TypeOf(uint id) => _def.TryGetValue(id, out SpvInstr? d) && d.Operands.Length > 0 ? d.Operands[0] : 0;
 
     bool IsFloatType(uint t) => Def(t) is { Opcode: OpTypeFloat };
     bool IsIntType(uint t) => Def(t) is { Opcode: OpTypeInt };
@@ -89,7 +89,7 @@ internal sealed class Folder
     bool ScalarWord(uint id, out uint word)
     {
         word = 0;
-        var d = Def(id);
+        SpvInstr? d = Def(id);
         if (d is null) return false;
         if (d.Opcode == OpConstantNull) return true;
         if (d.Opcode == OpConstant && d.Operands.Length == 3) { word = d.Operands[2]; return true; }
@@ -100,13 +100,13 @@ internal sealed class Folder
 
     bool BoolVal(uint id, out bool v)
     {
-        v = false; var d = Def(id);
+        v = false; SpvInstr? d = Def(id);
         if (d is { Opcode: OpConstantTrue }) { v = true; return true; }
         if (d is { Opcode: OpConstantFalse or OpConstantNull }) { v = false; return true; }
         return false;
     }
 
-    bool IsZeroScalar(uint id) { var d = Def(id); if (d is { Opcode: OpConstantNull }) return true; if (d is { Opcode: OpConstant } && d.Operands.Length == 3) return d.Operands[2] == 0; if (d is { Opcode: OpConstantFalse }) return true; return false; }
+    bool IsZeroScalar(uint id) { SpvInstr? d = Def(id); if (d is { Opcode: OpConstantNull }) return true; if (d is { Opcode: OpConstant } && d.Operands.Length == 3) return d.Operands[2] == 0; if (d is { Opcode: OpConstantFalse }) return true; return false; }
 
     // ---- ConstantManager: creation (deduped, TakeNextId at types section) ----
 
@@ -120,14 +120,14 @@ internal sealed class Folder
     public bool SwitchSelectorWord(uint id, out uint word)
     {
         word = 0;
-        var d = Def(id);
+        SpvInstr? d = Def(id);
         if (d is { Opcode: OpConstantNull }) return true;
         if (d is { Opcode: OpConstant } && Def(d.Operands[0]) is { Opcode: OpTypeInt }) { word = d.Operands[2]; return true; }
         return false;
     }
     public uint BoolConst(uint type, bool v)
     {
-        var pool = v ? _truePool : _falsePool;
+        Dictionary<uint, uint> pool = v ? _truePool : _falsePool;
         if (pool.TryGetValue(type, out uint id)) return id;
         id = _nextId++; var c = new SpvInstr(v ? OpConstantTrue : OpConstantFalse, [type, id]); _newConsts.Add(c); _def[id] = c; pool[type] = id; return id;
     }
@@ -181,7 +181,7 @@ internal sealed class Folder
         // re-enters this method or retains the list -- each copies what it needs), which matters because
         // CCP and Simplification call this for nearly every instruction in the module.
         inst.Classify(out int ri, out bool[] isId);
-        var ops = _opsScratch;
+        List<uint> ops = _opsScratch;
         ops.Clear();
         bool missing = false;
         for (int i = 0; i < inst.Operands.Length; i++)
@@ -195,7 +195,7 @@ internal sealed class Folder
         }
 
         // 1) Constant folding rules (in order). First non-zero wins.
-        foreach (var rule in RulesFor(inst))
+        foreach (Rule rule in RulesFor(inst))
         {
             uint r = rule(inst, ops);
             if (r != 0) return Materialize(r);
@@ -213,8 +213,8 @@ internal sealed class Folder
         {
             if (!missing && FoldVectors(inst, ops, out uint[] words))
             {
-                var t = inst.Operands[0]; var vt = Def(t)!; uint elem = vt.Operands[1];
-                var comps = new uint[words.Length];
+                uint t = inst.Operands[0]; SpvInstr vt = Def(t)!; uint elem = vt.Operands[1];
+                uint[] comps = new uint[words.Length];
                 for (int i = 0; i < words.Length; i++) { comps[i] = NormalizeFolded(elem, words[i]); if (comps[i] == 0) return 0; }
                 return CompositeConst(t, comps);
             }
@@ -250,28 +250,28 @@ internal sealed class Folder
     {
         result = 0;
         if (inst.Opcode is 194 or 195 or 196 && TypeWidth(inst.Operands[0]) is not (32 or 64)) return false;
-        var words = new uint[ops.Count];
+        uint[] words = new uint[ops.Count];
         for (int i = 0; i < ops.Count; i++) { if (!ScalarWord(ops[i], out words[i])) return false; }
         return OperateWords(inst.Opcode, words, out result);
     }
 
     bool FoldVectors(SpvInstr inst, List<uint> ops, out uint[] result)
     {
-        var vt = Def(inst.Operands[0])!; int dims = (int)vt.Operands[2];
+        SpvInstr vt = Def(inst.Operands[0])!; int dims = (int)vt.Operands[2];
         result = new uint[dims];
         if (inst.Opcode is 194 or 195 or 196 && TypeWidth(vt.Operands[1]) is not (32 or 64)) return false;
         // each operand must be a vector constant (composite) or null.
-        var comps = new uint[ops.Count][];
+        uint[][] comps = new uint[ops.Count][];
         for (int i = 0; i < ops.Count; i++)
         {
-            var d = Def(ops[i]);
+            SpvInstr? d = Def(ops[i]);
             if (d is { Opcode: OpConstantNull }) { comps[i] = null!; continue; }
             if (d is { Opcode: OpConstantComposite }) { comps[i] = d.Operands[2..]; continue; }
             return false;
         }
         for (int dd = 0; dd < dims; dd++)
         {
-            var w = new uint[ops.Count];
+            uint[] w = new uint[ops.Count];
             for (int i = 0; i < ops.Count; i++) { if (comps[i] is null) w[i] = 0; else if (!ScalarWord(comps[i][dd], out w[i])) return false; }
             if (!OperateWords(inst.Opcode, w, out result[dd])) return false;
         }
@@ -341,7 +341,7 @@ internal sealed class Folder
         if (ops.Count != 2) return false;
         return FoldBinaryIntegerOpToConstant(inst, ops, out result) || FoldBinaryBooleanOpToConstant(inst.Opcode, ops, out result);
     }
-    bool IntConstU(uint id, out uint v) { v = 0; var d = Def(id); if (d is { Opcode: OpConstant } && d.Operands.Length == 3) { v = d.Operands[2]; return true; } if (d is { Opcode: OpConstantNull }) return true; return false; }
+    bool IntConstU(uint id, out uint v) { v = 0; SpvInstr? d = Def(id); if (d is { Opcode: OpConstant } && d.Operands.Length == 3) { v = d.Operands[2]; return true; } if (d is { Opcode: OpConstantNull }) return true; return false; }
     bool FoldBinaryIntegerOpToConstant(SpvInstr inst, List<uint> ops, out uint result)
     {
         result = 0;
@@ -399,17 +399,17 @@ internal sealed class Folder
         if (inst.Opcode == OpExtInst)
         {
             if (_glslExt == 0 || inst.Operands.Length < 4 || inst.Operands[2] != _glslExt) return [];
-            return _extRules.TryGetValue(inst.Operands[3], out var er) ? er : [];
+            return _extRules.TryGetValue(inst.Operands[3], out List<Rule>? er) ? er : [];
         }
-        return _rules.TryGetValue(inst.Opcode, out var r) ? r : [];
+        return _rules.TryGetValue(inst.Opcode, out List<Rule>? r) ? r : [];
     }
 
     readonly List<uint> _opsScratch = [];   // reused operand buffer for FoldToConstant
     readonly Dictionary<int, List<Rule>> _rules = [];
     readonly Dictionary<uint, List<Rule>> _extRules = [];
 
-    void Add(int op, params Rule[] rs) { if (!_rules.TryGetValue(op, out var l)) _rules[op] = l = []; l.AddRange(rs); }
-    void AddExt(uint op, params Rule[] rs) { if (!_extRules.TryGetValue(op, out var l)) _extRules[op] = l = []; l.AddRange(rs); }
+    void Add(int op, params Rule[] rs) { if (!_rules.TryGetValue(op, out List<Rule>? l)) _rules[op] = l = []; l.AddRange(rs); }
+    void AddExt(uint op, params Rule[] rs) { if (!_extRules.TryGetValue(op, out List<Rule>? l)) _extRules[op] = l = []; l.AddRange(rs); }
 
     // ================= FoldInstruction (fold.cpp) : the Simplification path =================
     // In-place simplification rules (folding_rules.cpp). A rule mutates `inst` and returns true if it changed it.
@@ -418,17 +418,17 @@ internal sealed class Folder
     public delegate bool FoldRule(SpvInstr inst);
     readonly Dictionary<int, List<FoldRule>> _foldRules = [];
     readonly Dictionary<uint, List<FoldRule>> _foldExtRules = [];
-    void AddF(int op, params FoldRule[] rs) { if (!_foldRules.TryGetValue(op, out var l)) _foldRules[op] = l = []; l.AddRange(rs); }
-    void AddFExt(uint op, params FoldRule[] rs) { if (!_foldExtRules.TryGetValue(op, out var l)) _foldExtRules[op] = l = []; l.AddRange(rs); }
+    void AddF(int op, params FoldRule[] rs) { if (!_foldRules.TryGetValue(op, out List<FoldRule>? l)) _foldRules[op] = l = []; l.AddRange(rs); }
+    void AddFExt(uint op, params FoldRule[] rs) { if (!_foldExtRules.TryGetValue(op, out List<FoldRule>? l)) _foldExtRules[op] = l = []; l.AddRange(rs); }
 
     List<FoldRule> FoldRulesFor(SpvInstr inst)
     {
         if (inst.Opcode == OpExtInst)
         {
             if (_glslExt == 0 || inst.Operands.Length < 4 || inst.Operands[2] != _glslExt) return [];
-            return _foldExtRules.TryGetValue(inst.Operands[3], out var er) ? er : [];
+            return _foldExtRules.TryGetValue(inst.Operands[3], out List<FoldRule>? er) ? er : [];
         }
-        return _foldRules.TryGetValue(inst.Opcode, out var r) ? r : [];
+        return _foldRules.TryGetValue(inst.Opcode, out List<FoldRule>? r) ? r : [];
     }
 
     const int OpCopyObject = 83, OpNop = 0;
@@ -460,7 +460,7 @@ internal sealed class Folder
             _def[rid] = inst;
             return true;
         }
-        foreach (var rule in FoldRulesFor(inst)) if (rule(inst)) return true;
+        foreach (FoldRule rule in FoldRulesFor(inst)) if (rule(inst)) return true;
         return false;
     }
 
@@ -495,22 +495,22 @@ internal sealed class Folder
     }
     uint FpBinaryTyped(uint type, uint a, uint b, Func<uint, uint, float> f32, Func<double, double, double> f64)
     {
-        var td = Def(type)!;
+        SpvInstr td = Def(type)!;
         if (td.Opcode == OpTypeVector)
         {
             uint elem = td.Operands[1]; int n = (int)td.Operands[2];
-            var ca = Comps(a, n); var cb = Comps(b, n); if (ca is null || cb is null) return 0;
-            var res = new uint[n];
+            uint[]? ca = Comps(a, n); uint[]? cb = Comps(b, n); if (ca is null || cb is null) return 0;
+            uint[] res = new uint[n];
             for (int i = 0; i < n; i++) { uint r = FpBinaryTyped(elem, ca[i], cb[i], f32, f64); if (r == 0) return 0; res[i] = r; }
             return CompositeConst(type, res);
         }
         int width = TypeWidth(type);
         if (width == 32) { if (!ScalarWord(a, out uint aw) || !ScalarWord(b, out uint bw)) return 0; return ScalarConst(type, W32(f32(aw, bw))); }
-        if (width == 64) { var da = Words64(a); var db = Words64(b); if (da is null || db is null) return 0; ulong bits = BitConverter.DoubleToUInt64Bits(f64(F64(da[0], da[1]), F64(db[0], db[1]))); return Scalar64(type, (uint)bits, (uint)(bits >> 32)); }
+        if (width == 64) { uint[]? da = Words64(a); uint[]? db = Words64(b); if (da is null || db is null) return 0; ulong bits = BitConverter.DoubleToUInt64Bits(f64(F64(da[0], da[1]), F64(db[0], db[1]))); return Scalar64(type, (uint)bits, (uint)(bits >> 32)); }
         return 0;
     }
-    uint[]? Comps(uint id, int n) { var d = Def(id); if (d is { Opcode: OpConstantNull }) return Enumerable.Range(0, n).Select(_ => VirtualNull(Def(TypeOf(id))!.Operands[1])).ToArray(); if (d is { Opcode: OpConstantComposite }) return d.Operands[2..]; return null; }
-    uint[]? Words64(uint id) { var d = Def(id); if (d is { Opcode: OpConstant } && d.Operands.Length == 4) return [d.Operands[2], d.Operands[3]]; if (d is { Opcode: OpConstantNull }) return [0, 0]; return null; }
+    uint[]? Comps(uint id, int n) { SpvInstr? d = Def(id); if (d is { Opcode: OpConstantNull }) return Enumerable.Range(0, n).Select(_ => VirtualNull(Def(TypeOf(id))!.Operands[1])).ToArray(); if (d is { Opcode: OpConstantComposite }) return d.Operands[2..]; return null; }
+    uint[]? Words64(uint id) { SpvInstr? d = Def(id); if (d is { Opcode: OpConstant } && d.Operands.Length == 4) return [d.Operands[2], d.Operands[3]]; if (d is { Opcode: OpConstantNull }) return [0, 0]; return null; }
     uint Scalar64(uint type, uint lo, uint hi) { string k = ScalarKey(type, [lo, hi]); if (_scalarPool.TryGetValue(k, out uint id)) return id; id = _nextId++; var c = new SpvInstr(OpConstant, [type, id, lo, hi]); _newConsts.Add(c); _def[id] = c; _scalarPool[k] = id; return id; }
 
     // FoldFPBinaryOp(FOLD_FPCMP_OP): FP comparison -> bool constant (CompareFloatingPoint), f32/f64, scalar or
@@ -520,12 +520,12 @@ internal sealed class Folder
         if (!FpAllowed(inst)) return 0;
         if (!IsConst(ops[0]) || !IsConst(ops[1])) return 0;
         uint bt = inst.Operands[0];
-        var td = Def(bt)!;
+        SpvInstr td = Def(bt)!;
         if (td.Opcode == OpTypeVector)
         {
             int n = (int)td.Operands[2];
-            var ca = Comps(ops[0], n); var cb = Comps(ops[1], n); if (ca is null || cb is null) return 0;
-            var res = new uint[n];
+            uint[]? ca = Comps(ops[0], n); uint[]? cb = Comps(ops[1], n); if (ca is null || cb is null) return 0;
+            uint[] res = new uint[n];
             for (int i = 0; i < n; i++) { uint r = FpCompareScalar(td.Operands[1], ca[i], cb[i], cmp, ordered); if (r == 0) return 0; res[i] = r; }
             return CompositeConst(bt, res);
         }
@@ -536,7 +536,7 @@ internal sealed class Folder
         double fa, fb;
         int width = TypeWidth(TypeOf(a));
         if (width == 32) { if (!ScalarWord(a, out uint aw) || !ScalarWord(b, out uint bw)) return 0; fa = F32(aw); fb = F32(bw); }
-        else if (width == 64) { var da = Words64(a); var db = Words64(b); if (da is null || db is null) return 0; fa = F64(da[0], da[1]); fb = F64(db[0], db[1]); }
+        else if (width == 64) { uint[]? da = Words64(a); uint[]? db = Words64(b); if (da is null || db is null) return 0; fa = F64(da[0], da[1]); fb = F64(db[0], db[1]); }
         else return 0;
         bool un = double.IsNaN(fa) || double.IsNaN(fb);
         bool res = ordered ? (!un && cmp(fa, fb)) : (un || cmp(fa, fb));
@@ -550,7 +550,7 @@ internal sealed class Folder
         if (!FpAllowed(inst)) return 0;
         int op = inst.Opcode;
         bool c0 = IsConst(ops[0]), c1 = IsConst(ops[1]);
-        var operand = Def(c0 ? ops[1] : ops[0]);
+        SpvInstr? operand = Def(c0 ? ops[1] : ops[0]);
         if (operand is null) return 0;
         uint ot = TypeOf(operand.ResultId);
         if (Def(ot) is not { Opcode: OpTypeFloat }) return 0;
@@ -595,11 +595,11 @@ internal sealed class Folder
     uint IntConvert(SpvInstr inst, List<uint> ops, bool signed)
     {
         if (!IsConst(ops[0])) return 0;
-        uint type = inst.Operands[0]; var td = Def(type)!;
+        uint type = inst.Operands[0]; SpvInstr td = Def(type)!;
         if (td.Opcode == OpTypeVector)
         {
-            int n = (int)td.Operands[2]; var c = Comps(ops[0], n); if (c is null) return 0;
-            var res = new uint[n];
+            int n = (int)td.Operands[2]; uint[]? c = Comps(ops[0], n); if (c is null) return 0;
+            uint[] res = new uint[n];
             for (int i = 0; i < n; i++) { uint r = IntConvertScalar(td.Operands[1], c[i], signed); if (r == 0) return 0; res[i] = r; }
             return CompositeConst(type, res);
         }
@@ -607,7 +607,7 @@ internal sealed class Folder
     }
     uint IntConvertScalar(uint type, uint id, bool signed)
     {
-        var d = Def(id); int srcWidth = TypeWidth(TypeOf(id));
+        SpvInstr? d = Def(id); int srcWidth = TypeWidth(TypeOf(id));
         ulong v;
         if (d is { Opcode: OpConstantNull }) v = 0;
         else if (d is not { Opcode: OpConstant }) return 0;
@@ -619,7 +619,7 @@ internal sealed class Folder
     // ConstantManager::GenerateIntegerConstant: 64-bit -> two words; narrower -> sign/zero-extended single word.
     uint GenerateIntegerConstant(uint type, ulong v)
     {
-        var td = Def(type);
+        SpvInstr? td = Def(type);
         if (td is not { Opcode: OpTypeInt }) return 0;
         int width = (int)td.Operands[1];
         if (width == 64) return Scalar64(type, (uint)v, (uint)(v >> 32));
@@ -635,19 +635,19 @@ internal sealed class Folder
     uint FNegate(SpvInstr inst, List<uint> ops)
     {
         if (!FpAllowed(inst)) return 0;
-        uint type = inst.Operands[0]; var td = Def(type)!;
-        if (td.Opcode == OpTypeVector) { uint elem = td.Operands[1]; int n = (int)td.Operands[2]; var c = Comps(ops[0], n); if (c is null) return 0; var res = new uint[n]; for (int i = 0; i < n; i++) { uint r = FNegateScalar(elem, c[i]); if (r == 0) return 0; res[i] = r; } return CompositeConst(type, res); }
+        uint type = inst.Operands[0]; SpvInstr td = Def(type)!;
+        if (td.Opcode == OpTypeVector) { uint elem = td.Operands[1]; int n = (int)td.Operands[2]; uint[]? c = Comps(ops[0], n); if (c is null) return 0; uint[] res = new uint[n]; for (int i = 0; i < n; i++) { uint r = FNegateScalar(elem, c[i]); if (r == 0) return 0; res[i] = r; } return CompositeConst(type, res); }
         return FNegateScalar(type, ops[0]);
     }
-    uint FNegateScalar(uint type, uint id) { int w = TypeWidth(type); if (w == 32) { if (!ScalarWord(id, out uint x)) return 0; return ScalarConst(type, x ^ 0x80000000u); } if (w == 64) { var d = Words64(id); if (d is null) return 0; return Scalar64(type, d[0], d[1] ^ 0x80000000u); } return 0; }
+    uint FNegateScalar(uint type, uint id) { int w = TypeWidth(type); if (w == 32) { if (!ScalarWord(id, out uint x)) return 0; return ScalarConst(type, x ^ 0x80000000u); } if (w == 64) { uint[]? d = Words64(id); if (d is null) return 0; return Scalar64(type, d[0], d[1] ^ 0x80000000u); } return 0; }
     // FoldUnaryOp(NegateIntConst): any width, the operand read sign-extended; vectors component-wise.
     uint SNegate(SpvInstr inst, List<uint> ops)
     {
-        uint type = inst.Operands[0]; var td = Def(type)!;
+        uint type = inst.Operands[0]; SpvInstr td = Def(type)!;
         if (td.Opcode == OpTypeVector)
         {
-            int n = (int)td.Operands[2]; var c = Comps(ops[0], n); if (c is null) return 0;
-            var res = new uint[n];
+            int n = (int)td.Operands[2]; uint[]? c = Comps(ops[0], n); if (c is null) return 0;
+            uint[] res = new uint[n];
             for (int i = 0; i < n; i++) { uint r = SNegateScalar(td.Operands[1], c[i]); if (r == 0) return 0; res[i] = r; }
             return CompositeConst(type, res);
         }
@@ -655,7 +655,7 @@ internal sealed class Folder
     }
     uint SNegateScalar(uint type, uint id)
     {
-        var d = Def(id);
+        SpvInstr? d = Def(id);
         if (d is { Opcode: OpConstantNull }) return id;
         if (d is not { Opcode: OpConstant }) return 0;
         long v = TypeWidth(TypeOf(id)) <= 32 ? (int)d.Operands[2] : (long)(d.Operands[2] | ((ulong)d.Operands[3] << 32));
@@ -670,7 +670,7 @@ internal sealed class Folder
         if (!FpAllowed(inst) || !IsConst(ops[0])) return 0;
         return FoldFpUnaryPer(inst, ops[0], (elem, id) =>
         {
-            var it = Def(TypeOf(id));
+            SpvInstr? it = Def(TypeOf(id));
             if (it is not { Opcode: OpTypeInt } || it.Operands[1] != 32) return 0u;
             if (!ScalarWord(id, out uint x)) return 0u;
             double val = it.Operands[2] == 1 ? (int)x : x;
@@ -686,12 +686,12 @@ internal sealed class Folder
         if (!FpAllowed(inst) || !IsConst(ops[0])) return 0;
         return FoldFpUnaryPer(inst, ops[0], (elem, id) =>
         {
-            var it = Def(elem);
+            SpvInstr? it = Def(elem);
             if (it is not { Opcode: OpTypeInt } || it.Operands[1] != 32) return 0u;
             int sw = TypeWidth(TypeOf(id));
             double val;
             if (sw == 32) { if (!ScalarWord(id, out uint x)) return 0u; val = F32(x); }
-            else if (sw == 64) { var d = Words64(id); if (d is null) return 0u; val = F64(d[0], d[1]); }
+            else if (sw == 64) { uint[]? d = Words64(id); if (d is null) return 0u; val = F64(d[0], d[1]); }
             else return 0u;
             uint r = it.Operands[2] == 1 ? unchecked((uint)(int)val) : (uint)val;
             return ScalarConst(elem, r);
@@ -707,12 +707,12 @@ internal sealed class Folder
         uint type = inst.Operands[0]; int w = TypeWidth(type);
         bool ZeroVector(uint id)
         {
-            var d = Def(id);
+            SpvInstr? d = Def(id);
             if (d is { Opcode: OpConstantNull }) return true;
             if (d is not { Opcode: OpConstantComposite }) return false;
             foreach (uint c in d.Operands[2..])
             {
-                var cd = Def(c);
+                SpvInstr? cd = Def(c);
                 if (cd is { Opcode: OpConstantNull }) continue;
                 if (cd is not { Opcode: OpConstant } || cd.Operands[2..].Any(x => x != 0)) return false;
             }
@@ -722,10 +722,10 @@ internal sealed class Folder
             if (IsConst(ops[i]) && ZeroVector(ops[i]))
                 return w == 32 ? ScalarConst(type, 0) : w == 64 ? Scalar64(type, 0, 0) : 0;
         if (!IsConst(ops[0]) || !IsConst(ops[1])) return 0;
-        var vt = Def(TypeOf(ops[0]));
+        SpvInstr? vt = Def(TypeOf(ops[0]));
         if (vt is not { Opcode: 23 }) return 0;   // OpTypeVector
         int n = (int)vt.Operands[2];
-        var a = Comps(ops[0], n); var b = Comps(ops[1], n);
+        uint[]? a = Comps(ops[0], n); uint[]? b = Comps(ops[1], n);
         if (a is null || b is null) return 0;
         if (w == 32)
         {
@@ -743,7 +743,7 @@ internal sealed class Folder
             double r = 0.0;
             for (int i = 0; i < n; i++)
             {
-                var x = Words64(a[i]); var y = Words64(b[i]);
+                uint[]? x = Words64(a[i]); uint[]? y = Words64(b[i]);
                 if (x is null || y is null) return 0;
                 double p = F64(x[0], x[1]) * F64(y[0], y[1]);
                 r += p;
@@ -761,39 +761,39 @@ internal sealed class Folder
         uint type = inst.Operands[0];
         if (!FpAllowed(inst)) return 0;
         if (!IsConst(ops[0]) || !IsConst(ops[1])) return 0;
-        var vt = Def(type)!; uint elem = vt.Operands[1]; int n = (int)vt.Operands[2]; int w = TypeWidth(elem);
+        SpvInstr vt = Def(type)!; uint elem = vt.Operands[1]; int n = (int)vt.Operands[2]; int w = TypeWidth(elem);
         if (w != 32 && w != 64) return 0;
         uint Elem(double v) { if (w == 32) return ScalarConst(elem, W32((float)v)); ulong b = BitConverter.DoubleToUInt64Bits(v); return Scalar64(elem, (uint)b, (uint)(b >> 32)); }
         if (IsZeroConst(ops[0]) || IsZeroConst(ops[1]))
         {
-            var zero = new uint[n];
+            uint[] zero = new uint[n];
             for (int i = 0; i < n; i++) zero[i] = w == 32 ? ScalarConst(elem, 0) : Scalar64(elem, 0, 0);
             return CompositeConst(type, zero);
         }
         uint mat = matrixFirst ? ops[0] : ops[1], vec = matrixFirst ? ops[1] : ops[0];
-        var md = Def(mat);
+        SpvInstr? md = Def(mat);
         if (md is not { Opcode: OpConstantComposite }) return 0;
         uint[] cols = md.Operands[2..];
-        var colType = Def(TypeOf(mat))!; uint colVecType = colType.Operands[1]; int rows = (int)Def(colVecType)!.Operands[2];
-        var v = Comps(vec, matrixFirst ? cols.Length : rows);
+        SpvInstr colType = Def(TypeOf(mat))!; uint colVecType = colType.Operands[1]; int rows = (int)Def(colVecType)!.Operands[2];
+        uint[]? v = Comps(vec, matrixFirst ? cols.Length : rows);
         if (v is null) return 0;
-        double Scalar(uint id) { if (w == 32) { ScalarWord(id, out uint x); return F32(x); } var d = Words64(id)!; return F64(d[0], d[1]); }
+        double Scalar(uint id) { if (w == 32) { ScalarWord(id, out uint x); return F32(x); } uint[] d = Words64(id)!; return F64(d[0], d[1]); }
         uint[]? Col(uint c) => Def(c) is { Opcode: OpConstantNull } ? null : Comps(c, rows);
-        var res = new uint[n];
+        uint[] res = new uint[n];
         for (int i = 0; i < n; i++)
         {
             if (w == 32)
             {
                 float r = 0f;
-                if (matrixFirst) { for (int j = 0; j < cols.Length; j++) { var c = Col(cols[j]); if (c is null) continue; float p = (float)Scalar(c[i]) * (float)Scalar(v[j]); r += p; } }
-                else { var c = Col(cols[i]); if (c is not null) for (int j = 0; j < c.Length; j++) { float p = (float)Scalar(v[j]) * (float)Scalar(c[j]); r += p; } }
+                if (matrixFirst) { for (int j = 0; j < cols.Length; j++) { uint[]? c = Col(cols[j]); if (c is null) continue; float p = (float)Scalar(c[i]) * (float)Scalar(v[j]); r += p; } }
+                else { uint[]? c = Col(cols[i]); if (c is not null) for (int j = 0; j < c.Length; j++) { float p = (float)Scalar(v[j]) * (float)Scalar(c[j]); r += p; } }
                 res[i] = Elem(r);
             }
             else
             {
                 double r = 0.0;
-                if (matrixFirst) { for (int j = 0; j < cols.Length; j++) { var c = Col(cols[j]); if (c is null) continue; r += Scalar(c[i]) * Scalar(v[j]); } }
-                else { var c = Col(cols[i]); if (c is not null) for (int j = 0; j < c.Length; j++) r += Scalar(v[j]) * Scalar(c[j]); }
+                if (matrixFirst) { for (int j = 0; j < cols.Length; j++) { uint[]? c = Col(cols[j]); if (c is null) continue; r += Scalar(c[i]) * Scalar(v[j]); } }
+                else { uint[]? c = Col(cols[i]); if (c is not null) for (int j = 0; j < c.Length; j++) r += Scalar(v[j]) * Scalar(c[j]); }
                 res[i] = Elem(r);
             }
         }
@@ -804,22 +804,22 @@ internal sealed class Folder
     uint VectorTimesScalar(SpvInstr inst, List<uint> ops)
     {
         if (!FpAllowed(inst)) return 0;
-        uint type = inst.Operands[0]; var td = Def(type)!; uint elem = td.Operands[1]; int n = (int)td.Operands[2];
+        uint type = inst.Operands[0]; SpvInstr td = Def(type)!; uint elem = td.Operands[1]; int n = (int)td.Operands[2];
         uint vec = ops[0], scl = ops[1];
         if (IsZeroVec(vec)) return vec;
         if (IsZeroScalar(scl)) return NullConst(type);
-        var c = Comps(vec, n); if (c is null) return 0;
+        uint[]? c = Comps(vec, n); if (c is null) return 0;
         int width = TypeWidth(elem);
-        var res = new uint[n];
+        uint[] res = new uint[n];
         for (int i = 0; i < n; i++)
         {
             if (width == 32) { if (!ScalarWord(c[i], out uint cw) || !ScalarWord(scl, out uint sw)) return 0; res[i] = ScalarConst(elem, W32(F32(cw) * F32(sw))); }
-            else if (width == 64) { var dc = Words64(c[i]); var ds = Words64(scl); if (dc is null || ds is null) return 0; ulong bits = BitConverter.DoubleToUInt64Bits(F64(dc[0], dc[1]) * F64(ds[0], ds[1])); res[i] = Scalar64(elem, (uint)bits, (uint)(bits >> 32)); }
+            else if (width == 64) { uint[]? dc = Words64(c[i]); uint[]? ds = Words64(scl); if (dc is null || ds is null) return 0; ulong bits = BitConverter.DoubleToUInt64Bits(F64(dc[0], dc[1]) * F64(ds[0], ds[1])); res[i] = Scalar64(elem, (uint)bits, (uint)(bits >> 32)); }
             else return 0;
         }
         return CompositeConst(type, res);
     }
-    bool IsZeroVec(uint id) { var d = Def(id); if (d is { Opcode: OpConstantNull }) return true; if (d is { Opcode: OpConstantComposite }) return d.Operands[2..].All(IsZeroScalar); return false; }
+    bool IsZeroVec(uint id) { SpvInstr? d = Def(id); if (d is { Opcode: OpConstantNull }) return true; if (d is { Opcode: OpConstantComposite }) return d.Operands[2..].All(IsZeroScalar); return false; }
 
     // FoldCompositeWithConstants: an OpCompositeConstruct whose inputs are all constants folds to an
     // OpConstantComposite. The operand ids are already the declared component constants, so they become the
@@ -835,13 +835,13 @@ internal sealed class Folder
     {
         uint cId = ops[0];
         if (!IsConst(cId)) return 0;
-        var c = Def(cId);
+        SpvInstr? c = Def(cId);
         for (int i = 1; i < NumIn(inst); i++)
         {
             uint elementIndex = InOp(inst, i);
             if (c is { Opcode: OpConstantNull }) return NullConst(inst.Operands[0]);
             if (c is not { Opcode: OpConstantComposite }) return 0;
-            var components = c.Operands[2..];
+            uint[] components = c.Operands[2..];
             if (elementIndex >= components.Length) return 0;
             cId = components[(int)elementIndex];
             c = Def(cId);
@@ -873,16 +873,16 @@ internal sealed class Folder
             curId = comps[(int)index];
         }
         uint finalIndex = inst.Operands[^1];
-        var ids = new uint[comps!.Length];
+        uint[] ids = new uint[comps!.Length];
         for (int k = 0; k < comps.Length; k++) ids[k] = k == finalIndex ? objectId : comps[k];
         // Every level below the top goes through BuildInstructionAndAddToModule, which always declares a new
         // constant -- a duplicate when an equal one exists, in which case the parent still refers to the first.
         uint newConst = chain.Count > 0 ? CompositeConstForceNew(curType, ids) : CompositeConst(curType, ids);
         for (int i = chain.Count - 1; i >= 0; i--)
         {
-            var (ptype, pcomps) = chain[i];
+            (uint ptype, uint[]? pcomps) = chain[i];
             uint idx = inst.Operands[4 + i];
-            var pids = new uint[pcomps.Length];
+            uint[] pids = new uint[pcomps.Length];
             for (int k = 0; k < pcomps.Length; k++) pids[k] = k == idx ? newConst : pcomps[k];
             newConst = i > 0 ? CompositeConstForceNew(ptype, pids) : CompositeConst(ptype, pids);
         }
@@ -897,11 +897,11 @@ internal sealed class Folder
     }
     uint[]? InsertComponentIds(uint id, uint typeId)
     {
-        var d = Def(id);
+        SpvInstr? d = Def(id);
         if (d is { Opcode: OpConstantComposite }) return d.Operands[2..];
         if (d is { Opcode: OpConstantNull } && Def(typeId) is { Opcode: OpTypeVector } t)
         {
-            int n = (int)t.Operands[2]; uint e = t.Operands[1]; var r = new uint[n];
+            int n = (int)t.Operands[2]; uint e = t.Operands[1]; uint[] r = new uint[n];
             for (int k = 0; k < n; k++) r[k] = VirtualNull(e);
             return r;
         }
@@ -913,8 +913,8 @@ internal sealed class Folder
     {
         uint c1 = ops[0], c2 = ops[1];
         if (!IsConst(c1) || !IsConst(c2)) return 0;
-        var c1c = Comps(c1, (int)Def(TypeOf(c1))!.Operands[2]);
-        var c2c = Comps(c2, (int)Def(TypeOf(c2))!.Operands[2]);
+        uint[]? c1c = Comps(c1, (int)Def(TypeOf(c1))!.Operands[2]);
+        uint[]? c2c = Comps(c2, (int)Def(TypeOf(c2))!.Operands[2]);
         if (c1c is null || c2c is null) return 0;
         var ids = new List<uint>();
         for (int i = 2; i < NumIn(inst); i++)
@@ -944,13 +944,13 @@ internal sealed class Folder
         for (int r = 0; r < rows; r++) rowElems[r] = [];
         foreach (uint colId in columns)
         {
-            var comps = Comps(colId, rows);
+            uint[]? comps = Comps(colId, rows);
             if (comps is null) return 0;
             for (int r = 0; r < rows; r++) rowElems[r].Add(comps[r]);
         }
 
         uint resultColVec = Def(resultType)!.Operands[1];
-        var resultColumns = new uint[rows];
+        uint[] resultColumns = new uint[rows];
         for (int c = 0; c < rows; c++) resultColumns[c] = CompositeConst(resultColVec, rowElems[c].ToArray());
         return CompositeConst(resultType, resultColumns);
     }
@@ -960,14 +960,14 @@ internal sealed class Folder
     static uint ExtArg(List<uint> ops, int i) => ops[3 + i];
 
     uint IntWord(uint id) { ScalarWord(id, out uint w); return w; }
-    ulong Int64Of(uint id) { var d = Words64(id); return d is null ? 0UL : d[0] | ((ulong)d[1] << 32); }
-    double FloatOf(uint id, int w) { if (w == 16) { ScalarWord(id, out uint x); return F16(x); } if (w == 32) { ScalarWord(id, out uint x); return F32(x); } var d = Words64(id); return d is null ? 0 : F64(d[0], d[1]); }
+    ulong Int64Of(uint id) { uint[]? d = Words64(id); return d is null ? 0UL : d[0] | ((ulong)d[1] << 32); }
+    double FloatOf(uint id, int w) { if (w == 16) { ScalarWord(id, out uint x); return F16(x); } if (w == 32) { ScalarWord(id, out uint x); return F32(x); } uint[]? d = Words64(id); return d is null ? 0 : F64(d[0], d[1]); }
     static bool NegZeroLess(double a, double b) { if (a == 0.0 && b == 0.0 && double.IsNegative(a) && !double.IsNegative(b)) return true; return a < b; }
 
     // FoldMin/FoldMax scalar rule: returns whichever operand id is smaller/larger (no new constant for scalars).
     uint MinScalar(uint elem, uint aId, uint bId, bool max)
     {
-        var d = Def(elem)!;
+        SpvInstr d = Def(elem)!;
         if (d.Opcode == OpTypeInt)
         {
             int w = TypeWidth(elem); bool sg = IntSigned(elem);
@@ -989,12 +989,12 @@ internal sealed class Folder
     }
     uint FoldExtBinaryPer(SpvInstr inst, uint aId, uint bId, Func<uint, uint, uint, uint> scalar)
     {
-        var td = Def(inst.Operands[0])!;
+        SpvInstr td = Def(inst.Operands[0])!;
         if (td.Opcode == OpTypeVector)
         {
             int n = (int)td.Operands[2]; uint elem = td.Operands[1];
-            var ac = Comps(aId, n); var bc = Comps(bId, n); if (ac is null || bc is null) return 0;
-            var ids = new uint[n]; for (int i = 0; i < n; i++) { ids[i] = scalar(elem, ac[i], bc[i]); if (ids[i] == 0) return 0; }
+            uint[]? ac = Comps(aId, n); uint[]? bc = Comps(bId, n); if (ac is null || bc is null) return 0;
+            uint[] ids = new uint[n]; for (int i = 0; i < n; i++) { ids[i] = scalar(elem, ac[i], bc[i]); if (ids[i] == 0) return 0; }
             return CompositeConst(inst.Operands[0], ids);
         }
         return scalar(inst.Operands[0], aId, bId);
@@ -1010,15 +1010,15 @@ internal sealed class Folder
     // constant: only the final result becomes an instruction, so the intermediate stays component-wise here.
     uint[]? Parts(SpvInstr inst, uint id)
     {
-        var td = Def(inst.Operands[0])!;
+        SpvInstr td = Def(inst.Operands[0])!;
         return td.Opcode == OpTypeVector ? Comps(id, (int)td.Operands[2]) : [id];
     }
     uint[]? MinMaxParts(SpvInstr inst, uint[]? a, uint[]? b, bool max)
     {
         if (a is null || b is null) return null;
-        var td = Def(inst.Operands[0])!;
+        SpvInstr td = Def(inst.Operands[0])!;
         uint elem = td.Opcode == OpTypeVector ? td.Operands[1] : inst.Operands[0];
-        var r = new uint[a.Length];
+        uint[] r = new uint[a.Length];
         for (int i = 0; i < a.Length; i++) { r[i] = MinScalar(elem, a[i], b[i], max); if (r[i] == 0) return null; }
         return r;
     }
@@ -1035,32 +1035,32 @@ internal sealed class Folder
         if (!FpAllowed(inst)) return 0;
         uint x = ExtArg(ops, 0), mn = ExtArg(ops, 1), mx = ExtArg(ops, 2);
         if (!IsConst(x) || !IsConst(mn) || !IsConst(mx)) return 0;
-        var temp = MinMaxParts(inst, Parts(inst, x), Parts(inst, mn), max: true);
-        var result = MinMaxParts(inst, temp, Parts(inst, mx), max: false);
+        uint[]? temp = MinMaxParts(inst, Parts(inst, x), Parts(inst, mn), max: true);
+        uint[]? result = MinMaxParts(inst, temp, Parts(inst, mx), max: false);
         return result is null ? 0 : FromParts(inst, result);
     }
     uint FoldClamp2(SpvInstr inst, List<uint> ops)   // x <= min_val -> min_val
     {
         uint x = ExtArg(ops, 0), mn = ExtArg(ops, 1);
         if (!IsConst(x) || !IsConst(mn)) return 0;
-        var temp = MinMaxParts(inst, Parts(inst, x), Parts(inst, mn), max: true);
+        uint[]? temp = MinMaxParts(inst, Parts(inst, x), Parts(inst, mn), max: true);
         return temp is not null && SameConstant(inst, temp, mn) ? mn : 0;
     }
     uint FoldClamp3(SpvInstr inst, List<uint> ops)   // x >= max_val -> max_val
     {
         uint x = ExtArg(ops, 0), mx = ExtArg(ops, 2);
         if (!IsConst(x) || !IsConst(mx)) return 0;
-        var temp = MinMaxParts(inst, Parts(inst, x), Parts(inst, mx), max: false);
+        uint[]? temp = MinMaxParts(inst, Parts(inst, x), Parts(inst, mx), max: false);
         return temp is not null && SameConstant(inst, temp, mx) ? mx : 0;
     }
     uint FoldFpUnaryPer(SpvInstr inst, uint aId, Func<uint, uint, uint> scalar)
     {
-        var td = Def(inst.Operands[0])!;
+        SpvInstr td = Def(inst.Operands[0])!;
         if (td.Opcode == OpTypeVector)
         {
             int n = (int)td.Operands[2]; uint elem = td.Operands[1];
-            var ac = Comps(aId, n); if (ac is null) return 0;
-            var ids = new uint[n]; for (int i = 0; i < n; i++) { ids[i] = scalar(elem, ac[i]); if (ids[i] == 0) return 0; }
+            uint[]? ac = Comps(aId, n); if (ac is null) return 0;
+            uint[] ids = new uint[n]; for (int i = 0; i < n; i++) { ids[i] = scalar(elem, ac[i]); if (ids[i] == 0) return 0; }
             return CompositeConst(inst.Operands[0], ids);
         }
         return scalar(inst.Operands[0], aId);
@@ -1074,7 +1074,7 @@ internal sealed class Folder
         {
             int w = TypeWidth(elem);
             if (w == 32) { if (!ScalarWord(id, out uint x)) return 0u; return ScalarConst(elem, W32((float)fp(F32(x)))); }
-            if (w == 64) { var d = Words64(id); if (d is null) return 0u; ulong bits = BitConverter.DoubleToUInt64Bits(fp(F64(d[0], d[1]))); return Scalar64(elem, (uint)bits, (uint)(bits >> 32)); }
+            if (w == 64) { uint[]? d = Words64(id); if (d is null) return 0u; ulong bits = BitConverter.DoubleToUInt64Bits(fp(F64(d[0], d[1]))); return Scalar64(elem, (uint)bits, (uint)(bits >> 32)); }
             return 0u;
         });
     }
@@ -1088,7 +1088,7 @@ internal sealed class Folder
         uint x = ExtArg(ops, 0), y = ExtArg(ops, 1), a = ExtArg(ops, 2);
         if (!IsConst(x) || !IsConst(y) || !IsConst(a)) return 0;
         uint type = TypeOf(x);
-        var td = Def(type)!;
+        SpvInstr td = Def(type)!;
         uint elem = td.Opcode == OpTypeVector ? td.Operands[1] : type;
         int w = TypeWidth(elem);
         if (w != 32 && w != 64) return 0;
@@ -1107,19 +1107,19 @@ internal sealed class Folder
         }
         int n = (int)td.Operands[2];
         uint one = w == 32 ? ScalarConst(elem, W32(1.0f)) : Scalar64(elem, 0, 0x3FF00000u);
-        var oneV = Enumerable.Repeat(one, n).ToArray();
-        var xc = Comps(x, n); var yc = Comps(y, n); var ac = Comps(a, n);
+        uint[] oneV = Enumerable.Repeat(one, n).ToArray();
+        uint[]? xc = Comps(x, n); uint[]? yc = Comps(y, n); uint[]? ac = Comps(a, n);
         if (xc is null || yc is null || ac is null) return 0;
         uint[]? Step(uint[] p, uint[] q, Func<uint, uint, float> f32, Func<double, double, double> f64)
         {
-            var r = new uint[n];
+            uint[] r = new uint[n];
             for (int i = 0; i < n; i++) { r[i] = FpBinaryTyped(elem, p[i], q[i], f32, f64); if (r[i] == 0) return null; }
             return r;
         }
-        var t1v = Step(oneV, ac, (p, q) => F32(p) - F32(q), (p, q) => p - q); if (t1v is null) return 0;
-        var t2v = Step(xc, t1v, (p, q) => F32(p) * F32(q), (p, q) => p * q); if (t2v is null) return 0;
-        var t3v = Step(yc, ac, (p, q) => F32(p) * F32(q), (p, q) => p * q); if (t3v is null) return 0;
-        var rv = Step(t2v, t3v, (p, q) => F32(p) + F32(q), (p, q) => p + q); if (rv is null) return 0;
+        uint[]? t1v = Step(oneV, ac, (p, q) => F32(p) - F32(q), (p, q) => p - q); if (t1v is null) return 0;
+        uint[]? t2v = Step(xc, t1v, (p, q) => F32(p) * F32(q), (p, q) => p * q); if (t2v is null) return 0;
+        uint[]? t3v = Step(yc, ac, (p, q) => F32(p) * F32(q), (p, q) => p * q); if (t3v is null) return 0;
+        uint[]? rv = Step(t2v, t3v, (p, q) => F32(p) + F32(q), (p, q) => p + q); if (rv is null) return 0;
         return CompositeConst(inst.Operands[0], rv);
     }
 
@@ -1133,7 +1133,7 @@ internal sealed class Folder
         {
             int w = TypeWidth(elem);
             if (w == 32) { if (!ScalarWord(x, out uint xa) || !ScalarWord(y, out uint ya)) return 0u; return ScalarConst(elem, W32((float)fp(F32(xa), F32(ya)))); }
-            if (w == 64) { var da = Words64(x); var db = Words64(y); if (da is null || db is null) return 0u; ulong bits = BitConverter.DoubleToUInt64Bits(fp(F64(da[0], da[1]), F64(db[0], db[1]))); return Scalar64(elem, (uint)bits, (uint)(bits >> 32)); }
+            if (w == 64) { uint[]? da = Words64(x); uint[]? db = Words64(y); if (da is null || db is null) return 0u; ulong bits = BitConverter.DoubleToUInt64Bits(fp(F64(da[0], da[1]), F64(db[0], db[1]))); return Scalar64(elem, (uint)bits, (uint)(bits >> 32)); }
             return 0u;
         });
     }
@@ -1141,7 +1141,7 @@ internal sealed class Folder
     // A scalar/vector constant whose every component is `dv` (float) or `iv` (int).
     uint UniformConst(uint type, double dv, ulong iv)
     {
-        var td = Def(type)!;
+        SpvInstr td = Def(type)!;
         if (td.Opcode == OpTypeVector) { uint elem = td.Operands[1]; int n = (int)td.Operands[2]; uint s = UniformConst(elem, dv, iv); if (s == 0) return 0; return CompositeConst(type, Enumerable.Repeat(s, n).ToArray()); }
         int w = TypeWidth(type);
         if (IsFloatType(type)) { if (w == 32) return ScalarConst(type, W32((float)dv)); if (w == 64) { ulong b = BitConverter.DoubleToUInt64Bits(dv); return Scalar64(type, (uint)b, (uint)(b >> 32)); } return 0; }
@@ -1164,9 +1164,9 @@ internal sealed class Folder
         uint type = inst.Operands[0];
         if (ops[0] == ops[1]) return UniformConst(type, 1.0, 1);
         if (inst.Opcode == OpUDiv) return 0;
-        var lhs = Def(ops[0]);
+        SpvInstr? lhs = Def(ops[0]);
         if (lhs is { Opcode: 126 or 127 } && InOp(lhs, 0) == ops[1] && (!uf || FpAllowed(lhs))) return UniformConst(type, -1.0, ulong.MaxValue);
-        var rhs = Def(ops[1]);
+        SpvInstr? rhs = Def(ops[1]);
         if (rhs is { Opcode: 126 or 127 } && InOp(rhs, 0) == ops[0] && (!uf || FpAllowed(rhs))) return UniformConst(type, -1.0, ulong.MaxValue);
         return 0;
     }
@@ -1189,7 +1189,7 @@ internal sealed class Folder
     uint InOp(SpvInstr inst, int i) => inst.Operands[InStart(inst) + i];
     int NumIn(SpvInstr inst) => inst.Operands.Length - InStart(inst);
     void SetIn(SpvInstr inst, params uint[] words) { int s = InStart(inst); inst.Operands = [.. inst.Operands[..s], .. words]; }
-    void SetOp(SpvInstr inst, int op, params uint[] words) { int s = InStart(inst); var head = inst.Operands[..s]; inst.Opcode = op; inst.Operands = [.. head, .. words]; }
+    void SetOp(SpvInstr inst, int op, params uint[] words) { int s = InStart(inst); uint[] head = inst.Operands[..s]; inst.Opcode = op; inst.Operands = [.. head, .. words]; }
 
     // The def of `id` if it is a constant (mirrors spirv-opt's constants[i]); 0 if not.
     uint ConstOrZero(uint id) => IsConst(id) ? id : 0;
@@ -1200,14 +1200,14 @@ internal sealed class Folder
     enum FKind { Unknown, Zero, One }
     FKind FloatConstKind(uint id)
     {
-        var d = Def(id);
+        SpvInstr? d = Def(id);
         if (d is null) return FKind.Unknown;
         if (d.Opcode == OpConstantNull) return FKind.Zero;
         uint type = d.Operands[0];
         if (Def(type) is { Opcode: OpTypeVector })
         {
             if (d.Opcode != OpConstantComposite || d.Operands.Length <= 2) return FKind.Unknown;
-            var comps = d.Operands[2..];
+            uint[] comps = d.Operands[2..];
             FKind k = FloatConstKind(comps[0]);
             for (int i = 1; i < comps.Length; i++) if (FloatConstKind(comps[i]) != k) return FKind.Unknown;
             return k;
@@ -1216,20 +1216,20 @@ internal sealed class Folder
         int width = TypeWidth(type);
         if (width == 16) { if (!ScalarWord(id, out uint x)) return FKind.Unknown; float f = F16(x); return f == 0f ? FKind.Zero : f == 1f ? FKind.One : FKind.Unknown; }
         if (width == 32) { if (!ScalarWord(id, out uint x)) return FKind.Unknown; float f = F32(x); return f == 0f ? FKind.Zero : f == 1f ? FKind.One : FKind.Unknown; }
-        if (width == 64) { var w = Words64(id); if (w is null) return FKind.Unknown; double v = F64(w[0], w[1]); return v == 0.0 ? FKind.Zero : v == 1.0 ? FKind.One : FKind.Unknown; }
+        if (width == 64) { uint[]? w = Words64(id); if (w is null) return FKind.Unknown; double v = F64(w[0], w[1]); return v == 0.0 ? FKind.Zero : v == 1.0 ? FKind.One : FKind.Unknown; }
         return FKind.Unknown;
     }
 
     // GetBoolConstantKind: the uniform boolean value of a bool/null/composite constant, or null.
     bool? BoolConstKind(uint id)
     {
-        var d = Def(id);
+        SpvInstr? d = Def(id);
         if (d is null) return null;
         if (d.Opcode == OpConstantComposite)
         {
             if (d.Operands.Length <= 2) return null;
-            var comps = d.Operands[2..];
-            var first = BoolConstKind(comps[0]);
+            uint[] comps = d.Operands[2..];
+            bool? first = BoolConstKind(comps[0]);
             if (first is null) return null;
             for (int i = 1; i < comps.Length; i++) if (BoolConstKind(comps[i]) != first) return null;
             return first;
@@ -1243,7 +1243,7 @@ internal sealed class Folder
     // Constant::IsZero (bit pattern all-zero for scalar, all-zero components for composite, null -> zero).
     bool IsZeroConst(uint id)
     {
-        var d = Def(id);
+        SpvInstr? d = Def(id);
         if (d is null) return false;
         if (d.Opcode == OpConstantNull || d.Opcode == 42) return true;
         if (d.Opcode == 41) return false;
@@ -1255,7 +1255,7 @@ internal sealed class Folder
     // IsAllInt1: every element sign-extends to 1.
     bool IsAllInt1(uint id)
     {
-        var d = Def(id);
+        SpvInstr? d = Def(id);
         if (d is null) return false;
         if (d.Opcode == OpConstantComposite) { for (int i = 2; i < d.Operands.Length; i++) if (!IsAllInt1(d.Operands[i])) return false; return d.Operands.Length > 2; }
         if (d.Opcode == OpConstant && IsIntType(d.Operands[0]))
@@ -1269,14 +1269,14 @@ internal sealed class Folder
     // ElementWidth: unwrap a vector to its scalar element's bit width.
     int ElementWidth(uint type)
     {
-        var d = Def(type);
+        SpvInstr? d = Def(type);
         if (d is { Opcode: OpTypeVector }) return ElementWidth(d.Operands[1]);
         if (d is { Opcode: OpTypeFloat or OpTypeInt } && d.Operands.Length >= 2) return (int)d.Operands[1];
         return 0;
     }
     bool HasFloatingPoint(uint type)
     {
-        var d = Def(type);
+        SpvInstr? d = Def(type);
         if (d is { Opcode: OpTypeFloat }) return true;
         if (d is { Opcode: OpTypeVector }) return HasFloatingPoint(d.Operands[1]);
         return false;
@@ -1292,14 +1292,14 @@ internal sealed class Folder
     bool RedundantFAdd(SpvInstr inst)
     {
         if (!FpAllowed(inst)) return false;
-        var k0 = FloatConstKind(InOp(inst, 0)); var k1 = FloatConstKind(InOp(inst, 1));
+        FKind k0 = FloatConstKind(InOp(inst, 0)); FKind k1 = FloatConstKind(InOp(inst, 1));
         if (k0 == FKind.Zero || k1 == FKind.Zero) { SetOp(inst, OpCopyObject, InOp(inst, k0 == FKind.Zero ? 1 : 0)); return true; }
         return false;
     }
     bool RedundantFSub(SpvInstr inst)
     {
         if (!FpAllowed(inst)) return false;
-        var k0 = FloatConstKind(InOp(inst, 0)); var k1 = FloatConstKind(InOp(inst, 1));
+        FKind k0 = FloatConstKind(InOp(inst, 0)); FKind k1 = FloatConstKind(InOp(inst, 1));
         if (k0 == FKind.Zero) { SetOp(inst, OpFNegate, InOp(inst, 1)); return true; }
         if (k1 == FKind.Zero) { SetOp(inst, OpCopyObject, InOp(inst, 0)); return true; }
         return false;
@@ -1307,7 +1307,7 @@ internal sealed class Folder
     bool RedundantFMul(SpvInstr inst)
     {
         if (!FpAllowed(inst)) return false;
-        var k0 = FloatConstKind(InOp(inst, 0)); var k1 = FloatConstKind(InOp(inst, 1));
+        FKind k0 = FloatConstKind(InOp(inst, 0)); FKind k1 = FloatConstKind(InOp(inst, 1));
         if (k0 == FKind.Zero || k1 == FKind.Zero) { SetOp(inst, OpCopyObject, InOp(inst, k0 == FKind.Zero ? 0 : 1)); return true; }
         if (k0 == FKind.One || k1 == FKind.One) { SetOp(inst, OpCopyObject, InOp(inst, k0 == FKind.One ? 1 : 0)); return true; }
         return false;
@@ -1315,7 +1315,7 @@ internal sealed class Folder
     bool RedundantFDiv(SpvInstr inst)
     {
         if (!FpAllowed(inst)) return false;
-        var k0 = FloatConstKind(InOp(inst, 0)); var k1 = FloatConstKind(InOp(inst, 1));
+        FKind k0 = FloatConstKind(InOp(inst, 0)); FKind k1 = FloatConstKind(InOp(inst, 1));
         if (k0 == FKind.Zero || k1 == FKind.One) { SetOp(inst, OpCopyObject, InOp(inst, 0)); return true; }
         return false;
     }
@@ -1370,7 +1370,7 @@ internal sealed class Folder
         if (trueId == falseId) { SetOp(inst, OpCopyObject, trueId); return true; }
         uint condId = InOp(inst, 0);
         if (!IsConst(condId)) return false;
-        var ct = Def(TypeOf(condId));
+        SpvInstr? ct = Def(TypeOf(condId));
         if (ct is { Opcode: OpTypeBool })
         {
             bool selFalse = Def(condId) is { Opcode: OpConstantNull or 42 };
@@ -1378,10 +1378,10 @@ internal sealed class Folder
             return true;
         }
         if (ct is not { Opcode: OpTypeVector }) return false;
-        var cd = Def(condId)!;
+        SpvInstr cd = Def(condId)!;
         if (cd.Opcode == OpConstantNull) { SetOp(inst, OpCopyObject, falseId); return true; }
         if (cd.Opcode != OpConstantComposite) return false;
-        var comps = cd.Operands[2..]; uint size = (uint)comps.Length;
+        uint[] comps = cd.Operands[2..]; uint size = (uint)comps.Length;
         var ops = new List<uint> { trueId, falseId };
         for (uint i = 0; i < size; i++)
         {
@@ -1397,7 +1397,7 @@ internal sealed class Folder
         if (!IsConst(c1) || !IsConst(c2)) return false;
         uint condId = InOp(inst, 0);
         if (inst.Operands[0] != TypeOf(condId)) return false;
-        var ut = BoolConstKind(c1); var uf = BoolConstKind(c2);
+        bool? ut = BoolConstKind(c1); bool? uf = BoolConstKind(c2);
         if (ut is null || uf is null) return false;
         if (ut == true && uf == false) { SetOp(inst, OpCopyObject, condId); return true; }
         if (ut == false && uf == true) { SetOp(inst, OpLogicalNot, condId); return true; }
@@ -1440,7 +1440,7 @@ internal sealed class Folder
         uint constId = ConstInputId(inst);
         if (constId == 0) return false;
         if (inst.Operands[0] != TypeOf(InOp(inst, 0))) return false;
-        var uk = BoolConstKind(constId);
+        bool? uk = BoolConstKind(constId);
         if (uk is null) return false;
         bool directCopy = inst.Opcode == OpLogicalEqual ? uk.Value : !uk.Value;
         SetOp(inst, directCopy ? OpCopyObject : OpLogicalNot, NonConstInputId(inst));
@@ -1448,7 +1448,7 @@ internal sealed class Folder
     }
     bool FoldLogicalNotComparison(SpvInstr inst)
     {
-        var child = Def(InOp(inst, 0));
+        SpvInstr? child = Def(InOp(inst, 0));
         if (child is null || NumUses(child.ResultId) > 1) return false;
         int no = child.Opcode switch
         {
@@ -1493,7 +1493,7 @@ internal sealed class Folder
     {
         for (int i = start; i < end; i++)
         {
-            var t = Def(typeId);
+            SpvInstr? t = Def(typeId);
             if (t is null) return 0;
             switch (t.Opcode)
             {
@@ -1536,10 +1536,10 @@ internal sealed class Folder
     bool CompositeConstructFeedingExtract(SpvInstr inst)
     {
         if (NumIn(inst) <= 1) return false;
-        var cinst = Def(InOp(inst, 0));
+        SpvInstr? cinst = Def(InOp(inst, 0));
         if (cinst is not { Opcode: OpCompositeConstruct }) return false;
         uint indexIntoResult = InOp(inst, 1);
-        var operands = ExtractOperandsForElement(cinst, indexIntoResult);
+        List<uint> operands = ExtractOperandsForElement(cinst, indexIntoResult);
         if (operands.Count == 0) return false;
         for (int i = 2; i < NumIn(inst); i++) operands.Add(InOp(inst, i));
         if (operands.Count == 1) SetOp(inst, OpCopyObject, operands.ToArray());
@@ -1553,7 +1553,7 @@ internal sealed class Folder
         SpvInstr? firstElem = null;
         for (int i = 0; i < NumIn(inst); i++)
         {
-            var elem = Def(InOp(inst, i));
+            SpvInstr? elem = Def(InOp(inst, i));
             if (elem is null) return false;
             firstElem ??= elem;
             if (elem.Opcode != OpCompositeExtract) return false;
@@ -1562,7 +1562,7 @@ internal sealed class Folder
             if (i == 0) originalId = InOp(elem, 0);
             else if (originalId != InOp(elem, 0)) return false;
         }
-        var originalInst = Def(originalId);
+        SpvInstr? originalInst = Def(originalId);
         if (originalInst is null) return false;
         uint originalTypeId = GetElementType(originalInst.Operands[0], firstElem!, 3, firstElem!.Operands.Length - 1);
         if (inst.Operands[0] != originalTypeId) return false;
@@ -1572,7 +1572,7 @@ internal sealed class Folder
     }
     bool InsertFeedingExtract(SpvInstr inst)
     {
-        var cinst = Def(InOp(inst, 0));
+        SpvInstr? cinst = Def(InOp(inst, 0));
         if (cinst is not { Opcode: OpCompositeInsert }) return false;
         int i;
         for (i = 1; i < NumIn(inst); i++)
@@ -1596,9 +1596,9 @@ internal sealed class Folder
     }
     bool VectorShuffleFeedingExtract(SpvInstr inst)
     {
-        var cinst = Def(InOp(inst, 0));
+        SpvInstr? cinst = Def(InOp(inst, 0));
         if (cinst is not { Opcode: OpVectorShuffle }) return false;
-        var firstInput = Def(InOp(cinst, 0));
+        SpvInstr? firstInput = Def(InOp(cinst, 0));
         if (firstInput is null || Def(firstInput.Operands[0]) is not { Opcode: OpTypeVector } fit) return false;
         uint firstSize = fit.Operands[2];
         uint newIndex = InOp(cinst, 2 + (int)InOp(inst, 1));
@@ -1621,14 +1621,14 @@ internal sealed class Folder
             if (Def(vd.Operands[1]) is not { Opcode: OpTypeFloat } ed) return false;
             int ew = (int)ed.Operands[1];
             if (ew != 32 && ew != 64) return false;
-            var comps = Comps(cid, (int)vd.Operands[2]);
+            uint[]? comps = Comps(cid, (int)vd.Operands[2]);
             if (comps is null) return false;
             uint componentWithOne = 0xffffffff; bool allOthersZero = true;
             for (uint j = 0; j < comps.Length; j++)
             {
                 double value;
                 if (ew == 32) { if (!ScalarWord(comps[j], out uint w)) return false; value = F32(w); }
-                else { var w = Words64(comps[j]); if (w is null) return false; value = F64(w[0], w[1]); }
+                else { uint[]? w = Words64(comps[j]); if (w is null) return false; value = F64(w[0], w[1]); }
                 if (value == 0.0) continue;
                 if (value == 1.0) { if (componentWithOne == 0xffffffff) componentWithOne = j; else { componentWithOne = 0xffffffff; break; } }
                 else { allOthersZero = false; break; }
@@ -1648,13 +1648,13 @@ internal sealed class Folder
     // NegateConstant: -c as a new (deduped) constant id.
     uint NegateConst(uint id)
     {
-        uint type = TypeOf(id); var td = Def(type)!;
+        uint type = TypeOf(id); SpvInstr td = Def(type)!;
         if (td.Opcode == OpTypeVector)
         {
-            var d = Def(id)!;
+            SpvInstr d = Def(id)!;
             if (d.Opcode == OpConstantNull) return id;
             uint elem = td.Operands[1];
-            var ids = d.Operands[2..].Select(c => NegateScalarConst(elem, c)).ToArray();
+            uint[] ids = d.Operands[2..].Select(c => NegateScalarConst(elem, c)).ToArray();
             return CompositeConst(type, ids);
         }
         return NegateScalarConst(type, id);
@@ -1665,7 +1665,7 @@ internal sealed class Folder
         if (IsFloatType(type))
         {
             if (w == 32) { ScalarWord(id, out uint x); return ScalarConst(type, W32(F32(x) * -1.0f)); }
-            var d = Words64(id)!; ulong b = BitConverter.DoubleToUInt64Bits(F64(d[0], d[1]) * -1.0); return Scalar64(type, (uint)b, (uint)(b >> 32));
+            uint[] d = Words64(id)!; ulong b = BitConverter.DoubleToUInt64Bits(F64(d[0], d[1]) * -1.0); return Scalar64(type, (uint)b, (uint)(b >> 32));
         }
         if (w <= 32) { ScalarWord(id, out uint x); return ScalarConst(type, unchecked(0u - x)); }
         ulong v = Int64Of(id); ulong nv = unchecked(0UL - v); return Scalar64(type, (uint)nv, (uint)(nv >> 32));
@@ -1696,7 +1696,7 @@ internal sealed class Folder
         bool c0 = IsConst(a0);
         uint const1 = c0 ? a0 : IsConst(a1) ? a1 : 0;
         if (const1 == 0) return false;
-        var other = Def(c0 ? a1 : a0);
+        SpvInstr? other = Def(c0 ? a1 : a0);
         if (other is null || other.Opcode != inst.Opcode) return false;
         uint o0 = InOp(other, 0), o1 = InOp(other, 1);
         bool oc0 = IsConst(o0);
@@ -1717,7 +1717,7 @@ internal sealed class Folder
         if (IsConst(a0) || IsConst(a1)) return false;
         uint type = inst.Operands[0];
         int width = ElementWidth(type); if (width != 32 && width != 64) return false;
-        var lhs = Def(a0); var rhs = Def(a1);
+        SpvInstr? lhs = Def(a0); SpvInstr? rhs = Def(a1);
         if (lhs is null || rhs is null || lhs.Opcode != inst.Opcode || rhs.Opcode != inst.Opcode) return false;
         bool l0 = IsConst(InOp(lhs, 0)); uint lc = l0 ? InOp(lhs, 0) : IsConst(InOp(lhs, 1)) ? InOp(lhs, 1) : 0;
         if (lc == 0) return false;
@@ -1739,7 +1739,7 @@ internal sealed class Folder
         uint type = inst.Operands[0];
         int width = ElementWidth(type); if (width != 32 && width != 64) return false;
         if (!FpAllowed(inst)) return false;
-        var lhs = Def(a0); var rhs = Def(a1);
+        SpvInstr? lhs = Def(a0); SpvInstr? rhs = Def(a1);
         if (lhs is null || rhs is null) return false;
         bool lhsMul = lhs.Opcode == OpFMul, lhsDiv = lhs.Opcode == OpFDiv, rhsMul = rhs.Opcode == OpFMul, rhsDiv = rhs.Opcode == OpFDiv;
         if (!(lhsMul || lhsDiv) || !(rhsMul || rhsDiv)) return false;
@@ -1774,7 +1774,7 @@ internal sealed class Folder
     bool RedundantFMix(SpvInstr inst)
     {
         if (!FpAllowed(inst) || inst.Operands.Length < 7) return false;
-        var k = IsConst(inst.Operands[6]) ? FloatConstKind(inst.Operands[6]) : FKind.Unknown;
+        FKind k = IsConst(inst.Operands[6]) ? FloatConstKind(inst.Operands[6]) : FKind.Unknown;
         if (k == FKind.Unknown) return false;
         return ToCopy(inst, k == FKind.Zero ? inst.Operands[4] : inst.Operands[5]);
     }
@@ -1795,7 +1795,7 @@ internal sealed class Folder
         uint type = inst.Operands[0];
         if (HasFloatingPoint(type) && !FpAllowed(inst)) return false;
         uint a0 = InOp(inst, 0), a1 = InOp(inst, 1);
-        var m0 = Def(a0); var m1 = Def(a1);
+        SpvInstr? m0 = Def(a0); SpvInstr? m1 = Def(a1);
         if (m0 is not { Opcode: OpFMul or OpIMul } || m1 is not { Opcode: OpFMul or OpIMul }) return false;
         // NumUses counts the folded instruction once per operand id; the same mul on both sides is 2 uses.
         if (a0 == a1 || NumUses(a0) > 1 || NumUses(a1) > 1) return false;
@@ -1821,7 +1821,7 @@ internal sealed class Folder
         bool usesFloat = HasFloatingPoint(type);
         if (usesFloat && !FpAllowed(inst)) return false;
 
-        var lhs = Def(InOp(inst, 0)); var rhs = Def(InOp(inst, 1));
+        SpvInstr? lhs = Def(InOp(inst, 0)); SpvInstr? rhs = Def(InOp(inst, 1));
         if (lhs is null || rhs is null) return false;
         int addOp = usesFloat ? OpFAdd : OpIAdd;
         int subOp = usesFloat ? OpFSub : OpISub;
@@ -1863,12 +1863,12 @@ internal sealed class Folder
     // PerformOperation: input1 op input2 as a new constant id (scalar or per-component). 0 if invalid.
     uint PerformOp(int opcode, uint aId, uint bId)
     {
-        uint type = TypeOf(aId); var td = Def(type)!;
+        uint type = TypeOf(aId); SpvInstr td = Def(type)!;
         if (td.Opcode == OpTypeVector)
         {
             uint elem = td.Operands[1]; int n = (int)td.Operands[2];
-            var ac = Comps(aId, n); var bc = Comps(bId, n); if (ac is null || bc is null) return 0;
-            var ids = new uint[n];
+            uint[]? ac = Comps(aId, n); uint[]? bc = Comps(bId, n); if (ac is null || bc is null) return 0;
+            uint[] ids = new uint[n];
             for (int i = 0; i < n; i++) { ids[i] = PerformScalar(opcode, elem, ac[i], bc[i]); if (ids[i] == 0) return 0; }
             return CompositeConst(type, ids);
         }
@@ -1886,7 +1886,7 @@ internal sealed class Folder
                 float r = opcode switch { OpFMul => a * b, OpFDiv => a / b, OpFAdd => a + b, OpFSub => a - b, _ => float.NaN };
                 return IsValidF(r) ? ScalarConst(type, W32(r)) : 0;
             }
-            var da = Words64(aId)!; var db = Words64(bId)!; double a2 = F64(da[0], da[1]), b2 = F64(db[0], db[1]);
+            uint[] da = Words64(aId)!; uint[] db = Words64(bId)!; double a2 = F64(da[0], da[1]), b2 = F64(db[0], db[1]);
             double r2 = opcode switch { OpFMul => a2 * b2, OpFDiv => a2 / b2, OpFAdd => a2 + b2, OpFSub => a2 - b2, _ => double.NaN };
             if (!IsValidD(r2)) return 0; ulong bits = BitConverter.DoubleToUInt64Bits(r2); return Scalar64(type, (uint)bits, (uint)(bits >> 32));
         }
@@ -1911,7 +1911,7 @@ internal sealed class Folder
     {
         uint type = inst.Operands[0];
         if (HasFloatingPoint(type) && !FpAllowed(inst)) return false;
-        var op = Def(InOp(inst, 0)); if (op is null) return false;
+        SpvInstr? op = Def(InOp(inst, 0)); if (op is null) return false;
         if (HasFloatingPoint(type) && !FpAllowed(op)) return false;
         if (op.Opcode == inst.Opcode) { SetOp(inst, OpCopyObject, InOp(op, 0)); return true; }
         return false;
@@ -1920,7 +1920,7 @@ internal sealed class Folder
     {
         uint type = inst.Operands[0];
         if (HasFloatingPoint(type) && !FpAllowed(inst)) return false;
-        var op = Def(InOp(inst, 0)); if (op is null) return false;
+        SpvInstr? op = Def(InOp(inst, 0)); if (op is null) return false;
         if (HasFloatingPoint(type) && !FpAllowed(op)) return false;
         int w = ElementWidth(type); if (w != 32 && w != 64) return false;
         int oc = op.Opcode;
@@ -1937,7 +1937,7 @@ internal sealed class Folder
     {
         uint type = inst.Operands[0]; bool uf = HasFloatingPoint(type);
         if (uf && !FpAllowed(inst)) return false;
-        var op = Def(InOp(inst, 0)); if (op is null) return false;
+        SpvInstr? op = Def(InOp(inst, 0)); if (op is null) return false;
         if (uf && !FpAllowed(op)) return false;
         int w = ElementWidth(type); if (w != 32 && w != 64) return false;
         int oc = op.Opcode;
@@ -1959,7 +1959,7 @@ internal sealed class Folder
         if (HasFloatingPoint(type) && !FpAllowed(inst)) return false;
         int w = ElementWidth(type); if (w != 32 && w != 64) return false;
         uint c1 = ConstInputId(inst); if (c1 == 0) return false;
-        var other = Def(NonConstInputId(inst)); if (other is null) return false;
+        SpvInstr? other = Def(NonConstInputId(inst)); if (other is null) return false;
         if (HasFloatingPoint(type) && !FpAllowed(other)) return false;
         if (other.Opcode != inst.Opcode) return false;
         uint c2 = OpConstId(other); if (c2 == 0) return false;
@@ -1974,7 +1974,7 @@ internal sealed class Folder
         if (uf && !FpAllowed(inst)) return false;
         int w = ElementWidth(type); if (w != 32 && w != 64) return false;
         uint c = ConstInputId(inst); if (c == 0) return false;
-        var other = Def(NonConstInputId(inst)); if (other is null) return false;
+        SpvInstr? other = Def(NonConstInputId(inst)); if (other is null) return false;
         if (uf && !FpAllowed(other)) return false;
         if (other.Opcode is 126 or OpFNegate) { SetIn(inst, InOp(other, 0), NegateConst(c)); return true; }
         return false;
@@ -1983,7 +1983,7 @@ internal sealed class Folder
     {
         uint type = inst.Operands[0];
         if (HasFloatingPoint(type) && !FpAllowed(inst)) return false;
-        var lhs = Def(InOp(inst, 0)); var rhs = Def(InOp(inst, 1));
+        SpvInstr? lhs = Def(InOp(inst, 0)); SpvInstr? rhs = Def(InOp(inst, 1));
         if (IsFoldableNegation(lhs) && IsFoldableNegation(rhs)) { SetIn(inst, InOp(lhs!, 0), InOp(rhs!, 0)); return true; }
         return false;
     }
@@ -1991,7 +1991,7 @@ internal sealed class Folder
     {
         uint type = inst.Operands[0]; bool uf = HasFloatingPoint(type);
         if (uf && !FpAllowed(inst)) return false;
-        var lhs = Def(InOp(inst, 0)); var rhs = Def(InOp(inst, 1));
+        SpvInstr? lhs = Def(InOp(inst, 0)); SpvInstr? rhs = Def(InOp(inst, 1));
         if (IsFoldableNegation(lhs)) { SetOp(inst, uf ? OpFSub : OpISub, InOp(inst, 1), InOp(lhs!, 0)); return true; }
         if (IsFoldableNegation(rhs)) { SetOp(inst, uf ? OpFSub : OpISub, InOp(inst, 0), InOp(rhs!, 0)); return true; }
         return false;
@@ -2000,7 +2000,7 @@ internal sealed class Folder
     {
         uint type = inst.Operands[0]; bool uf = HasFloatingPoint(type);
         if (uf && !FpAllowed(inst)) return false;
-        var lhs = Def(InOp(inst, 0)); var rhs = Def(InOp(inst, 1));
+        SpvInstr? lhs = Def(InOp(inst, 0)); SpvInstr? rhs = Def(InOp(inst, 1));
         if (IsFoldableNegation(rhs)) { SetOp(inst, uf ? OpFAdd : OpIAdd, InOp(inst, 0), InOp(rhs!, 0)); return true; }
         int w = ElementWidth(type); if (w != 32 && w != 64) return false;
         uint c1 = InOp(inst, 1);
@@ -2008,7 +2008,7 @@ internal sealed class Folder
         return false;
     }
 
-    bool HasZeroConst(uint id) { var d = Def(id); if (d is null) return false; if (d.Opcode == OpConstantNull) return true; if (d.Opcode == OpConstantComposite) return d.Operands[2..].Any(HasZeroConst); return IsZeroConst(id); }
+    bool HasZeroConst(uint id) { SpvInstr? d = Def(id); if (d is null) return false; if (d.Opcode == OpConstantNull) return true; if (d.Opcode == OpConstantComposite) return d.Operands[2..].Any(HasZeroConst); return IsZeroConst(id); }
 
     bool MergeMulDiv(SpvInstr inst)
     {
@@ -2017,11 +2017,11 @@ internal sealed class Folder
         int w = ElementWidth(type); if (w != 32 && w != 64) return false;
         for (int i = 0; i < 2; i++)
         {
-            var op = Def(InOp(inst, i));
+            SpvInstr? op = Def(InOp(inst, i));
             if (op is { Opcode: OpFDiv } && InOp(op, 1) == InOp(inst, 1 - i)) { SetOp(inst, OpCopyObject, InOp(op, 0)); return true; }
         }
         uint c1 = ConstInputId(inst); if (c1 == 0) return false;
-        var other = Def(NonConstInputId(inst)); if (other is null) return false;
+        SpvInstr? other = Def(NonConstInputId(inst)); if (other is null) return false;
         if (!FpAllowed(other) || other.Opcode != OpFDiv) return false;
         uint c2 = OpConstId(other); if (c2 == 0 || HasZeroConst(c2)) return false;
         bool otherFirstIsVar = OpZeroIsVar(other);
@@ -2036,7 +2036,7 @@ internal sealed class Folder
         if (uf && !FpAllowed(inst)) return false;
         int w = ElementWidth(type); if (w != 32 && w != 64) return false;
         uint c1 = ConstInputId(inst); if (c1 == 0) return false;
-        var other = Def(NonConstInputId(inst)); if (other is null) return false;
+        SpvInstr? other = Def(NonConstInputId(inst)); if (other is null) return false;
         if (uf && !FpAllowed(other)) return false;
         if (other.Opcode != OpFAdd && other.Opcode != OpIAdd) return false;
         uint c2 = OpConstId(other); if (c2 == 0) return false;
@@ -2051,7 +2051,7 @@ internal sealed class Folder
         if (uf && !FpAllowed(inst)) return false;
         int w = ElementWidth(type); if (w != 32 && w != 64) return false;
         uint c1 = ConstInputId(inst); if (c1 == 0) return false;
-        var other = Def(NonConstInputId(inst)); if (other is null) return false;
+        SpvInstr? other = Def(NonConstInputId(inst)); if (other is null) return false;
         if (uf && !FpAllowed(other)) return false;
         if (other.Opcode != OpFSub && other.Opcode != OpISub) return false;
         uint c2 = OpConstId(other); if (c2 == 0) return false;
@@ -2069,7 +2069,7 @@ internal sealed class Folder
         if (uf && !FpAllowed(inst)) return false;
         int w = ElementWidth(type); if (w != 32 && w != 64) return false;
         uint c1 = ConstInputId(inst); if (c1 == 0) return false;
-        var other = Def(NonConstInputId(inst)); if (other is null) return false;
+        SpvInstr? other = Def(NonConstInputId(inst)); if (other is null) return false;
         if (uf && !FpAllowed(other)) return false;
         if (other.Opcode != OpFAdd && other.Opcode != OpIAdd) return false;
         uint c2 = OpConstId(other); if (c2 == 0) return false;
@@ -2089,7 +2089,7 @@ internal sealed class Folder
         if (uf && !FpAllowed(inst)) return false;
         int w = ElementWidth(type); if (w != 32 && w != 64) return false;
         uint c1 = ConstInputId(inst); if (c1 == 0) return false;
-        var other = Def(NonConstInputId(inst)); if (other is null) return false;
+        SpvInstr? other = Def(NonConstInputId(inst)); if (other is null) return false;
         if (uf && !FpAllowed(other)) return false;
         if (other.Opcode != OpFSub && other.Opcode != OpISub) return false;
         uint c2 = OpConstId(other); if (c2 == 0) return false;
@@ -2109,7 +2109,7 @@ internal sealed class Folder
     }
     bool MergeGenericAddendSub(uint addend, uint sub, SpvInstr inst)
     {
-        var subInst = Def(sub);
+        SpvInstr? subInst = Def(sub);
         if (subInst is null || (subInst.Opcode != OpFSub && subInst.Opcode != OpISub)) return false;
         if (subInst.Opcode == OpFSub && !FpAllowed(subInst)) return false;
         if (addend != InOp(subInst, 1)) return false;
@@ -2129,7 +2129,7 @@ internal sealed class Folder
         if (!FpAllowed(inst)) return false;
         int w = ElementWidth(inst.Operands[0]); if (w != 32 && w != 64) return false;
         uint c1 = ConstInputId(inst); if (c1 == 0 || HasZeroConst(c1)) return false;
-        var other = Def(NonConstInputId(inst)); if (other is null || !FpAllowed(other)) return false;
+        SpvInstr? other = Def(NonConstInputId(inst)); if (other is null || !FpAllowed(other)) return false;
         bool firstIsVar = !IsConst(InOp(inst, 0));
         if (other.Opcode != OpFDiv) return false;
         uint c2 = OpConstId(other); if (c2 == 0 || HasZeroConst(c2)) return false;
@@ -2147,12 +2147,12 @@ internal sealed class Folder
     {
         if (!FpAllowed(inst)) return false;
         int w = ElementWidth(inst.Operands[0]); if (w != 32 && w != 64) return false;
-        var op0 = Def(InOp(inst, 0));
+        SpvInstr? op0 = Def(InOp(inst, 0));
         if (op0 is { Opcode: OpFMul })
             for (int i = 0; i < 2; i++)
                 if (InOp(op0, i) == InOp(inst, 1)) { SetOp(inst, OpCopyObject, InOp(op0, 1 - i)); return true; }
         uint c1 = ConstInputId(inst); if (c1 == 0 || HasZeroConst(c1)) return false;
-        var other = Def(NonConstInputId(inst)); if (other is null || !FpAllowed(other)) return false;
+        SpvInstr? other = Def(NonConstInputId(inst)); if (other is null || !FpAllowed(other)) return false;
         bool firstIsVar = !IsConst(InOp(inst, 0));
         if (other.Opcode != OpFMul) return false;
         uint c2 = OpConstId(other); if (c2 == 0) return false;
@@ -2168,7 +2168,7 @@ internal sealed class Folder
     {
         if (!FpAllowed(inst)) return false;
         uint c1 = ConstInputId(inst); if (c1 == 0) return false;
-        var other = Def(NonConstInputId(inst)); if (other is null || !FpAllowed(other)) return false;
+        SpvInstr? other = Def(NonConstInputId(inst)); if (other is null || !FpAllowed(other)) return false;
         bool firstIsVar = !IsConst(InOp(inst, 0));
         if (other.Opcode != OpFNegate) return false;
         uint neg = NegateConst(c1);
@@ -2190,8 +2190,8 @@ internal sealed class Folder
         if (Def(type) is { Opcode: OpTypeVector } vt)
         {
             uint elem = vt.Operands[1]; int n = (int)vt.Operands[2];
-            var comps = Comps(divisor, n); if (comps is null) return false;
-            var ids = new uint[n];
+            uint[]? comps = Comps(divisor, n); if (comps is null) return false;
+            uint[] ids = new uint[n];
             for (int i = 0; i < n; i++) { ids[i] = ReciprocalScalar(elem, comps[i]); if (ids[i] == 0) return false; }
             recip = CompositeConst(type, ids);
         }
@@ -2210,7 +2210,7 @@ internal sealed class Folder
             if (float.IsNaN(r) || float.IsInfinity(r) || ((bits & 0x7F800000) == 0 && (bits & 0x007FFFFF) != 0)) return 0;
             return ScalarConst(type, bits);
         }
-        var words = Words64(constId); if (words is null) return 0;
+        uint[]? words = Words64(constId); if (words is null) return 0;
         double dv = F64(words[0], words[1]); if (dv == 0d) return 0;
         double dr = 1d / dv; ulong db = System.BitConverter.DoubleToUInt64Bits(dr);
         if (double.IsNaN(dr) || double.IsInfinity(dr) || ((db & 0x7FF0000000000000UL) == 0 && (db & 0x000FFFFFFFFFFFFFUL) != 0)) return 0;
@@ -2220,7 +2220,7 @@ internal sealed class Folder
     // BitCastScalarOrVector: OpBitcast of a numeric constant -> a constant of the target type with the same words.
     int TypeWordCount(uint type)
     {
-        var d = Def(type);
+        SpvInstr? d = Def(type);
         if (d is { Opcode: OpTypeVector }) return (int)d.Operands[2] * TypeWordCount(d.Operands[1]);
         if (d is { Opcode: OpTypeInt or OpTypeFloat }) return TypeWidth(type) == 64 ? 2 : 1;
         if (d is { Opcode: OpTypeBool }) return 1;
@@ -2228,11 +2228,11 @@ internal sealed class Folder
     }
     List<uint>? NumericWords(uint id)
     {
-        var d = Def(id);
+        SpvInstr? d = Def(id);
         if (d is null) return null;
         if (d.Opcode == OpConstantNull) { int t = TypeWordCount(TypeOf(id)); return t == 0 ? null : Enumerable.Repeat(0u, t).ToList(); }
         if (d.Opcode == OpConstant) return d.Operands[2..].ToList();
-        if (d.Opcode == OpConstantComposite) { var w = new List<uint>(); for (int i = 2; i < d.Operands.Length; i++) { var s = NumericWords(d.Operands[i]); if (s is null) return null; w.AddRange(s); } return w; }
+        if (d.Opcode == OpConstantComposite) { var w = new List<uint>(); for (int i = 2; i < d.Operands.Length; i++) { List<uint>? s = NumericWords(d.Operands[i]); if (s is null) return null; w.AddRange(s); } return w; }
         return null;
     }
     uint ScalarFromWords(uint type, List<uint> w)
@@ -2255,12 +2255,12 @@ internal sealed class Folder
     }
     uint WordsToConstant(List<uint> words, uint type)
     {
-        var d = Def(type)!;
+        SpvInstr d = Def(type)!;
         if (d.Opcode == OpTypeVector)
         {
             uint elem = d.Operands[1]; int n = (int)d.Operands[2]; int ew = TypeWordCount(elem);
             if (ew == 0 || words.Count != n * ew) return 0;
-            var ids = new uint[n];
+            uint[] ids = new uint[n];
             for (int i = 0; i < n; i++) { ids[i] = ScalarFromWords(elem, words.GetRange(i * ew, ew)); if (ids[i] == 0) return 0; }
             return CompositeConst(type, ids);
         }
@@ -2272,7 +2272,7 @@ internal sealed class Folder
         if (!IsConst(srcId)) return false;
         uint type = inst.Operands[0];
         if (HasFloatingPoint(type) && !FpAllowed(inst)) return false;
-        var words = NumericWords(srcId);
+        List<uint>? words = NumericWords(srcId);
         if (words is null || words.Count == 0) return false;
         uint newId = WordsToConstant(words, type);
         if (newId == 0) return false;
@@ -2285,7 +2285,7 @@ internal sealed class Folder
     {
         uint srcId = InOp(inst, 0);
         if (!IsConst(srcId)) return false;
-        var words = NumericWords(srcId);
+        List<uint>? words = NumericWords(srcId);
         if (words is null || words.Count == 0) return false;
         for (int i = 0; i < words.Count; i++)
         {
@@ -2317,14 +2317,14 @@ internal sealed class Folder
     {
         int numIn = inst.Operands.Length - 2;
         if (numIn < 3) return false;
-        bool SameIndexesExceptLast(SpvInstr a, SpvInstr b)
+        static bool SameIndexesExceptLast(SpvInstr a, SpvInstr b)
         {
             if (a.Operands.Length != b.Operands.Length) return false;
             for (int i = 4; i < a.Operands.Length - 1; i++) if (a.Operands[i] != b.Operands[i]) return false;
             return true;
         }
         var inserted = new SortedDictionary<uint, uint>();
-        for (var cur = inst; cur is { Opcode: OpCompositeInsert }; cur = Def(cur.Operands[3]))
+        for (SpvInstr? cur = inst; cur is { Opcode: OpCompositeInsert }; cur = Def(cur.Operands[3]))
         {
             if (cur.Operands.Length - 2 > numIn && !inserted.ContainsKey(cur.Operands[2 + numIn - 1])) return false;
             if (SameIndexesExceptLast(inst, cur)) inserted.TryAdd(cur.Operands[^1], cur.Operands[2]);
@@ -2333,12 +2333,12 @@ internal sealed class Folder
         uint container = inst.Operands[0];
         for (int i = 4; i < inst.Operands.Length - 1; i++)
         {
-            var t = Def(container);
+            SpvInstr? t = Def(container);
             if (t is { Opcode: OpTypeArray or OpTypeMatrix or 23 }) container = t.Operands[1];
             else if (t is { Opcode: OpTypeStruct }) container = t.Operands[1 + inst.Operands[i]];
             else return false;
         }
-        var ct = Def(container);
+        SpvInstr? ct = Def(container);
         uint size = ct switch
         {
             { Opcode: 23 or OpTypeMatrix } => ct.Operands[2],
@@ -2355,8 +2355,8 @@ internal sealed class Folder
 
     uint FindOrAddGlobal(Func<SpvInstr, bool> match, Func<uint, SpvInstr> make)
     {
-        foreach (var d in _def.Values) if (match(d)) return d.ResultId;   // types are unique, so the order is moot
-        uint id = _nextId++; var g = make(id); _newConsts.Add(g); _def[id] = g; return id;
+        foreach (SpvInstr d in _def.Values) if (match(d)) return d.ResultId;   // types are unique, so the order is moot
+        uint id = _nextId++; SpvInstr g = make(id); _newConsts.Add(g); _def[id] = g; return id;
     }
     uint UIntType32() => FindOrAddGlobal(d => d.Opcode == 21 && d.Operands.Length == 3 && d.Operands[1] == 32 && d.Operands[2] == 0, id => new SpvInstr(21, [id, 32, 0]));
     uint PointerType(uint pointee, uint storage) => FindOrAddGlobal(d => d.Opcode == 32 && d.Operands[1] == storage && d.Operands[2] == pointee, id => new SpvInstr(32, [id, storage, pointee]));
@@ -2366,7 +2366,7 @@ internal sealed class Folder
     {
         foreach (uint idx in indexes)
         {
-            var t = Def(type);
+            SpvInstr? t = Def(type);
             if (t is { Opcode: OpTypeArray or OpTypeMatrix or 23 }) type = t.Operands[1];
             else if (t is { Opcode: OpTypeStruct } && 1 + idx < t.Operands.Length) type = t.Operands[1 + idx];
             else return 0;
@@ -2378,7 +2378,7 @@ internal sealed class Folder
     // element types still differ) only the element.
     bool CopyLogicalFeedingExtract(SpvInstr inst)
     {
-        var copy = Def(inst.Operands[2]);
+        SpvInstr? copy = Def(inst.Operands[2]);
         if (copy is not { Opcode: 400 }) return false;
         uint original = copy.Operands[2];
         uint[] indexes = inst.Operands[3..];
@@ -2393,15 +2393,15 @@ internal sealed class Folder
     // result type, logically copying only the constituents whose types differ.
     bool CompositeConstructFeedingCopyLogical(SpvInstr inst)
     {
-        var src = Def(inst.Operands[2]);
+        SpvInstr? src = Def(inst.Operands[2]);
         if (src is not { Opcode: OpCompositeConstruct }) return false;
-        var dst = Def(inst.Operands[0]);
+        SpvInstr? dst = Def(inst.Operands[0]);
         uint[] parts = src.Operands[2..];
         uint[] expected;
         if (dst is { Opcode: OpTypeStruct }) { if (dst.Operands.Length - 1 != parts.Length) return false; expected = dst.Operands[1..]; }
         else if (dst is { Opcode: OpTypeArray }) expected = [.. Enumerable.Repeat(dst.Operands[1], parts.Length)];
         else return false;
-        var operands = new uint[parts.Length];
+        uint[] operands = new uint[parts.Length];
         for (int i = 0; i < parts.Length; i++)
             operands[i] = TypeOf(parts[i]) == expected[i] ? parts[i] : AddInstr(400, expected[i], parts[i]);
         SetOp(inst, OpCompositeConstruct, operands);
@@ -2411,11 +2411,11 @@ internal sealed class Folder
     // FMixFeedingExtract: an element of mix(x, y, a) whose `a` element folds to 0 or 1 is that element of x or y.
     bool FMixFeedingExtract(SpvInstr inst)
     {
-        var mix = Def(inst.Operands[2]);
+        SpvInstr? mix = Def(inst.Operands[2]);
         if (mix is not { Opcode: OpExtInst } || _glslExt == 0 || mix.Operands.Length < 7 || mix.Operands[2] != _glslExt || mix.Operands[3] != 46) return false;
         // Fold a scratch copy of the extract that reads `a` instead (its result id is the extract's own).
         uint rid = inst.ResultId;
-        var saved = _def.GetValueOrDefault(rid);
+        SpvInstr? saved = _def.GetValueOrDefault(rid);
         var probe = new SpvInstr(OpCompositeExtract, [inst.Operands[0], rid, mix.Operands[6], .. inst.Operands[3..]]);
         FoldInstruction(probe);
         if (saved is not null) _def[rid] = saved; else _def.Remove(rid);
@@ -2435,7 +2435,7 @@ internal sealed class Folder
     // loaded directly through an access chain (built before the original load, which DCE then drops).
     bool LoadFeedingExtract(SpvInstr inst)
     {
-        var load = Def(inst.Operands[2]);
+        SpvInstr? load = Def(inst.Operands[2]);
         if (load is not { Opcode: 61 }) return false;
         if (Def(load.Operands[0]) is not { Opcode: OpTypeStruct or OpTypeArray }) return false;
         uint mask = load.Operands.Length > 3 ? load.Operands[3] : 0;
@@ -2469,7 +2469,7 @@ internal sealed class Folder
         uint a = InOp(inst, 0), b = InOp(inst, 1);
         bool c0 = IsConst(a), c1 = IsConst(b);
         if (!c0 && !c1) return false;
-        var sel = Def(c0 ? b : a);
+        SpvInstr? sel = Def(c0 ? b : a);
         if (sel is not { Opcode: OpSelect }) return false;
         uint cond = InOp(sel, 0), tv = InOp(sel, 1), fv = InOp(sel, 2);
         if (!IsConst(tv) || !IsConst(fv)) return false;
@@ -2480,7 +2480,7 @@ internal sealed class Folder
         uint rhs = c0 ? AddBinaryOp(type, op, a, fv) : AddBinaryOp(type, op, fv, b);
         uint Settle(uint id)
         {
-            var d = Def(id)!;
+            SpvInstr d = Def(id)!;
             if (FoldInstruction(d))
                 while (d.Opcode == OpCopyObject) { id = d.Operands[2]; d = Def(id)!; }
             return id;
@@ -2496,8 +2496,8 @@ internal sealed class Folder
     bool VectorShuffleFeedingShuffle(SpvInstr inst)
     {
         const uint Undef = 0xFFFFFFFF;
-        var ops = inst.Operands;   // [type, result, v0, v1, comps...]
-        var feeding = Def(ops[2])!;
+        uint[] ops = inst.Operands;   // [type, result, v0, v1, comps...]
+        SpvInstr feeding = Def(ops[2])!;
         uint op0Length = Def(TypeOf(ops[2]))!.Operands[2];
         bool feederIsOp0 = true;
         if (feeding.Opcode != OpVectorShuffle) { feeding = Def(ops[3])!; feederIsOp0 = false; }
@@ -2610,13 +2610,13 @@ internal sealed class Folder
     {
         if (!IsConst(ops[0]) || !IsConst(ops[1])) return 0;
         uint type = inst.Operands[0];
-        var td = Def(type)!;
+        SpvInstr td = Def(type)!;
         if (td.Opcode == 23)
         {
             uint elem = td.Operands[1]; int n = (int)td.Operands[2];
-            var a = Comps(ops[0], n); var b = Comps(ops[1], n);
+            uint[]? a = Comps(ops[0], n); uint[]? b = Comps(ops[1], n);
             if (a is null || b is null) return 0;
-            var res = new uint[n];
+            uint[] res = new uint[n];
             for (int i = 0; i < n; i++) { uint r = IntScalar(elem, a[i], b[i], signed, op); if (r == 0) return 0; res[i] = r; }
             return CompositeConst(type, res);
         }
@@ -2624,12 +2624,12 @@ internal sealed class Folder
     }
     uint IntScalar(uint type, uint a, uint b, bool signed, Func<ulong, ulong, ulong> op)
     {
-        var td = Def(type);
+        SpvInstr? td = Def(type);
         if (td is not { Opcode: 21 }) return 0;
         int width = (int)td.Operands[1];
         ulong Value(uint id)
         {
-            var d = Def(id);
+            SpvInstr? d = Def(id);
             if (d is { Opcode: OpConstantNull }) return 0;
             ulong raw = d!.Operands.Length >= 4 ? d.Operands[2] | ((ulong)d.Operands[3] << 32) : d.Operands[2];
             if (width < 64) raw &= (1UL << width) - 1;

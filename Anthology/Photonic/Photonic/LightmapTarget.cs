@@ -31,7 +31,7 @@ public sealed class LightmapTarget
     /// <summary>Read-only view over the live HDR buffer in (R, G, B, R, G, B, ...) layout, length <c>Width*Height*3</c>.</summary>
     public System.ReadOnlySpan<float> Pixels => PixelsRGB;
 
-    private readonly System.Collections.Generic.List<BakeInstance> _instances = new();
+    private readonly System.Collections.Generic.List<BakeInstance> _instances = [];
 
     /// <summary>Instances whose UV1 maps into this target.</summary>
     public System.Collections.Generic.IReadOnlyList<BakeInstance> Instances => _instances;
@@ -86,7 +86,7 @@ public sealed class LightmapTarget
     /// <summary>Returns a fresh HDR snapshot of the current pixel data (R,G,B interleaved). Read after the job has succeeded.</summary>
     public float[] ReadHDR()
     {
-        var copy = new float[PixelsRGB.Length];
+        float[] copy = new float[PixelsRGB.Length];
         System.Array.Copy(PixelsRGB, copy, copy.Length);
         return copy;
     }
@@ -100,7 +100,7 @@ public sealed class LightmapTarget
     public float[] ReadHDRRGBA()
     {
         int n = Width * Height;
-        var rgba = new float[n * 4];
+        float[] rgba = new float[n * 4];
         for (int i = 0; i < n; i++)
         {
             rgba[i * 4] = PixelsRGB[i * 3];
@@ -122,7 +122,7 @@ public sealed class LightmapTarget
     {
         if (maxRange <= 0f) maxRange = 8f;
         int n = Width * Height;
-        var bytes = new byte[n * 4];
+        byte[] bytes = new byte[n * 4];
         float invMax = 1f / maxRange;
         for (int i = 0; i < n; i++)
         {
@@ -154,7 +154,7 @@ public sealed class LightmapTarget
     public byte[] ReadLDR(float exposure = 1f, float gamma = 1f / 2.2f)
     {
         int n = Width * Height;
-        var bytes = new byte[n * 3];
+        byte[] bytes = new byte[n * 3];
         for (int i = 0; i < n; i++)
         {
             float r = PixelsRGB[i * 3] * exposure;

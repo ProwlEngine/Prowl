@@ -346,7 +346,7 @@ internal sealed class VoxelPass(LazyCompute clear, LazyCompute pyramid, LazyComp
     // The stored voxels a box region covers, split where the wrap crosses the edge and grown to whole level 5 cells
     private static List<(Int3 Min, Int3 Max)> PyramidPieces(VoxelRegion[] regions, VoxelHeader header)
     {
-        List<(Int3, Int3)> pieces = new();
+        List<(Int3, Int3)> pieces = [];
         Span<int> resolution = [(int)header.ResolutionX, (int)header.ResolutionY, (int)header.ResolutionZ];
         Span<int> wrap = [(int)header.WrapX, (int)header.WrapY, (int)header.WrapZ];
         foreach (VoxelRegion region in regions)

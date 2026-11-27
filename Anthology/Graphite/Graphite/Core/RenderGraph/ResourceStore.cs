@@ -22,8 +22,8 @@ internal abstract class HistoryRings<TResource, TDesc>
         public int CurrentIndex;
     }
 
-    private readonly Dictionary<int, Ring> _rings = new();
-    private readonly List<int> _expired = new();
+    private readonly Dictionary<int, Ring> _rings = [];
+    private readonly List<int> _expired = [];
     private readonly int _slots;
     private ulong _lastExecutionId;
     private long _executionCount;
@@ -163,9 +163,9 @@ internal sealed class BufferRings(RenderResourceID id, int slots, List<(DeviceBu
 
 internal sealed class ResourceStore : IDisposable
 {
-    private readonly Dictionary<RenderResourceID, TextureRings> _textures = new();
-    private readonly Dictionary<RenderResourceID, BufferRings> _buffers = new();
-    private readonly List<(DeviceBuffer From, DeviceBuffer To)> _resizes = new();
+    private readonly Dictionary<RenderResourceID, TextureRings> _textures = [];
+    private readonly Dictionary<RenderResourceID, BufferRings> _buffers = [];
+    private readonly List<(DeviceBuffer From, DeviceBuffer To)> _resizes = [];
     private bool _disposed;
 
     public TextureRings TexturesFor(RenderResourceID id, int slots)

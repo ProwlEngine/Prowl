@@ -12,15 +12,15 @@ internal sealed class StackFormat : ISerializationFormat
 
     public EchoObject Serialize(Type? targetType, object value, SerializationContext context)
     {
-        var reference = CollectionReferences.TryWriteReference(value, context, out int id);
+        EchoObject? reference = CollectionReferences.TryWriteReference(value, context, out int id);
         if (reference != null) return reference;
 
-        var elementType = targetType!.GetGenericArguments()[0];
+        Type elementType = targetType!.GetGenericArguments()[0];
         var stack = (IEnumerable)value;
-        List<EchoObject> tags = new();
+        List<EchoObject> tags = [];
 
         // Convert stack to array to preserve order
-        var array = stack.Cast<object>().ToArray();
+        object[] array = stack.Cast<object>().ToArray();
         // Serialize in reverse order so we can maintain order when deserializing
         for (int i = array.Length - 1; i >= 0; i--)
         {
@@ -32,7 +32,7 @@ internal sealed class StackFormat : ISerializationFormat
 
     public object? Deserialize(EchoObject value, Type targetType, SerializationContext context)
     {
-        if (CollectionReferences.TryReadReference(value, context, out var existing))
+        if (CollectionReferences.TryReadReference(value, context, out object? existing))
             return existing;
 
         Type elementType = targetType.GetGenericArguments()[0];
@@ -42,9 +42,9 @@ internal sealed class StackFormat : ISerializationFormat
 
         // Process elements in order - they were serialized in reverse,
         // so this will maintain proper order
-        foreach (var tag in CollectionReferences.ListItems(value))
+        foreach (EchoObject tag in CollectionReferences.ListItems(value))
         {
-            var item = Serializer.Deserialize(tag, elementType, context);
+            object? item = Serializer.Deserialize(tag, elementType, context);
             stack.Push((dynamic?)item);
         }
 

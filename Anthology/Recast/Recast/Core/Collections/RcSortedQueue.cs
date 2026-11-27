@@ -21,89 +21,88 @@ freely, subject to the following restrictions:
 using System;
 using System.Collections.Generic;
 
-namespace Prowl.Recast.Core.Collections
+namespace Prowl.Recast.Core.Collections;
+
+public class RcSortedQueue<T>
 {
-    public class RcSortedQueue<T>
+    private bool _dirty;
+    private readonly List<T> _items;
+    private readonly Comparison<T> _comparison;
+
+    public RcSortedQueue(Comparison<T> comp)
     {
-        private bool _dirty;
-        private readonly List<T> _items;
-        private readonly Comparison<T> _comparison;
+        _items = [];
+        _comparison = (x, y) => comp(x, y) * -1;
+    }
 
-        public RcSortedQueue(Comparison<T> comp)
-        {
-            _items = new List<T>();
-            _comparison = (x, y) => comp(x, y) * -1;
-        }
+    public int Count()
+    {
+        return _items.Count;
+    }
 
-        public int Count()
-        {
-            return _items.Count;
-        }
+    public bool IsEmpty()
+    {
+        return 0 == _items.Count;
+    }
 
-        public bool IsEmpty()
-        {
-            return 0 == _items.Count;
-        }
+    public void Clear()
+    {
+        _items.Clear();
+        _dirty = false;
+    }
 
-        public void Clear()
+    private void Balance()
+    {
+        if (_dirty)
         {
-            _items.Clear();
+            _items.Sort(_comparison); // reverse
             _dirty = false;
         }
+    }
 
-        private void Balance()
-        {
-            if (_dirty)
-            {
-                _items.Sort(_comparison); // reverse
-                _dirty = false;
-            }
-        }
+    public T Peek()
+    {
+        Balance();
+        return _items[^1];
+    }
 
-        public T Peek()
-        {
-            Balance();
-            return _items[^1];
-        }
+    public T Dequeue()
+    {
+        T node = Peek();
+        _items.RemoveAt(_items.Count - 1);
+        return node;
+    }
 
-        public T Dequeue()
-        {
-            var node = Peek();
-            _items.RemoveAt(_items.Count - 1);
-            return node;
-        }
+    public void Enqueue(T item)
+    {
+        if (null == item)
+            return;
 
-        public void Enqueue(T item)
-        {
-            if (null == item)
-                return;
+        _items.Add(item);
+        _dirty = true;
+    }
 
-            _items.Add(item);
-            _dirty = true;
-        }
+    public bool Remove(T item)
+    {
+        if (null == item)
+            return false;
 
-        public bool Remove(T item)
-        {
-            if (null == item)
-                return false;
+        //int idx = _items.BinarySearch(item, _comparer); // don't use this! Because reference types can be reused externally.
+        //int idx = _items.FindLastIndex(x => item.Equals(x));
+        int idx = _items.LastIndexOf(item);
+        if (0 > idx)
+            return false;
 
-            //int idx = _items.BinarySearch(item, _comparer); // don't use this! Because reference types can be reused externally.
-            //int idx = _items.FindLastIndex(x => item.Equals(x));
-            int idx = _items.LastIndexOf(item);
-            if (0 > idx)
-                return false;
-
-            _items.RemoveAt(idx);
-            return true;
-        }
+        _items.RemoveAt(idx);
+        return true;
+    }
 
 
-        public List<T> ToList()
-        {
-            Balance();
-            var temp = new List<T>(_items);
-            temp.Reverse();
-            return temp;
-        }
+    public List<T> ToList()
+    {
+        Balance();
+        var temp = new List<T>(_items);
+        temp.Reverse();
+        return temp;
     }
 }

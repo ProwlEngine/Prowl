@@ -82,7 +82,7 @@ internal static class GltfMaterialMapper
 
         if (src.Extensions is not null)
         {
-            foreach (var kvp in src.Extensions)
+            foreach (KeyValuePair<string, JsonElement> kvp in src.Extensions)
             {
                 if (TryConsume(kvp.Key, kvp.Value, dst, ctx))
                     continue;
@@ -211,7 +211,7 @@ internal static class GltfMaterialMapper
 
             case "KHR_materials_emissive_strength":
                 if (value.ValueKind == JsonValueKind.Object &&
-                    value.TryGetProperty("emissiveStrength", out var es) &&
+                    value.TryGetProperty("emissiveStrength", out JsonElement es) &&
                     es.ValueKind == JsonValueKind.Number)
                 {
                     dst.EmissiveStrength = es.GetSingle();
@@ -289,16 +289,16 @@ internal static class GltfMaterialMapper
 
     private static MaterialTextureSlot? MapSlotJson(JsonElement obj)
     {
-        if (obj.ValueKind != JsonValueKind.Object || !obj.TryGetProperty("index", out var idx))
+        if (obj.ValueKind != JsonValueKind.Object || !obj.TryGetProperty("index", out JsonElement idx))
             return null;
         var slot = new IntermediateTextureSlot
         {
             TextureIndex = idx.GetInt32(),
-            UVChannel = obj.TryGetProperty("texCoord", out var tc) && tc.ValueKind == JsonValueKind.Number ? tc.GetInt32() : 0,
+            UVChannel = obj.TryGetProperty("texCoord", out JsonElement tc) && tc.ValueKind == JsonValueKind.Number ? tc.GetInt32() : 0,
         };
-        if (obj.TryGetProperty("extensions", out var exts) &&
+        if (obj.TryGetProperty("extensions", out JsonElement exts) &&
             exts.ValueKind == JsonValueKind.Object &&
-            exts.TryGetProperty("KHR_texture_transform", out var xform))
+            exts.TryGetProperty("KHR_texture_transform", out JsonElement xform))
         {
             ApplyTextureTransform(xform, slot);
         }
@@ -319,16 +319,16 @@ internal static class GltfMaterialMapper
         if (xform.ValueKind != JsonValueKind.Object)
             return;
 
-        if (xform.TryGetProperty("offset", out var off) && off.ValueKind == JsonValueKind.Array && off.GetArrayLength() == 2)
+        if (xform.TryGetProperty("offset", out JsonElement off) && off.ValueKind == JsonValueKind.Array && off.GetArrayLength() == 2)
             slot.Offset = new Float2(off[0].GetSingle(), off[1].GetSingle());
 
-        if (xform.TryGetProperty("scale", out var sc) && sc.ValueKind == JsonValueKind.Array && sc.GetArrayLength() == 2)
+        if (xform.TryGetProperty("scale", out JsonElement sc) && sc.ValueKind == JsonValueKind.Array && sc.GetArrayLength() == 2)
             slot.Scale = new Float2(sc[0].GetSingle(), sc[1].GetSingle());
 
-        if (xform.TryGetProperty("rotation", out var r) && r.ValueKind == JsonValueKind.Number)
+        if (xform.TryGetProperty("rotation", out JsonElement r) && r.ValueKind == JsonValueKind.Number)
             slot.Rotation = r.GetSingle();
 
-        if (xform.TryGetProperty("texCoord", out var tc) && tc.ValueKind == JsonValueKind.Number)
+        if (xform.TryGetProperty("texCoord", out JsonElement tc) && tc.ValueKind == JsonValueKind.Number)
             slot.UVChannel = tc.GetInt32();
     }
 
@@ -342,7 +342,7 @@ internal static class GltfMaterialMapper
             FactorTexture = GetSlot(v, "clearcoatTexture"),
             RoughnessTexture = GetSlot(v, "clearcoatRoughnessTexture"),
             NormalTexture = GetSlot(v, "clearcoatNormalTexture"),
-            NormalScale = v.TryGetProperty("clearcoatNormalTexture", out var normal) ? GetFloat(normal, "scale", 1f) : 1f,
+            NormalScale = v.TryGetProperty("clearcoatNormalTexture", out JsonElement normal) ? GetFloat(normal, "scale", 1f) : 1f,
         };
     }
 
@@ -350,7 +350,7 @@ internal static class GltfMaterialMapper
     {
         if (v.ValueKind != JsonValueKind.Object) return null;
         Color color = new(0f, 0f, 0f, 1f);
-        if (v.TryGetProperty("sheenColorFactor", out var cc) && cc.ValueKind == JsonValueKind.Array && cc.GetArrayLength() >= 3)
+        if (v.TryGetProperty("sheenColorFactor", out JsonElement cc) && cc.ValueKind == JsonValueKind.Array && cc.GetArrayLength() >= 3)
             color = new Color(cc[0].GetSingle(), cc[1].GetSingle(), cc[2].GetSingle(), 1f);
         return new SheenExtension
         {
@@ -375,7 +375,7 @@ internal static class GltfMaterialMapper
     {
         if (v.ValueKind != JsonValueKind.Object) return null;
         Color attColor = new(1f, 1f, 1f, 1f);
-        if (v.TryGetProperty("attenuationColor", out var cc) && cc.ValueKind == JsonValueKind.Array && cc.GetArrayLength() >= 3)
+        if (v.TryGetProperty("attenuationColor", out JsonElement cc) && cc.ValueKind == JsonValueKind.Array && cc.GetArrayLength() >= 3)
             attColor = new Color(cc[0].GetSingle(), cc[1].GetSingle(), cc[2].GetSingle(), 1f);
         return new VolumeExtension
         {
@@ -396,7 +396,7 @@ internal static class GltfMaterialMapper
     {
         if (v.ValueKind != JsonValueKind.Object) return null;
         Color color = new(1f, 1f, 1f, 1f);
-        if (v.TryGetProperty("specularColorFactor", out var cc) && cc.ValueKind == JsonValueKind.Array && cc.GetArrayLength() >= 3)
+        if (v.TryGetProperty("specularColorFactor", out JsonElement cc) && cc.ValueKind == JsonValueKind.Array && cc.GetArrayLength() >= 3)
             color = new Color(cc[0].GetSingle(), cc[1].GetSingle(), cc[2].GetSingle(), 1f);
         return new SpecularExtension
         {
@@ -411,11 +411,11 @@ internal static class GltfMaterialMapper
     {
         if (v.ValueKind != JsonValueKind.Object) return null;
         Color diffuse = new(1f, 1f, 1f, 1f);
-        if (v.TryGetProperty("diffuseFactor", out var df) && df.ValueKind == JsonValueKind.Array && df.GetArrayLength() >= 4)
+        if (v.TryGetProperty("diffuseFactor", out JsonElement df) && df.ValueKind == JsonValueKind.Array && df.GetArrayLength() >= 4)
             diffuse = new Color(df[0].GetSingle(), df[1].GetSingle(), df[2].GetSingle(), df[3].GetSingle());
 
         Color spec = new(1f, 1f, 1f, 1f);
-        if (v.TryGetProperty("specularFactor", out var sf) && sf.ValueKind == JsonValueKind.Array && sf.GetArrayLength() >= 3)
+        if (v.TryGetProperty("specularFactor", out JsonElement sf) && sf.ValueKind == JsonValueKind.Array && sf.GetArrayLength() >= 3)
             spec = new Color(sf[0].GetSingle(), sf[1].GetSingle(), sf[2].GetSingle(), 1f);
 
         return new SpecularGlossinessExtension
@@ -463,7 +463,7 @@ internal static class GltfMaterialMapper
     {
         if (v.ValueKind != JsonValueKind.Object) return null;
         Color color = new(1f, 1f, 1f, 1f);
-        if (v.TryGetProperty("diffuseTransmissionColorFactor", out var cc) && cc.ValueKind == JsonValueKind.Array && cc.GetArrayLength() >= 3)
+        if (v.TryGetProperty("diffuseTransmissionColorFactor", out JsonElement cc) && cc.ValueKind == JsonValueKind.Array && cc.GetArrayLength() >= 3)
             color = new Color(cc[0].GetSingle(), cc[1].GetSingle(), cc[2].GetSingle(), 1f);
         return new DiffuseTransmissionExtension
         {
@@ -475,8 +475,8 @@ internal static class GltfMaterialMapper
     }
 
     private static float GetFloat(JsonElement obj, string name, float fallback) =>
-        obj.TryGetProperty(name, out var v) && v.ValueKind == JsonValueKind.Number ? v.GetSingle() : fallback;
+        obj.TryGetProperty(name, out JsonElement v) && v.ValueKind == JsonValueKind.Number ? v.GetSingle() : fallback;
 
     private static MaterialTextureSlot? GetSlot(JsonElement obj, string name) =>
-        obj.TryGetProperty(name, out var v) ? MapSlotJson(v) : null;
+        obj.TryGetProperty(name, out JsonElement v) ? MapSlotJson(v) : null;
 }

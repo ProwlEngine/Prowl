@@ -18,45 +18,45 @@ freely, subject to the following restrictions:
 */
 
 using System;
+
 using Prowl.Recast.Core.Numerics;
 
-namespace Prowl.Recast.Detour.Extras
+namespace Prowl.Recast.Detour.Extras;
+
+public class DtBVTreeBuilder
 {
-    public class DtBVTreeBuilder
+    public void Build(DtMeshData data)
     {
-        public void Build(DtMeshData data)
-        {
-            data.bvTree = new DtBVNode[data.header.polyCount * 2];
-            data.header.bvNodeCount = data.bvTree.Length == 0
-                ? 0
-                : CreateBVTree(data, data.bvTree, data.header.bvQuantFactor);
-        }
+        data.bvTree = new DtBVNode[data.header.polyCount * 2];
+        data.header.bvNodeCount = data.bvTree.Length == 0
+            ? 0
+            : CreateBVTree(data, data.bvTree, data.header.bvQuantFactor);
+    }
 
-        private static int CreateBVTree(DtMeshData data, DtBVNode[] nodes, float quantFactor)
+    private static int CreateBVTree(DtMeshData data, DtBVNode[] nodes, float quantFactor)
+    {
+        DtBVItem[] items = new DtBVItem[data.header.polyCount];
+        for (int i = 0; i < data.header.polyCount; i++)
         {
-            DtBVItem[] items = new DtBVItem[data.header.polyCount];
-            for (int i = 0; i < data.header.polyCount; i++)
+            DtBVItem it = new DtBVItem();
+            items[i] = it;
+            it.i = i;
+            RcVec3f bmin = data.verts.ToVec3(data.polys[i].verts[0] * 3);
+            RcVec3f bmax = data.verts.ToVec3(data.polys[i].verts[0] * 3);
+            for (int j = 1; j < data.polys[i].vertCount; j++)
             {
-                DtBVItem it = new DtBVItem();
-                items[i] = it;
-                it.i = i;
-                RcVec3f bmin = data.verts.ToVec3(data.polys[i].verts[0] * 3);
-                RcVec3f bmax = data.verts.ToVec3(data.polys[i].verts[0] * 3);
-                for (int j = 1; j < data.polys[i].vertCount; j++)
-                {
-                    bmin = RcVec3f.Min(bmin, data.verts.ToVec3(data.polys[i].verts[j] * 3));
-                    bmax = RcVec3f.Max(bmax, data.verts.ToVec3(data.polys[i].verts[j] * 3));
-                }
-
-                it.bmin.X = Math.Clamp((int)((bmin.X - data.header.bmin.X) * quantFactor), 0, 0x7fffffff);
-                it.bmin.Y = Math.Clamp((int)((bmin.Y - data.header.bmin.Y) * quantFactor), 0, 0x7fffffff);
-                it.bmin.Z = Math.Clamp((int)((bmin.Z - data.header.bmin.Z) * quantFactor), 0, 0x7fffffff);
-                it.bmax.X = Math.Clamp((int)((bmax.X - data.header.bmin.X) * quantFactor), 0, 0x7fffffff);
-                it.bmax.Y = Math.Clamp((int)((bmax.Y - data.header.bmin.Y) * quantFactor), 0, 0x7fffffff);
-                it.bmax.Z = Math.Clamp((int)((bmax.Z - data.header.bmin.Z) * quantFactor), 0, 0x7fffffff);
+                bmin = RcVec3f.Min(bmin, data.verts.ToVec3(data.polys[i].verts[j] * 3));
+                bmax = RcVec3f.Max(bmax, data.verts.ToVec3(data.polys[i].verts[j] * 3));
             }
 
-            return DtNavMeshBuilder.Subdivide(items, data.header.polyCount, 0, data.header.polyCount, 0, nodes);
+            it.bmin.X = Math.Clamp((int)((bmin.X - data.header.bmin.X) * quantFactor), 0, 0x7fffffff);
+            it.bmin.Y = Math.Clamp((int)((bmin.Y - data.header.bmin.Y) * quantFactor), 0, 0x7fffffff);
+            it.bmin.Z = Math.Clamp((int)((bmin.Z - data.header.bmin.Z) * quantFactor), 0, 0x7fffffff);
+            it.bmax.X = Math.Clamp((int)((bmax.X - data.header.bmin.X) * quantFactor), 0, 0x7fffffff);
+            it.bmax.Y = Math.Clamp((int)((bmax.Y - data.header.bmin.Y) * quantFactor), 0, 0x7fffffff);
+            it.bmax.Z = Math.Clamp((int)((bmax.Z - data.header.bmin.Z) * quantFactor), 0, 0x7fffffff);
         }
+
+        return DtNavMeshBuilder.Subdivide(items, data.header.polyCount, 0, data.header.polyCount, 0, nodes);
     }
 }

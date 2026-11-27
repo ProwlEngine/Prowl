@@ -33,8 +33,8 @@ internal sealed class ViewGraph
 
     public static readonly RenderResourceID SceneId = RenderResourceID.Intern(RendererOutputs.Scene);
 
-    private readonly Dictionary<RenderFeature, FeaturePass> _passes = new();
-    private readonly Dictionary<RenderFeature, int> _used = new();
+    private readonly Dictionary<RenderFeature, FeaturePass> _passes = [];
+    private readonly Dictionary<RenderFeature, int> _used = [];
     private int _frame;
     private bool _begun;
 
@@ -50,7 +50,7 @@ internal sealed class ViewGraph
     public FrameGraph Graph { get; }
     public CameraShape Shape { get; private set; }
 
-    public readonly Dictionary<string, TextureHandle> Published = new(StringComparer.Ordinal);
+    public readonly Dictionary<string, TextureHandle> Published = [with(StringComparer.Ordinal)];
 
     public TextureHandle Scene { get; set; }
     public TextureHandle Current { get; set; }
@@ -163,7 +163,7 @@ internal sealed class ViewGraph
             foreach ((RenderFeature feature, int frame) in _used)
             {
                 if (frame != _frame)
-                    (stale ??= new()).Add(feature);
+                    (stale ??= []).Add(feature);
             }
             foreach (RenderFeature feature in stale ?? [])
             {

@@ -31,8 +31,8 @@ internal sealed class WorldFrame(RenderWorld world, BucketSet buckets, int globa
 
     /// <summary>The views capturing the sky and the reflection probes: six faces at once or one, reused across frames.</summary>
     public CameraFrame? SkyCamera;
-    public readonly List<CameraFrame> ProbeCameras = new();
-    public readonly List<CameraFrame> ProbeFaceCameras = new();
+    public readonly List<CameraFrame> ProbeCameras = [];
+    public readonly List<CameraFrame> ProbeFaceCameras = [];
     public int ProbeCamerasUsed, ProbeFaceCamerasUsed;
 
     /// <summary>The view drawing the world's voxel volume and the three layer target it rasterizes into, while it has a box.</summary>
@@ -40,7 +40,7 @@ internal sealed class WorldFrame(RenderWorld world, BucketSet buckets, int globa
     public RenderTexture? VoxelTarget { get; private set; }
 
     /// <summary>The views drawing this frame's regions of the voxel box, each culled to its region, reused across frames.</summary>
-    public readonly List<CameraFrame> VoxelDrawCameras = new();
+    public readonly List<CameraFrame> VoxelDrawCameras = [];
     public int VoxelDrawCamerasUsed;
 
     public void EnsureVoxelTarget(GraphicsDevice device, RenderStore store, uint size)
@@ -61,7 +61,7 @@ internal sealed class WorldFrame(RenderWorld world, BucketSet buckets, int globa
     /// </summary>
     public CameraFrame? VoxelShadowCamera;
     public RenderTexture? VoxelShadow { get; private set; }
-    public readonly List<ShadowDraw> VoxelShadowDraws = new();
+    public readonly List<ShadowDraw> VoxelShadowDraws = [];
 
     /// <summary>Whether the shadow's pass runs this frame. Off, the map keeps what it last drew.</summary>
     public bool VoxelShadowRedraw;

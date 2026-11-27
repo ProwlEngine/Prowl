@@ -1,4 +1,5 @@
 using System.Linq;
+
 using Prowl.Recast.Core;
 using Prowl.Recast.Core.Collections;
 using Prowl.Recast.Core.Numerics;
@@ -6,148 +7,145 @@ using Prowl.Recast.Detour;
 using Prowl.Recast.Geom;
 using Prowl.Recast.Toolset.Builder;
 
-namespace Prowl.Recast.Toolset.Tools
+namespace Prowl.Recast.Toolset.Tools;
+
+public class RcTileTool : IRcToolable
 {
-    public class RcTileTool : IRcToolable
+    public string GetName()
     {
-        public string GetName()
+        return "Tiles";
+    }
+
+    public void RemoveAllTiles(IRcInputGeomProvider geom, RcNavMeshBuildSettings settings, DtNavMesh navMesh)
+    {
+        if (null == settings || null == geom || navMesh == null)
+            return;
+
+        RcVec3f bmin = geom.GetMeshBoundsMin();
+        RcVec3f bmax = geom.GetMeshBoundsMax();
+        RcRecast.CalcGridSize(bmin, bmax, settings.cellSize, out int gw, out int gh);
+
+        int ts = settings.tileSize;
+        int tw = (gw + ts - 1) / ts;
+        int th = (gh + ts - 1) / ts;
+
+        for (int y = 0; y < th; ++y)
         {
-            return "Tiles";
-        }
-
-        public void RemoveAllTiles(IRcInputGeomProvider geom, RcNavMeshBuildSettings settings, DtNavMesh navMesh)
-        {
-            if (null == settings || null == geom || navMesh == null)
-                return;
-
-            var bmin = geom.GetMeshBoundsMin();
-            var bmax = geom.GetMeshBoundsMax();
-            int gw = 0, gh = 0;
-            RcRecast.CalcGridSize(bmin, bmax, settings.cellSize, out gw, out gh);
-
-            int ts = settings.tileSize;
-            int tw = (gw + ts - 1) / ts;
-            int th = (gh + ts - 1) / ts;
-
-            for (int y = 0; y < th; ++y)
+            for (int x = 0; x < tw; ++x)
             {
-                for (int x = 0; x < tw; ++x)
-                {
-                    var tileRef = navMesh.GetTileRefAt(x, y, 0);
-                    navMesh.RemoveTile(tileRef);
-                }
+                long tileRef = navMesh.GetTileRefAt(x, y, 0);
+                navMesh.RemoveTile(tileRef);
             }
         }
+    }
 
-        public void BuildAllTiles(IRcInputGeomProvider geom, RcNavMeshBuildSettings settings, DtNavMesh navMesh)
+    public void BuildAllTiles(IRcInputGeomProvider geom, RcNavMeshBuildSettings settings, DtNavMesh navMesh)
+    {
+        if (null == settings || null == geom || navMesh == null)
+            return;
+
+        RcVec3f bmin = geom.GetMeshBoundsMin();
+        RcVec3f bmax = geom.GetMeshBoundsMax();
+        RcRecast.CalcGridSize(bmin, bmax, settings.cellSize, out int gw, out int gh);
+
+        int ts = settings.tileSize;
+        int tw = (gw + ts - 1) / ts;
+        int th = (gh + ts - 1) / ts;
+
+        for (int y = 0; y < th; ++y)
         {
-            if (null == settings || null == geom || navMesh == null)
-                return;
-
-            var bmin = geom.GetMeshBoundsMin();
-            var bmax = geom.GetMeshBoundsMax();
-            int gw = 0, gh = 0;
-            RcRecast.CalcGridSize(bmin, bmax, settings.cellSize, out gw, out gh);
-
-            int ts = settings.tileSize;
-            int tw = (gw + ts - 1) / ts;
-            int th = (gh + ts - 1) / ts;
-
-            for (int y = 0; y < th; ++y)
+            for (int x = 0; x < tw; ++x)
             {
-                for (int x = 0; x < tw; ++x)
-                {
-                    BuildTile(geom, settings, navMesh, x, y, out var tileBuildTicks, out var tileTriCount, out var tileMemUsage);
-                }
+                BuildTile(geom, settings, navMesh, x, y, out long tileBuildTicks, out int tileTriCount, out int tileMemUsage);
             }
         }
+    }
 
-        public bool BuildTile(IRcInputGeomProvider geom, RcNavMeshBuildSettings settings, DtNavMesh navMesh, int tx, int ty, out long tileBuildTicks, out int tileTriCount, out int tileMemUsage)
+    public bool BuildTile(IRcInputGeomProvider geom, RcNavMeshBuildSettings settings, DtNavMesh navMesh, int tx, int ty, out long tileBuildTicks, out int tileTriCount, out int tileMemUsage)
+    {
+        tileBuildTicks = 0;
+        tileTriCount = 0; // ...
+        tileMemUsage = 0; // ...
+
+        bool availableTile = navMesh.IsAvailableTileCount();
+        if (!availableTile)
         {
-            tileBuildTicks = 0;
-            tileTriCount = 0; // ...
-            tileMemUsage = 0; // ...
-
-            var availableTile = navMesh.IsAvailableTileCount();
-            if (!availableTile)
-            {
-                return false;
-            }
-
-            RcVec3f bmin = geom.GetMeshBoundsMin();
-            RcVec3f bmax = geom.GetMeshBoundsMax();
-
-            RcConfig cfg = new RcConfig(
-                true, settings.tileSize, settings.tileSize,
-                RcConfig.CalcBorder(settings.agentRadius, settings.cellSize),
-                RcPartitionType.OfValue(settings.partitioning),
-                settings.cellSize, settings.cellHeight,
-                settings.agentMaxSlope, settings.agentHeight, settings.agentRadius, settings.agentMaxClimb,
-                settings.minRegionSize * settings.minRegionSize * settings.cellSize * settings.cellSize,
-                settings.mergedRegionSize * settings.mergedRegionSize * settings.cellSize * settings.cellSize,
-                settings.edgeMaxLen, settings.edgeMaxError,
-                settings.vertsPerPoly,
-                settings.detailSampleDist, settings.detailSampleMaxError,
-                settings.filterLowHangingObstacles, settings.filterLedgeSpans, settings.filterWalkableLowHeightSpans,
-                SampleAreaModifications.SAMPLE_AREAMOD_WALKABLE, true
-            );
-
-            var beginTick = RcFrequency.Ticks;
-            var rb = new RcBuilder();
-            var result = rb.BuildTile(geom, cfg, bmin, bmax, tx, ty, new RcAtomicInteger(0), 1, settings.keepInterResults);
-
-            var tb = new TileNavMeshBuilder();
-            var meshData = tb.BuildMeshData(geom, settings.cellSize, settings.cellHeight, settings.agentHeight, settings.agentRadius, settings.agentMaxClimb, RcImmutableArray.Create(result)
-            ).FirstOrDefault();
-
-            if (null == meshData)
-                return false;
-
-            navMesh.UpdateTile(meshData, 0);
-
-            tileBuildTicks = RcFrequency.Ticks - beginTick;
-            tileTriCount = 0; // ...
-            tileMemUsage = 0; // ...
-
-            return true;
+            return false;
         }
 
-        public bool BuildTile(IRcInputGeomProvider geom, RcNavMeshBuildSettings settings, DtNavMesh navMesh, RcVec3f pos, out long tileBuildTicks, out int tileTriCount, out int tileMemUsage)
-        {
-            tileBuildTicks = 0;
-            tileTriCount = 0;
-            tileMemUsage = 0;
+        RcVec3f bmin = geom.GetMeshBoundsMin();
+        RcVec3f bmax = geom.GetMeshBoundsMax();
 
-            if (null == settings || null == geom || navMesh == null)
-                return false;
+        RcConfig cfg = new RcConfig(
+            true, settings.tileSize, settings.tileSize,
+            RcConfig.CalcBorder(settings.agentRadius, settings.cellSize),
+            RcPartitionType.OfValue(settings.partitioning),
+            settings.cellSize, settings.cellHeight,
+            settings.agentMaxSlope, settings.agentHeight, settings.agentRadius, settings.agentMaxClimb,
+            settings.minRegionSize * settings.minRegionSize * settings.cellSize * settings.cellSize,
+            settings.mergedRegionSize * settings.mergedRegionSize * settings.cellSize * settings.cellSize,
+            settings.edgeMaxLen, settings.edgeMaxError,
+            settings.vertsPerPoly,
+            settings.detailSampleDist, settings.detailSampleMaxError,
+            settings.filterLowHangingObstacles, settings.filterLedgeSpans, settings.filterWalkableLowHeightSpans,
+            SampleAreaModifications.SAMPLE_AREAMOD_WALKABLE, true
+        );
 
-            float ts = settings.tileSize * settings.cellSize;
+        long beginTick = RcFrequency.Ticks;
+        var rb = new RcBuilder();
+        RcBuilderResult result = rb.BuildTile(geom, cfg, bmin, bmax, tx, ty, new RcAtomicInteger(0), 1, settings.keepInterResults);
 
-            RcVec3f bmin = geom.GetMeshBoundsMin();
-            RcVec3f bmax = geom.GetMeshBoundsMax();
+        var tb = new TileNavMeshBuilder();
+        DtMeshData meshData = tb.BuildMeshData(geom, settings.cellSize, settings.cellHeight, settings.agentHeight, settings.agentRadius, settings.agentMaxClimb, RcImmutableArray.Create(result)
+        ).FirstOrDefault();
 
-            int tx = (int)((pos.X - bmin.X) / ts);
-            int ty = (int)((pos.Z - bmin.Z) / ts);
+        if (null == meshData)
+            return false;
 
-            return BuildTile(geom, settings, navMesh, tx, ty, out tileBuildTicks, out tileTriCount, out tileMemUsage);
-        }
+        navMesh.UpdateTile(meshData, 0);
 
-        public bool RemoveTile(IRcInputGeomProvider geom, RcNavMeshBuildSettings settings, DtNavMesh navMesh, RcVec3f pos)
-        {
-            if (null == settings || null == geom || navMesh == null)
-                return false;
+        tileBuildTicks = RcFrequency.Ticks - beginTick;
+        tileTriCount = 0; // ...
+        tileMemUsage = 0; // ...
 
-            float ts = settings.tileSize * settings.cellSize;
+        return true;
+    }
 
-            var bmin = geom.GetMeshBoundsMin();
+    public bool BuildTile(IRcInputGeomProvider geom, RcNavMeshBuildSettings settings, DtNavMesh navMesh, RcVec3f pos, out long tileBuildTicks, out int tileTriCount, out int tileMemUsage)
+    {
+        tileBuildTicks = 0;
+        tileTriCount = 0;
+        tileMemUsage = 0;
 
-            int tx = (int)((pos.X - bmin.X) / ts);
-            int ty = (int)((pos.Z - bmin.Z) / ts);
+        if (null == settings || null == geom || navMesh == null)
+            return false;
 
-            var tileRef = navMesh.GetTileRefAt(tx, ty, 0);
-            navMesh.RemoveTile(tileRef);
+        float ts = settings.tileSize * settings.cellSize;
 
-            return true;
-        }
+        RcVec3f bmin = geom.GetMeshBoundsMin();
+        RcVec3f bmax = geom.GetMeshBoundsMax();
+
+        int tx = (int)((pos.X - bmin.X) / ts);
+        int ty = (int)((pos.Z - bmin.Z) / ts);
+
+        return BuildTile(geom, settings, navMesh, tx, ty, out tileBuildTicks, out tileTriCount, out tileMemUsage);
+    }
+
+    public bool RemoveTile(IRcInputGeomProvider geom, RcNavMeshBuildSettings settings, DtNavMesh navMesh, RcVec3f pos)
+    {
+        if (null == settings || null == geom || navMesh == null)
+            return false;
+
+        float ts = settings.tileSize * settings.cellSize;
+
+        RcVec3f bmin = geom.GetMeshBoundsMin();
+
+        int tx = (int)((pos.X - bmin.X) / ts);
+        int ty = (int)((pos.Z - bmin.Z) / ts);
+
+        long tileRef = navMesh.GetTileRefAt(tx, ty, 0);
+        navMesh.RemoveTile(tileRef);
+
+        return true;
     }
 }

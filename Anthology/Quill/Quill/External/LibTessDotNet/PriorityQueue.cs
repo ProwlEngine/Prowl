@@ -98,7 +98,7 @@ namespace Prowl.Quill.External
                 stack.Push(new StackItem { p = p, r = r });
                 while (stack.Count > 0)
                 {
-                    var top = stack.Pop();
+                    StackItem top = stack.Pop();
                     p = top.p;
                     r = top.r;
 

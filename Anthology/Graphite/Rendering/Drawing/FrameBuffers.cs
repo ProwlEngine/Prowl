@@ -4,7 +4,7 @@ namespace Prowl.Graphite.Rendering;
 
 internal sealed class BufferSet
 {
-    public readonly List<DeviceBuffer> Items = new();
+    public readonly List<DeviceBuffer> Items = [];
 
     public void Clear() => Items.Clear();
 
@@ -29,8 +29,8 @@ internal sealed class BufferSet
 internal sealed class FrameBuffers
 {
     public readonly BufferSet Shared = new();
-    public readonly List<WorldFrame> Worlds = new();
-    public readonly List<CameraFrame> Cameras = new();
+    public readonly List<WorldFrame> Worlds = [];
+    public readonly List<CameraFrame> Cameras = [];
 
     public void WriteAll(FrameGraph graph, PassBuilder pass, BufferAccess access)
     {

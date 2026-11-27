@@ -38,8 +38,8 @@ public sealed class TypeMap
     private readonly AssemblyMap _assemblies;
     private readonly SyntheticIndexes _indexes;
     private readonly ReportBuilder _report;
-    private readonly Dictionary<Type, TypeResolution> _cache = new();
-    private readonly HashSet<Type> _resolving = new();
+    private readonly Dictionary<Type, TypeResolution> _cache = [];
+    private readonly HashSet<Type> _resolving = [];
 
     private MemberMap _members = null!;
 
@@ -59,7 +59,7 @@ public sealed class TypeMap
 
     public TypeResolution Resolve(Type type)
     {
-        if (_cache.TryGetValue(type, out var cached)) return cached;
+        if (_cache.TryGetValue(type, out TypeResolution cached)) return cached;
 
         // A type whose resolution depends on its own resolution. Answering "unchanged" would be silently wrong
         // for a replaced type, so the answer is only assumed where it cannot be wrong, and reported otherwise.
@@ -67,7 +67,7 @@ public sealed class TypeMap
 
         try
         {
-            var resolution = ResolveUncached(type);
+            TypeResolution resolution = ResolveUncached(type);
             _cache[type] = resolution;
             return resolution;
         }
@@ -96,7 +96,7 @@ public sealed class TypeMap
         if (type.IsPointer) return ResolveWrapped(type, static t => t.MakePointerType());
         if (type.IsConstructedGenericType) return ResolveConstructedGeneric(type);
 
-        var assembly = _assemblies.Resolve(type.Assembly);
+        AssemblyResolution assembly = _assemblies.Resolve(type.Assembly);
 
         return assembly.Kind switch
         {
@@ -115,7 +115,7 @@ public sealed class TypeMap
 
     private TypeResolution ResolveArray(Type type)
     {
-        var element = Resolve(type.GetElementType()!);
+        TypeResolution element = Resolve(type.GetElementType()!);
         if (element.IsRemoved) return TypeResolution.Removed;
         if (element.IsUnchanged) return TypeResolution.Unchanged(type);
 
@@ -125,22 +125,22 @@ public sealed class TypeMap
 
     private TypeResolution ResolveWrapped(Type type, Func<Type, Type> wrap)
     {
-        var element = Resolve(type.GetElementType()!);
+        TypeResolution element = Resolve(type.GetElementType()!);
         if (element.IsRemoved) return TypeResolution.Removed;
         return element.IsUnchanged ? TypeResolution.Unchanged(type) : TypeResolution.Substituted(wrap(element.Target!));
     }
 
     private TypeResolution ResolveConstructedGeneric(Type type)
     {
-        var definition = Resolve(type.GetGenericTypeDefinition());
+        TypeResolution definition = Resolve(type.GetGenericTypeDefinition());
         if (definition.IsRemoved) return TypeResolution.Removed;
 
-        var arguments = type.GetGenericArguments();
+        Type[] arguments = type.GetGenericArguments();
         bool changed = definition.IsSubstituted;
 
         for (int i = 0; i < arguments.Length; i++)
         {
-            var argument = Resolve(arguments[i]);
+            TypeResolution argument = Resolve(arguments[i]);
             if (argument.IsRemoved) return TypeResolution.Removed;
 
             changed |= argument.IsSubstituted;
@@ -154,13 +154,13 @@ public sealed class TypeMap
 
     private TypeResolution Substitute(Type type, Assembly target)
     {
-        if (SyntheticName.TryParse(type.Name, out var name))
+        if (SyntheticName.TryParse(type.Name, out SyntheticName name))
             return SubstituteSynthetic(type, target, name);
 
         if (type.FullName == null)
             return SubstituteUnnamed(type);
 
-        var candidate = target.GetType(type.FullName);
+        Type? candidate = target.GetType(type.FullName);
         if (candidate == null) return Removed(type);
 
         return Validate(candidate) ? TypeResolution.Substituted(candidate) : TypeResolution.Removed;
@@ -168,45 +168,35 @@ public sealed class TypeMap
 
     private TypeResolution SubstituteSynthetic(Type type, Assembly target, in SyntheticName name)
     {
-        switch (name.Kind)
+        return name.Kind switch
         {
-            case SyntheticKind.LambdaDisplayClass:
-            case SyntheticKind.StateMachine:
-                return SubstituteNested(type, name);
-
-            case SyntheticKind.AnonymousType:
-                return SubstituteAnonymous(type, target);
-
-            case SyntheticKind.ReadOnlyList:
-            case SyntheticKind.InlineArray:
-                return type.FullName is { } fullName && target.GetType(fullName) is { } found
-                    ? TypeResolution.Substituted(found)
-                    : TypeResolution.Removed;
-
-            default:
-                // Other synthetic kinds are not structurally matched, so they cannot be carried over.
-                return TypeResolution.Removed;
-        }
+            SyntheticKind.LambdaDisplayClass or SyntheticKind.StateMachine => SubstituteNested(type, name),
+            SyntheticKind.AnonymousType => SubstituteAnonymous(type, target),
+            SyntheticKind.ReadOnlyList or SyntheticKind.InlineArray => type.FullName is { } fullName && target.GetType(fullName) is { } found
+                                ? TypeResolution.Substituted(found)
+                                : TypeResolution.Removed,
+            _ => TypeResolution.Removed,// Other synthetic kinds are not structurally matched, so they cannot be carried over.
+        };
     }
 
     // A display class or state machine is matched by the ordinal of the method it was declared inside, which
     // is stable across an edit in a way its own name is not.
     private TypeResolution SubstituteNested(Type type, in SyntheticName name)
     {
-        var declaring = type.DeclaringType;
+        Type? declaring = type.DeclaringType;
         if (declaring == null) return TypeResolution.Removed;
 
-        var newDeclaring = Resolve(declaring);
+        TypeResolution newDeclaring = Resolve(declaring);
         if (newDeclaring.Target is not { } target) return TypeResolution.Removed;
 
         if (name.Ordinal < 0 && name.SubOrdinal < 0)
         {
-            var byName = target.GetNestedType(type.Name, AnyNested);
+            Type? byName = target.GetNestedType(type.Name, AnyNested);
             return byName == null ? TypeResolution.Removed : TypeResolution.Substituted(byName);
         }
 
-        var previousIndex = _indexes.For(declaring.Assembly);
-        var scope = previousIndex.FindScopeMethod(declaring, null, name.Ordinal);
+        SyntheticIndex previousIndex = _indexes.For(declaring.Assembly);
+        MethodBase? scope = previousIndex.FindScopeMethod(declaring, null, name.Ordinal);
 
         if (scope == null)
         {
@@ -218,12 +208,12 @@ public sealed class TypeMap
 
         if (_members.ResolveMethod(scope) is not { } newScope) return TypeResolution.Removed;
 
-        var currentIndex = _indexes.For(target.Assembly);
+        SyntheticIndex currentIndex = _indexes.For(target.Assembly);
         var key = new SyntheticTypeKey(
             target.FullName ?? target.Name, name.Kind, name.Suffix,
             currentIndex.ScopeOrdinalOf(newScope), name.SubOrdinal);
 
-        if (currentIndex.TryGetType(key, out var matched))
+        if (currentIndex.TryGetType(key, out Type? matched))
             return TypeResolution.Substituted(matched);
 
         _report.Report(ReloadCode.SyntheticTypeUnmatched, ReloadSeverity.Warning,
@@ -235,10 +225,10 @@ public sealed class TypeMap
     {
         if (!type.IsGenericTypeDefinition) return TypeResolution.Unchanged(type);
 
-        var properties = AnonymousPropertyNames(type);
+        string[]? properties = AnonymousPropertyNames(type);
         if (properties == null) return TypeResolution.Removed;
 
-        var matched = _indexes.For(target).FindAnonymous(properties);
+        Type? matched = _indexes.For(target).FindAnonymous(properties);
         if (matched != null) return TypeResolution.Substituted(matched);
 
         _report.Report(ReloadCode.AnonymousTypeUnmatched, ReloadSeverity.Warning,
@@ -248,13 +238,13 @@ public sealed class TypeMap
 
     private static string[]? AnonymousPropertyNames(Type type)
     {
-        var parameters = type.GetGenericArguments();
+        Type[] parameters = type.GetGenericArguments();
         if (parameters.Length == 0) return null;
 
-        var names = new string[parameters.Length];
+        string[] names = new string[parameters.Length];
         for (int i = 0; i < parameters.Length; i++)
         {
-            var name = parameters[i].Name;
+            string name = parameters[i].Name;
             const string suffix = ">j__TPar";
             if (name.Length <= suffix.Length + 1 || name[0] != '<' || !name.EndsWith(suffix, StringComparison.Ordinal))
                 return null;
@@ -271,25 +261,25 @@ public sealed class TypeMap
 
         if (type.IsGenericMethodParameter)
         {
-            var method = _members.ResolveMethod(type.DeclaringMethod!);
-            var arguments = method?.GetGenericArguments();
+            MethodBase? method = _members.ResolveMethod(type.DeclaringMethod!);
+            Type[]? arguments = method?.GetGenericArguments();
             return arguments != null && type.GenericParameterPosition < arguments.Length
                 ? TypeResolution.Substituted(arguments[type.GenericParameterPosition])
                 : TypeResolution.Removed;
         }
 
-        var declaring = Resolve(type.DeclaringType);
+        TypeResolution declaring = Resolve(type.DeclaringType);
         if (declaring.Target is not { } target) return TypeResolution.Removed;
 
         if (type.IsGenericTypeParameter)
         {
-            var arguments = target.GetGenericArguments();
+            Type[] arguments = target.GetGenericArguments();
             return type.GenericParameterPosition < arguments.Length
                 ? TypeResolution.Substituted(arguments[type.GenericParameterPosition])
                 : TypeResolution.Removed;
         }
 
-        var nested = target.GetNestedType(type.Name, AnyNested);
+        Type? nested = target.GetNestedType(type.Name, AnyNested);
         return nested == null ? TypeResolution.Removed : TypeResolution.Substituted(nested);
     }
 
@@ -299,11 +289,11 @@ public sealed class TypeMap
     /// </summary>
     private bool Validate(Type candidate)
     {
-        foreach (var contract in candidate.GetInterfaces())
+        foreach (Type contract in candidate.GetInterfaces())
             if (_assemblies.IsSubstituted(contract.Assembly))
                 return RejectSubstitution(candidate, contract.Assembly);
 
-        for (var baseType = candidate; baseType != null; baseType = baseType.BaseType)
+        for (Type? baseType = candidate; baseType != null; baseType = baseType.BaseType)
             if (_assemblies.IsSubstituted(baseType.Assembly))
                 return RejectSubstitution(candidate, baseType.Assembly);
 

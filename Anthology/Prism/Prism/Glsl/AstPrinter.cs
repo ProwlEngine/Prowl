@@ -13,7 +13,7 @@ public static class AstPrinter
     {
         var sb = new StringBuilder();
         sb.Append("#version ").Append(unit.Version).Append('\n');
-        foreach (var decl in unit.Declarations) sb.Append(Decl(decl)).Append('\n');
+        foreach (Decl decl in unit.Declarations) sb.Append(Decl(decl)).Append('\n');
         return sb.ToString();
     }
 
@@ -82,7 +82,7 @@ public static class AstPrinter
             sb.Append("layout(")
               .Append(Join(q.Layout, li => li.Value is null ? li.Name : $"{li.Name} = {Expr(li.Value)}"))
               .Append(") ");
-        foreach (var w in q.Words) sb.Append(w).Append(' ');
+        foreach (string w in q.Words) sb.Append(w).Append(' ');
         return sb.ToString();
     }
 

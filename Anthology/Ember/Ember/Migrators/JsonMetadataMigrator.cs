@@ -39,7 +39,7 @@ public sealed class JsonMetadataMigrator : IValueMigrator, IReloadScopedMigrator
     {
         try
         {
-            var handler = typeof(JsonSerializerOptions).Assembly
+            Type? handler = typeof(JsonSerializerOptions).Assembly
                 .GetType("System.Text.Json.JsonSerializerOptionsUpdateHandler");
 
             handler?.GetMethod("ClearCache", BindingFlags.Static | BindingFlags.Public | BindingFlags.NonPublic)

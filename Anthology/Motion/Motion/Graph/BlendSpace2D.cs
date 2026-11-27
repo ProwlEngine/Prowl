@@ -1,4 +1,5 @@
 using System.Collections.Generic;
+
 using Prowl.Vector;
 
 namespace Prowl.Motion;
@@ -199,8 +200,8 @@ public sealed class BlendSpace2D
 
     private static int[] SortAlong(Float2[] points, Float2 direction)
     {
-        var order = new int[points.Length];
-        var keys = new float[points.Length];
+        int[] order = new int[points.Length];
+        float[] keys = new float[points.Length];
         for (int i = 0; i < points.Length; i++)
         {
             order[i] = i;
@@ -213,7 +214,7 @@ public sealed class BlendSpace2D
     // Andrew's monotone chain, counter clockwise, without repeating the first point.
     private static int[] ConvexHull(Float2[] points)
     {
-        var order = new int[points.Length];
+        int[] order = new int[points.Length];
         for (int i = 0; i < order.Length; i++)
             order[i] = i;
         Array.Sort(order, (a, b) => points[a].X != points[b].X ? points[a].X.CompareTo(points[b].X) : points[a].Y.CompareTo(points[b].Y));

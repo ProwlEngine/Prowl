@@ -11,18 +11,18 @@ namespace Prowl.Clay.Formats.Fbx;
 /// </summary>
 internal sealed class FbxPropertyTable
 {
-    private readonly Dictionary<string, FbxProperty[]> _byName = new(StringComparer.Ordinal);
+    private readonly Dictionary<string, FbxProperty[]> _byName = [with(StringComparer.Ordinal)];
 
     /// <summary>Number of properties in the table.</summary>
     public int Count => _byName.Count;
 
     /// <summary>Returns the property values for the named entry (one entry can carry several values).</summary>
     public FbxProperty[]? GetRaw(string name) =>
-        _byName.TryGetValue(name, out var v) ? v : null;
+        _byName.TryGetValue(name, out FbxProperty[]? v) ? v : null;
 
     public bool TryGetDouble(string name, out double value)
     {
-        if (_byName.TryGetValue(name, out var arr) && arr.Length > 0)
+        if (_byName.TryGetValue(name, out FbxProperty[]? arr) && arr.Length > 0)
         {
             value = arr[0].AsDouble();
             return true;
@@ -33,7 +33,7 @@ internal sealed class FbxPropertyTable
 
     public bool TryGetInt(string name, out int value)
     {
-        if (_byName.TryGetValue(name, out var arr) && arr.Length > 0)
+        if (_byName.TryGetValue(name, out FbxProperty[]? arr) && arr.Length > 0)
         {
             value = arr[0].AsInt();
             return true;
@@ -44,7 +44,7 @@ internal sealed class FbxPropertyTable
 
     public bool TryGetString(string name, out string value)
     {
-        if (_byName.TryGetValue(name, out var arr) && arr.Length > 0)
+        if (_byName.TryGetValue(name, out FbxProperty[]? arr) && arr.Length > 0)
         {
             value = arr[0].AsString();
             return true;
@@ -56,7 +56,7 @@ internal sealed class FbxPropertyTable
     /// <summary>Reads x/y/z triplet starting at <paramref name="firstIndex"/>.</summary>
     public bool TryGetVec3(string name, out double x, out double y, out double z, int firstIndex = 0)
     {
-        if (_byName.TryGetValue(name, out var arr) && arr.Length >= firstIndex + 3)
+        if (_byName.TryGetValue(name, out FbxProperty[]? arr) && arr.Length >= firstIndex + 3)
         {
             x = arr[firstIndex + 0].AsDouble();
             y = arr[firstIndex + 1].AsDouble();
@@ -88,7 +88,7 @@ internal sealed class FbxPropertyTable
     public static FbxPropertyTable From(FbxNode propsNode)
     {
         var table = new FbxPropertyTable();
-        foreach (var child in propsNode.Children)
+        foreach (FbxNode child in propsNode.Children)
         {
             if (child.Properties.Count < 4) continue;
             string name = child.Properties[0].AsString();

@@ -12,7 +12,7 @@ internal unsafe partial class VkFramebuffer : VkFramebufferBase
 {
     private readonly VkGraphicsDevice _gd;
     private readonly VkFramebufferHandle _deviceFramebuffer;
-    private readonly Dictionary<(FramebufferMode Mode, RenderPassOps Ops), RenderPass> _renderPasses = new();
+    private readonly Dictionary<(FramebufferMode Mode, RenderPassOps Ops), RenderPass> _renderPasses = [];
     private readonly uint _colorAttachmentCount;
     private readonly List<ImageView> _attachmentViews = [];
 

@@ -69,8 +69,8 @@ public static class GeometryCSG
         }
 
         // Categorize each brush's polygons against the other convex solid.
-        brushA.CategorizeAgainst(brushB, out var insideA, out var alignedA, out _, out var outsideA);
-        brushB.CategorizeAgainst(brushA, out var insideB, out _, out _, out var outsideB);
+        brushA.CategorizeAgainst(brushB, out List<Polygon>? insideA, out List<Polygon>? alignedA, out _, out List<Polygon>? outsideA);
+        brushB.CategorizeAgainst(brushA, out List<Polygon>? insideB, out _, out _, out List<Polygon>? outsideB);
 
         // A's faces are emitted last so that A wins on shared (welded) per-vertex attributes.
         switch (operation)
@@ -124,7 +124,7 @@ public static class GeometryCSG
     private sealed class EmitContext
     {
         public readonly GeometryData Result;
-        public readonly Dictionary<SnapKey, GeometryData.Vertex> Weld = new();
+        public readonly Dictionary<SnapKey, GeometryData.Vertex> Weld = [];
         public readonly bool HasAttributes;
 
         public EmitContext(GeometryData result, GeometryData? a, GeometryData? b)
@@ -136,13 +136,13 @@ public static class GeometryCSG
         // meshA is registered first so it wins when both inputs define the same attribute name.
         private static bool RegisterAttributes(GeometryData result, GeometryData? a, GeometryData? b)
         {
-            foreach (var mesh in new[] { a, b })
+            foreach (GeometryData? mesh in new[] { a, b })
             {
                 if (mesh == null) continue;
-                foreach (var def in mesh.VertexAttributes) result.AddVertexAttribute(def.Name, def.Type.BaseType, def.Type.Dimensions);
-                foreach (var def in mesh.EdgeAttributes) result.AddEdgeAttribute(def.Name, def.Type.BaseType, def.Type.Dimensions);
-                foreach (var def in mesh.LoopAttributes) result.AddLoopAttribute(def.Name, def.Type.BaseType, def.Type.Dimensions);
-                foreach (var def in mesh.FaceAttributes) result.AddFaceAttribute(def.Name, def.Type.BaseType, def.Type.Dimensions);
+                foreach (GeometryData.AttributeDefinition def in mesh.VertexAttributes) result.AddVertexAttribute(def.Name, def.Type.BaseType, def.Type.Dimensions);
+                foreach (GeometryData.AttributeDefinition def in mesh.EdgeAttributes) result.AddEdgeAttribute(def.Name, def.Type.BaseType, def.Type.Dimensions);
+                foreach (GeometryData.AttributeDefinition def in mesh.LoopAttributes) result.AddLoopAttribute(def.Name, def.Type.BaseType, def.Type.Dimensions);
+                foreach (GeometryData.AttributeDefinition def in mesh.FaceAttributes) result.AddFaceAttribute(def.Name, def.Type.BaseType, def.Type.Dimensions);
             }
 
             return result.VertexAttributes.Count > 0 || result.EdgeAttributes.Count > 0 ||
@@ -153,7 +153,7 @@ public static class GeometryCSG
     private static void Emit(EmitContext ctx, Brush brush, List<Polygon> polygons, bool flip)
     {
         var ring = new List<Float3>();
-        foreach (var polygon in polygons)
+        foreach (Polygon polygon in polygons)
         {
             if (polygon.FirstEdge == -1)
                 continue;
@@ -171,9 +171,9 @@ public static class GeometryCSG
     {
         var verts = new List<GeometryData.Vertex>(ring.Count);
         var positions = new List<Float3>(ring.Count);
-        foreach (var point in ring)
+        foreach (Float3 point in ring)
         {
-            var vertex = GetOrAddVertex(ctx, point);
+            GeometryData.Vertex vertex = GetOrAddVertex(ctx, point);
             // Skip vertices coincident with the previous one (collapsed edges).
             if (verts.Count > 0 && verts[verts.Count - 1] == vertex)
                 continue;
@@ -191,7 +191,7 @@ public static class GeometryCSG
         if (verts.Count < 3)
             return;
 
-        var face = ctx.Result.AddFace(verts.ToArray());
+        GeometryData.Face? face = ctx.Result.AddFace(verts.ToArray());
         if (face == null || !ctx.HasAttributes)
             return;
 
@@ -203,10 +203,10 @@ public static class GeometryCSG
     private static GeometryData.Vertex GetOrAddVertex(EmitContext ctx, Float3 point)
     {
         var key = new SnapKey(point, WeldTolerance);
-        if (ctx.Weld.TryGetValue(key, out var existing))
+        if (ctx.Weld.TryGetValue(key, out GeometryData.Vertex? existing))
             return existing;
 
-        var vertex = ctx.Result.AddVertex(point);
+        GeometryData.Vertex vertex = ctx.Result.AddVertex(point);
         ctx.Weld[key] = vertex;
         return vertex;
     }
@@ -239,16 +239,16 @@ public static class GeometryCSG
             return;
 
         Float3 centroid = Float3.Zero;
-        foreach (var p in positions) centroid += p;
+        foreach (Float3 p in positions) centroid += p;
         centroid /= positions.Count;
 
-        if (!brush.ResolveFace(polygon.PlaneIndex, centroid, out var source))
+        if (!brush.ResolveFace(polygon.PlaneIndex, centroid, out SourceFace? source))
             return;
 
-        foreach (var def in ctx.Result.FaceAttributes)
+        foreach (GeometryData.AttributeDefinition def in ctx.Result.FaceAttributes)
         {
             if (source.Mesh.HasFaceAttribute(def.Name) &&
-                source.Face.Attributes.TryGetValue(def.Name, out var value))
+                source.Face.Attributes.TryGetValue(def.Name, out GeometryData.AttributeValue? value))
             {
                 face.Attributes[def.Name] = GeometryData.AttributeValue.Copy(value);
             }
@@ -266,15 +266,15 @@ public static class GeometryCSG
 
         for (int i = 0; i < verts.Count; i++)
         {
-            if (!brush.ResolveCorner(polygon.PlaneIndex, positions[i], out var source, out var weights))
+            if (!brush.ResolveCorner(polygon.PlaneIndex, positions[i], out SourceFace? source, out float[]? weights))
                 continue;
 
             if (anyLoop)
             {
-                var loop = face.GetLoop(verts[i]);
+                GeometryData.Loop? loop = face.GetLoop(verts[i]);
                 if (loop != null)
                 {
-                    foreach (var def in ctx.Result.LoopAttributes)
+                    foreach (GeometryData.AttributeDefinition def in ctx.Result.LoopAttributes)
                     {
                         if (!source.Mesh.HasLoopAttribute(def.Name)) continue;
                         loop.Attributes[def.Name] = InterpolateLoop(def, source, weights);
@@ -284,7 +284,7 @@ public static class GeometryCSG
 
             if (anyVertex)
             {
-                foreach (var def in ctx.Result.VertexAttributes)
+                foreach (GeometryData.AttributeDefinition def in ctx.Result.VertexAttributes)
                 {
                     if (!source.Mesh.HasVertexAttribute(def.Name)) continue;
                     verts[i].Attributes[def.Name] = InterpolateVertex(def, source, weights);
@@ -304,18 +304,18 @@ public static class GeometryCSG
         for (int i = 0; i < n; i++)
         {
             int j = (i + 1) % n;
-            var sourceEdge = brush.ResolveEdge(polygon.PlaneIndex, positions[i], positions[j], out var source);
+            GeometryData.Edge? sourceEdge = brush.ResolveEdge(polygon.PlaneIndex, positions[i], positions[j], out SourceFace? source);
             if (sourceEdge == null)
                 continue;
 
-            var edge = ctx.Result.FindEdge(verts[i], verts[j]);
+            GeometryData.Edge? edge = ctx.Result.FindEdge(verts[i], verts[j]);
             if (edge == null)
                 continue;
 
-            foreach (var def in ctx.Result.EdgeAttributes)
+            foreach (GeometryData.AttributeDefinition def in ctx.Result.EdgeAttributes)
             {
                 if (source!.Mesh.HasEdgeAttribute(def.Name) &&
-                    sourceEdge.Attributes.TryGetValue(def.Name, out var value))
+                    sourceEdge.Attributes.TryGetValue(def.Name, out GeometryData.AttributeValue? value))
                 {
                     edge.Attributes[def.Name] = GeometryData.AttributeValue.Copy(value);
                 }
@@ -330,8 +330,8 @@ public static class GeometryCSG
         var perCorner = new GeometryData.AttributeValue?[n];
         for (int k = 0; k < n; k++)
         {
-            var loop = source.Loops[k];
-            if (loop != null && loop.Attributes.TryGetValue(def.Name, out var value))
+            GeometryData.Loop? loop = source.Loops[k];
+            if (loop != null && loop.Attributes.TryGetValue(def.Name, out GeometryData.AttributeValue? value))
                 perCorner[k] = value;
         }
         return Interpolate(def, perCorner, weights);
@@ -344,7 +344,7 @@ public static class GeometryCSG
         var perCorner = new GeometryData.AttributeValue?[n];
         for (int k = 0; k < n; k++)
         {
-            if (source.Verts[k].Attributes.TryGetValue(def.Name, out var value))
+            if (source.Verts[k].Attributes.TryGetValue(def.Name, out GeometryData.AttributeValue? value))
                 perCorner[k] = value;
         }
         return Interpolate(def, perCorner, weights);
@@ -354,7 +354,7 @@ public static class GeometryCSG
         GeometryData.AttributeValue?[] perCorner, float[] weights)
     {
         int dims = def.Type.Dimensions;
-        var acc = new float[dims];
+        float[] acc = new float[dims];
 
         for (int k = 0; k < perCorner.Length; k++)
         {
@@ -373,7 +373,7 @@ public static class GeometryCSG
         if (def.Type.BaseType == GeometryData.AttributeBaseType.Float)
             return new GeometryData.FloatAttributeValue { Data = acc };
 
-        var rounded = new int[dims];
+        int[] rounded = new int[dims];
         for (int d = 0; d < dims; d++) rounded[d] = (int)MathF.Round(acc[d]);
         return new GeometryData.IntAttributeValue { Data = rounded };
     }
@@ -396,7 +396,7 @@ public static class GeometryCSG
 
         public static SourceFace Build(GeometryData mesh, GeometryData.Face face)
         {
-            var verts = face.NeighborVertices();
+            List<GeometryData.Vertex> verts = face.NeighborVertices();
             int n = verts.Count;
             var info = new SourceFace
             {
@@ -486,7 +486,7 @@ public static class GeometryCSG
             var planes = new List<Plane>();
             var planeFaces = new List<List<SourceFace>>();
 
-            foreach (var face in geometry.Faces)
+            foreach (GeometryData.Face face in geometry.Faces)
             {
                 if (face.VertCount < 3)
                     continue;
@@ -516,14 +516,14 @@ public static class GeometryCSG
                 else
                 {
                     planes.Add(plane);
-                    planeFaces.Add(new List<SourceFace> { info });
+                    planeFaces.Add([info]);
                 }
             }
 
             if (planes.Count < 4)
                 return null;
 
-            var brush = CreateFromPlanes(planes.ToArray());
+            Brush brush = CreateFromPlanes(planes.ToArray());
             brush.PlaneFaces = planeFaces.ToArray();
             return brush;
         }
@@ -543,14 +543,14 @@ public static class GeometryCSG
 
         private sealed class PointIntersection
         {
-            public readonly List<EdgeIntersection> Edges = new List<EdgeIntersection>();
-            public readonly HashSet<int> PlaneIndices = new HashSet<int>();
+            public readonly List<EdgeIntersection> Edges = [];
+            public readonly HashSet<int> PlaneIndices = [];
             public readonly int VertexIndex;
 
             public PointIntersection(int vertexIndex, List<int> planes)
             {
                 VertexIndex = vertexIndex;
-                foreach (var plane in planes)
+                foreach (int plane in planes)
                     PlaneIndices.Add(plane);
             }
         }
@@ -615,16 +615,16 @@ public static class GeometryCSG
             }
 
             // Build the intersection edges, each formed by a pair of planes shared by two points.
-            var foundPlanes = new int[2];
+            int[] foundPlanes = new int[2];
             for (int i = 0; i < pointIntersections.Count; i++)
             {
-                var pointA = pointIntersections[i];
+                PointIntersection pointA = pointIntersections[i];
                 for (int j = i + 1; j < pointIntersections.Count; j++)
                 {
-                    var pointB = pointIntersections[j];
+                    PointIntersection pointB = pointIntersections[j];
 
                     int foundPlaneIndex = 0;
-                    foreach (var currentPlaneIndex in pointA.PlaneIndices)
+                    foreach (int currentPlaneIndex in pointA.PlaneIndices)
                     {
                         if (!pointB.PlaneIndices.Contains(currentPlaneIndex))
                             continue;
@@ -664,7 +664,7 @@ public static class GeometryCSG
             // Link the half-edges around each polygon by ordering the edges meeting at every point.
             for (int i = pointIntersections.Count - 1; i >= 0; i--)
             {
-                var pointEdges = pointIntersections[i].Edges;
+                List<EdgeIntersection> pointEdges = pointIntersections[i].Edges;
 
                 // A valid corner needs at least 3 edges meeting; otherwise the point is spurious.
                 if (pointEdges.Count <= 2)
@@ -672,10 +672,10 @@ public static class GeometryCSG
 
                 for (int j = 0; j < pointEdges.Count - 1; j++)
                 {
-                    var edge1 = pointEdges[j];
+                    EdgeIntersection edge1 = pointEdges[j];
                     for (int k = j + 1; k < pointEdges.Count; k++)
                     {
-                        var edge2 = pointEdges[k];
+                        EdgeIntersection edge2 = pointEdges[k];
 
                         int planeIndex1, planeIndex2;
                         if (edge1.PlaneIndices[0] == edge2.PlaneIndices[0]) { planeIndex1 = 0; planeIndex2 = 0; }
@@ -684,9 +684,9 @@ public static class GeometryCSG
                         else if (edge1.PlaneIndices[1] == edge2.PlaneIndices[1]) { planeIndex1 = 1; planeIndex2 = 1; }
                         else continue;
 
-                        var sharedPlane = planes[edge1.PlaneIndices[planeIndex1]];
-                        var edge1Plane = planes[edge1.PlaneIndices[1 - planeIndex1]];
-                        var edge2Plane = planes[edge2.PlaneIndices[1 - planeIndex2]];
+                        Plane sharedPlane = planes[edge1.PlaneIndices[planeIndex1]];
+                        Plane edge1Plane = planes[edge1.PlaneIndices[1 - planeIndex1]];
+                        Plane edge2Plane = planes[edge2.PlaneIndices[1 - planeIndex2]];
 
                         Float3 direction = Float3.Cross(sharedPlane.Normal, edge1Plane.Normal);
 
@@ -702,7 +702,7 @@ public static class GeometryCSG
                             ingoing = edge1.Edge;
                             outgoingIndex = edge2.Edge.Twin;
                         }
-                        var outgoing = edges[outgoingIndex];
+                        HalfEdge outgoing = edges[outgoingIndex];
 
                         // Link out-going to in-going; the half-edges form the circular polygon loop.
                         ingoing.Next = outgoingIndex;
@@ -716,7 +716,7 @@ public static class GeometryCSG
             }
 
             var brush = new Brush(planes, vertices, edges, polygons);
-            foreach (var polygon in polygons)
+            foreach (Polygon polygon in polygons)
                 brush.RecomputeBounds(polygon);
             brush.RecomputeBounds();
             return brush;
@@ -729,21 +729,21 @@ public static class GeometryCSG
         // Picks the source face on a plane that best contains a point, returning its mean-value weights.
         public bool ResolveCorner(int planeIndex, Float3 point, out SourceFace source, out float[] weights)
         {
-            var candidates = PlaneFaces[planeIndex];
+            List<SourceFace> candidates = PlaneFaces[planeIndex];
             source = null!;
             weights = Array.Empty<float>();
             if (candidates.Count == 0)
                 return false;
 
             float bestScore = float.NegativeInfinity;
-            foreach (var candidate in candidates)
+            foreach (SourceFace candidate in candidates)
             {
-                var w = new float[candidate.Corners.Length];
+                float[] w = new float[candidate.Corners.Length];
                 if (!Intersection.PolygonMeanValueWeights(point, candidate.Corners, w))
                     continue;
 
                 float minWeight = float.PositiveInfinity;
-                foreach (var value in w)
+                foreach (float value in w)
                     if (value < minWeight) minWeight = value;
 
                 if (minWeight > bestScore)
@@ -764,7 +764,7 @@ public static class GeometryCSG
         public GeometryData.Edge? ResolveEdge(int planeIndex, Float3 pa, Float3 pb, out SourceFace? source)
         {
             source = null;
-            if (!ResolveFace(planeIndex, (pa + pb) * 0.5f, out var fi))
+            if (!ResolveFace(planeIndex, (pa + pb) * 0.5f, out SourceFace? fi))
                 return null;
             source = fi;
 
@@ -789,7 +789,7 @@ public static class GeometryCSG
         private void RecomputeBounds()
         {
             bool first = true;
-            foreach (var polygon in Polygons)
+            foreach (Polygon polygon in Polygons)
             {
                 if (polygon.FirstEdge == -1)
                     continue;
@@ -819,8 +819,8 @@ public static class GeometryCSG
 
             int start = polygon.FirstEdge;
             int current = start;
-            var min = Vertices[Edges[current].Vertex];
-            var max = min;
+            Float3 min = Vertices[Edges[current].Vertex];
+            Float3 max = min;
             int guard = 0;
             do
             {
@@ -863,26 +863,26 @@ public static class GeometryCSG
             out List<Polygon> inside, out List<Polygon> aligned,
             out List<Polygon> revAligned, out List<Polygon> outside)
         {
-            inside = new List<Polygon>();
-            aligned = new List<Polygon>();
-            revAligned = new List<Polygon>();
-            outside = new List<Polygon>();
+            inside = [];
+            aligned = [];
+            revAligned = [];
+            outside = [];
 
             // Snapshot count: splitting appends outside pieces past this point and they're already routed.
             int count = Polygons.Count;
             for (int i = count - 1; i >= 0; i--)
             {
-                var inputPolygon = Polygons[i];
+                Polygon inputPolygon = Polygons[i];
                 if (inputPolygon.FirstEdge == -1)
                     continue;
 
-                var finalResult = SplitResult.CompletelyInside;
+                SplitResult finalResult = SplitResult.CompletelyInside;
 
                 if (Overlaps(cutting.BoundsMin, cutting.BoundsMax, inputPolygon.BoundsMin, inputPolygon.BoundsMax))
                 {
                     for (int otherIndex = 0; otherIndex < cutting.Planes.Length; otherIndex++)
                     {
-                        var cuttingPlane = cutting.Planes[otherIndex];
+                        Plane cuttingPlane = cutting.Planes[otherIndex];
 
                         Side side = OnSide(cuttingPlane, inputPolygon.BoundsMin, inputPolygon.BoundsMax);
                         if (side == Side.Outside)
@@ -893,7 +893,7 @@ public static class GeometryCSG
                         if (side == Side.Inside)
                             continue;
 
-                        var intermediateResult = PolygonSplit(cuttingPlane, inputPolygon, out var outsidePolygon);
+                        SplitResult intermediateResult = PolygonSplit(cuttingPlane, inputPolygon, out Polygon? outsidePolygon);
 
                         if (intermediateResult == SplitResult.CompletelyOutside)
                         {
@@ -933,7 +933,7 @@ public static class GeometryCSG
         private int EdgeSplit(HalfEdge thisEdge, Float3 vertex)
         {
             int thisTwinIndex = thisEdge.Twin;
-            var thisTwin = Edges[thisTwinIndex];
+            HalfEdge thisTwin = Edges[thisTwinIndex];
             int thisEdgeIndex = thisTwin.Twin;
 
             var newEdge = new HalfEdge();
@@ -1124,7 +1124,7 @@ public static class GeometryCSG
                 case Side.Inside: return SplitResult.CompletelyInside;
                 case Side.Outside: return SplitResult.CompletelyOutside;
                 default:
-                    var polygonPlane = Planes[inputPolygon.PlaneIndex];
+                    Plane polygonPlane = Planes[inputPolygon.PlaneIndex];
                     return Float3.Dot(polygonPlane.Normal, cuttingPlane.Normal) > 0
                         ? SplitResult.PlaneAligned
                         : SplitResult.PlaneOppositeAligned;

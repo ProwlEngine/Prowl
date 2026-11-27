@@ -80,7 +80,7 @@ public static class AutoAtlasPacker
         }
 
         // ---- 2) Sort by max side desc: standard shelf-pack heuristic. ------------------------
-        var order = new int[n];
+        int[] order = new int[n];
         for (int i = 0; i < n; i++) order[i] = i;
         System.Array.Sort(order, (a, b) =>
         {
@@ -102,7 +102,7 @@ public static class AutoAtlasPacker
 
             for (int a = 0; a < atlasCursors.Count && !placed; a++)
             {
-                var (cx, cy, rh) = atlasCursors[a];
+                (int cx, int cy, int rh) = atlasCursors[a];
                 // Try the current shelf first; if no horizontal room, start a new shelf.
                 if (cx + w + padding > atlasWidth)
                 {
@@ -136,7 +136,7 @@ public static class AutoAtlasPacker
         var bakeInstances = new BakeInstance[n];
         for (int i = 0; i < n; i++)
         {
-            var p = placements[i];
+            (int atlas, int x, int y, int w, int h) p = placements[i];
             var offset = new Float2(p.x / (float)atlasWidth, p.y / (float)atlasHeight);
             var scale = new Float2(p.w / (float)atlasWidth, p.h / (float)atlasHeight);
             bakeInstances[i] = targets[p.atlas].AddBakeInstance(
@@ -187,7 +187,7 @@ public static class AutoAtlasPacker
         var placements = new (int, int, int, int, int)[n];
         for (int i = 0; i < n; i++)
         {
-            var it = items[i];
+            (BakeMesh mesh, Float4x4 transform, int atlasIndex, Float2 uvOffset, Float2 uvScale) it = items[i];
             bakeInstances[i] = targets[it.atlasIndex].AddBakeInstance(
                 it.mesh, it.transform, it.uvOffset, it.uvScale, bakeUVLayer);
             placements[i] = (
@@ -213,23 +213,23 @@ public static class AutoAtlasPacker
     /// </remarks>
     private static float MeshMaxWorldOverUVRatio(BakeMesh mesh, Float4x4 transform, string bakeUVLayer)
     {
-        if (!mesh.UVLayers.TryGetValue(bakeUVLayer, out var uv)) return 0f;
-        var positions = mesh.Positions;
+        if (!mesh.UVLayers.TryGetValue(bakeUVLayer, out Float2[]? uv)) return 0f;
+        Float3[] positions = mesh.Positions;
         float maxRatio = 0f;
         for (int g = 0; g < mesh.MaterialGroups.Count; g++)
         {
-            var idx = mesh.MaterialGroups[g].Indices;
+            int[] idx = mesh.MaterialGroups[g].Indices;
             for (int i = 0; i < idx.Length; i += 3)
             {
-                var v0 = Float4x4.TransformPoint(positions[idx[i]], transform);
-                var v1 = Float4x4.TransformPoint(positions[idx[i + 1]], transform);
-                var v2 = Float4x4.TransformPoint(positions[idx[i + 2]], transform);
+                Float3 v0 = Float4x4.TransformPoint(positions[idx[i]], transform);
+                Float3 v1 = Float4x4.TransformPoint(positions[idx[i + 1]], transform);
+                Float3 v2 = Float4x4.TransformPoint(positions[idx[i + 2]], transform);
                 float wArea = Float3.Length(Float3.Cross(v1 - v0, v2 - v0)) * 0.5f;
                 if (wArea < 1e-9f) continue;
 
-                var a = uv[idx[i]];
-                var b = uv[idx[i + 1]];
-                var c = uv[idx[i + 2]];
+                Float2 a = uv[idx[i]];
+                Float2 b = uv[idx[i + 1]];
+                Float2 c = uv[idx[i + 2]];
                 float uArea = System.Math.Abs((b.X - a.X) * (c.Y - a.Y) - (b.Y - a.Y) * (c.X - a.X)) * 0.5f;
                 if (uArea < 1e-10f) continue;
 

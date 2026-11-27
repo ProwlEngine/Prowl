@@ -30,10 +30,10 @@ internal static class GltfAnimationMapper
 
         for (int a = 0; a < dom.Animations.Length; a++)
         {
-            var src = dom.Animations[a];
+            GltfAnimation src = dom.Animations[a];
             var anim = new IntermediateAnimation { Name = src.Name ?? $"Animation_{a}" };
 
-            foreach (var channel in src.Channels)
+            foreach (GltfAnimationChannel channel in src.Channels)
             {
                 if (channel.Target.Node is not { } nodeIdx ||
                     (uint)nodeIdx >= (uint)nodes.Length)
@@ -47,10 +47,10 @@ internal static class GltfAnimationMapper
                     continue;
                 }
 
-                var sampler = src.Samplers[channel.Sampler];
+                GltfAnimationSampler sampler = src.Samplers[channel.Sampler];
                 CurveInterpolation interp = ParseInterpolation(sampler.Interpolation, ctx);
 
-                var times = reader.ReadFloats1D(sampler.Input);
+                float[] times = reader.ReadFloats1D(sampler.Input);
                 if (times.Length == 0) continue;
 
                 switch (channel.Target.Path)

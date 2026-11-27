@@ -80,17 +80,17 @@ internal sealed class Blas
         var tris = new TriRef[triCount];
         var centroids = new Float3[triCount];
         var aabbs = new AABB[triCount];
-        var positions = Mesh.Positions;
+        Float3[] positions = Mesh.Positions;
 
         int t = 0;
         for (int g = 0; g < Mesh.MaterialGroups.Count; g++)
         {
-            var idx = Mesh.MaterialGroups[g].Indices;
+            int[] idx = Mesh.MaterialGroups[g].Indices;
             for (int i = 0; i < idx.Length; i += 3)
             {
                 int i0 = idx[i], i1 = idx[i + 1], i2 = idx[i + 2];
                 tris[t] = new TriRef { I0 = i0, I1 = i1, I2 = i2, MaterialGroupIndex = g };
-                var p0 = positions[i0]; var p1 = positions[i1]; var p2 = positions[i2];
+                Float3 p0 = positions[i0]; Float3 p1 = positions[i1]; Float3 p2 = positions[i2];
                 var min = new Float3(System.Math.Min(p0.X, System.Math.Min(p1.X, p2.X)),
                                      System.Math.Min(p0.Y, System.Math.Min(p1.Y, p2.Y)),
                                      System.Math.Min(p0.Z, System.Math.Min(p1.Z, p2.Z)));
@@ -103,12 +103,14 @@ internal sealed class Blas
             }
         }
 
-        var perm = new int[triCount];
+        int[] perm = new int[triCount];
         for (int i = 0; i < triCount; i++) perm[i] = i;
 
         // ---- 1) Build binary SAH BVH into a temp list. ----------------------------------------
-        var bvh2 = new System.Collections.Generic.List<Node>(2 * System.Math.Max(1, triCount));
-        bvh2.Add(default);
+        var bvh2 = new System.Collections.Generic.List<Node>(2 * System.Math.Max(1, triCount))
+        {
+            default
+        };
         BuildRecursive(bvh2, 0, perm, 0, triCount, aabbs, centroids);
 
         // ---- 2) Rebuild triangle storage as 4-aligned padded SoA so each leaf is exactly one
@@ -127,15 +129,15 @@ internal sealed class Blas
         var padE2Z = new System.Collections.Generic.List<float>(paddedCapacity);
         for (int ni = 0; ni < bvh2.Count; ni++)
         {
-            var n = bvh2[ni];
+            Node n = bvh2[ni];
             if (n.PrimCount == 0) continue; // inner
             int firstNew = padTris.Count;
             for (int i = 0; i < n.PrimCount; i++)
             {
-                var tr = tris[perm[n.LeftFirst + i]];
-                var v0 = positions[tr.I0];
-                var e1 = positions[tr.I1] - v0;
-                var e2 = positions[tr.I2] - v0;
+                TriRef tr = tris[perm[n.LeftFirst + i]];
+                Float3 v0 = positions[tr.I0];
+                Float3 e1 = positions[tr.I1] - v0;
+                Float3 e2 = positions[tr.I2] - v0;
                 padTris.Add(tr);
                 padV0X.Add(v0.X); padV0Y.Add(v0.Y); padV0Z.Add(v0.Z);
                 padE1X.Add(e1.X); padE1Y.Add(e1.Y); padE1Z.Add(e1.Z);
@@ -168,9 +170,9 @@ internal sealed class Blas
                                        int[] perm, int first, int count,
                                        AABB[] aabbs, Float3[] centroids)
     {
-        var bounds = aabbs[perm[first]];
+        AABB bounds = aabbs[perm[first]];
         for (int i = 1; i < count; i++) bounds.Encapsulate(aabbs[perm[first + i]]);
-        var node = nodes[nodeIndex];
+        Node node = nodes[nodeIndex];
         node.Bounds = bounds;
 
         if (count <= LeafThreshold)
@@ -181,14 +183,14 @@ internal sealed class Blas
             return;
         }
 
-        var cmin = centroids[perm[first]]; var cmax = cmin;
+        Float3 cmin = centroids[perm[first]]; Float3 cmax = cmin;
         for (int i = 1; i < count; i++)
         {
-            var c = centroids[perm[first + i]];
+            Float3 c = centroids[perm[first + i]];
             cmin = new Float3(System.Math.Min(cmin.X, c.X), System.Math.Min(cmin.Y, c.Y), System.Math.Min(cmin.Z, c.Z));
             cmax = new Float3(System.Math.Max(cmax.X, c.X), System.Math.Max(cmax.Y, c.Y), System.Math.Max(cmax.Z, c.Z));
         }
-        var cext = cmax - cmin;
+        Float3 cext = cmax - cmin;
         int axis = 0;
         if (cext.Y > cext.X) axis = 1;
         if (cext.Z > Component(cext, axis)) axis = 2;
@@ -200,7 +202,7 @@ internal sealed class Blas
             return;
         }
 
-        var binCounts = new int[SahBins];
+        int[] binCounts = new int[SahBins];
         var binBounds = new AABB[SahBins];
         bool[] binSet = new bool[SahBins];
         float scale = SahBins / Component(cext, axis);
@@ -218,8 +220,8 @@ internal sealed class Blas
 
         var leftBounds = new AABB[SahBins - 1];
         var rightBounds = new AABB[SahBins - 1];
-        var leftCount = new int[SahBins - 1];
-        var rightCount = new int[SahBins - 1];
+        int[] leftCount = new int[SahBins - 1];
+        int[] rightCount = new int[SahBins - 1];
 
         AABB lAcc = default; bool lSet = false; int lCnt = 0;
         for (int b = 0; b < SahBins - 1; b++)
@@ -316,7 +318,7 @@ internal sealed class Blas
         System.Span<int> slots = stackalloc int[4];
         System.Span<bool> isLeaf = stackalloc bool[4];
         int slotCount = 0;
-        var root = bvh2[bvh2Idx];
+        Node root = bvh2[bvh2Idx];
         if (root.PrimCount > 0)
         {
             slots[0] = bvh2Idx; isLeaf[0] = true; slotCount = 1;
@@ -326,7 +328,7 @@ internal sealed class Blas
             for (int c = 0; c < 2; c++)
             {
                 int ci = root.LeftFirst + c;
-                var child = bvh2[ci];
+                Node child = bvh2[ci];
                 if (child.PrimCount > 0)
                 {
                     slots[slotCount] = ci; isLeaf[slotCount] = true; slotCount++;
@@ -354,7 +356,7 @@ internal sealed class Blas
             if (i < slotCount)
             {
                 int srcIdx = slots[i];
-                var bbox = bvh2[srcIdx].Bounds;
+                AABB bbox = bvh2[srcIdx].Bounds;
                 minX[i] = bbox.Min.X; minY[i] = bbox.Min.Y; minZ[i] = bbox.Min.Z;
                 maxX[i] = bbox.Max.X; maxY[i] = bbox.Max.Y; maxZ[i] = bbox.Max.Z;
                 if (isLeaf[i])
@@ -429,46 +431,46 @@ internal sealed class Blas
         var e2z = Vector256.LoadUnsafe(ref E2Z[firstTri]);
 
         // p = cross(rd, e2)
-        var px = rdY * e2z - rdZ * e2y;
-        var py = rdZ * e2x - rdX * e2z;
-        var pz = rdX * e2y - rdY * e2x;
+        Vector256<float> px = rdY * e2z - rdZ * e2y;
+        Vector256<float> py = rdZ * e2x - rdX * e2z;
+        Vector256<float> pz = rdX * e2y - rdY * e2x;
 
         // det = dot(e1, p). Its sign is the triangle's facing relative to the ray; backface culling
         // keeps only one side. (For a CCW-wound triangle, det > 0 = front-facing.)
-        var det = e1x * px + e1y * py + e1z * pz;
+        Vector256<float> det = e1x * px + e1y * py + e1z * pz;
         var eps = Vector256.Create(1e-12f);
         Vector256<float> validDet;
         if (!cullEnabled) validDet = Vector256.GreaterThan(Vector256.Abs(det), eps);
         else if (keepPositive) validDet = Vector256.GreaterThan(det, eps);
         else validDet = Vector256.LessThan(det, -Vector256.Create(1e-12f));
 
-        var invDet = Vector256.Create(1f) / det;
+        Vector256<float> invDet = Vector256.Create(1f) / det;
 
         // tv = ro - v0
-        var tvx = roX - v0x;
-        var tvy = roY - v0y;
-        var tvz = roZ - v0z;
+        Vector256<float> tvx = roX - v0x;
+        Vector256<float> tvy = roY - v0y;
+        Vector256<float> tvz = roZ - v0z;
 
         // u = dot(tv, p) * invDet, must be in [0, 1]
-        var u = (tvx * px + tvy * py + tvz * pz) * invDet;
-        var zero = Vector256<float>.Zero;
+        Vector256<float> u = (tvx * px + tvy * py + tvz * pz) * invDet;
+        Vector256<float> zero = Vector256<float>.Zero;
         var one = Vector256.Create(1f);
-        var validU = Vector256.GreaterThanOrEqual(u, zero) & Vector256.LessThanOrEqual(u, one);
+        Vector256<float> validU = Vector256.GreaterThanOrEqual(u, zero) & Vector256.LessThanOrEqual(u, one);
 
         // q = cross(tv, e1)
-        var qx = tvy * e1z - tvz * e1y;
-        var qy = tvz * e1x - tvx * e1z;
-        var qz = tvx * e1y - tvy * e1x;
+        Vector256<float> qx = tvy * e1z - tvz * e1y;
+        Vector256<float> qy = tvz * e1x - tvx * e1z;
+        Vector256<float> qz = tvx * e1y - tvy * e1x;
 
         // v = dot(rd, q) * invDet, must be >= 0 and u+v <= 1
-        var v = (rdX * qx + rdY * qy + rdZ * qz) * invDet;
-        var validV = Vector256.GreaterThanOrEqual(v, zero) & Vector256.LessThanOrEqual(u + v, one);
+        Vector256<float> v = (rdX * qx + rdY * qy + rdZ * qz) * invDet;
+        Vector256<float> validV = Vector256.GreaterThanOrEqual(v, zero) & Vector256.LessThanOrEqual(u + v, one);
 
         // t = dot(e2, q) * invDet, must be in (tMin, maxT)
-        var tt = (e2x * qx + e2y * qy + e2z * qz) * invDet;
-        var validT = Vector256.GreaterThan(tt, tMinV) & Vector256.LessThan(tt, tMaxV);
+        Vector256<float> tt = (e2x * qx + e2y * qy + e2z * qz) * invDet;
+        Vector256<float> validT = Vector256.GreaterThan(tt, tMinV) & Vector256.LessThan(tt, tMaxV);
 
-        var hit = validDet & validU & validV & validT;
+        Vector256<float> hit = validDet & validU & validV & validT;
         hitMask = Vector256.ExtractMostSignificantBits(hit);
         tOut = tt; uOut = u; vOut = v;
     }
@@ -516,18 +518,18 @@ internal sealed class Blas
 
         while (sp > 0)
         {
-            var top = stack[--sp];
+            (int idx, float tNear) top = stack[--sp];
             if (top.tNear >= t) continue;   // pruned by a closer hit
             int ni = top.idx;
-            ref var n = ref Nodes4[ni];
+            ref Node4 n = ref Nodes4[ni];
 
             // SIMD ray-vs-4-AABB
-            var t1x = (n.MinX - roX) * invX;
-            var t2x = (n.MaxX - roX) * invX;
-            var t1y = (n.MinY - roY) * invY;
-            var t2y = (n.MaxY - roY) * invY;
-            var t1z = (n.MinZ - roZ) * invZ;
-            var t2z = (n.MaxZ - roZ) * invZ;
+            Vector128<float> t1x = (n.MinX - roX) * invX;
+            Vector128<float> t2x = (n.MaxX - roX) * invX;
+            Vector128<float> t1y = (n.MinY - roY) * invY;
+            Vector128<float> t2y = (n.MaxY - roY) * invY;
+            Vector128<float> t1z = (n.MinZ - roZ) * invZ;
+            Vector128<float> t2z = (n.MaxZ - roZ) * invZ;
             var enter = Vector128.Max(Vector128.Max(Vector128.Min(t1x, t2x), Vector128.Min(t1y, t2y)),
                                        Vector128.Max(Vector128.Min(t1z, t2z), tMinV));
             var exit = Vector128.Min(Vector128.Min(Vector128.Max(t1x, t2x), Vector128.Max(t1y, t2y)),
@@ -561,7 +563,7 @@ internal sealed class Blas
                     {
                         RayTri8(packStart, roX8, roY8, roZ8, rdX8, rdY8, rdZ8, tMinV8, tMaxV8,
                                 cullEnabled, keepPositive,
-                                out var tt, out var uu, out var vv, out uint tHitMask);
+                                out Vector256<float> tt, out Vector256<float> uu, out Vector256<float> vv, out uint tHitMask);
                         if (tHitMask == 0) continue;
                         tt.CopyTo(tLanes);
                         uu.CopyTo(uLanes);
@@ -621,14 +623,14 @@ internal sealed class Blas
         while (sp > 0)
         {
             int ni = stack[--sp];
-            ref var n = ref Nodes4[ni];
+            ref Node4 n = ref Nodes4[ni];
 
-            var t1x = (n.MinX - roX) * invX;
-            var t2x = (n.MaxX - roX) * invX;
-            var t1y = (n.MinY - roY) * invY;
-            var t2y = (n.MaxY - roY) * invY;
-            var t1z = (n.MinZ - roZ) * invZ;
-            var t2z = (n.MaxZ - roZ) * invZ;
+            Vector128<float> t1x = (n.MinX - roX) * invX;
+            Vector128<float> t2x = (n.MaxX - roX) * invX;
+            Vector128<float> t1y = (n.MinY - roY) * invY;
+            Vector128<float> t2y = (n.MaxY - roY) * invY;
+            Vector128<float> t1z = (n.MinZ - roZ) * invZ;
+            Vector128<float> t2z = (n.MaxZ - roZ) * invZ;
             var enter = Vector128.Max(Vector128.Max(Vector128.Min(t1x, t2x), Vector128.Min(t1y, t2y)),
                                        Vector128.Max(Vector128.Min(t1z, t2z), tMinV));
             var exit = Vector128.Min(Vector128.Min(Vector128.Max(t1x, t2x), Vector128.Max(t1y, t2y)),

@@ -10,7 +10,7 @@ internal sealed class SessionBatcher(int maxMessageSize) : IDisposable
 {
     internal const ushort MessageId = NetSession.ReservedMessageIds + 6;
     private const int MaxBatchSize = 65536;
-    private readonly Dictionary<Connection, OutgoingBatch> _batches = new();
+    private readonly Dictionary<Connection, OutgoingBatch> _batches = [];
     private readonly int _maxMessageSize = maxMessageSize;
 
     public void Dispose()
@@ -173,7 +173,7 @@ internal sealed class SessionBatcher(int maxMessageSize) : IDisposable
     private sealed class OutgoingBatch : IDisposable
     {
         /// <summary>One pending batch per delivery mode and channel, each its own stream on the transport.</summary>
-        public readonly Dictionary<(Delivery Delivery, byte Channel), NetWriter> Writers = new();
+        public readonly Dictionary<(Delivery Delivery, byte Channel), NetWriter> Writers = [];
 
         public void Dispose()
         {

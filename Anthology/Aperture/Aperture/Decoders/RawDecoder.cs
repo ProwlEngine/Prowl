@@ -2,6 +2,7 @@
 // Licensed under the MIT License. See the LICENSE file in the project root for details.
 
 using System.Buffers.Binary;
+
 using Prowl.Aperture.Decoders.Raw;
 using Prowl.Aperture.Metadata;
 

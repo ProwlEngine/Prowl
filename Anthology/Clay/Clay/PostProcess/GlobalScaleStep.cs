@@ -29,34 +29,34 @@ internal sealed class GlobalScaleStep : IPostProcess
         float scale = context.Settings.GlobalScale * scene.SourceUnitToMeters;
         if (scale == 1f) return;
 
-        foreach (var mesh in scene.Meshes)
+        foreach (IntermediateMesh mesh in scene.Meshes)
         {
             for (int i = 0; i < mesh.Positions.Count; i++)
                 mesh.Positions[i] *= scale;
 
-            foreach (var bs in mesh.BlendShapes)
+            foreach (IntermediateBlendShape bs in mesh.BlendShapes)
             {
-                foreach (var frame in bs.Frames)
+                foreach (IntermediateBlendShapeFrame frame in bs.Frames)
                 {
-                    var dp = frame.DeltaPositions;
+                    Float3[] dp = frame.DeltaPositions;
                     for (int i = 0; i < dp.Length; i++)
                         dp[i] *= scale;
                 }
             }
         }
 
-        foreach (var node in scene.Nodes)
+        foreach (IntermediateNode node in scene.Nodes)
             node.LocalPosition *= scale;
 
-        foreach (var skin in scene.Skins)
+        foreach (IntermediateSkin skin in scene.Skins)
         {
             for (int i = 0; i < skin.InverseBindPoses.Count; i++)
                 skin.InverseBindPoses[i] = ScaleTranslation(skin.InverseBindPoses[i], scale);
         }
 
-        foreach (var anim in scene.Animations)
+        foreach (IntermediateAnimation anim in scene.Animations)
         {
-            foreach (var b in anim.Bindings)
+            foreach (IntermediateAnimationBinding b in anim.Bindings)
             {
                 if (b.Property != AnimatedProperty.Position) continue;
                 for (int i = 0; i < b.Values.Count; i++)

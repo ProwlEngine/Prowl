@@ -22,7 +22,7 @@ internal static class GltfExtras
             return null;
 
         var result = new Dictionary<string, object?>();
-        foreach (var property in e.EnumerateObject())
+        foreach (JsonProperty property in e.EnumerateObject())
             result[property.Name] = Convert(property.Value);
         return result.Count == 0 ? null : result;
     }

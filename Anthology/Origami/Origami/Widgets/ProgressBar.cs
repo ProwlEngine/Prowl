@@ -6,6 +6,7 @@ using System;
 using Prowl.PaperUI;
 using Prowl.PaperUI.LayoutEngine;
 using Prowl.Quill;
+using Prowl.Scribe;
 using Prowl.Vector;
 
 using Color = System.Drawing.Color;
@@ -145,9 +146,9 @@ public sealed class ProgressBarBuilder
 
     public void Show()
     {
-        var font = _theme.Font;
-        var ink = _theme.Ink;
-        var ramp = _variant == OrigamiVariant.Subtle ? ink : _theme.Get(_variant);
+        FontFile? font = _theme.Font;
+        OrigamiRamp ink = _theme.Ink;
+        OrigamiRamp ramp = _variant == OrigamiVariant.Subtle ? ink : _theme.Get(_variant);
 
         // Nebula gradient: acc (#A855F7 / C500) -> acc-bright (#BD6BFF / C600).
         Color fillStart = _fillColorOverride ?? ramp.C500;
@@ -242,7 +243,7 @@ public sealed class ProgressBarBuilder
                     .Text(_label!, font!).TextColor(ink.C500).FontSize(labelFontSize);
             }
 
-            var trackBox = _paper.Box("track")
+            ElementBuilder trackBox = _paper.Box("track")
                 .Width(_width.HasValue ? UnitValue.Pixels(_width.Value) : UnitValue.Stretch())
                 .Height(rowH).IsNotInteractable();
             using (trackBox.Enter())
@@ -364,7 +365,7 @@ public sealed class ProgressBarBuilder
         const float period = 14f;   // band size
         const float bandW = 7f;     // white portion of each 14px band
         float phase = ((time / 0.7f) % 1f) * period;    // scrolls 0..14 over 0.7s
-        var white = Color32.FromArgb(51, 255, 255, 255); // rgba(255,255,255,0.2)
+        Vector.Color white = Color32.FromArgb(51, 255, 255, 255); // rgba(255,255,255,0.2)
 
         canvas.SaveState();
         canvas.IntersectScissor(rx, trackY, fillW, trackH);
@@ -437,8 +438,8 @@ public sealed class ProgressBarBuilder
 
         // SetBoxBrush gives a soft-edged horizontal band in a single fill. The
         // rounded-rect path clips it to the track shape.
-        var bright = ToC32(WithAlpha(s.FillEnd, 220));
-        var fade = ToC32(WithAlpha(s.FillEnd, 0));
+        Color32 bright = ToC32(WithAlpha(s.FillEnd, 220));
+        Color32 fade = ToC32(WithAlpha(s.FillEnd, 0));
 
         canvas.SaveState();
         canvas.RoundedRect(rx, trackY, rw, trackH, trackR, trackR, trackR, trackR);
@@ -457,8 +458,8 @@ public sealed class ProgressBarBuilder
         // Box brush with feather creates a soft halo at the leading edge.
         float glowR = trackH * 1.5f;
         float feather = trackH * 1.5f;
-        var inner = ToC32(WithAlpha(color, 200));
-        var outer = ToC32(WithAlpha(color, 0));
+        Color32 inner = ToC32(WithAlpha(color, 200));
+        Color32 outer = ToC32(WithAlpha(color, 0));
 
         canvas.SaveState();
         canvas.RoundedRect(leadX - glowR, trackY - trackH * 0.5f, glowR * 2f, trackH * 2f, glowR, glowR, glowR, glowR);

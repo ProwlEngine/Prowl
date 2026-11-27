@@ -104,7 +104,7 @@ public partial class GeometryData
 
         public float Crease
         {
-            get => TryGetAttribute(CreaseAttribute, out var value) && value is FloatAttributeValue f && f.Data.Length > 0 ? f.Data[0] : 0;
+            get => TryGetAttribute(CreaseAttribute, out AttributeValue? value) && value is FloatAttributeValue f && f.Data.Length > 0 ? f.Data[0] : 0;
             set => SetAttribute(CreaseAttribute, new FloatAttributeValue(value));
         }
     }
@@ -144,7 +144,7 @@ public partial class GeometryData
 
         var positions = new List<Float3>(capacity);
         var normals = new List<Float3>(capacity);
-        var uvs = hasUv ? new List<Float2>(capacity) : null;
+        List<Float2>? uvs = hasUv ? [with(capacity)] : null;
         var sources = new List<int>(capacity);
         var vertexFaces = new List<int>(capacity);
         var shared = new Dictionary<(int Vertex, int Fan, Float2 Uv), int>();
@@ -160,7 +160,7 @@ public partial class GeometryData
             int f = face.Slot;
             if (!shading.Drawn(f)) continue;
             int material = hasMaterial ? face.Material : 0;
-            if (!byMaterial.TryGetValue(material, out var target))
+            if (!byMaterial.TryGetValue(material, out (List<uint> Indices, List<int> Faces) target))
                 byMaterial[material] = target = (new List<uint>(), new List<int>());
 
             corners.Clear();
@@ -180,7 +180,7 @@ public partial class GeometryData
                 if (hasUv && loop.TryGetAttribute(UvAttribute, out AttributeValue? value) && value is FloatAttributeValue { Data.Length: >= 2 } data)
                     uv = new Float2(data.Data[0], data.Data[1]);
 
-                var key = (v, fan, uv);
+                (int v, int fan, Float2 uv) key = (v, fan, uv);
                 if (options.SplitFaces || !shared.TryGetValue(key, out int index))
                 {
                     index = positions.Count;
@@ -229,7 +229,7 @@ public partial class GeometryData
         var indices = new List<uint>();
         var triangleFaces = new List<int>();
         var subMeshes = new List<(int, int, int)>();
-        foreach (var (material, (materialIndices, materialFaces)) in byMaterial)
+        foreach ((int material, (List<uint>? materialIndices, List<int>? materialFaces)) in byMaterial)
         {
             subMeshes.Add((material, indices.Count, materialIndices.Count));
             indices.AddRange(materialIndices);

@@ -1,25 +1,24 @@
 using System.Collections.Generic;
 
-namespace Prowl.Recast
+namespace Prowl.Recast;
+
+public class RcContourHoleComparer : IComparer<RcContourHole>
 {
-    public class RcContourHoleComparer : IComparer<RcContourHole>
+    public static readonly RcContourHoleComparer Shared = new RcContourHoleComparer();
+
+    private RcContourHoleComparer()
     {
-        public static readonly RcContourHoleComparer Shared = new RcContourHoleComparer();
+    }
 
-        private RcContourHoleComparer()
+    public int Compare(RcContourHole a, RcContourHole b)
+    {
+        if (a.minx == b.minx)
         {
+            return a.minz.CompareTo(b.minz);
         }
-
-        public int Compare(RcContourHole a, RcContourHole b)
+        else
         {
-            if (a.minx == b.minx)
-            {
-                return a.minz.CompareTo(b.minz);
-            }
-            else
-            {
-                return a.minx.CompareTo(b.minx);
-            }
+            return a.minx.CompareTo(b.minx);
         }
     }
 }

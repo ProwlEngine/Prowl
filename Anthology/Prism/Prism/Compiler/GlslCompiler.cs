@@ -1,4 +1,5 @@
 using System.Collections.Concurrent;
+
 using Prowl.Prism.Glsl;
 using Prowl.Prism.SpirV;
 
@@ -25,9 +26,9 @@ public static class GlslCompiler
         bool autoMapLocations = false, IncludeCallback? includes = null) =>
         CompileLane.OnLane(() =>
         {
-            var unit = Parser.Parse(source, defines, includes, stage);
-            var module = (_lowerer ??= new Lowerer()).Reset(stage, target, autoMapLocations).Lower(unit);
-            var words = module.Serialize();
+            TranslationUnit unit = Parser.Parse(source, defines, includes, stage);
+            Module module = (_lowerer ??= new Lowerer()).Reset(stage, target, autoMapLocations).Lower(unit);
+            uint[] words = module.Serialize();
             // glslang type-checks uncalled functions too: re-lower a fresh parse (the AST carries per-compile
             // memos) with every body reachable, only for its errors.
             if (_lowerer.SkippedUncalledFunctions)
@@ -65,18 +66,18 @@ sealed class CompileLane
     public static T OnLane<T>(Func<T> work) => _isLaneThread ? work() : (_owned ??= new CompileLane()).Run(work);
 
     readonly Thread _thread;
-    readonly BlockingCollection<(Func<object> Work, TaskCompletionSource<object?> Done)> _queue = new();
+    readonly BlockingCollection<(Func<object> Work, TaskCompletionSource<object?> Done)> _queue = [];
 
     public CompileLane()
     {
         // The lane's thread captures only the queue, never this lane: the lane is then held only by its owner
         // thread's ThreadStatic slot, so once the owner has exited and the lane is collected, the finalizer below
         // ends the lane's thread too.
-        var queue = _queue;
+        BlockingCollection<(Func<object> Work, TaskCompletionSource<object?> Done)> queue = _queue;
         _thread = new Thread(() =>
         {
             _isLaneThread = true;
-            foreach (var (work, done) in queue.GetConsumingEnumerable())
+            foreach ((Func<object>? work, TaskCompletionSource<object?>? done) in queue.GetConsumingEnumerable())
                 try { done.SetResult(work()); }
                 catch (Exception e) { done.SetException(e); }
         }, maxStackSize: 64 * 1024 * 1024) { IsBackground = true, Name = "Prism compile" };

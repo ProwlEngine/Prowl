@@ -222,15 +222,15 @@ public sealed class Renderer : IDisposable
 
     /// <summary>A world's local light shadows, for tests.</summary>
     internal WorldShadows? ShadowsOf(RenderWorld world) => _worlds[world].Shadows;
-    private readonly Dictionary<RenderWorld, WorldFrame> _worlds = new();
-    private readonly List<RenderWorld> _removedWorlds = new();
+    private readonly Dictionary<RenderWorld, WorldFrame> _worlds = [];
+    private readonly List<RenderWorld> _removedWorlds = [];
 
     private readonly ConcurrentQueue<RendererError> _errors = new();
     private readonly ConcurrentDictionary<string, bool> _reported = new(StringComparer.Ordinal);
 
-    private readonly List<Material> _changedMaterials = new();
-    private readonly List<Material> _shadowMaterials = new();
-    private readonly List<GpuMesh> _changedMeshes = new();
+    private readonly List<Material> _changedMaterials = [];
+    private readonly List<Material> _shadowMaterials = [];
+    private readonly List<GpuMesh> _changedMeshes = [];
     private readonly RenderStore _store;
     private ViewDesc[] _views = [];
     private FrameTime _time;
@@ -244,7 +244,7 @@ public sealed class Renderer : IDisposable
     private bool _disposed;
 
     /// <summary>Frame features that are not per world, with the built in Deform and Readback. Host thread.</summary>
-    public ExtensionSet<FrameFeature> FrameFeatures { get; } = new(null);
+    public ExtensionSet<FrameFeature> FrameFeatures { get; } = [with(null)];
 
     public Renderer(GraphicsDevice device, IShaderCompiler? compiler, RendererOptions? options = null)
     {
@@ -382,8 +382,8 @@ public sealed class Renderer : IDisposable
     }
 
     private int _nextViewId;
-    private readonly List<int> _releasedViews = new();
-    private readonly List<int> _frameReleased = new();
+    private readonly List<int> _releasedViews = [];
+    private readonly List<int> _frameReleased = [];
 
     /// <summary>Creates a mesh. Any thread, resident on a later frame.</summary>
     public GpuMesh CreateMesh(MeshData data) => _geometry.Create(data);
@@ -615,8 +615,8 @@ public sealed class Renderer : IDisposable
     private Action<bool>? _submitted;
     private IProfiler[] _profilers = [];
     private readonly ConcurrentQueue<ReadbackRequest> _readbacks = new();
-    private readonly List<ReadbackRequest> _frameReadbacks = new();
-    private readonly List<ReadbackRequest> _pendingReadbacks = new();
+    private readonly List<ReadbackRequest> _frameReadbacks = [];
+    private readonly List<ReadbackRequest> _pendingReadbacks = [];
 
     /// <summary>
     /// Copies a texture region to the host after this frame's views, calling <paramref name="done"/> on the host thread
@@ -700,8 +700,8 @@ public sealed class Renderer : IDisposable
             }
         }
     }
-    private readonly HashSet<Texture> _freedTextures = new();
-    private readonly HashSet<RenderFeature> _extracted = new();
+    private readonly HashSet<Texture> _freedTextures = [];
+    private readonly HashSet<RenderFeature> _extracted = [];
 
     // Snapshots every world's and view's features and copies their settings, each feature once
     private void ExtractFeatures(ReadOnlySpan<ViewDesc> views)
@@ -797,8 +797,8 @@ public sealed class Renderer : IDisposable
     internal LazyCompute CreateLazyCompute(string file, bool lit) => InternalShaders.Compute(Device, _compiler, file, _options.Compile, lit);
 
     private int _frameCount;
-    private readonly List<Double3> _cameras = new();
-    private readonly List<(Action<BakedReflectionProbe> Done, BakedReflectionProbe Baked)> _bakes = new();
+    private readonly List<Double3> _cameras = [];
+    private readonly List<(Action<BakedReflectionProbe> Done, BakedReflectionProbe Baked)> _bakes = [];
 
     // Hands finished reflection probe bakes to the host, before this frame's changes are extracted
     private void RaiseBakes()
@@ -839,7 +839,7 @@ public sealed class Renderer : IDisposable
         }
     }
 
-    private readonly Dictionary<Type, object> _sharedObjects = new();
+    private readonly Dictionary<Type, object> _sharedObjects = [];
 
     /// <summary>
     /// What a kind of feature keeps once for the renderer, such as its lookup tables, made the first time it is asked

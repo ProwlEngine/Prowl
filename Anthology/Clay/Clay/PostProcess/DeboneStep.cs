@@ -25,7 +25,7 @@ internal sealed class DeboneStep : IPostProcess
     public void Execute(IntermediateScene scene, ImportContext context)
     {
         int stripped = 0;
-        foreach (var mesh in scene.Meshes)
+        foreach (IntermediateMesh mesh in scene.Meshes)
         {
             if (mesh.VertexJoints is null || mesh.VertexWeights is null) continue;
 

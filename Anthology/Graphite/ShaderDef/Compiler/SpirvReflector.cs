@@ -105,7 +105,7 @@ internal static class SpirvReflector
 
             foreach (uint id in module.Globals)
             {
-                if (!module.Variables.TryGetValue(id, out var variable))
+                if (!module.Variables.TryGetValue(id, out (uint PointerType, uint Storage) variable))
                     continue;
 
                 uint pointee = module.Types[variable.PointerType].Operands[1];

@@ -52,8 +52,8 @@ public static class GltfWriter
     private sealed class Writer
     {
         public readonly MemoryStream Binary = new();
-        private readonly List<GltfBufferView> _views = new();
-        private readonly List<GltfAccessorJson> _accessors = new();
+        private readonly List<GltfBufferView> _views = [];
+        private readonly List<GltfAccessorJson> _accessors = [];
 
         public GltfDom Build(ExportModel model)
         {
@@ -112,7 +112,7 @@ public static class GltfWriter
             if (mesh.Colors is { } colors) attributes["COLOR_0"] = Floats([.. colors.SelectMany(c => new[] { c.X, c.Y, c.Z, c.W })], colors.Length, "VEC4");
             if (mesh.Joints is { } joints && mesh.Weights is { } weights)
             {
-                var shorts = new byte[joints.Length * 8];
+                byte[] shorts = new byte[joints.Length * 8];
                 for (int i = 0; i < joints.Length; i++)
                     for (int k = 0; k < 4; k++) BitConverter.TryWriteBytes(shorts.AsSpan(i * 8 + k * 2), (ushort)Math.Max(0, joints[i][k]));
                 attributes["JOINTS_0"] = Accessor(View(shorts, ArrayBuffer), GltfComponentType.UnsignedShort, joints.Length, "VEC4");
@@ -157,7 +157,7 @@ public static class GltfWriter
         // Triangles wound the other way, since negating X mirrors them
         private int Indices(uint[] indices)
         {
-            var flipped = new byte[indices.Length * 4];
+            byte[] flipped = new byte[indices.Length * 4];
             for (int i = 0; i + 2 < indices.Length; i += 3)
             {
                 BitConverter.TryWriteBytes(flipped.AsSpan(i * 4), indices[i]);
@@ -263,7 +263,7 @@ public static class GltfWriter
 
         private int Floats(float[] values, int count, string type, int? target = ArrayBuffer)
         {
-            var bytes = new byte[values.Length * 4];
+            byte[] bytes = new byte[values.Length * 4];
             Buffer.BlockCopy(values, 0, bytes, 0, bytes.Length);
             return Accessor(View(bytes, target), GltfComponentType.Float, count, type);
         }

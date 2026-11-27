@@ -1,14 +1,13 @@
-namespace Prowl.Recast.Toolset.Tools
+namespace Prowl.Recast.Toolset.Tools;
+
+public enum RcDynamicColliderShape
 {
-    public enum RcDynamicColliderShape
-    {
-        SPHERE,
-        CAPSULE,
-        BOX,
-        CYLINDER,
-        COMPOSITE,
-        CONVEX,
-        TRIMESH_BRIDGE,
-        TRIMESH_HOUSE
-    }
+    SPHERE,
+    CAPSULE,
+    BOX,
+    CYLINDER,
+    COMPOSITE,
+    CONVEX,
+    TRIMESH_BRIDGE,
+    TRIMESH_HOUSE
 }

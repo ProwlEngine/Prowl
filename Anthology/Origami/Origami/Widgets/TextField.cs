@@ -281,18 +281,18 @@ public sealed class TextFieldBuilder
     public void Show()
     {
         if (Origami.IsReadOnly) _readOnly = true;
-        var ramp = _theme.Get(_variant);
-        var ink = _theme.Ink;
-        var font = _theme.Font;
+        OrigamiRamp ramp = _theme.Get(_variant);
+        OrigamiRamp ink = _theme.Ink;
+        Scribe.FontFile? font = _theme.Font;
         if (font == null) return;
-        var icons = _theme.Icons;
+        OrigamiIcons icons = _theme.Icons;
         bool subtle = _variant == OrigamiVariant.Subtle;
 
         // Validation runs every frame on the present value; explicit Error() overrides.
         string? errorMsg = _error;
         if (errorMsg == null && _validator != null)
         {
-            var (ok, msg) = _validator(_value);
+            (bool ok, string? msg) = _validator(_value);
             if (!ok) errorMsg = msg ?? "Invalid";
         }
         bool hasError = !string.IsNullOrEmpty(errorMsg);
@@ -319,7 +319,7 @@ public sealed class TextFieldBuilder
             // ── Field row (border, slots, text element) ────────────────
             // Soft accent glow on focus (not a hard ring).
             Color glowColor = hasError ? Color.FromArgb(130, _theme.Red.C500) : _theme.FocusGlow;
-            var rowBuilder = _paper.Row("row")
+            ElementBuilder rowBuilder = _paper.Row("row")
                 .Width(UnitValue.Stretch()).Height(fieldH)
                 .BackgroundColor(bgColor)
                 .BorderColor(idleBorder).BorderWidth(1)
@@ -359,7 +359,7 @@ public sealed class TextFieldBuilder
                 // Simple padded colored label before the input (channel tag / draggable label).
                 if (!string.IsNullOrEmpty(_prefixText) && font != null)
                 {
-                    var pfx = _paper.Box("pfx")
+                    ElementBuilder pfx = _paper.Box("pfx")
                         .Height(fieldH).Width(UnitValue.Auto)
                         .Text(_prefixText!, font)
                         .TextColor(_prefixColor ?? ink.C200)
@@ -382,9 +382,9 @@ public sealed class TextFieldBuilder
                         else
                         {
                             float r = MathF.Max(0f, _theme.Metrics.Rounding - 1f);
-                            var d = _prefixDrag;
-                            var start = _prefixDragStart;
-                            var end = _prefixDragEnd;
+                            Action<float> d = _prefixDrag;
+                            Action? start = _prefixDragStart;
+                            Action? end = _prefixDragEnd;
                             pfx.Rounded(r, 0f, 0f, r)
                                .Hovered.BackgroundColor(_theme.Hover).End()
                                .OnDragStart(_ => start?.Invoke())
@@ -403,7 +403,7 @@ public sealed class TextFieldBuilder
                 }
 
                 // The edit element ─────────────────────────────────────
-                var settings = ElementBuilder.TextInputSettings.Default;
+                ElementBuilder.TextInputSettings settings = ElementBuilder.TextInputSettings.Default;
                 settings.Font = (_mono && !_isSearch) ? (_theme.Mono ?? font) : font;
                 settings.TextColor = ink.C500;
                 settings.PlaceholderColor = ink.C300;
@@ -437,7 +437,7 @@ public sealed class TextFieldBuilder
                 // Inner edit element. HookToParent + IsNotInteractable lets the row collect
                 // clicks (so it gains focus via TabIndex(0)) while the textfield's own event
                 // handlers (cursor placement, drag-select, keyboard) still fire via the hook.
-                var editBuilder = _paper.Box("tf")
+                ElementBuilder editBuilder = _paper.Box("tf")
                     .Width(UnitValue.Stretch())
                     .Height(_multiLine ? UnitValue.Stretch() : _theme.Metrics.FontSize)
                     .Margin(editLeftPad, _multiLine ? 8 : 0, _multiLine ? 6 : UnitValue.Stretch(), _multiLine ? 6 : UnitValue.Stretch())
@@ -495,7 +495,7 @@ public sealed class TextFieldBuilder
 
                 if (_showClearButton && !string.IsNullOrEmpty(_value) && !_readOnly)
                 {
-                    var capturedRowForClear = rowHandle;
+                    ElementHandle capturedRowForClear = rowHandle;
                     DrawVecIcon($"{_id}_clear", "x", ink.C400, leftPad: 4, rightPad: _isPassword ? 0 : 8,
                         click: () =>
                         {
@@ -510,7 +510,7 @@ public sealed class TextFieldBuilder
 
                 if (_isPassword)
                 {
-                    var capturedRow = rowHandle;
+                    ElementHandle capturedRow = rowHandle;
                     DrawObjIcon($"{_id}_eye", pwShow ? icons.EyeOff : icons.Eye, ink.C400, leftPad: 4, rightPad: 6,
                         click: () => _paper.SetElementStorage(capturedRow, "pwShow", !pwShow));
                     drewTrailing = true;
@@ -571,7 +571,7 @@ public sealed class TextFieldBuilder
 
     private void DrawIcon(string id, string glyph, Color color, float leftPad, float rightPad, Action? click, Prowl.Scribe.FontFile font)
     {
-        var box = _paper.Box(id)
+        ElementBuilder box = _paper.Box(id)
             .Width(16).Height(_height)
             .Margin(leftPad, rightPad, 0, 0)
             .Alignment(TextAlignment.MiddleCenter)
@@ -592,7 +592,7 @@ public sealed class TextFieldBuilder
 
     private void DrawObjIcon(string id, IOrigamiIcon? icon, Color color, float leftPad, float rightPad, Action? click)
     {
-        var box = _paper.Box(id).Width(16).Height(_height).Margin(leftPad, rightPad, 0, 0)
+        ElementBuilder box = _paper.Box(id).Width(16).Height(_height).Margin(leftPad, rightPad, 0, 0)
             .Icon(_paper, icon, color, size: 15f);
 
         if (click != null) box.OnClick(_ => click()).Cursor(PaperCursor.Pointer);
@@ -602,7 +602,7 @@ public sealed class TextFieldBuilder
     // Vector search magnifier / clear-X (the icon font ships empty glyphs).
     private void DrawVecIcon(string id, string kind, Color color, float leftPad, float rightPad, Action? click, float fieldH)
     {
-        var box = _paper.Box(id).Width(16).Height(fieldH).Margin(leftPad, rightPad, 0, 0);
+        ElementBuilder box = _paper.Box(id).Width(16).Height(fieldH).Margin(leftPad, rightPad, 0, 0);
         if (click != null) box.OnClick(_ => click()).Cursor(PaperCursor.Pointer);
         else box.IsNotInteractable();
         box.OnPostLayout((h, r) => _paper.Draw(ref h, (canvas, rr) =>
@@ -687,10 +687,10 @@ public sealed class TextFieldBuilder
         float rowH = 22f;
         float padY = 4f;
         float popH = matches.Count * rowH + padY * 2;
-        var font = _theme.Font;
+        Scribe.FontFile? font = _theme.Font;
 
-        var capturedRow = rowHandle;
-        var capturedMatches = matches;
+        ElementHandle capturedRow = rowHandle;
+        List<string> capturedMatches = matches;
         Color popBorder = _variant is OrigamiVariant.Default or OrigamiVariant.Subtle
             ? _theme.Neutral.C400 : ramp.C400;
 
@@ -764,7 +764,7 @@ public static class TextFieldCommits
         public int Seen;
     }
 
-    private static readonly Dictionary<int, Edit> s_edits = new();
+    private static readonly Dictionary<int, Edit> s_edits = [];
     private static int s_frame;
     private static int s_focusedFrame = -1;
 
@@ -786,7 +786,7 @@ public static class TextFieldCommits
 
     internal static void Change(int key, Action<string> setter, string original, string draft)
     {
-        if (!s_edits.TryGetValue(key, out var edit))
+        if (!s_edits.TryGetValue(key, out Edit? edit))
             s_edits[key] = edit = new Edit { Setter = setter, Original = original, Seen = s_frame };
         edit.Draft = draft;
     }
@@ -794,14 +794,14 @@ public static class TextFieldCommits
     // The latest setter wins, since it closes over this frame's target.
     internal static void Seen(int key, Action<string> setter)
     {
-        if (!s_edits.TryGetValue(key, out var edit)) return;
+        if (!s_edits.TryGetValue(key, out Edit? edit)) return;
         edit.Seen = s_frame;
         edit.Setter = setter;
     }
 
     internal static void Commit(int key)
     {
-        if (!s_edits.Remove(key, out var edit)) return;
+        if (!s_edits.Remove(key, out Edit? edit)) return;
         if (edit.Draft != edit.Original) edit.Setter(edit.Draft);
     }
 
@@ -811,7 +811,7 @@ public static class TextFieldCommits
     internal static void EndFrame()
     {
         if (s_edits.Count > 0)
-            foreach (var (key, edit) in s_edits.ToArray())
+            foreach ((int key, Edit? edit) in s_edits.ToArray())
                 if (edit.Seen < s_frame) Commit(key);
         s_frame++;
     }

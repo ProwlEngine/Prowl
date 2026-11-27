@@ -38,39 +38,39 @@ public sealed class KcpTransport : Transport
     // Disconnect packets are unreliable, so send a few and hope one lands. The remote end times out otherwise.
     private const int DisconnectRepeats = 3;
 
-    private readonly Dictionary<SocketAddress, KcpConnection> _byAddress = new();
+    private readonly Dictionary<SocketAddress, KcpConnection> _byAddress = [];
 
     // Per IP address (one /64 for IPv6): its incoming connections and handshake budget.
-    private readonly Dictionary<UInt128, AddressBudget> _byIp = new();
+    private readonly Dictionary<UInt128, AddressBudget> _byIp = [];
 
     // Cookies that already opened a session, each kept until it would have expired anyway.
-    private readonly HashSet<ulong> _usedCookies = new();
+    private readonly HashSet<ulong> _usedCookies = [];
     private readonly Queue<(long ExpiresMs, ulong Cookie)> _cookieExpiry = new();
     private long _nextSweepMs;
 
     // Handshakes from every address together, and encrypted ones whose key agreement runs on the thread pool.
     private readonly AddressBudget _allHandshakes;
-    private readonly List<PendingAgreement> _agreements = new();
+    private readonly List<PendingAgreement> _agreements = [];
     private readonly object _signing = new();
 
     // Every session, so a packet from an address the session isn't at can find it.
-    private readonly Dictionary<uint, KcpConnection> _bySession = new();
+    private readonly Dictionary<uint, KcpConnection> _bySession = [];
     private readonly Stopwatch _clock = Stopwatch.StartNew();
     private readonly byte[] _cookieKey = RandomNumberGenerator.GetBytes(32);
 
-    private readonly List<DelayedPacket> _delayed = new();
+    private readonly List<DelayedPacket> _delayed = [];
 
     private readonly byte[] _receiveBuffer = new byte[KcpPacket.MaxDatagramSize];
 
     // Datagrams handled this Receive from each address without a connection.
     private const int UnknownSourceShare = 32;
-    private readonly Dictionary<(UInt128, int), int> _unknownSources = new();
+    private readonly Dictionary<(UInt128, int), int> _unknownSources = [];
     private readonly byte[] _openBuffer = new byte[KcpPacket.MaxDatagramSize];
     private readonly byte[] _plainBuffer = new byte[KcpPacket.MaxDatagramSize];
     private readonly Func<string, CancellationToken, Task<IPAddress[]>> _resolver;
-    private readonly Dictionary<KcpConnection, Resolution> _resolving = new();
-    private readonly List<KcpConnection> _scratch = new();
-    private readonly List<KcpConnection> _unreachable = new();
+    private readonly Dictionary<KcpConnection, Resolution> _resolving = [];
+    private readonly List<KcpConnection> _scratch = [];
+    private readonly List<KcpConnection> _unreachable = [];
     private int _incomingCount;
     private bool _listening;
     private KcpIoThreads? _io;
@@ -352,7 +352,7 @@ public sealed class KcpTransport : Transport
         {
             if (budget.Connections == 0 && budget.IsFull(now, Settings.MaxHandshakesPerAddressPerSecond))
             {
-                (idle ??= new List<UInt128>()).Add(ip);
+                (idle ??= []).Add(ip);
             }
         }
 
@@ -1265,7 +1265,7 @@ public sealed class KcpTransport : Transport
             port = defaultPort;
         }
 
-        List<SocketAddress> usable = new();
+        List<SocketAddress> usable = [];
         foreach (IPAddress ip in ips.OrderBy(ip => ip.AddressFamily == AddressFamily.InterNetwork ? 0 : 1))
         {
             if (socketFamily == AddressFamily.InterNetworkV6)

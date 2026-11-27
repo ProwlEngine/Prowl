@@ -1,4 +1,5 @@
 using System.Collections.Generic;
+
 using Prowl.Vector;
 using Prowl.Vector.Spatial;
 
@@ -29,7 +30,7 @@ public sealed class GraphContext
     public Skeleton Skeleton = null!;
     public Avatar? Avatar;
     public ParameterValue[] Parameters = System.Array.Empty<ParameterValue>();
-    public SampledEventsBuffer Events = new();
+    public SampledEventsBuffer Events = [];
     public uint UpdateId;
 
     /// <summary>Seconds of graph time elapsed since the instance started (unscaled by speed nodes).</summary>
@@ -95,7 +96,7 @@ public sealed class GraphContext
 /// </summary>
 public sealed class GraphBindContext
 {
-    private readonly List<(int From, int To, bool IsPose)> _edges = new();
+    private readonly List<(int From, int To, bool IsPose)> _edges = [];
 
     public GraphBindContext(Skeleton skeleton, GraphNodeInstance[] nodes, Avatar? avatar = null)
     {
@@ -202,7 +203,7 @@ public interface IBlendWeights
 /// </summary>
 public abstract class GraphNodeInstance
 {
-    private readonly List<GraphNodeInstance> _dependencies = new();
+    private readonly List<GraphNodeInstance> _dependencies = [];
     private int _initializationCount;
     private uint _lastUpdateId = uint.MaxValue;
 

@@ -189,7 +189,7 @@ public ref struct Tokenizer<TKind> where TKind : unmanaged, Enum
         if (TryFixed(out Token<TKind> fixedToken))
             return fixedToken;
 
-        var rules = _rules.Rules;
+        TokenRule<TKind>[] rules = _rules.Rules;
         for (int i = 0; i < rules.Length; i++)
         {
             if (rules[i](ref this, out Token<TKind> ruleToken))
@@ -204,8 +204,8 @@ public ref struct Tokenizer<TKind> where TKind : unmanaged, Enum
 
     private void SkipTrivia()
     {
-        var ws = _rules.WhitespacePredicate;
-        var comments = _rules.SkipComments;
+        CharPredicate? ws = _rules.WhitespacePredicate;
+        (string Start, string End)[] comments = _rules.SkipComments;
 
         bool progressed = true;
         while (progressed)
@@ -223,7 +223,7 @@ public ref struct Tokenizer<TKind> where TKind : unmanaged, Enum
 
             for (int i = 0; i < comments.Length; i++)
             {
-                var (open, close) = comments[i];
+                (string? open, string? close) = comments[i];
                 if (!TokenizerRules<TKind>.StartsWith(_source, _pos, open))
                     continue;
 
@@ -243,7 +243,7 @@ public ref struct Tokenizer<TKind> where TKind : unmanaged, Enum
             return false;
         }
 
-        var identifierPart = _rules.IdentifierPart;
+        CharPredicate identifierPart = _rules.IdentifierPart;
 
         // Entries are sorted longest-first, so the first match is the greediest.
         for (int i = 0; i < entries.Length; i++)

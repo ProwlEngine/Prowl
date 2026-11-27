@@ -36,7 +36,7 @@ internal static class NodeGraph
 
         while (stack.Count > 0)
         {
-            var (node, depth) = stack.Pop();
+            (IntermediateNode? node, int depth) = stack.Pop();
 
             if (!visited.Add(node))
                 throw new ImportException(
@@ -69,12 +69,12 @@ internal static class NodeGraph
         var settled = new HashSet<IntermediateNode>();
         var chain = new HashSet<IntermediateNode>();
 
-        foreach (var start in nodes)
+        foreach (IntermediateNode start in nodes)
         {
             if (settled.Contains(start)) continue;
             chain.Clear();
 
-            for (var node = start; node is not null; node = node.Parent)
+            for (IntermediateNode? node = start; node is not null; node = node.Parent)
             {
                 if (settled.Contains(node)) break;
                 if (!chain.Add(node))

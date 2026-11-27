@@ -53,7 +53,7 @@ internal static class FbxModelMapper
         var nodesByFbxId = new Dictionary<long, IntermediateNode>();
         var rotationOffsets = new Dictionary<long, (Prowl.Vector.Quaternion Pre, Prowl.Vector.Quaternion Post)>();
         var modelObjects = new List<FbxObject>();
-        foreach (var obj in doc.Objects.Values)
+        foreach (FbxObject obj in doc.Objects.Values)
         {
             if (obj.ObjectType != "Model") continue;
             modelObjects.Add(obj);
@@ -61,22 +61,22 @@ internal static class FbxModelMapper
             {
                 Name = string.IsNullOrEmpty(obj.Name) ? $"Model_{obj.Id}" : obj.Name,
             };
-            var (pre, post) = ComposeTRSFromProperties(obj.Properties, n);
+            (Quaternion pre, Quaternion post) = ComposeTRSFromProperties(obj.Properties, n);
             nodesByFbxId[obj.Id] = n;
             rotationOffsets[obj.Id] = (pre, post);
         }
 
         // 2. Parent each node via OO connections (Model -> Model destination).
-        foreach (var src in modelObjects)
+        foreach (FbxObject src in modelObjects)
         {
-            if (!doc.ConnectionsBySource.TryGetValue(src.Id, out var conns)) continue;
-            foreach (var c in conns)
+            if (!doc.ConnectionsBySource.TryGetValue(src.Id, out List<FbxConnection>? conns)) continue;
+            foreach (FbxConnection c in conns)
             {
                 if (c.Type != "OO") continue;
-                if (!doc.Objects.TryGetValue(c.Destination, out var dst)) continue;
+                if (!doc.Objects.TryGetValue(c.Destination, out FbxObject? dst)) continue;
                 if (dst.ObjectType != "Model") continue;
-                var childNode = nodesByFbxId[src.Id];
-                var parentNode = nodesByFbxId[dst.Id];
+                IntermediateNode childNode = nodesByFbxId[src.Id];
+                IntermediateNode parentNode = nodesByFbxId[dst.Id];
                 if (ReferenceEquals(childNode, parentNode)) continue;
                 // A Model with OO connections to two Models would otherwise land in both children
                 // lists while its single Parent pointer names one of them, so the depth-first walk
@@ -93,16 +93,16 @@ internal static class FbxModelMapper
         }
 
         // 3. Wire mesh + skin references onto each Model node.
-        foreach (var modelObj in modelObjects)
+        foreach (FbxObject modelObj in modelObjects)
         {
-            var node = nodesByFbxId[modelObj.Id];
+            IntermediateNode node = nodesByFbxId[modelObj.Id];
             AttachMeshes(modelObj, node, doc, meshMapping, materialMapping, scene, ctx);
         }
 
         // 4. Build the scene root: a synthetic root with the orphans (models that had no parent)
         // as its children. FBX's RootNode id 0 isn't typically materialized as an object.
         var root = new IntermediateNode { Name = "<RootNode>" };
-        foreach (var node in nodesByFbxId.Values)
+        foreach (IntermediateNode node in nodesByFbxId.Values)
         {
             if (node.Parent is null)
             {
@@ -132,12 +132,12 @@ internal static class FbxModelMapper
     {
         // Materials are connected directly from Material -> Model (OO). Collect them in order.
         var materialSlot = new List<int>();
-        if (doc.ConnectionsByDestination.TryGetValue(modelObj.Id, out var conns))
+        if (doc.ConnectionsByDestination.TryGetValue(modelObj.Id, out List<FbxConnection>? conns))
         {
-            foreach (var c in conns)
+            foreach (FbxConnection c in conns)
             {
                 if (c.Type != "OO") continue;
-                if (!doc.Objects.TryGetValue(c.Source, out var srcObj)) continue;
+                if (!doc.Objects.TryGetValue(c.Source, out FbxObject? srcObj)) continue;
                 if (srcObj.ObjectType != "Material") continue;
                 materialSlot.Add(materialMapping.MaterialIndex.GetValueOrDefault(srcObj.Id, -1));
             }
@@ -146,14 +146,14 @@ internal static class FbxModelMapper
         // Find every Geometry attached to this Model. For each, look up the IntermediateMeshes
         // we already produced (one per material slot).
         bool firstMeshOnNode = true;
-        if (doc.ConnectionsByDestination.TryGetValue(modelObj.Id, out var conns2))
+        if (doc.ConnectionsByDestination.TryGetValue(modelObj.Id, out List<FbxConnection>? conns2))
         {
-            foreach (var c in conns2)
+            foreach (FbxConnection c in conns2)
             {
                 if (c.Type != "OO") continue;
-                if (!doc.Objects.TryGetValue(c.Source, out var srcObj)) continue;
+                if (!doc.Objects.TryGetValue(c.Source, out FbxObject? srcObj)) continue;
                 if (srcObj.ObjectType != "Geometry" || srcObj.Subtype != "Mesh") continue;
-                if (!meshMapping.GeometryToMeshes.TryGetValue(srcObj.Id, out var range)) continue;
+                if (!meshMapping.GeometryToMeshes.TryGetValue(srcObj.Id, out FbxMeshMapper.GeometryMapping? range)) continue;
                 if (range.MeshCount == 0) continue;
 
                 // Bake geometric transform onto the geometry's vertices (if any).
@@ -208,16 +208,16 @@ internal static class FbxModelMapper
     /// </summary>
     private static (Quaternion Pre, Quaternion Post) ComposeTRSFromProperties(FbxPropertyTable p, IntermediateNode node)
     {
-        ReadVec3(p, "Lcl Translation", out var lclT, Float3.Zero);
-        ReadVec3(p, "Lcl Rotation", out var lclR, Float3.Zero);
-        ReadVec3(p, "Lcl Scaling", out var lclS, Float3.One);
+        ReadVec3(p, "Lcl Translation", out Float3 lclT, Float3.Zero);
+        ReadVec3(p, "Lcl Rotation", out Float3 lclR, Float3.Zero);
+        ReadVec3(p, "Lcl Scaling", out Float3 lclS, Float3.One);
 
-        ReadVec3(p, "RotationOffset", out var rotOff, Float3.Zero);
-        ReadVec3(p, "RotationPivot", out var rotPiv, Float3.Zero);
-        ReadVec3(p, "ScalingOffset", out var scaleOff, Float3.Zero);
-        ReadVec3(p, "ScalingPivot", out var scalePiv, Float3.Zero);
-        ReadVec3(p, "PreRotation", out var preRot, Float3.Zero);
-        ReadVec3(p, "PostRotation", out var postRot, Float3.Zero);
+        ReadVec3(p, "RotationOffset", out Float3 rotOff, Float3.Zero);
+        ReadVec3(p, "RotationPivot", out Float3 rotPiv, Float3.Zero);
+        ReadVec3(p, "ScalingOffset", out Float3 scaleOff, Float3.Zero);
+        ReadVec3(p, "ScalingPivot", out Float3 scalePiv, Float3.Zero);
+        ReadVec3(p, "PreRotation", out Float3 preRot, Float3.Zero);
+        ReadVec3(p, "PostRotation", out Float3 postRot, Float3.Zero);
 
         int rotOrder = p.GetIntOr("RotationOrder", 0); // 0 = XYZ Euler (default)
 
@@ -240,7 +240,7 @@ internal static class FbxModelMapper
         m *= Float4x4.CreateScale(lclS);
         m *= Float4x4.CreateTranslation(-scalePiv);
 
-        SceneBakerHelpers.DecomposeMatrix(m, out var t, out var rDecomposed, out var s);
+        SceneBakerHelpers.DecomposeMatrix(m, out Float3 t, out Quaternion rDecomposed, out Float3 s);
         node.LocalPosition = t;
         node.LocalRotation = rDecomposed;
         node.LocalScale = s;
@@ -254,10 +254,10 @@ internal static class FbxModelMapper
     private static void BakeGeometricTransformIfNeeded(
         FbxObject modelObj, FbxMeshMapper.GeometryMapping range, IntermediateScene scene)
     {
-        var p = modelObj.Properties;
-        bool hasT = p.TryGetVec3("GeometricTranslation", out var gtX, out var gtY, out var gtZ);
-        bool hasR = p.TryGetVec3("GeometricRotation", out var grX, out var grY, out var grZ);
-        bool hasS = p.TryGetVec3("GeometricScaling", out var gsX, out var gsY, out var gsZ);
+        FbxPropertyTable p = modelObj.Properties;
+        bool hasT = p.TryGetVec3("GeometricTranslation", out double gtX, out double gtY, out double gtZ);
+        bool hasR = p.TryGetVec3("GeometricRotation", out double grX, out double grY, out double grZ);
+        bool hasS = p.TryGetVec3("GeometricScaling", out double gsX, out double gsY, out double gsZ);
         if (!hasT && !hasR && !hasS) return;
 
         Float3 gt = new((float)gtX, (float)gtY, (float)gtZ);
@@ -269,11 +269,11 @@ internal static class FbxModelMapper
 
         for (int m = range.FirstMeshIndex; m < range.FirstMeshIndex + range.MeshCount; m++)
         {
-            var mesh = scene.Meshes[m];
+            IntermediateMesh mesh = scene.Meshes[m];
             for (int i = 0; i < mesh.Positions.Count; i++)
             {
-                var v = mesh.Positions[i];
-                var v4 = geomMatrix * new Float4(v.X, v.Y, v.Z, 1f);
+                Float3 v = mesh.Positions[i];
+                Float4 v4 = geomMatrix * new Float4(v.X, v.Y, v.Z, 1f);
                 mesh.Positions[i] = new Float3(v4.X, v4.Y, v4.Z);
             }
             // Normals + tangents would also need the geometric rotation applied. For Phase 6

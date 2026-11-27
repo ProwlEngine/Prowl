@@ -45,14 +45,14 @@ public struct Quaternion : IEquatable<Quaternion>, IFormattable
         [MethodImpl(MethodImplOptions.AggressiveInlining)]
         get
         {
-            switch (index)
+            return index switch
             {
-                case 0: return X;
-                case 1: return Y;
-                case 2: return Z;
-                case 3: return W;
-                default: throw new IndexOutOfRangeException("Quaternion index out of range.");
-            }
+                0 => X,
+                1 => Y,
+                2 => Z,
+                3 => W,
+                _ => throw new IndexOutOfRangeException("Quaternion index out of range."),
+            };
         }
         [MethodImpl(MethodImplOptions.AggressiveInlining)]
         set
@@ -180,11 +180,13 @@ public struct Quaternion : IEquatable<Quaternion>, IFormattable
         float cosRollOver2 = Maths.Cos(rollOver2);
         float sinRollOver2 = Maths.Sin(rollOver2);
 
-        Quaternion result = new Quaternion();
-        result.W = cosYawOver2 * cosPitchOver2 * cosRollOver2 + sinYawOver2 * sinPitchOver2 * sinRollOver2;
-        result.X = sinYawOver2 * cosPitchOver2 * cosRollOver2 + cosYawOver2 * sinPitchOver2 * sinRollOver2;
-        result.Y = cosYawOver2 * sinPitchOver2 * cosRollOver2 - sinYawOver2 * cosPitchOver2 * sinRollOver2;
-        result.Z = cosYawOver2 * cosPitchOver2 * sinRollOver2 - sinYawOver2 * sinPitchOver2 * cosRollOver2;
+        Quaternion result = new Quaternion
+        {
+            W = cosYawOver2 * cosPitchOver2 * cosRollOver2 + sinYawOver2 * sinPitchOver2 * sinRollOver2,
+            X = sinYawOver2 * cosPitchOver2 * cosRollOver2 + cosYawOver2 * sinPitchOver2 * sinRollOver2,
+            Y = cosYawOver2 * sinPitchOver2 * cosRollOver2 - sinYawOver2 * cosPitchOver2 * sinRollOver2,
+            Z = cosYawOver2 * cosPitchOver2 * sinRollOver2 - sinYawOver2 * sinPitchOver2 * cosRollOver2
+        };
 
         return result;
     }

@@ -23,7 +23,7 @@ internal static class GltfCameraLightMapper
     {
         if (dom.Cameras is null) return;
 
-        foreach (var src in dom.Cameras)
+        foreach (GltfCamera src in dom.Cameras)
         {
             var camera = new IntermediateCamera { Name = src.Name };
 
@@ -90,7 +90,7 @@ internal static class GltfCameraLightMapper
 
         if (parsed?.Lights is null) return;
 
-        foreach (var src in parsed.Lights)
+        foreach (GltfPunctualLight src in parsed.Lights)
         {
             var light = new IntermediateLight
             {

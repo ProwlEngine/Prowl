@@ -1,6 +1,7 @@
 // This file is part of the Prowl Game Engine
 // Licensed under the MIT License. See the LICENSE file in the project root for details.
 
+using Prowl.Photonic.Imaging;
 using Prowl.Photonic.Integration;
 using Prowl.Photonic.Rasterization;
 using Prowl.Photonic.Raytracing;
@@ -43,7 +44,7 @@ public sealed class Job
     internal int DebugTexelY => _debugTexelY;
     internal LightmapTarget? DebugTarget => _debugTarget;
 
-    private System.Collections.Generic.List<DebugSegment> _debugSegments = new();
+    private System.Collections.Generic.List<DebugSegment> _debugSegments = [];
     private readonly object _debugLock = new();
 
     /// <summary>
@@ -60,7 +61,7 @@ public sealed class Job
     /// <summary>Returns a snapshot of the segments produced by the most recent recorded path for the debug texel.</summary>
     public System.Collections.Generic.List<DebugSegment> ReadDebugSegments()
     {
-        lock (_debugLock) return new System.Collections.Generic.List<DebugSegment>(_debugSegments);
+        lock (_debugLock) return [with(_debugSegments)];
     }
 
     internal void PublishDebugSegments(System.Collections.Generic.List<DebugSegment> segs)
@@ -77,7 +78,7 @@ public sealed class Job
     /// </summary>
     public TexelDiagnostic GetTexelInfo(LightmapTarget target, int x, int y)
     {
-        var ws = _workspacesPublic;
+        TargetWorkspace[]? ws = _workspacesPublic;
         if (ws is null || target is null) return default;
         int targetIndex = -1;
         for (int i = 0; i < _targets.Length; i++)
@@ -85,11 +86,11 @@ public sealed class Job
             if (object.ReferenceEquals(_targets[i], target)) { targetIndex = i; break; }
         }
         if (targetIndex < 0) return default;
-        var w = ws[targetIndex];
+        TargetWorkspace? w = ws[targetIndex];
         if (w is null) return default;
         if (x < 0 || x >= w.Width || y < 0 || y >= w.Height) return default;
         int idx = y * w.Width + x;
-        var s = w.Samples[idx];
+        TexelSample s = w.Samples[idx];
         return new TexelDiagnostic
         {
             Valid = true,
@@ -205,31 +206,31 @@ public sealed class Job
 
         for (int t = 0; t < workspaces.Length; t++)
         {
-            var ws = workspaces[t];
+            TargetWorkspace ws = workspaces[t];
             var samples = new System.Collections.Generic.List<Imaging.SeamFixer.Sample>();
             for (int i = 0; i < instances.Length; i++)
             {
-                var inst = instances[i];
+                BakeInstance inst = instances[i];
                 if (!object.ReferenceEquals(inst.Target, ws.Target) || !inst.ReceivesLighting) continue;
 
-                var key = (inst.Mesh, inst.BakeUVLayer);
-                if (!cache.TryGetValue(key, out var segments))
+                (BakeMesh Mesh, string BakeUVLayer) key = (inst.Mesh, inst.BakeUVLayer);
+                if (!cache.TryGetValue(key, out UvSeamFinder.SeamSegment[]? segments))
                     cache[key] = segments = Rasterization.UvSeamFinder.Find(inst.Mesh, inst.BakeUVLayer);
 
-                foreach (var seg in segments)
+                foreach (UvSeamFinder.SeamSegment seg in segments)
                 {
-                    var a0 = ToPixels(seg.A0, inst, ws);
-                    var a1 = ToPixels(seg.A1, inst, ws);
-                    var b0 = ToPixels(seg.B0, inst, ws);
-                    var b1 = ToPixels(seg.B1, inst, ws);
+                    Float2 a0 = ToPixels(seg.A0, inst, ws);
+                    Float2 a1 = ToPixels(seg.A1, inst, ws);
+                    Float2 b0 = ToPixels(seg.B0, inst, ws);
+                    Float2 b1 = ToPixels(seg.B1, inst, ws);
 
                     float span = System.Math.Max(Float2.Distance(a0, a1), Float2.Distance(b0, b1));
                     int steps = System.Math.Clamp((int)System.Math.Ceiling(span), 1, 4096);
                     for (int k = 0; k <= steps; k++)
                     {
                         float f = k / (float)steps;
-                        var pa = a0 + (a1 - a0) * f;
-                        var pb = b0 + (b1 - b0) * f;
+                        Float2 pa = a0 + (a1 - a0) * f;
+                        Float2 pb = b0 + (b1 - b0) * f;
                         samples.Add(new Imaging.SeamFixer.Sample { AX = pa.X, AY = pa.Y, BX = pb.X, BY = pb.Y });
                     }
                 }
@@ -246,7 +247,7 @@ public sealed class Job
     private void StitchSeams(TargetWorkspace ws, int targetIndex)
     {
         if (!_options.FixSeams || targetIndex >= _seamSamples.Length) return;
-        var samples = _seamSamples[targetIndex];
+        SeamFixer.Sample[]? samples = _seamSamples[targetIndex];
         if (samples is null) return;
         // Four passes at half strength converges without smearing the correction into the chart.
         Imaging.SeamFixer.Run(ws.Working(), ws.Covered, ws.Width, ws.Height,
@@ -263,7 +264,7 @@ public sealed class Job
             var allInstances = new System.Collections.Generic.List<BakeInstance>();
             for (int t = 0; t < _targets.Length; t++)
                 allInstances.AddRange(_targets[t].Instances);
-            var instances = allInstances.ToArray();
+            BakeInstance[] instances = allInstances.ToArray();
 
             _cts.Token.ThrowIfCancellationRequested();
 
@@ -272,7 +273,7 @@ public sealed class Job
 
             // Anything the caller left automatic is decided here, from the size of what is actually
             // being baked: a fixed ray bias or ray length cannot be right at every scale.
-            var bounds = accel.Blas.Mesh.Bounds;
+            AABB bounds = accel.Blas.Mesh.Bounds;
             _options.Resolve(Float3.Length(bounds.Max - bounds.Min));
 
             // 3) For each target: rasterize UV1 to texel samples --------------------------------
@@ -281,12 +282,12 @@ public sealed class Job
             //    a brief window where slot[i] is still null.
             // Stable per-triangle ids across the whole bake, so the smooth/flat decision can be
             // recorded once per triangle rather than per texel.
-            var triangleBase = new int[instances.Length];
+            int[] triangleBase = new int[instances.Length];
             int triangleCount = 0;
             for (int i = 0; i < instances.Length; i++)
             {
                 triangleBase[i] = triangleCount;
-                var groups = instances[i].Mesh.MaterialGroups;
+                IReadOnlyList<BakeMesh.MaterialGroup> groups = instances[i].Mesh.MaterialGroups;
                 for (int g = 0; g < groups.Count; g++) triangleCount += groups[g].Indices.Length / 3;
             }
 
@@ -319,16 +320,16 @@ public sealed class Job
                     _sparse[t] = Integration.SparseTexelSet.Build(workspaces[t], _options.SparseStride);
 
                 _activity = "Link sample points";
-                var linkOpts = CreateParallelOptions();
+                ParallelOptions linkOpts = CreateParallelOptions();
                 for (int t = 0; t < workspaces.Length; t++)
                     _neighbours[t] = Integration.SparseNeighbours.Build(workspaces[t], _sparse[t]!, accel.Blas, _options, linkOpts);
             }
 
             for (int t = 0; t < workspaces.Length; t++)
             {
-                var ws = workspaces[t];
-                var sparse = _sparse[t];
-                var roles = new byte[ws.Width * ws.Height];
+                TargetWorkspace ws = workspaces[t];
+                SparseTexelSet? sparse = _sparse[t];
+                byte[] roles = new byte[ws.Width * ws.Height];
                 for (int i = 0; i < roles.Length; i++)
                 {
                     if (!ws.Covered[i]) continue;
@@ -345,8 +346,8 @@ public sealed class Job
             // runtime seam handling, and re-bakes.
             for (int t = 0; t < _targets.Length; t++)
             {
-                var ws = workspaces[t];
-                var mask = new byte[ws.Width * ws.Height];
+                TargetWorkspace ws = workspaces[t];
+                byte[] mask = new byte[ws.Width * ws.Height];
                 for (int i = 0; i < mask.Length; i++) mask[i] = ws.Covered[i] ? (byte)1 : (byte)0;
                 _targets[t].CoverageMask = mask;
             }
@@ -382,17 +383,17 @@ public sealed class Job
     private void IntegrateContinuous(TargetWorkspace[] workspaces, Integration.BakeAcceleration accel)
     {
         var integrator = new PathIntegrator(_scene, accel.Blas, accel.MergedMats, _options);
-        var instanceMaterials = accel.InstanceMaterials;
-        var parallelOpts = CreateParallelOptions();
+        BakeMaterial?[][] instanceMaterials = accel.InstanceMaterials;
+        ParallelOptions parallelOpts = CreateParallelOptions();
 
         // ---- pre-compute direct lighting once (deterministic with current light types). -------
         _activity = "Pre-compute direct lighting";
         for (int ti = 0; ti < workspaces.Length; ti++)
         {
-            var ws = workspaces[ti];
+            TargetWorkspace ws = workspaces[ti];
             ws.AllocateContinuousBuffers();
             int W = ws.Width, H = ws.Height;
-            var sparseSet = ti < _sparse.Length ? _sparse[ti] : null;
+            SparseTexelSet? sparseSet = ti < _sparse.Length ? _sparse[ti] : null;
             try
             {
                 System.Threading.Tasks.Parallel.For(0, H, parallelOpts, y =>
@@ -402,8 +403,8 @@ public sealed class Job
                         int idx = y * W + x;
                         if (!ws.Covered[idx]) continue;
                         if (sparseSet is not null && _options.SparseIncludesDirect && !sparseSet.IsPoint[idx]) continue;
-                        var s = ws.Samples[idx];
-                        var mat = instanceMaterials[s.InstanceIndex][s.MaterialGroupIndex];
+                        TexelSample s = ws.Samples[idx];
+                        BakeMaterial? mat = instanceMaterials[s.InstanceIndex][s.MaterialGroupIndex];
                         Float3 albedo;
                         Float3 emissive = mat is not null ? mat.Emissive : Float3.Zero;
                         if (_options.Diagnostics.IgnoreAlbedo)
@@ -415,19 +416,19 @@ public sealed class Job
                             albedo = mat is not null ? mat.DiffuseColor : new Float3(0.7f);
                             if (mat is not null && mat.DiffuseTexture is not null)
                             {
-                                var samp = mat.DiffuseTexture.SampleLinearRGBA(s.UV0.X, s.UV0.Y);
+                                Float4 samp = mat.DiffuseTexture.SampleLinearRGBA(s.UV0.X, s.UV0.Y);
                                 albedo = albedo * new Float3(samp.X, samp.Y, samp.Z);
                             }
                         }
                         if (mat is not null && mat.EmissiveTexture is not null)
                         {
-                            var samp = mat.EmissiveTexture.SampleLinearRGBA(s.UV0.X, s.UV0.Y);
+                            Float4 samp = mat.EmissiveTexture.SampleLinearRGBA(s.UV0.X, s.UV0.Y);
                             emissive = emissive * new Float3(samp.X, samp.Y, samp.Z);
                         }
                         // No texel-albedo multiply here: the lightmap stores incoming irradiance;
                         // the runtime shader multiplies by the texel's diffuse texture.
                         _ = albedo;
-                        var direct = (_scene.Lights.Count > 0 && _options.IncludeDirectLighting)
+                        Float3 direct = (_scene.Lights.Count > 0 && _options.IncludeDirectLighting)
                             ? integrator.ComputeBakedDirectLighting(s.Position, s.Normal)
                             : Float3.Zero;
                         ws.DirectCache![idx] = direct + emissive;
@@ -451,13 +452,13 @@ public sealed class Job
             for (int ti = 0; ti < workspaces.Length; ti++)
             {
                 if (_cts.IsCancellationRequested) break;
-                var ws = workspaces[ti];
+                TargetWorkspace ws = workspaces[ti];
                 int W = ws.Width, H = ws.Height;
-                var sums = ws.IndirectSum!;
-                var counts = ws.IndirectSampleCount!;
-                var direct = ws.DirectCache!;
-                var pixels = ws.Working();
-                var sparse = ti < _sparse.Length ? _sparse[ti] : null;
+                Float3[] sums = ws.IndirectSum!;
+                int[] counts = ws.IndirectSampleCount!;
+                Float3[] direct = ws.DirectCache!;
+                float[] pixels = ws.Working();
+                SparseTexelSet? sparse = ti < _sparse.Length ? _sparse[ti] : null;
                 // With sparse indirect, the direct term is added back at full resolution after the
                 // reconstruction, so points must not carry it into the interpolation.
                 bool pointsCarryDirect = sparse is null || _options.SparseIncludesDirect;
@@ -465,7 +466,7 @@ public sealed class Job
                 void IntegrateTexel(int idx)
                 {
                     int x = idx % W, y = idx / W;
-                    var s = ws.Samples[idx];
+                    TexelSample s = ws.Samples[idx];
 
                     // Per-texel-per-iter deterministic seed so paths are reproducible.
                     ulong seed = ((ulong)x * 0x9E3779B97F4A7C15UL ^ ((ulong)y * 0xC6BC279692B5C323UL))
@@ -487,8 +488,8 @@ public sealed class Job
 
                     // Refresh the display pixel: direct (cached) + indirect average.
                     int n = counts[idx];
-                    var avg = n > 0 ? sums[idx] * (1f / n) : Float3.Zero;
-                    var final = pointsCarryDirect ? direct[idx] + avg : avg;
+                    Float3 avg = n > 0 ? sums[idx] * (1f / n) : Float3.Zero;
+                    Float3 final = pointsCarryDirect ? direct[idx] + avg : avg;
                     pixels[idx * 3] = final.X;
                     pixels[idx * 3 + 1] = final.Y;
                     pixels[idx * 3 + 2] = final.Z;
@@ -509,7 +510,7 @@ public sealed class Job
                     }
                     else
                     {
-                        var points = sparse.Points;
+                        int[] points = sparse.Points;
                         System.Threading.Tasks.Parallel.For(0, points.Length, parallelOpts, i => IntegrateTexel(points[i]));
                         _neighbours[ti]?.Apply(ws, sparse, parallelOpts);
                         if (!pointsCarryDirect) Integration.SparseTexelSet.AddDirect(ws, direct, parallelOpts);
@@ -524,7 +525,7 @@ public sealed class Job
             for (int ti = 0; ti < workspaces.Length; ti++)
             {
                 if (_cts.IsCancellationRequested) return;
-                var ws = workspaces[ti];
+                TargetWorkspace ws = workspaces[ti];
                 StitchSeams(ws, ti);
                 if (_options.DilatePixels > 0)
                     Imaging.Dilate.Run(ws.Working(), ws.ScratchCovered(), ws.Width, ws.Height,
@@ -555,7 +556,7 @@ public sealed class Job
             if (!ws.Covered[idx]) continue;
             covered++;
 
-            var s = ws.Samples[idx];
+                TexelSample s = ws.Samples[idx];
             // Eight texel radii is four texels of surface. Ordinary chart seams step across about
             // one; anything past this is a different part of the model entirely.
             float reach = s.WorldRadius * 8f;
@@ -583,20 +584,20 @@ public sealed class Job
     {
         for (int i = 0; i < allInstances.Length; i++)
         {
-            var inst = allInstances[i];
+            BakeInstance inst = allInstances[i];
             if (inst.Target != ws.Target) continue;
             if (!inst.ReceivesLighting) continue;
-            var mesh = inst.Mesh;
-            if (!mesh.UVLayers.TryGetValue(inst.BakeUVLayer, out var bakeUVs)) continue;
-            if (!mesh.UVLayers.TryGetValue("UV0", out var uv0)) uv0 = bakeUVs;
+            BakeMesh mesh = inst.Mesh;
+            if (!mesh.UVLayers.TryGetValue(inst.BakeUVLayer, out Float2[]? bakeUVs)) continue;
+            if (!mesh.UVLayers.TryGetValue("UV0", out Float2[]? uv0)) uv0 = bakeUVs;
 
-            var positions = mesh.Positions;
-            var normals = mesh.Normals;
+            Float3[] positions = mesh.Positions;
+            Float3[] normals = mesh.Normals;
             int triangleId = triangleBase[i];
             for (int g = 0; g < mesh.MaterialGroups.Count; g++)
             {
-                var grp = mesh.MaterialGroups[g];
-                var idx = grp.Indices;
+                BakeMesh.MaterialGroup grp = mesh.MaterialGroups[g];
+                int[] idx = grp.Indices;
                 for (int k = 0; k < idx.Length; k += 3, triangleId++)
                 {
                     int i0 = idx[k], i1 = idx[k + 1], i2 = idx[k + 2];

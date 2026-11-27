@@ -9,7 +9,7 @@ public abstract partial class GraphicsDevice
     public GraphicsCounters Counters { get; } = new();
 
     /// <summary>Factories that each create one profiler, or null to skip, for every execution started without profilers of its own.</summary>
-    public GlobalProfilerList GlobalProfilers { get; } = new();
+    public GlobalProfilerList GlobalProfilers { get; } = [];
 
     private long _pipelineIdCounter;
 

@@ -16,7 +16,7 @@ public sealed class WeakReferenceMigrator : IValueMigrator
     {
         if (type == typeof(WeakReference)) return new UntypedPlan();
 
-        var resolution = context.Types.Resolve(type);
+        TypeResolution resolution = context.Types.Resolve(type);
         if (resolution.IsRemoved) return MigrationPlan.Dropped;
 
         return new TypedPlan(type, resolution.Target!, resolution.IsSubstituted);
@@ -31,7 +31,7 @@ public sealed class WeakReferenceMigrator : IValueMigrator
             var reference = (WeakReference)target;
             if (!reference.IsAlive) return;
 
-            var current = reference.Target;
+            object? current = reference.Target;
             if (current == null) return;
 
             reference.Target = context.Map(current);
@@ -64,7 +64,7 @@ public sealed class WeakReferenceMigrator : IValueMigrator
 
         public override void Fill(object source, object target, MigrationContext context)
         {
-            var arguments = new object?[1];
+            object?[] arguments = new object?[1];
 
             // A collected or absent target leaves the replacement empty, which is what it already is.
             if (!(bool)_tryGetTarget.Invoke(source, arguments)! || arguments[0] == null) return;

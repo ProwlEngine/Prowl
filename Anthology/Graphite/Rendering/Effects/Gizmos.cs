@@ -96,9 +96,9 @@ public sealed class GizmoBatch
     internal int Count;
     internal int Version;
 
-    private readonly List<Texture> _textures = new();
-    private readonly List<Float4x4> _matrices = new();
-    private readonly List<float> _durations = new();
+    private readonly List<Texture> _textures = [];
+    private readonly List<Float4x4> _matrices = [];
+    private readonly List<float> _durations = [];
     private Float4x4 _matrix = Float4x4.Identity;
     private float _duration;
     private int _timed;
@@ -733,7 +733,7 @@ public sealed class GizmoBatch
         for (int i = 0; i < Count; i++)
             counts[Slot(i)]++;
         Span<int> starts = stackalloc int[counts.Length];
-        List<Run> list = new(counts.Length);
+        List<Run> list = [with(counts.Length)];
         for (int s = 0, at = 0; s < counts.Length; s++)
         {
             starts[s] = at;
@@ -996,15 +996,15 @@ public sealed class Gizmos : RenderFeature, IDisposable
     private readonly Texture _white;
 
     // Host thread
-    private readonly List<GizmoBatch> _batches = new();
-    private readonly Dictionary<GizmoBatch, int> _sent = new();
-    private readonly List<Draw> _drawing = new();
+    private readonly List<GizmoBatch> _batches = [];
+    private readonly Dictionary<GizmoBatch, int> _sent = [];
+    private readonly List<Draw> _drawing = [];
     private readonly ConcurrentQueue<Upload> _uploads = new();
     private volatile Draw[] _frame = [];
 
     // Render thread
-    private readonly Dictionary<GizmoBatch, GpuBatch> _gpu = new();
-    private readonly List<(DeviceBuffer Buffer, ulong Frame)> _retired = new();
+    private readonly Dictionary<GizmoBatch, GpuBatch> _gpu = [];
+    private readonly List<(DeviceBuffer Buffer, ulong Frame)> _retired = [];
 
     public Gizmos(Renderer renderer, RenderSlot slot = RenderSlot.DisplayPost, int order = 0) : base(slot, order)
     {

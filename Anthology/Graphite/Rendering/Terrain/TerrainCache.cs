@@ -32,7 +32,7 @@ internal sealed class TerrainCache : IDisposable
 
     public sealed class Frame
     {
-        public readonly List<(int Slot, int Level, long X, long Z, int W, int H)> Fills = new();
+        public readonly List<(int Slot, int Level, long X, long Z, int W, int H)> Fills = [];
         public readonly float[] Levels;
 
         public Frame(int levels, int slots) => Levels = new float[levels * slots * 4];
@@ -42,7 +42,7 @@ internal sealed class TerrainCache : IDisposable
     private readonly LazyCompute _program;
     private readonly PropertySet _properties = new();
     private readonly Sampler _point, _linear;
-    private readonly Dictionary<SamplerDescription, Sampler> _layerSamplers = new();
+    private readonly Dictionary<SamplerDescription, Sampler> _layerSamplers = [];
     private readonly ResourceFactory _factory;
 
     public TerrainCache(Renderer renderer, int levels, int size, double texel, int slots)

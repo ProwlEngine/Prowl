@@ -225,7 +225,7 @@ internal sealed class WorldVoxels(TableHost tables)
     private static uint Wrap(long coordinate, int resolution) => (uint)(((coordinate % resolution) + resolution) % resolution);
 
     /// <summary>The parts of the box, in its voxels, cleared and drawn again this frame.</summary>
-    public readonly List<VoxelRegion> Regions = new();
+    public readonly List<VoxelRegion> Regions = [];
 
     private (long X, long Y, long Z) _drawnOrigin;
     private VoxelVolumeDesc? _drawn;

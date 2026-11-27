@@ -33,7 +33,7 @@ public static class CodeFolding
                 regions.Push((i, trimmed));
             else if (trimmed.StartsWith("#endregion", StringComparison.Ordinal) && regions.Count > 0)
             {
-                var r = regions.Pop();
+                (int Line, string Label) r = regions.Pop();
                 if (i > r.Line) folds.Add(new CodeFoldRange(r.Line, i, r.Label));
             }
 
@@ -61,7 +61,7 @@ public static class CodeFolding
 
             tokens.Clear();
             state = lexer.Tokenize(line, state, tokens);
-            foreach (var t in tokens)
+            foreach (CodeToken t in tokens)
             {
                 if (t.Kind != CodeTokenKind.Punctuation) continue;
                 for (int c = t.Start; c < t.End; c++) Brace(lines, line[c], i, braces, folds);

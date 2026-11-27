@@ -7,12 +7,12 @@ namespace Prowl.Ember;
 /// <summary>Accumulates everything a reload produces, and mints the <see cref="ReloadReport"/> at the end.</summary>
 internal sealed class ReportBuilder
 {
-    private readonly List<ReloadDiagnostic> _diagnostics = new();
+    private readonly List<ReloadDiagnostic> _diagnostics = [];
     private readonly IDiagnosticSink? _sink;
     private readonly bool _collectStatistics;
 
-    private readonly Dictionary<object, object> _replaced = new(ReferenceEqualityComparer.Instance);
-    private readonly List<object> _dropped = new();
+    private readonly Dictionary<object, object> _replaced = [with(ReferenceEqualityComparer.Instance)];
+    private readonly List<object> _dropped = [];
 
     private long _planTicks, _mapTicks, _fillTicks, _rebuildTicks, _notifyTicks;
 

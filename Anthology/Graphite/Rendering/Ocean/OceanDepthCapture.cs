@@ -29,7 +29,7 @@ public sealed class OceanDepthCapture : IDisposable
         View.Target = _framebuffer;
         View.Kind = ViewKind.RenderTexture;
         View.Sky = false;
-        View.Features = new ExtensionSet<RenderFeature> { _feature };
+        View.Features = [_feature];
         Input = new OceanDepthInput { Heights = _heights.ColorTextures[0] };
     }
 

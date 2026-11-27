@@ -21,116 +21,119 @@ freely, subject to the following restrictions:
 using System.Collections.Generic;
 using System.Linq;
 using System.Threading.Tasks;
+
+using Prowl.Recast;
+using Prowl.Recast.Core;
 using Prowl.Recast.Core.Numerics;
 using Prowl.Recast.Detour.TileCache.Io.Compress;
-using Prowl.Recast;
 using Prowl.Recast.Geom;
 
-namespace Prowl.Recast.Detour.TileCache
+namespace Prowl.Recast.Detour.TileCache;
+
+public class DtTileCacheLayerBuilder
 {
-    public class DtTileCacheLayerBuilder
+    private readonly IDtTileCacheCompressorFactory _compFactory;
+
+    public DtTileCacheLayerBuilder(IDtTileCacheCompressorFactory compFactory)
     {
-        private readonly IDtTileCacheCompressorFactory _compFactory;
+        _compFactory = compFactory;
+    }
 
-        public DtTileCacheLayerBuilder(IDtTileCacheCompressorFactory compFactory)
+    public List<DtTileCacheLayerBuildResult> Build(IRcInputGeomProvider geom, RcConfig cfg, DtTileCacheStorageParams storageParams, int threads, int tw, int th)
+    {
+        if (threads == 1)
         {
-            _compFactory = compFactory;
+            return BuildSingleThread(geom, cfg, storageParams, tw, th);
         }
 
-        public List<DtTileCacheLayerBuildResult> Build(IRcInputGeomProvider geom, RcConfig cfg, DtTileCacheStorageParams storageParams, int threads, int tw, int th)
+        return BuildMultiThread(geom, cfg, storageParams, tw, th, threads);
+    }
+
+    private List<DtTileCacheLayerBuildResult> BuildSingleThread(IRcInputGeomProvider geom, RcConfig cfg, DtTileCacheStorageParams storageParams, int tw, int th)
+    {
+        var results = new List<DtTileCacheLayerBuildResult>();
+        for (int y = 0; y < th; ++y)
         {
-            if (threads == 1)
+            for (int x = 0; x < tw; ++x)
             {
-                return BuildSingleThread(geom, cfg, storageParams, tw, th);
+                DtTileCacheLayerBuildResult result = BuildTileCacheLayer(geom, cfg, x, y, storageParams);
+                results.Add(result);
             }
-
-            return BuildMultiThread(geom, cfg, storageParams, tw, th, threads);
         }
 
-        private List<DtTileCacheLayerBuildResult> BuildSingleThread(IRcInputGeomProvider geom, RcConfig cfg, DtTileCacheStorageParams storageParams, int tw, int th)
+        return results;
+    }
+
+
+    private List<DtTileCacheLayerBuildResult> BuildMultiThread(IRcInputGeomProvider geom, RcConfig cfg, DtTileCacheStorageParams storageParams, int tw, int th, int threads)
+    {
+        var results = new List<Task<DtTileCacheLayerBuildResult>>();
+        for (int y = 0; y < th; ++y)
         {
-            var results = new List<DtTileCacheLayerBuildResult>();
-            for (int y = 0; y < th; ++y)
+            for (int x = 0; x < tw; ++x)
             {
-                for (int x = 0; x < tw; ++x)
-                {
-                    var result = BuildTileCacheLayer(geom, cfg, x, y, storageParams);
-                    results.Add(result);
-                }
+                int tx = x;
+                int ty = y;
+                Task<DtTileCacheLayerBuildResult> task = Task.Run(() => BuildTileCacheLayer(geom, cfg, tx, ty, storageParams));
+                results.Add(task);
             }
-
-            return results;
         }
 
+        return results
+            .Select(x => x.Result)
+            .ToList();
+    }
 
-        private List<DtTileCacheLayerBuildResult> BuildMultiThread(IRcInputGeomProvider geom, RcConfig cfg, DtTileCacheStorageParams storageParams, int tw, int th, int threads)
+    protected virtual RcHeightfieldLayerSet BuildHeightfieldLayerSet(IRcInputGeomProvider geom, RcConfig cfg, int tx, int ty)
+    {
+        RcBuilder rcBuilder = new RcBuilder();
+        RcVec3f bmin = geom.GetMeshBoundsMin();
+        RcVec3f bmax = geom.GetMeshBoundsMax();
+        RcBuilderConfig builderCfg = new RcBuilderConfig(cfg, bmin, bmax, tx, ty);
+        RcHeightfieldLayerSet lset = rcBuilder.BuildLayers(geom, builderCfg);
+        return lset;
+    }
+
+    protected virtual DtTileCacheLayerBuildResult BuildTileCacheLayer(IRcInputGeomProvider geom, RcConfig cfg, int tx, int ty, DtTileCacheStorageParams storageParams)
+    {
+        RcHeightfieldLayerSet lset = BuildHeightfieldLayerSet(geom, cfg, tx, ty);
+        List<byte[]> result = [];
+        if (lset != null)
         {
-            var results = new List<Task<DtTileCacheLayerBuildResult>>();
-            for (int y = 0; y < th; ++y)
+            for (int i = 0; i < lset.layers.Length; ++i)
             {
-                for (int x = 0; x < tw; ++x)
+                RcHeightfieldLayer layer = lset.layers[i];
+
+                // Store header
+                DtTileCacheLayerHeader header = new DtTileCacheLayerHeader
                 {
-                    int tx = x;
-                    int ty = y;
-                    var task = Task.Run(() => BuildTileCacheLayer(geom, cfg, tx, ty, storageParams));
-                    results.Add(task);
-                }
-            }
-
-            return results
-                .Select(x => x.Result)
-                .ToList();
-        }
-
-        protected virtual RcHeightfieldLayerSet BuildHeightfieldLayerSet(IRcInputGeomProvider geom, RcConfig cfg, int tx, int ty)
-        {
-            RcBuilder rcBuilder = new RcBuilder();
-            RcVec3f bmin = geom.GetMeshBoundsMin();
-            RcVec3f bmax = geom.GetMeshBoundsMax();
-            RcBuilderConfig builderCfg = new RcBuilderConfig(cfg, bmin, bmax, tx, ty);
-            RcHeightfieldLayerSet lset = rcBuilder.BuildLayers(geom, builderCfg);
-            return lset;
-        }
-
-        protected virtual DtTileCacheLayerBuildResult BuildTileCacheLayer(IRcInputGeomProvider geom, RcConfig cfg, int tx, int ty, DtTileCacheStorageParams storageParams)
-        {
-            RcHeightfieldLayerSet lset = BuildHeightfieldLayerSet(geom, cfg, tx, ty);
-            List<byte[]> result = new List<byte[]>();
-            if (lset != null)
-            {
-                for (int i = 0; i < lset.layers.Length; ++i)
-                {
-                    RcHeightfieldLayer layer = lset.layers[i];
-
-                    // Store header
-                    DtTileCacheLayerHeader header = new DtTileCacheLayerHeader();
-                    header.magic = DtTileCacheLayerHeader.DT_TILECACHE_MAGIC;
-                    header.version = DtTileCacheLayerHeader.DT_TILECACHE_VERSION;
+                    magic = DtTileCacheLayerHeader.DT_TILECACHE_MAGIC,
+                    version = DtTileCacheLayerHeader.DT_TILECACHE_VERSION,
 
                     // Tile layer location in the navmesh.
-                    header.tx = tx;
-                    header.ty = ty;
-                    header.tlayer = i;
-                    header.bmin = layer.bmin;
-                    header.bmax = layer.bmax;
+                    tx = tx,
+                    ty = ty,
+                    tlayer = i,
+                    bmin = layer.bmin,
+                    bmax = layer.bmax,
 
                     // Tile info.
-                    header.width = layer.width;
-                    header.height = layer.height;
-                    header.minx = layer.minx;
-                    header.maxx = layer.maxx;
-                    header.miny = layer.miny;
-                    header.maxy = layer.maxy;
-                    header.hmin = layer.hmin;
-                    header.hmax = layer.hmax;
+                    width = layer.width,
+                    height = layer.height,
+                    minx = layer.minx,
+                    maxx = layer.maxx,
+                    miny = layer.miny,
+                    maxy = layer.maxy,
+                    hmin = layer.hmin,
+                    hmax = layer.hmax
+                };
 
-                    var comp = _compFactory.Create(storageParams.Compatibility ? 0 : 1);
-                    var bytes = DtTileCacheBuilder.CompressTileCacheLayer(header, layer.heights, layer.areas, layer.cons, storageParams.Order, storageParams.Compatibility, comp);
-                    result.Add(bytes);
-                }
+                IRcCompressor comp = _compFactory.Create(storageParams.Compatibility ? 0 : 1);
+                byte[] bytes = DtTileCacheBuilder.CompressTileCacheLayer(header, layer.heights, layer.areas, layer.cons, storageParams.Order, storageParams.Compatibility, comp);
+                result.Add(bytes);
             }
-
-            return new DtTileCacheLayerBuildResult(tx, ty, result);
         }
+
+        return new DtTileCacheLayerBuildResult(tx, ty, result);
     }
 }

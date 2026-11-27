@@ -1,4 +1,5 @@
 using System.Collections.Generic;
+
 using Prowl.Vector;
 
 namespace Prowl.Motion;
@@ -192,7 +193,7 @@ public static partial class HumanTrait
         var up = new Float3(0f, 1f, 0f);
         var forward = new Float3(0f, 0f, 1f);
 
-        BoneSpec Spec(AimKind aim, Float3 reference, Float3 zero, Float3 signs, Float3 fixedAim = default)
+        static BoneSpec Spec(AimKind aim, Float3 reference, Float3 zero, Float3 signs, Float3 fixedAim = default)
             => new(aim, fixedAim, reference, Quaternion.Normalize(new Quaternion(zero.X, zero.Y, zero.Z, 1f)), signs);
 
         var one = new Float3(1f, 1f, 1f);

@@ -77,19 +77,19 @@ internal sealed class FbxProperty
         if (FloatArrayValue is { } f) return f;
         if (DoubleArrayValue is { } d)
         {
-            var r = new float[d.Length];
+            float[] r = new float[d.Length];
             for (int k = 0; k < d.Length; k++) r[k] = (float)d[k];
             return r;
         }
         if (IntArrayValue is { } iarr)
         {
-            var r = new float[iarr.Length];
+            float[] r = new float[iarr.Length];
             for (int k = 0; k < iarr.Length; k++) r[k] = iarr[k];
             return r;
         }
         if (LongArrayValue is { } l)
         {
-            var r = new float[l.Length];
+            float[] r = new float[l.Length];
             for (int k = 0; k < l.Length; k++) r[k] = l[k];
             return r;
         }
@@ -106,19 +106,19 @@ internal sealed class FbxProperty
         if (DoubleArrayValue is { } d) return d;
         if (FloatArrayValue is { } f)
         {
-            var r = new double[f.Length];
+            double[] r = new double[f.Length];
             for (int k = 0; k < f.Length; k++) r[k] = f[k];
             return r;
         }
         if (IntArrayValue is { } iarr)
         {
-            var r = new double[iarr.Length];
+            double[] r = new double[iarr.Length];
             for (int k = 0; k < iarr.Length; k++) r[k] = iarr[k];
             return r;
         }
         if (LongArrayValue is { } l)
         {
-            var r = new double[l.Length];
+            double[] r = new double[l.Length];
             for (int k = 0; k < l.Length; k++) r[k] = l[k];
             return r;
         }
@@ -135,19 +135,19 @@ internal sealed class FbxProperty
         if (IntArrayValue is { } i) return i;
         if (LongArrayValue is { } l)
         {
-            var r = new int[l.Length];
+            int[] r = new int[l.Length];
             for (int j = 0; j < l.Length; j++) r[j] = checked((int)l[j]);
             return r;
         }
         if (FloatArrayValue is { } f)
         {
-            var r = new int[f.Length];
+            int[] r = new int[f.Length];
             for (int j = 0; j < f.Length; j++) r[j] = (int)f[j];
             return r;
         }
         if (DoubleArrayValue is { } d)
         {
-            var r = new int[d.Length];
+            int[] r = new int[d.Length];
             for (int j = 0; j < d.Length; j++) r[j] = (int)d[j];
             return r;
         }
@@ -164,19 +164,19 @@ internal sealed class FbxProperty
         if (LongArrayValue is { } l) return l;
         if (IntArrayValue is { } i)
         {
-            var r = new long[i.Length];
+            long[] r = new long[i.Length];
             for (int j = 0; j < i.Length; j++) r[j] = i[j];
             return r;
         }
         if (FloatArrayValue is { } f)
         {
-            var r = new long[f.Length];
+            long[] r = new long[f.Length];
             for (int j = 0; j < f.Length; j++) r[j] = (long)f[j];
             return r;
         }
         if (DoubleArrayValue is { } d)
         {
-            var r = new long[d.Length];
+            long[] r = new long[d.Length];
             for (int j = 0; j < d.Length; j++) r[j] = (long)d[j];
             return r;
         }
@@ -220,8 +220,8 @@ internal enum FbxPropertyType : byte
 internal sealed class FbxNode
 {
     public required string Name { get; init; }
-    public List<FbxProperty> Properties { get; } = new();
-    public List<FbxNode> Children { get; } = new();
+    public List<FbxProperty> Properties { get; } = [];
+    public List<FbxNode> Children { get; } = [];
 
     /// <summary>Finds the first child with the given name, or <c>null</c>.</summary>
     public FbxNode? FindChild(string name)

@@ -18,20 +18,19 @@ freely, subject to the following restrictions:
 
 using Prowl.Recast.Detour.Extras.Jumplink;
 
-namespace Prowl.Recast.Toolset.Tools
+namespace Prowl.Recast.Toolset.Tools;
+
+public class RcJumpLinkBuilderToolConfig
 {
-    public class RcJumpLinkBuilderToolConfig
-    {
-        public int buildTypes = DtJumpLinkType.EDGE_CLIMB_DOWN.Bit | DtJumpLinkType.EDGE_JUMP.Bit;
-        public bool buildOffMeshConnections = false;
-        
-        public float groundTolerance = 0.3f;
-        public float climbDownDistance = 0.4f;
-        public float climbDownMaxHeight = 3.2f;
-        public float climbDownMinHeight = 1.5f;
-        public float edgeJumpEndDistance = 2f;
-        public float edgeJumpHeight = 0.4f;
-        public float edgeJumpDownMaxHeight = 2.5f;
-        public float edgeJumpUpMaxHeight = 0.3f;
-    }
+    public int buildTypes = DtJumpLinkType.EDGE_CLIMB_DOWN.Bit | DtJumpLinkType.EDGE_JUMP.Bit;
+    public bool buildOffMeshConnections = false;
+    
+    public float groundTolerance = 0.3f;
+    public float climbDownDistance = 0.4f;
+    public float climbDownMaxHeight = 3.2f;
+    public float climbDownMinHeight = 1.5f;
+    public float edgeJumpEndDistance = 2f;
+    public float edgeJumpHeight = 0.4f;
+    public float edgeJumpDownMaxHeight = 2.5f;
+    public float edgeJumpUpMaxHeight = 0.3f;
 }

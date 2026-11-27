@@ -1,4 +1,5 @@
 using System.Collections.Generic;
+
 using Prowl.Vector.Spatial;
 
 namespace Prowl.Motion;
@@ -45,7 +46,7 @@ public sealed class StateInfo
 {
     public int PoseNodeIndex { get; set; }
     public string? Name { get; set; }
-    public List<TransitionInfo> Transitions { get; } = new();
+    public List<TransitionInfo> Transitions { get; } = [];
 }
 
 /// <summary>
@@ -54,7 +55,7 @@ public sealed class StateInfo
 /// </summary>
 public sealed class StateMachineDefinition : PoseNodeDefinition
 {
-    public List<StateInfo> States { get; } = new();
+    public List<StateInfo> States { get; } = [];
     public int DefaultStateIndex { get; set; }
 
     public override GraphNodeInstance CreateInstance() => new StateMachineInstance(this);
@@ -110,7 +111,7 @@ internal sealed class StateMachineInstance : PoseNodeInstance, IStateMachineStat
     }
 
     private readonly StateMachineDefinition _def;
-    private readonly List<Transition> _transitionPool = new();
+    private readonly List<Transition> _transitionPool = [];
     private StateRuntime[] _states = null!;
     private int _defaultState;
     private int _active = -1;
@@ -141,8 +142,11 @@ internal sealed class StateMachineInstance : PoseNodeInstance, IStateMachineStat
         for (int s = 0; s < count; s++)
         {
             StateInfo info = _def.States[s];
-            var state = new StateRuntime { Content = context.PoseNode(info.PoseNodeIndex) };
-            state.Transitions = new TransitionData[info.Transitions.Count];
+            var state = new StateRuntime
+            {
+                Content = context.PoseNode(info.PoseNodeIndex),
+                Transitions = new TransitionData[info.Transitions.Count]
+            };
             for (int t = 0; t < info.Transitions.Count; t++)
             {
                 TransitionInfo transition = info.Transitions[t];
@@ -243,7 +247,7 @@ internal sealed class StateMachineInstance : PoseNodeInstance, IStateMachineStat
     /// </summary>
     private ControlParameterInstance[] ParametersRead(ValueNodeInstance condition)
     {
-        _parametersRead ??= new Dictionary<ValueNodeInstance, ControlParameterInstance[]>();
+        _parametersRead ??= [];
         if (_parametersRead.TryGetValue(condition, out ControlParameterInstance[]? known)) return known;
 
         ControlParameterInstance[] result = ControlParameterInstance.ReadBy(condition);
@@ -253,7 +257,7 @@ internal sealed class StateMachineInstance : PoseNodeInstance, IStateMachineStat
 
     private void StartTransition(GraphContext context, TransitionData info, int firstEvent)
     {
-        var sourceRange = context.Events.RangeFrom(firstEvent);
+        SampledEventRange sourceRange = context.Events.RangeFrom(firstEvent);
         context.Events.MarkFromInactiveBranch(sourceRange);
 
         float sourcePrevious = PreviousTime;

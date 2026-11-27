@@ -107,8 +107,8 @@ internal sealed class PathIntegrator
             Float3 rd;
             if (useLUT)
             {
-                var tsd = CosineHemisphereLUT.Get(rng.NextU32());
-                Hemisphere.BuildOrthonormalBasis(n, out var T, out var B);
+                Float3 tsd = CosineHemisphereLUT.Get(rng.NextU32());
+                Hemisphere.BuildOrthonormalBasis(n, out Float3 T, out Float3 B);
                 rd = Float3.Normalize(T * tsd.X + B * tsd.Y + n * tsd.Z);
             }
             else
@@ -116,7 +116,7 @@ internal sealed class PathIntegrator
                 float u1 = rng.NextFloat(), u2 = rng.NextFloat();
                 rd = Hemisphere.SampleCosine(n, u1, u2);
             }
-            var hit = ClosestHitWorld(RayMath.OffsetOrigin(ro, n, _bias), rd, _maxDistance);
+            HitInfo hit = ClosestHitWorld(RayMath.OffsetOrigin(ro, n, _bias), rd, _maxDistance);
             if (!hit.Hit)
             {
                 radiance += t * SampleEnvironment(rd);
@@ -146,8 +146,8 @@ internal sealed class PathIntegrator
     /// </summary>
     private void ResolveHitSurface(HitInfo hit, out Float3 albedo, out Float3 emissive)
     {
-        var triRef = _blas.Triangles[hit.TriangleIndex];
-        var mat = _mats[triRef.MaterialGroupIndex];
+        Blas.TriRef triRef = _blas.Triangles[hit.TriangleIndex];
+        BakeMaterial? mat = _mats[triRef.MaterialGroupIndex];
         emissive = mat is not null ? mat.Emissive : Float3.Zero;
         if (_ignoreAlbedo)
         {
@@ -156,9 +156,9 @@ internal sealed class PathIntegrator
         }
         albedo = mat is not null ? mat.DiffuseColor : new Float3(0.7f);
         if (mat is not null && mat.DiffuseTexture is not null
-            && _blas.Mesh.UVLayers.TryGetValue(mat.DiffuseUVLayer, out var uvLayer))
+            && _blas.Mesh.UVLayers.TryGetValue(mat.DiffuseUVLayer, out Float2[]? uvLayer))
         {
-            var uvA = uvLayer[triRef.I0]; var uvB = uvLayer[triRef.I1]; var uvC = uvLayer[triRef.I2];
+            Float2 uvA = uvLayer[triRef.I0]; Float2 uvB = uvLayer[triRef.I1]; Float2 uvC = uvLayer[triRef.I2];
             float w = 1f - (float)hit.U - (float)hit.V;
             Float2 uv = uvA * w + uvB * (float)hit.U + uvC * (float)hit.V;
             // Nearest sample on the bounce path: variance averages out across indirect samples.
@@ -223,9 +223,9 @@ internal sealed class PathIntegrator
     {
         for (int i = 0; i < _scene.Lights.Count; i++)
         {
-            var l = _scene.Lights[i];
+            Light l = _scene.Lights[i];
             if (!l.BakeDirect) continue;
-            if (!l.Sample(position, out var toLight, out var Li, out float maxDist, _scene.DefaultAttenuation)) continue;
+            if (!l.Sample(position, out Float3 toLight, out Float3 Li, out float maxDist, _scene.DefaultAttenuation)) continue;
             if (Li.X + Li.Y + Li.Z <= 0) continue;
             if (l.CastsShadows && _blas.AnyHit(position, toLight, _bias, maxDist - 2 * _bias, _cullEnabled, ProwlKeepPositiveDet))
                 continue;
@@ -237,7 +237,7 @@ internal sealed class PathIntegrator
     /// otherwise the hit surface's outgoing radiance under the lightmap shading convention.</summary>
     private Float3 ProbeIncomingRadiance(Float3 origin, Float3 dir, int bounces, ref Sampler rng)
     {
-        var hit = ClosestHitWorld(origin, dir, _maxDistance);
+        HitInfo hit = ClosestHitWorld(origin, dir, _maxDistance);
         if (!hit.Hit) return SampleEnvironment(dir);
 
         ResolveHitSurface(hit, out Float3 albedo, out Float3 emissive);
@@ -278,13 +278,13 @@ internal sealed class PathIntegrator
     {
         for (int i = 0; i < _scene.Lights.Count; i++)
         {
-            var l = _scene.Lights[i];
-            if (!l.Sample(position, out var toLight, out var Li, out float maxDist, _scene.DefaultAttenuation)) continue;
+            Light l = _scene.Lights[i];
+            if (!l.Sample(position, out Float3 toLight, out Float3 Li, out float maxDist, _scene.DefaultAttenuation)) continue;
             if (Li.X + Li.Y + Li.Z <= 0) continue;
             float ndotl = Float3.Dot(normal, toLight);
             if (ndotl <= 0) continue;
 
-            var ro = RayMath.OffsetOrigin(position, normal, _bias);
+            Float3 ro = RayMath.OffsetOrigin(position, normal, _bias);
             bool blocked = false;
             if (l.CastsShadows)
                 blocked = _blas.AnyHit(ro, toLight, _bias, maxDist - 2 * _bias, _cullEnabled, ProwlKeepPositiveDet);
@@ -320,8 +320,8 @@ internal sealed class PathIntegrator
             Float3 rd;
             if (useLUT)
             {
-                var tsd = CosineHemisphereLUT.Get(rng.NextU32());
-                Hemisphere.BuildOrthonormalBasis(n, out var T, out var B);
+                Float3 tsd = CosineHemisphereLUT.Get(rng.NextU32());
+                Hemisphere.BuildOrthonormalBasis(n, out Float3 T, out Float3 B);
                 rd = Float3.Normalize(T * tsd.X + B * tsd.Y + n * tsd.Z);
             }
             else
@@ -330,8 +330,8 @@ internal sealed class PathIntegrator
                 rd = Hemisphere.SampleCosine(n, u1, u2);
             }
 
-            var rayOrigin = RayMath.OffsetOrigin(ro, n, _bias);
-            var hit = ClosestHitWorld(rayOrigin, rd, _maxDistance);
+            Float3 rayOrigin = RayMath.OffsetOrigin(ro, n, _bias);
+            HitInfo hit = ClosestHitWorld(rayOrigin, rd, _maxDistance);
 
             // Record this bounce segment regardless of hit.
             segs.Add(new DebugSegment
@@ -345,8 +345,8 @@ internal sealed class PathIntegrator
 
             if (!hit.Hit) { radiance += t * SampleEnvironment(rd); break; }
 
-            var triRef = _blas.Triangles[hit.TriangleIndex];
-            var mat = _mats[triRef.MaterialGroupIndex];
+            Blas.TriRef triRef = _blas.Triangles[hit.TriangleIndex];
+            BakeMaterial? mat = _mats[triRef.MaterialGroupIndex];
             Float3 hitAlbedo;
             if (_ignoreAlbedo)
             {
@@ -356,9 +356,9 @@ internal sealed class PathIntegrator
             {
                 hitAlbedo = mat is not null ? mat.DiffuseColor : new Float3(0.7f);
                 if (mat is not null && mat.DiffuseTexture is not null
-                    && _blas.Mesh.UVLayers.TryGetValue(mat.DiffuseUVLayer, out var uvLayer))
+                    && _blas.Mesh.UVLayers.TryGetValue(mat.DiffuseUVLayer, out Float2[]? uvLayer))
                 {
-                    var uvA = uvLayer[triRef.I0]; var uvB = uvLayer[triRef.I1]; var uvC = uvLayer[triRef.I2];
+                    Float2 uvA = uvLayer[triRef.I0]; Float2 uvB = uvLayer[triRef.I1]; Float2 uvC = uvLayer[triRef.I2];
                     float w = 1f - hit.U - hit.V;
                     Float2 uv = uvA * w + uvB * hit.U + uvC * hit.V;
                     hitAlbedo = hitAlbedo * mat.DiffuseTexture.SampleNearestRGB(uv.X, uv.Y);
@@ -368,12 +368,12 @@ internal sealed class PathIntegrator
             // Record the shadow rays at this bounce hit too: those are the NEE samples.
             for (int i = 0; i < _scene.Lights.Count; i++)
             {
-                var l = _scene.Lights[i];
-                if (!l.Sample(hit.Position, out var toLight, out var Li, out float maxDist, _scene.DefaultAttenuation)) continue;
+                Light l = _scene.Lights[i];
+                if (!l.Sample(hit.Position, out Float3 toLight, out Float3 Li, out float maxDist, _scene.DefaultAttenuation)) continue;
                 if (Li.X + Li.Y + Li.Z <= 0) continue;
                 float ndotl = Float3.Dot(hit.Normal, toLight);
                 if (ndotl <= 0) continue;
-                var shadowOrigin = RayMath.OffsetOrigin(hit.Position, hit.Normal, _bias);
+                Float3 shadowOrigin = RayMath.OffsetOrigin(hit.Position, hit.Normal, _bias);
                 bool blocked = false;
                 if (l.CastsShadows) blocked = _blas.AnyHit(shadowOrigin, toLight, _bias, maxDist - 2 * _bias, _cullEnabled, ProwlKeepPositiveDet);
                 float drawLen = float.IsPositiveInfinity(maxDist) ? 50f : maxDist;
@@ -407,16 +407,16 @@ internal sealed class PathIntegrator
         Float3 sum = Float3.Zero;
         for (int i = 0; i < _scene.Lights.Count; i++)
         {
-            var l = _scene.Lights[i];
+            Light l = _scene.Lights[i];
             if (bakedDirectOnly && !l.BakeDirect) continue;
-            if (!l.Sample(position, out var toLight, out var Li, out float maxDist, _scene.DefaultAttenuation)) continue;
+            if (!l.Sample(position, out Float3 toLight, out Float3 Li, out float maxDist, _scene.DefaultAttenuation)) continue;
             if (Li.X + Li.Y + Li.Z <= 0) continue;
             float ndotl = Float3.Dot(normal, toLight);
             if (ndotl <= 0) continue;
 
             if (l.CastsShadows)
             {
-                var ro = RayMath.OffsetOrigin(position, normal, _bias);
+                Float3 ro = RayMath.OffsetOrigin(position, normal, _bias);
                 if (_blas.AnyHit(ro, toLight, _bias, maxDist - 2 * _bias, _cullEnabled, ProwlKeepPositiveDet))
                     continue;
             }
@@ -436,9 +436,9 @@ internal sealed class PathIntegrator
             hit.TriangleIndex = triIdx;
 
             // The merged BLAS already holds world-space positions + normals.
-            var tri = _blas.Triangles[triIdx];
-            var positions = _blas.Mesh.Positions;
-            var normals = _blas.Mesh.Normals;
+            Blas.TriRef tri = _blas.Triangles[triIdx];
+            Float3[] positions = _blas.Mesh.Positions;
+            Float3[] normals = _blas.Mesh.Normals;
             float w = 1f - uu - vv;
             hit.Position = positions[tri.I0] * w + positions[tri.I1] * uu + positions[tri.I2] * vv;
             hit.Normal = Float3.Normalize(normals[tri.I0] * w + normals[tri.I1] * uu + normals[tri.I2] * vv);

@@ -23,7 +23,7 @@ public class SerializerGenerator : IIncrementalGenerator
             SourceText.From(AttributeSource, Encoding.UTF8)));
 
         // Find all types with the [GenerateSerializer] attribute
-        var typesToGenerate = context.SyntaxProvider
+        IncrementalValuesProvider<TypeToGenerate?> typesToGenerate = context.SyntaxProvider
             .ForAttributeWithMetadataName(
                 "Prowl.Echo.GenerateSerializerAttribute",
                 predicate: static (node, _) => node is TypeDeclarationSyntax,
@@ -34,26 +34,24 @@ public class SerializerGenerator : IIncrementalGenerator
         context.RegisterSourceOutput(typesToGenerate, static (spc, typeInfo) =>
         {
             if (typeInfo is null) return;
-            var source = GenerateSerializerSource(typeInfo);
+            string source = GenerateSerializerSource(typeInfo);
             spc.AddSource($"{typeInfo.FullTypeName}.g.cs", SourceText.From(source, Encoding.UTF8));
         });
     }
 
     private static TypeToGenerate? GetTypeToGenerate(GeneratorAttributeSyntaxContext context)
     {
-        var typeSymbol = context.TargetSymbol as INamedTypeSymbol;
-        if (typeSymbol is null) return null;
+        if (context.TargetSymbol is not INamedTypeSymbol typeSymbol) return null;
 
-        var typeDeclaration = context.TargetNode as TypeDeclarationSyntax;
-        if (typeDeclaration is null) return null;
+        if (context.TargetNode is not TypeDeclarationSyntax typeDeclaration) return null;
 
         // Check if type has FixedEchoStructure attribute
-        var fixedStructureAttr = context.SemanticModel.Compilation.GetTypeByMetadataName("Prowl.Echo.FixedEchoStructureAttribute");
+        INamedTypeSymbol? fixedStructureAttr = context.SemanticModel.Compilation.GetTypeByMetadataName("Prowl.Echo.FixedEchoStructureAttribute");
         bool isFixedStructure = typeSymbol.GetAttributes().Any(a =>
             SymbolEqualityComparer.Default.Equals(a.AttributeClass, fixedStructureAttr));
 
         // Get all fields that should be serialized
-        var fields = GetSerializableFields(typeSymbol, context.SemanticModel.Compilation);
+        List<FieldToSerialize> fields = GetSerializableFields(typeSymbol, context.SemanticModel.Compilation);
 
         return new TypeToGenerate(
             TypeName: typeSymbol.Name,
@@ -71,14 +69,14 @@ public class SerializerGenerator : IIncrementalGenerator
         var fields = new List<FieldToSerialize>();
 
         // Get attribute symbols for checking
-        var serializeIgnoreAttr = compilation.GetTypeByMetadataName("Prowl.Echo.SerializeIgnoreAttribute");
-        var nonSerializedAttr = compilation.GetTypeByMetadataName("System.NonSerializedAttribute");
-        var serializeFieldAttr = compilation.GetTypeByMetadataName("Prowl.Echo.SerializeFieldAttribute");
-        var ignoreOnNullAttr = compilation.GetTypeByMetadataName("Prowl.Echo.IgnoreOnNullAttribute");
-        var serializeIfAttr = compilation.GetTypeByMetadataName("Prowl.Echo.SerializeIfAttribute");
-        var formerlySerializedAsAttr = compilation.GetTypeByMetadataName("Prowl.Echo.FormerlySerializedAsAttribute");
+        INamedTypeSymbol? serializeIgnoreAttr = compilation.GetTypeByMetadataName("Prowl.Echo.SerializeIgnoreAttribute");
+        INamedTypeSymbol? nonSerializedAttr = compilation.GetTypeByMetadataName("System.NonSerializedAttribute");
+        INamedTypeSymbol? serializeFieldAttr = compilation.GetTypeByMetadataName("Prowl.Echo.SerializeFieldAttribute");
+        INamedTypeSymbol? ignoreOnNullAttr = compilation.GetTypeByMetadataName("Prowl.Echo.IgnoreOnNullAttribute");
+        INamedTypeSymbol? serializeIfAttr = compilation.GetTypeByMetadataName("Prowl.Echo.SerializeIfAttribute");
+        INamedTypeSymbol? formerlySerializedAsAttr = compilation.GetTypeByMetadataName("Prowl.Echo.FormerlySerializedAsAttribute");
 
-        foreach (var member in typeSymbol.GetMembers())
+        foreach (ISymbol member in typeSymbol.GetMembers())
         {
             if (member is not IFieldSymbol field) continue;
 
@@ -118,16 +116,16 @@ public class SerializerGenerator : IIncrementalGenerator
                 .ToList();
 
             // Classify field type for inline serialization
-            var category = ClassifyFieldType(field.Type);
+            FieldTypeCategory category = ClassifyFieldType(field.Type);
             string? elementTypeName = null;
-            var elementCategory = FieldTypeCategory.Fallback;
+            FieldTypeCategory elementCategory = FieldTypeCategory.Fallback;
 
             switch (category)
             {
                 case FieldTypeCategory.ListOfKnown:
                     {
                         var listType = (INamedTypeSymbol)field.Type;
-                        var elemType = listType.TypeArguments[0];
+                        ITypeSymbol elemType = listType.TypeArguments[0];
                         elementTypeName = elemType.ToDisplayString(SymbolDisplayFormat.FullyQualifiedFormat).Replace("global::", "");
                         elementCategory = ClassifyFieldType(elemType);
                         break;
@@ -142,7 +140,7 @@ public class SerializerGenerator : IIncrementalGenerator
                 case FieldTypeCategory.DictStringToKnown:
                     {
                         var dictType = (INamedTypeSymbol)field.Type;
-                        var valType = dictType.TypeArguments[1];
+                        ITypeSymbol valType = dictType.TypeArguments[1];
                         elementTypeName = valType.ToDisplayString(SymbolDisplayFormat.FullyQualifiedFormat).Replace("global::", "");
                         elementCategory = ClassifyFieldType(valType);
                         break;
@@ -230,7 +228,7 @@ public class SerializerGenerator : IIncrementalGenerator
             listType.TypeArguments.Length == 1 &&
             listType.OriginalDefinition.ToDisplayString() == "System.Collections.Generic.List<T>")
         {
-            var elemCat = ClassifyFieldType(listType.TypeArguments[0]);
+            FieldTypeCategory elemCat = ClassifyFieldType(listType.TypeArguments[0]);
             if (IsSimpleElementCategory(elemCat))
                 return FieldTypeCategory.ListOfKnown;
         }
@@ -238,7 +236,7 @@ public class SerializerGenerator : IIncrementalGenerator
         // T[] where T is a simple element type (rank-1 only, byte[] already handled)
         if (type is IArrayTypeSymbol arrType && arrType.Rank == 1)
         {
-            var elemCat = ClassifyFieldType(arrType.ElementType);
+            FieldTypeCategory elemCat = ClassifyFieldType(arrType.ElementType);
             if (IsSimpleElementCategory(elemCat))
                 return FieldTypeCategory.ArrayOfKnown;
         }
@@ -250,7 +248,7 @@ public class SerializerGenerator : IIncrementalGenerator
             dictType.TypeArguments[0].SpecialType == SpecialType.System_String &&
             dictType.OriginalDefinition.ToDisplayString() == "System.Collections.Generic.Dictionary<TKey, TValue>")
         {
-            var valCat = ClassifyFieldType(dictType.TypeArguments[1]);
+            FieldTypeCategory valCat = ClassifyFieldType(dictType.TypeArguments[1]);
             if (IsSimpleElementCategory(valCat))
                 return FieldTypeCategory.DictStringToKnown;
         }
@@ -367,7 +365,7 @@ public class SerializerGenerator : IIncrementalGenerator
             // DateTime → compound with "date" key (matches DateTimeFormat)
             case FieldTypeCategory.DateTime:
                 {
-                    var v = $"_s_{field.Name}";
+                    string v = $"_s_{field.Name}";
                     sb.AppendLine($"{indent}var {v} = EchoObject.NewCompound();");
                     sb.AppendLine($"{indent}{v}.Add(\"date\", new EchoObject(EchoType.Long, {field.Name}.ToBinary()));");
                     return v;
@@ -376,7 +374,7 @@ public class SerializerGenerator : IIncrementalGenerator
             // TimeSpan → compound with "ticks" key (matches TimeSpanFormat)
             case FieldTypeCategory.TimeSpan:
                 {
-                    var v = $"_s_{field.Name}";
+                    string v = $"_s_{field.Name}";
                     sb.AppendLine($"{indent}var {v} = EchoObject.NewCompound();");
                     sb.AppendLine($"{indent}{v}.Add(\"ticks\", new EchoObject(EchoType.Long, {field.Name}.Ticks));");
                     return v;
@@ -385,8 +383,8 @@ public class SerializerGenerator : IIncrementalGenerator
             // List<T> → bare EchoType.List (matches ListFormat)
             case FieldTypeCategory.ListOfKnown:
                 {
-                    var v = $"_s_{field.Name}";
-                    var elemExpr = GetSerializeExpression(field.ElementCategory, "_item");
+                    string v = $"_s_{field.Name}";
+                    string elemExpr = GetSerializeExpression(field.ElementCategory, "_item");
                     sb.AppendLine($"{indent}EchoObject {v};");
                     sb.AppendLine($"{indent}if ({field.Name} != null)");
                     sb.AppendLine($"{indent}{{");
@@ -404,9 +402,9 @@ public class SerializerGenerator : IIncrementalGenerator
             // T[] → compound with "array" key (matches ArrayFormat)
             case FieldTypeCategory.ArrayOfKnown:
                 {
-                    var v = $"_s_{field.Name}";
-                    var arrList = $"_arrList_{field.Name}";
-                    var elemExpr = GetSerializeExpression(field.ElementCategory, "_item");
+                    string v = $"_s_{field.Name}";
+                    string arrList = $"_arrList_{field.Name}";
+                    string elemExpr = GetSerializeExpression(field.ElementCategory, "_item");
                     sb.AppendLine($"{indent}EchoObject {v};");
                     sb.AppendLine($"{indent}if ({field.Name} != null)");
                     sb.AppendLine($"{indent}{{");
@@ -426,8 +424,8 @@ public class SerializerGenerator : IIncrementalGenerator
             // Dictionary<string, T> → bare compound (matches DictionaryFormat for string keys)
             case FieldTypeCategory.DictStringToKnown:
                 {
-                    var v = $"_s_{field.Name}";
-                    var valExpr = GetSerializeExpression(field.ElementCategory, "_kvp.Value");
+                    string v = $"_s_{field.Name}";
+                    string valExpr = GetSerializeExpression(field.ElementCategory, "_kvp.Value");
                     sb.AppendLine($"{indent}EchoObject {v};");
                     sb.AppendLine($"{indent}if ({field.Name} != null)");
                     sb.AppendLine($"{indent}{{");
@@ -486,7 +484,7 @@ public class SerializerGenerator : IIncrementalGenerator
             // List<T> → iterate bare list (matches ListFormat)
             case FieldTypeCategory.ListOfKnown:
                 {
-                    var elemDeser = GetDeserializeExpression(field.ElementCategory, "_item", field.ElementTypeName!);
+                    string elemDeser = GetDeserializeExpression(field.ElementCategory, "_item", field.ElementTypeName!);
                     sb.AppendLine($"{indent}if ({sourceExpr}.TagType != EchoType.Null)");
                     sb.AppendLine($"{indent}{{");
                     sb.AppendLine($"{indent}    {field.Name} = new System.Collections.Generic.List<{field.ElementTypeName}>();");
@@ -503,8 +501,8 @@ public class SerializerGenerator : IIncrementalGenerator
             // T[] → read from compound "array" key (matches ArrayFormat)
             case FieldTypeCategory.ArrayOfKnown:
                 {
-                    var arrData = $"_arrData_{field.Name}";
-                    var elemDeser = GetDeserializeExpression(field.ElementCategory, $"{arrData}.List[_i]", field.ElementTypeName!);
+                    string arrData = $"_arrData_{field.Name}";
+                    string elemDeser = GetDeserializeExpression(field.ElementCategory, $"{arrData}.List[_i]", field.ElementTypeName!);
                     sb.AppendLine($"{indent}if ({sourceExpr}.TagType != EchoType.Null && {sourceExpr}.TryGet(\"array\", out var {arrData}))");
                     sb.AppendLine($"{indent}{{");
                     sb.AppendLine($"{indent}    {field.Name} = new {field.ElementTypeName}[{arrData}.List.Count];");
@@ -521,7 +519,7 @@ public class SerializerGenerator : IIncrementalGenerator
             // Dictionary<string, T> → iterate compound tags (matches DictionaryFormat for string keys)
             case FieldTypeCategory.DictStringToKnown:
                 {
-                    var valDeser = GetDeserializeExpression(field.ElementCategory, "_kvp.Value", field.ElementTypeName!);
+                    string valDeser = GetDeserializeExpression(field.ElementCategory, "_kvp.Value", field.ElementTypeName!);
                     sb.AppendLine($"{indent}if ({sourceExpr}.TagType != EchoType.Null)");
                     sb.AppendLine($"{indent}{{");
                     sb.AppendLine($"{indent}    {field.Name} = new System.Collections.Generic.Dictionary<string, {field.ElementTypeName}>();");
@@ -565,8 +563,8 @@ public class SerializerGenerator : IIncrementalGenerator
         }
 
         // Generate the partial class/struct
-        var keyword = typeInfo.IsStruct ? "struct" : "class";
-        var indent = string.IsNullOrEmpty(typeInfo.Namespace) ? "" : "    ";
+        string keyword = typeInfo.IsStruct ? "struct" : "class";
+        string indent = string.IsNullOrEmpty(typeInfo.Namespace) ? "" : "    ";
 
         sb.AppendLine($"{indent}partial {keyword} {typeInfo.TypeName} : ISerializable");
         sb.AppendLine($"{indent}{{");
@@ -600,7 +598,7 @@ public class SerializerGenerator : IIncrementalGenerator
         sb.AppendLine($"{indent}public void Serialize(ref EchoObject compound, SerializationContext ctx)");
         sb.AppendLine($"{indent}{{");
 
-        foreach (var field in typeInfo.Fields)
+        foreach (FieldToSerialize field in typeInfo.Fields)
         {
             bool needsNullCheck = field.HasIgnoreOnNull;
             bool hasSerializeIf = field.SerializeIfConditions.Count > 0;
@@ -610,18 +608,18 @@ public class SerializerGenerator : IIncrementalGenerator
                 var conditions = new List<string>();
                 if (needsNullCheck)
                     conditions.Add($"{field.Name} != null");
-                foreach (var condition in field.SerializeIfConditions)
+                foreach (string condition in field.SerializeIfConditions)
                     conditions.Add(condition);
 
                 sb.AppendLine($"{indent}    if ({string.Join(" && ", conditions)})");
                 sb.AppendLine($"{indent}    {{");
-                var expr = EmitSerializeExpr(sb, field, indent + "        ");
+                string expr = EmitSerializeExpr(sb, field, indent + "        ");
                 sb.AppendLine($"{indent}        compound.Add(\"{field.Name}\", {expr});");
                 sb.AppendLine($"{indent}    }}");
             }
             else
             {
-                var expr = EmitSerializeExpr(sb, field, indent + "    ");
+                string expr = EmitSerializeExpr(sb, field, indent + "    ");
                 sb.AppendLine($"{indent}    compound.Add(\"{field.Name}\", {expr});");
             }
         }
@@ -634,9 +632,9 @@ public class SerializerGenerator : IIncrementalGenerator
         sb.AppendLine($"{indent}public void Deserialize(EchoObject value, SerializationContext ctx)");
         sb.AppendLine($"{indent}{{");
 
-        foreach (var field in typeInfo.Fields)
+        foreach (FieldToSerialize field in typeInfo.Fields)
         {
-            var varName = $"_{field.Name}";
+            string varName = $"_{field.Name}";
 
             // Try to deserialize from current field name
             sb.AppendLine($"{indent}    if (value.TryGet(\"{field.Name}\", out var {varName}))");
@@ -647,8 +645,8 @@ public class SerializerGenerator : IIncrementalGenerator
             // If field has FormerlySerializedAs, try those names as fallback
             for (int i = 0; i < field.FormerlySerializedAs.Count; i++)
             {
-                var oldName = field.FormerlySerializedAs[i];
-                var oldVarName = $"_old_{field.Name}_{i}";
+                string oldName = field.FormerlySerializedAs[i];
+                string oldVarName = $"_old_{field.Name}_{i}";
                 sb.AppendLine($"{indent}    else if (value.TryGet(\"{oldName}\", out var {oldVarName}))");
                 sb.AppendLine($"{indent}    {{");
                 EmitDeserializeAssignment(sb, field, oldVarName, indent + "        ");
@@ -665,9 +663,9 @@ public class SerializerGenerator : IIncrementalGenerator
         sb.AppendLine($"{indent}{{");
         sb.AppendLine($"{indent}    var list = EchoObject.NewList();");
 
-        foreach (var field in typeInfo.Fields)
+        foreach (FieldToSerialize field in typeInfo.Fields)
         {
-            var expr = EmitSerializeExpr(sb, field, indent + "    ");
+            string expr = EmitSerializeExpr(sb, field, indent + "    ");
             sb.AppendLine($"{indent}    list.ListAdd({expr});");
         }
 
@@ -690,7 +688,7 @@ public class SerializerGenerator : IIncrementalGenerator
 
         for (int i = 0; i < typeInfo.Fields.Count; i++)
         {
-            var field = typeInfo.Fields[i];
+            FieldToSerialize field = typeInfo.Fields[i];
             EmitDeserializeAssignment(sb, field, $"listValue[{i}]", indent + "    ");
         }
 

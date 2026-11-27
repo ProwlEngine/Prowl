@@ -23,8 +23,8 @@ internal sealed class Pipeline
 
     public void Run(IntermediateScene scene)
     {
-        var flags = _context.Settings.PostProcess;
-        foreach (var step in _orderedSteps)
+        PostProcessFlags flags = _context.Settings.PostProcess;
+        foreach (IPostProcess step in _orderedSteps)
         {
             if ((flags & step.Flag) == 0)
                 continue;
@@ -53,8 +53,8 @@ internal sealed class Pipeline
     /// Canonical execution order. Earlier steps massage raw topology, then geometry transforms run,
     /// then dedup, then skin/weight work, then graph + mesh optimizers, then validation.
     /// </summary>
-    private static List<IPostProcess> BuildCanonicalOrder() => new()
-    {
+    private static List<IPostProcess> BuildCanonicalOrder() =>
+    [
         // Topology cleanup first so later steps see only valid faces.
         new TriangulateStep(),
         new RemoveDegeneratesStep(),
@@ -91,5 +91,5 @@ internal sealed class Pipeline
         // Bookkeeping.
         new EmbedTexturesStep(),
         new ValidateDataStructureStep(),
-    };
+    ];
 }

@@ -18,54 +18,53 @@ freely, subject to the following restrictions:
 3. This notice may not be removed or altered from any source distribution.
 */
 
-namespace Prowl.Recast
+namespace Prowl.Recast;
+
+public readonly struct RcAreaModification
 {
-    public readonly struct RcAreaModification
+    public const int RC_AREA_FLAGS_MASK = 0x3F;
+
+    public readonly int Value;
+    public readonly int Mask;
+
+    /**
+     * Mask is set to all available bits, which means value is fully applied
+     *
+     * @param value
+     *            The area id to apply. [Limit: &lt;= #RC_AREA_FLAGS_MASK]
+     */
+    public RcAreaModification(int value)
     {
-        public const int RC_AREA_FLAGS_MASK = 0x3F;
+        Value = value;
+        Mask = RC_AREA_FLAGS_MASK;
+    }
 
-        public readonly int Value;
-        public readonly int Mask;
+    /**
+     *
+     * @param value
+     *            The area id to apply. [Limit: &lt;= #RC_AREA_FLAGS_MASK]
+     * @param mask
+     *            Bitwise mask used when applying value. [Limit: &lt;= #RC_AREA_FLAGS_MASK]
+     */
+    public RcAreaModification(int value, int mask)
+    {
+        Value = value;
+        Mask = mask;
+    }
 
-        /**
-         * Mask is set to all available bits, which means value is fully applied
-         *
-         * @param value
-         *            The area id to apply. [Limit: &lt;= #RC_AREA_FLAGS_MASK]
-         */
-        public RcAreaModification(int value)
-        {
-            Value = value;
-            Mask = RC_AREA_FLAGS_MASK;
-        }
+    public RcAreaModification(RcAreaModification other)
+    {
+        Value = other.Value;
+        Mask = other.Mask;
+    }
 
-        /**
-         *
-         * @param value
-         *            The area id to apply. [Limit: &lt;= #RC_AREA_FLAGS_MASK]
-         * @param mask
-         *            Bitwise mask used when applying value. [Limit: &lt;= #RC_AREA_FLAGS_MASK]
-         */
-        public RcAreaModification(int value, int mask)
-        {
-            Value = value;
-            Mask = mask;
-        }
+    public readonly int GetMaskedValue()
+    {
+        return Value & Mask;
+    }
 
-        public RcAreaModification(RcAreaModification other)
-        {
-            Value = other.Value;
-            Mask = other.Mask;
-        }
-
-        public readonly int GetMaskedValue()
-        {
-            return Value & Mask;
-        }
-
-        public readonly int Apply(int area)
-        {
-            return ((Value & Mask) | (area & ~Mask));
-        }
+    public readonly int Apply(int area)
+    {
+        return ((Value & Mask) | (area & ~Mask));
     }
 }

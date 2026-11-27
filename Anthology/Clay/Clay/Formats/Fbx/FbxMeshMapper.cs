@@ -25,10 +25,10 @@ internal static class FbxMeshMapper
     {
         /// <summary>Geometry id -&gt; range of emitted IntermediateMeshes plus the
         /// FBX-vertex -&gt; (mesh, vertex) expansion map.</summary>
-        public Dictionary<long, GeometryMapping> GeometryToMeshes { get; } = new();
+        public Dictionary<long, GeometryMapping> GeometryToMeshes { get; } = [];
 
         /// <summary>For each emitted IntermediateMesh, the FBX material slot index (0-based) it represents.</summary>
-        public List<int> MaterialSlotPerMesh { get; } = new();
+        public List<int> MaterialSlotPerMesh { get; } = [];
     }
 
     /// <summary>
@@ -52,11 +52,11 @@ internal static class FbxMeshMapper
     public static MeshMapping MapAll(FbxDocument doc, IntermediateScene scene, ImportContext ctx)
     {
         var result = new MeshMapping();
-        foreach (var obj in doc.Objects.Values)
+        foreach (FbxObject obj in doc.Objects.Values)
         {
             if (obj.ObjectType != "Geometry" || obj.Subtype != "Mesh") continue;
             int first = scene.Meshes.Count;
-            var mapping = MapOne(obj, scene, ctx, result, first);
+            GeometryMapping? mapping = MapOne(obj, scene, ctx, result, first);
             if (mapping is not null)
                 result.GeometryToMeshes[obj.Id] = mapping;
         }
@@ -65,9 +65,9 @@ internal static class FbxMeshMapper
 
     private static GeometryMapping? MapOne(FbxObject geo, IntermediateScene scene, ImportContext ctx, MeshMapping mapping, int firstMeshIndex)
     {
-        var node = geo.Node;
-        var verticesNode = node.FindChild("Vertices");
-        var indicesNode = node.FindChild("PolygonVertexIndex");
+        FbxNode node = geo.Node;
+        FbxNode? verticesNode = node.FindChild("Vertices");
+        FbxNode? indicesNode = node.FindChild("PolygonVertexIndex");
         if (verticesNode is null || indicesNode is null || verticesNode.Properties.Count == 0 || indicesNode.Properties.Count == 0)
         {
             ctx.Log.Warning($"FBX geometry '{geo.Name}' missing Vertices or PolygonVertexIndex; skipping.", "FbxMeshMapper");
@@ -94,7 +94,7 @@ internal static class FbxMeshMapper
         //   faceSizes[poly]  = number of vertices in poly
         //   unpackedVertexIndices[i] = the source vertex index for unpacked position i
         var faceSizes = new List<int>(polyIndices.Length / 3 + 1);
-        var unpackedVertexIndices = new int[polyIndices.Length];
+        int[] unpackedVertexIndices = new int[polyIndices.Length];
         int faceStart = 0;
         for (int i = 0; i < polyIndices.Length; i++)
         {
@@ -110,15 +110,15 @@ internal static class FbxMeshMapper
         }
 
         // Layered data: normals/UVs/colors/material indices.
-        var unpackedNormals = ReadLayerVec3(node, "LayerElementNormal", "Normals", "NormalIndex", polyIndices.Length, vertexCount, faceSizes, unpackedVertexIndices, ctx);
-        var unpackedTangents = ReadLayerVec3(node, "LayerElementTangent", "Tangents", "TangentIndex", polyIndices.Length, vertexCount, faceSizes, unpackedVertexIndices, ctx);
-        var unpackedBinormals = ReadLayerVec3(node, "LayerElementBinormal", "Binormals", "BinormalsIndex", polyIndices.Length, vertexCount, faceSizes, unpackedVertexIndices, ctx);
+        Float3[]? unpackedNormals = ReadLayerVec3(node, "LayerElementNormal", "Normals", "NormalIndex", polyIndices.Length, vertexCount, faceSizes, unpackedVertexIndices, ctx);
+        Float3[]? unpackedTangents = ReadLayerVec3(node, "LayerElementTangent", "Tangents", "TangentIndex", polyIndices.Length, vertexCount, faceSizes, unpackedVertexIndices, ctx);
+        Float3[]? unpackedBinormals = ReadLayerVec3(node, "LayerElementBinormal", "Binormals", "BinormalsIndex", polyIndices.Length, vertexCount, faceSizes, unpackedVertexIndices, ctx);
         // UV: enumerate every LayerElementUV node (each carries its own slot index in property[0])
         // and route into the per-channel slots on the intermediate mesh. Slot indices that go out
         // of range are dropped with a warning.
         var unpackedUVsPerChannel = new Float2[]?[Prowl.Clay.Mesh.MaxUVChannels];
-        var uvChannelNames = new string?[Prowl.Clay.Mesh.MaxUVChannels];
-        foreach (var uvLayer in node.FindChildren("LayerElementUV"))
+        string?[] uvChannelNames = new string?[Prowl.Clay.Mesh.MaxUVChannels];
+        foreach (FbxNode uvLayer in node.FindChildren("LayerElementUV"))
         {
             int slot = uvLayer.Properties.Count > 0 ? uvLayer.IntAt(0) : 0;
             if ((uint)slot >= Prowl.Clay.Mesh.MaxUVChannels)
@@ -130,8 +130,8 @@ internal static class FbxMeshMapper
             unpackedUVsPerChannel[slot] = ReadLayerVec2InScope(uvLayer, "UV", "UVIndex", polyIndices.Length, vertexCount, faceSizes, unpackedVertexIndices, ctx, "LayerElementUV");
             uvChannelNames[slot] = uvLayer.FindChild("Name")?.StringAt(0);
         }
-        var unpackedColors = ReadLayerColor(node, "LayerElementColor", "Colors", "ColorIndex", polyIndices.Length, vertexCount, faceSizes, unpackedVertexIndices, ctx);
-        var faceMaterialSlot = ReadMaterialIndices(node, faceSizes.Count, ctx);
+        Color[]? unpackedColors = ReadLayerColor(node, "LayerElementColor", "Colors", "ColorIndex", polyIndices.Length, vertexCount, faceSizes, unpackedVertexIndices, ctx);
+        int[] faceMaterialSlot = ReadMaterialIndices(node, faceSizes.Count, ctx);
 
         // Group faces by material slot. Build one IntermediateMesh per slot present.
         int maxSlot = 0;
@@ -140,7 +140,7 @@ internal static class FbxMeshMapper
         int slotCount = maxSlot + 1;
 
         // First pass: count how many polygonvertex entries each slot needs.
-        var slotPVCount = new int[slotCount];
+        int[] slotPVCount = new int[slotCount];
         for (int f = 0; f < faceSizes.Count; f++)
             slotPVCount[faceMaterialSlot[f]] += faceSizes[f];
 
@@ -204,13 +204,13 @@ internal static class FbxMeshMapper
                     mesh.Positions.Add((uint)fbxV < (uint)vertexCount ? sourceVertices[fbxV] : default);
                     if (unpackedNormals is not null)
                     {
-                        mesh.Normals ??= new List<Float3>();
+                        mesh.Normals ??= [];
                         mesh.Normals.Add(unpackedNormals[pv]);
                     }
                     if (unpackedTangents is not null)
                     {
-                        mesh.Tangents ??= new List<Float4>();
-                        var t = unpackedTangents[pv];
+                        mesh.Tangents ??= [];
+                        Float3 t = unpackedTangents[pv];
                         // The bitangent follows +V, which the flip below turns over
                         float w = -1f;
                         if (unpackedBinormals is not null && unpackedNormals is not null)
@@ -219,15 +219,15 @@ internal static class FbxMeshMapper
                     }
                     for (int uv = 0; uv < Prowl.Clay.Mesh.MaxUVChannels; uv++)
                     {
-                        var src = unpackedUVsPerChannel[uv];
+                        Float2[]? src = unpackedUVsPerChannel[uv];
                         if (src is null) continue;
                         // FBX puts V = 0 at the image's bottom, Clay at its top as glTF does
-                        mesh.UVs[uv] ??= new List<Float2>();
+                        mesh.UVs[uv] ??= [];
                         mesh.UVs[uv]!.Add(new Float2(src[pv].X, 1f - src[pv].Y));
                     }
                     if (unpackedColors is not null)
                     {
-                        mesh.Colors0 ??= new List<Color>();
+                        mesh.Colors0 ??= [];
                         mesh.Colors0.Add(unpackedColors[pv]);
                     }
                     corners.Add(meshVi);
@@ -275,9 +275,9 @@ internal static class FbxMeshMapper
         FbxNode geometry, string elementName, string dataKey, string indexKey,
         int polyVertexCount, int vertexCount, List<int> faceSizes, int[] unpackedVertexIndices, ImportContext ctx)
     {
-        var layer = geometry.FindChild(elementName);
+        FbxNode? layer = geometry.FindChild(elementName);
         if (layer is null) return null;
-        var data = layer.FindChild(dataKey);
+        FbxNode? data = layer.FindChild(dataKey);
         if (data is null || data.Properties.Count == 0) return null;
         double[] raw = data.Properties[0].AsDoubleArray();
         if (raw.Length % 3 != 0)
@@ -304,7 +304,7 @@ internal static class FbxMeshMapper
         FbxNode layer, string dataKey, string indexKey,
         int polyVertexCount, int vertexCount, List<int> faceSizes, int[] unpackedVertexIndices, ImportContext ctx, string elementName)
     {
-        var data = layer.FindChild(dataKey);
+        FbxNode? data = layer.FindChild(dataKey);
         if (data is null || data.Properties.Count == 0) return null;
         double[] raw = data.Properties[0].AsDoubleArray();
         if (raw.Length % 2 != 0)
@@ -325,9 +325,9 @@ internal static class FbxMeshMapper
         FbxNode geometry, string elementName, string dataKey, string indexKey,
         int polyVertexCount, int vertexCount, List<int> faceSizes, int[] unpackedVertexIndices, ImportContext ctx)
     {
-        var layer = geometry.FindChild(elementName);
+        FbxNode? layer = geometry.FindChild(elementName);
         if (layer is null) return null;
-        var data = layer.FindChild(dataKey);
+        FbxNode? data = layer.FindChild(dataKey);
         if (data is null || data.Properties.Count == 0) return null;
         double[] raw = data.Properties[0].AsDoubleArray();
         if (raw.Length % 4 != 0)
@@ -356,7 +356,7 @@ internal static class FbxMeshMapper
         int[]? indices = null;
         if (reference == "IndexToDirect" || reference == "Index")
         {
-            var idxNode = layer.FindChild(indexKey);
+            FbxNode? idxNode = layer.FindChild(indexKey);
             if (idxNode is null || idxNode.Properties.Count == 0)
             {
                 ctx.Log.Warning($"{elementName}: ReferenceInformationType={reference} but no {indexKey} array.", "FbxMeshMapper");
@@ -421,12 +421,12 @@ internal static class FbxMeshMapper
     /// </summary>
     private static int[] ReadMaterialIndices(FbxNode geometry, int faceCount, ImportContext ctx)
     {
-        var layer = geometry.FindChild("LayerElementMaterial");
+        FbxNode? layer = geometry.FindChild("LayerElementMaterial");
         if (layer is null)
             return new int[faceCount];
 
         string mapping = layer.FindChild("MappingInformationType")?.StringAt(0) ?? "AllSame";
-        var indices = layer.FindChild("Materials")?.Properties.ElementAtOrDefault(0)?.AsIntArray();
+        int[]? indices = layer.FindChild("Materials")?.Properties.ElementAtOrDefault(0)?.AsIntArray();
 
         // Drop a dummy layer where every entry is negative. Some exporters emit a placeholder
         // LayerElementMaterial with -1 sentinels and expect the converter to fall through to

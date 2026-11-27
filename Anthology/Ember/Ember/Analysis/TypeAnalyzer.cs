@@ -26,22 +26,22 @@ internal sealed class TypeAnalyzer
     private const BindingFlags DeclaredInstance =
         BindingFlags.Instance | BindingFlags.Public | BindingFlags.NonPublic | BindingFlags.DeclaredOnly;
 
-    private static readonly HashSet<Type> KnownLeaves = new()
-    {
+    private static readonly HashSet<Type> KnownLeaves =
+    [
         typeof(string), typeof(decimal), typeof(Guid),
         typeof(DateTime), typeof(DateTimeOffset), typeof(TimeSpan), typeof(TimeOnly), typeof(DateOnly),
         typeof(Uri), typeof(Version), typeof(IntPtr), typeof(UIntPtr),
         typeof(System.Globalization.CultureInfo), typeof(System.Text.Encoding),
         typeof(System.Text.RegularExpressions.Regex),
-    };
+    ];
 
     private readonly TypeMap _types;
     private readonly ScopeRules _scope;
     private readonly MigratorRegistry _migrators;
     private readonly InertAnalysisMode _mode;
 
-    private readonly Dictionary<Type, TypeFacts> _facts = new();
-    private readonly Dictionary<Type, bool> _inert = new();
+    private readonly Dictionary<Type, TypeFacts> _facts = [];
+    private readonly Dictionary<Type, bool> _inert = [];
 
     public TypeAnalyzer(TypeMap types, ScopeRules scope, MigratorRegistry migrators, InertAnalysisMode mode)
     {
@@ -55,7 +55,7 @@ internal sealed class TypeAnalyzer
 
     public TypeFacts For(Type type)
     {
-        if (_facts.TryGetValue(type, out var cached)) return cached;
+        if (_facts.TryGetValue(type, out TypeFacts cached)) return cached;
 
         var facts = new TypeFacts(
             IsSubstituted: _types.Resolve(type).IsSubstituted,
@@ -68,7 +68,7 @@ internal sealed class TypeAnalyzer
 
     public bool IsInert(Type type)
     {
-        if (_inert.TryGetValue(type, out var cached)) return cached;
+        if (_inert.TryGetValue(type, out bool cached)) return cached;
 
         // Independent of the mode. A primitive's only field is itself, so field walking one never terminates.
         if (type.IsPrimitive || type.IsPointer) return _inert[type] = true;
@@ -122,7 +122,7 @@ internal sealed class TypeAnalyzer
 
     private bool ForcesVisit(Type type)
     {
-        foreach (var migrator in _migrators)
+        foreach (IValueMigrator migrator in _migrators)
             if (migrator.Handles(type))
                 return migrator.ForcesVisit(type);
 
@@ -139,11 +139,11 @@ internal sealed class TypeAnalyzer
         var pending = new Stack<Type>();
         pending.Push(root);
 
-        while (pending.TryPop(out var type))
+        while (pending.TryPop(out Type? type))
         {
             if (successors.ContainsKey(type)) continue;
 
-            if (_inert.TryGetValue(type, out var known))
+            if (_inert.TryGetValue(type, out bool known))
             {
                 // An earlier query already settled this one. If it lost, it still has to seed this region.
                 if (!known) seeds.Enqueue(type);
@@ -168,10 +168,10 @@ internal sealed class TypeAnalyzer
 
             successors[type] = reached;
 
-            foreach (var next in reached)
+            foreach (Type next in reached)
             {
-                if (!predecessors.TryGetValue(next, out var into))
-                    predecessors[next] = into = new List<Type>();
+                if (!predecessors.TryGetValue(next, out List<Type>? into))
+                    predecessors[next] = into = [];
                 into.Add(type);
 
                 pending.Push(next);
@@ -179,11 +179,11 @@ internal sealed class TypeAnalyzer
         }
 
         // Optimistic start: everything still in the region is inert until a non-inert successor reaches it.
-        while (seeds.TryDequeue(out var type))
+        while (seeds.TryDequeue(out Type? type))
         {
-            if (!predecessors.TryGetValue(type, out var into)) continue;
+            if (!predecessors.TryGetValue(type, out List<Type>? into)) continue;
 
-            foreach (var predecessor in into)
+            foreach (Type predecessor in into)
             {
                 if (!successors.Remove(predecessor)) continue;
                 Settle(predecessor, false);
@@ -191,7 +191,7 @@ internal sealed class TypeAnalyzer
             }
         }
 
-        foreach (var survivor in successors.Keys)
+        foreach (Type survivor in successors.Keys)
             Settle(survivor, true);
 
         return _inert[root];
@@ -212,7 +212,7 @@ internal sealed class TypeAnalyzer
     {
         if (type.IsArray)
         {
-            var element = type.GetElementType()!;
+            Type element = type.GetElementType()!;
             if (IsOpenReference(element)) return false;
             reached.Add(element);
             return true;
@@ -221,11 +221,11 @@ internal sealed class TypeAnalyzer
         if (type.BaseType != null)
             reached.Add(type.BaseType);
 
-        foreach (var field in type.GetFields(DeclaredInstance))
+        foreach (FieldInfo field in type.GetFields(DeclaredInstance))
         {
             if (IgnoreRules.Applies(field)) continue;
 
-            var fieldType = field.FieldType;
+            Type fieldType = field.FieldType;
             if (fieldType.IsPointer) continue;
             if (IsOpenReference(fieldType)) return false;
 

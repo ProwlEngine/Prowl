@@ -26,7 +26,7 @@ internal static class OrientationPass
         error = ApertureError.None;
 
         bool transposes = Transposes(orientation);
-        List<ImageFrame> frames = new(image.Frames.Count);
+        List<ImageFrame> frames = [with(image.Frames.Count)];
 
         try
         {

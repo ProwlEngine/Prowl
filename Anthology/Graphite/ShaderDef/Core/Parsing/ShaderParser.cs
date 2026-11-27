@@ -22,8 +22,8 @@ public static class ShaderParser
         ParserUtility.ExpectKeyword(ref t, "Properties");
         ParserUtility.Expect(ref t, ShaderToken.OpenBrace);
 
-        List<ShaderProperty> properties = new();
-        HashSet<string> names = new();
+        List<ShaderProperty> properties = [];
+        HashSet<string> names = [];
 
         while (t.Peek().Kind == ShaderToken.Identifier)
         {
@@ -58,8 +58,8 @@ public static class ShaderParser
         if (ParserUtility.PeekKeyword(ref t, "Properties"))
             properties = ParsePropertiesBlock(ref t);
 
-        List<ShaderPass> passes = new();
-        HashSet<string> passNames = new();
+        List<ShaderPass> passes = [];
+        HashSet<string> passNames = [];
         ShaderSurface? surface = null;
         if (ParserUtility.PeekKeyword(ref t, "Surface"))
         {
@@ -171,7 +171,7 @@ public static class ShaderParser
 
         ShaderProperty[] properties = [];
         string? baseModel = null;
-        List<string> defines = new();
+        List<string> defines = [];
         bool forwardOnly = false, lightWraps = false;
         string pack = "", unpack = "", lighting = "";
         while (true)
@@ -232,7 +232,7 @@ public static class ShaderParser
         ParserUtility.ExpectKeyword(ref t, "Tags");
         ParserUtility.Expect(ref t, ShaderToken.OpenBrace);
 
-        Dictionary<string, string> tags = new();
+        Dictionary<string, string> tags = [];
 
         while (t.Peek().Kind == ShaderToken.String)
         {
@@ -432,7 +432,7 @@ public static class ShaderParser
     {
         ParserUtility.Expect(ref t, ShaderToken.OpenBrace);
 
-        List<PassState> states = new();
+        List<PassState> states = [];
 
         while (t.Peek().Kind == ShaderToken.Identifier)
         {
@@ -678,7 +678,7 @@ public static class ShaderParser
     // Parses [Attribute] [Attribute(args)] after a property, keeping each as source text without the brackets.
     static string[] Attributes(ref Tokenizer<ShaderToken> t)
     {
-        List<string> attributes = new();
+        List<string> attributes = [];
         while (t.TryConsume(ShaderToken.OpenBracket))
         {
             Token<ShaderToken> nameToken = ParserUtility.Expect(ref t, ShaderToken.Identifier, "attribute name");

@@ -5,11 +5,11 @@ using System;
 using System.Collections.Generic;
 using System.Linq;
 
+using static Prowl.Vector.Geometry.Operators.EditingCommon;
+
 using Edge = Prowl.Vector.Geometry.GeometryData.Edge;
 using Face = Prowl.Vector.Geometry.GeometryData.Face;
 using Vertex = Prowl.Vector.Geometry.GeometryData.Vertex;
-
-using static Prowl.Vector.Geometry.Operators.EditingCommon;
 
 namespace Prowl.Vector.Geometry.Operators;
 
@@ -39,7 +39,7 @@ internal static class ExtrudeEdgesOp
             bool reversed = false;
             if (e.Loop != null)
             {
-                var loop = e.Loop;
+                GeometryData.Loop loop = e.Loop;
                 reversed = loop.Vert == a;
             }
             else

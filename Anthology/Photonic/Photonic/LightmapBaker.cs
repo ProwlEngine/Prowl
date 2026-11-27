@@ -34,7 +34,7 @@ namespace Prowl.Photonic;
 public sealed class LightmapBaker : System.IDisposable
 {
     private BakeScene? _scene;
-    private readonly System.Collections.Generic.List<LightmapTarget> _targets = new();
+    private readonly System.Collections.Generic.List<LightmapTarget> _targets = [];
     private Job? _job;
 
     /// <summary>Global bake settings. Tweak before calling <see cref="Start"/>.</summary>

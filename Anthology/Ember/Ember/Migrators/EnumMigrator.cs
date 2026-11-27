@@ -15,7 +15,7 @@ public sealed class EnumMigrator : IValueMigrator
 
     public MigrationPlan Plan(Type type, PlanContext context)
     {
-        var resolution = context.Types.Resolve(type);
+        TypeResolution resolution = context.Types.Resolve(type);
 
         if (resolution.IsUnchanged) return MigrationPlan.Preserved;
         if (resolution.IsRemoved) return MigrationPlan.Dropped;

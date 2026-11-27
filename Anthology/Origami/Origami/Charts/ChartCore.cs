@@ -4,6 +4,7 @@
 using System;
 using System.Collections.Generic;
 
+using Prowl.OrigamiUI;
 using Prowl.PaperUI;
 using Prowl.PaperUI.Events;
 using Prowl.PaperUI.LayoutEngine;
@@ -11,8 +12,6 @@ using Prowl.Quill;
 using Prowl.Vector;
 
 using Color = System.Drawing.Color;
-
-using Prowl.OrigamiUI;
 
 namespace Prowl.OrigamiUI.Charts;
 

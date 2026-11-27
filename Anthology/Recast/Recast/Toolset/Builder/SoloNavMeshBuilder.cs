@@ -22,90 +22,89 @@ using Prowl.Recast.Detour;
 using Prowl.Recast.Geom;
 using Prowl.Recast.Toolset.Geom;
 
-namespace Prowl.Recast.Toolset.Builder
+namespace Prowl.Recast.Toolset.Builder;
+
+public class SoloNavMeshBuilder
 {
-    public class SoloNavMeshBuilder
+    public NavMeshBuildResult Build(RcSampleInputGeomProvider geom, RcNavMeshBuildSettings settings)
     {
-        public NavMeshBuildResult Build(RcSampleInputGeomProvider geom, RcNavMeshBuildSettings settings)
+        return Build(geom,
+            RcPartitionType.OfValue(settings.partitioning),
+            settings.cellSize, settings.cellHeight,
+            settings.agentMaxSlope, settings.agentHeight, settings.agentRadius, settings.agentMaxClimb,
+            settings.minRegionSize, settings.mergedRegionSize,
+            settings.edgeMaxLen, settings.edgeMaxError,
+            settings.vertsPerPoly,
+            settings.detailSampleDist, settings.detailSampleMaxError,
+            settings.filterLowHangingObstacles, settings.filterLedgeSpans, settings.filterWalkableLowHeightSpans,
+            settings.keepInterResults);
+    }
+
+    public NavMeshBuildResult Build(RcSampleInputGeomProvider geom,
+        RcPartition partitionType,
+        float cellSize, float cellHeight,
+        float agentMaxSlope, float agentHeight, float agentRadius, float agentMaxClimb,
+        int regionMinSize, int regionMergeSize,
+        float edgeMaxLen, float edgeMaxError,
+        int vertsPerPoly,
+        float detailSampleDist, float detailSampleMaxError,
+        bool filterLowHangingObstacles, bool filterLedgeSpans, bool filterWalkableLowHeightSpans,
+        bool keepInterResults)
+    {
+        RcConfig cfg = new RcConfig(
+            partitionType,
+            cellSize, cellHeight,
+            agentMaxSlope, agentHeight, agentRadius, agentMaxClimb,
+            regionMinSize, regionMergeSize,
+            edgeMaxLen, edgeMaxError,
+            vertsPerPoly,
+            detailSampleDist, detailSampleMaxError,
+            filterLowHangingObstacles, filterLedgeSpans, filterWalkableLowHeightSpans,
+            SampleAreaModifications.SAMPLE_AREAMOD_WALKABLE, true);
+
+        RcBuilderResult rcResult = BuildRecastResult(geom, cfg, keepInterResults);
+        DtMeshData meshData = BuildMeshData(geom, cellSize, cellHeight, agentHeight, agentRadius, agentMaxClimb, rcResult);
+        if (null == meshData)
         {
-            return Build(geom,
-                RcPartitionType.OfValue(settings.partitioning),
-                settings.cellSize, settings.cellHeight,
-                settings.agentMaxSlope, settings.agentHeight, settings.agentRadius, settings.agentMaxClimb,
-                settings.minRegionSize, settings.mergedRegionSize,
-                settings.edgeMaxLen, settings.edgeMaxError,
-                settings.vertsPerPoly,
-                settings.detailSampleDist, settings.detailSampleMaxError,
-                settings.filterLowHangingObstacles, settings.filterLedgeSpans, settings.filterWalkableLowHeightSpans,
-                settings.keepInterResults);
+            return new NavMeshBuildResult();
         }
 
-        public NavMeshBuildResult Build(RcSampleInputGeomProvider geom,
-            RcPartition partitionType,
-            float cellSize, float cellHeight,
-            float agentMaxSlope, float agentHeight, float agentRadius, float agentMaxClimb,
-            int regionMinSize, int regionMergeSize,
-            float edgeMaxLen, float edgeMaxError,
-            int vertsPerPoly,
-            float detailSampleDist, float detailSampleMaxError,
-            bool filterLowHangingObstacles, bool filterLedgeSpans, bool filterWalkableLowHeightSpans,
-            bool keepInterResults)
+        DtNavMesh navMesh = BuildNavMesh(meshData, vertsPerPoly);
+        return new NavMeshBuildResult(cfg, RcImmutableArray.Create(rcResult), navMesh);
+    }
+
+    private DtNavMesh BuildNavMesh(DtMeshData meshData, int vertsPerPoly)
+    {
+        var mesh = new DtNavMesh();
+        DtStatus status = mesh.Init(meshData, vertsPerPoly, 0);
+        if (status.Failed())
         {
-            RcConfig cfg = new RcConfig(
-                partitionType,
-                cellSize, cellHeight,
-                agentMaxSlope, agentHeight, agentRadius, agentMaxClimb,
-                regionMinSize, regionMergeSize,
-                edgeMaxLen, edgeMaxError,
-                vertsPerPoly,
-                detailSampleDist, detailSampleMaxError,
-                filterLowHangingObstacles, filterLedgeSpans, filterWalkableLowHeightSpans,
-                SampleAreaModifications.SAMPLE_AREAMOD_WALKABLE, true);
+            return null;
+        }
+        
+        return mesh;
+    }
 
-            RcBuilderResult rcResult = BuildRecastResult(geom, cfg, keepInterResults);
-            var meshData = BuildMeshData(geom, cellSize, cellHeight, agentHeight, agentRadius, agentMaxClimb, rcResult);
-            if (null == meshData)
-            {
-                return new NavMeshBuildResult();
-            }
+    private RcBuilderResult BuildRecastResult(RcSampleInputGeomProvider geom, RcConfig cfg, bool keepInterResults)
+    {
+        RcBuilderConfig bcfg = new RcBuilderConfig(cfg, geom.GetMeshBoundsMin(), geom.GetMeshBoundsMax());
+        RcBuilder rcBuilder = new RcBuilder();
+        return rcBuilder.Build(geom, bcfg, keepInterResults);
+    }
 
-            var navMesh = BuildNavMesh(meshData, vertsPerPoly);
-            return new NavMeshBuildResult(cfg, RcImmutableArray.Create(rcResult), navMesh);
+    public DtMeshData BuildMeshData(RcSampleInputGeomProvider geom,
+        float cellSize, float cellHeight,
+        float agentHeight, float agentRadius, float agentMaxClimb,
+        RcBuilderResult result)
+    {
+        DtNavMeshCreateParams option = DemoNavMeshBuilder
+            .GetNavMeshCreateParams(geom, cellSize, cellHeight, agentHeight, agentRadius, agentMaxClimb, result);
+        DtMeshData meshData = DtNavMeshBuilder.CreateNavMeshData(option);
+        if (null == meshData)
+        {
+            return null;
         }
 
-        private DtNavMesh BuildNavMesh(DtMeshData meshData, int vertsPerPoly)
-        {
-            var mesh = new DtNavMesh();
-            var status = mesh.Init(meshData, vertsPerPoly, 0);
-            if (status.Failed())
-            {
-                return null;
-            }
-            
-            return mesh;
-        }
-
-        private RcBuilderResult BuildRecastResult(RcSampleInputGeomProvider geom, RcConfig cfg, bool keepInterResults)
-        {
-            RcBuilderConfig bcfg = new RcBuilderConfig(cfg, geom.GetMeshBoundsMin(), geom.GetMeshBoundsMax());
-            RcBuilder rcBuilder = new RcBuilder();
-            return rcBuilder.Build(geom, bcfg, keepInterResults);
-        }
-
-        public DtMeshData BuildMeshData(RcSampleInputGeomProvider geom,
-            float cellSize, float cellHeight,
-            float agentHeight, float agentRadius, float agentMaxClimb,
-            RcBuilderResult result)
-        {
-            DtNavMeshCreateParams option = DemoNavMeshBuilder
-                .GetNavMeshCreateParams(geom, cellSize, cellHeight, agentHeight, agentRadius, agentMaxClimb, result);
-            var meshData = DtNavMeshBuilder.CreateNavMeshData(option);
-            if (null == meshData)
-            {
-                return null;
-            }
-
-            return DemoNavMeshBuilder.UpdateAreaAndFlags(meshData);
-        }
+        return DemoNavMeshBuilder.UpdateAreaAndFlags(meshData);
     }
 }

@@ -17,74 +17,76 @@ freely, subject to the following restrictions:
 */
 
 using System.IO;
+
 using Prowl.Recast.Core;
 
-namespace Prowl.Recast.Detour.Io
+namespace Prowl.Recast.Detour.Io;
+
+public class DtMeshSetWriter
 {
-    public class DtMeshSetWriter
+    private readonly DtMeshDataWriter writer = new DtMeshDataWriter();
+    private readonly DtNavMeshParamWriter paramWriter = new DtNavMeshParamWriter();
+
+    public void Write(BinaryWriter stream, DtNavMesh mesh, RcByteOrder order, bool cCompatibility)
     {
-        private readonly DtMeshDataWriter writer = new DtMeshDataWriter();
-        private readonly DtNavMeshParamWriter paramWriter = new DtNavMeshParamWriter();
+        WriteHeader(stream, mesh, order, cCompatibility);
+        WriteTiles(stream, mesh, order, cCompatibility);
+    }
 
-        public void Write(BinaryWriter stream, DtNavMesh mesh, RcByteOrder order, bool cCompatibility)
+    private void WriteHeader(BinaryWriter stream, DtNavMesh mesh, RcByteOrder order, bool cCompatibility)
+    {
+        RcIO.Write(stream, NavMeshSetHeader.NAVMESHSET_MAGIC, order);
+        RcIO.Write(stream, cCompatibility ? NavMeshSetHeader.NAVMESHSET_VERSION : NavMeshSetHeader.NAVMESHSET_VERSION_RECAST4J, order);
+        int numTiles = 0;
+        for (int i = 0; i < mesh.GetMaxTiles(); ++i)
         {
-            WriteHeader(stream, mesh, order, cCompatibility);
-            WriteTiles(stream, mesh, order, cCompatibility);
+            DtMeshTile tile = mesh.GetTile(i);
+            if (tile == null || tile.data == null || tile.data.header == null)
+            {
+                continue;
+            }
+
+            numTiles++;
         }
 
-        private void WriteHeader(BinaryWriter stream, DtNavMesh mesh, RcByteOrder order, bool cCompatibility)
+        RcIO.Write(stream, numTiles, order);
+        paramWriter.Write(stream, mesh.GetParams(), order);
+        if (!cCompatibility)
         {
-            RcIO.Write(stream, NavMeshSetHeader.NAVMESHSET_MAGIC, order);
-            RcIO.Write(stream, cCompatibility ? NavMeshSetHeader.NAVMESHSET_VERSION : NavMeshSetHeader.NAVMESHSET_VERSION_RECAST4J, order);
-            int numTiles = 0;
-            for (int i = 0; i < mesh.GetMaxTiles(); ++i)
-            {
-                DtMeshTile tile = mesh.GetTile(i);
-                if (tile == null || tile.data == null || tile.data.header == null)
-                {
-                    continue;
-                }
-
-                numTiles++;
-            }
-
-            RcIO.Write(stream, numTiles, order);
-            paramWriter.Write(stream, mesh.GetParams(), order);
-            if (!cCompatibility)
-            {
-                RcIO.Write(stream, mesh.GetMaxVertsPerPoly(), order);
-            }
+            RcIO.Write(stream, mesh.GetMaxVertsPerPoly(), order);
         }
+    }
 
-        private void WriteTiles(BinaryWriter stream, DtNavMesh mesh, RcByteOrder order, bool cCompatibility)
+    private void WriteTiles(BinaryWriter stream, DtNavMesh mesh, RcByteOrder order, bool cCompatibility)
+    {
+        for (int i = 0; i < mesh.GetMaxTiles(); ++i)
         {
-            for (int i = 0; i < mesh.GetMaxTiles(); ++i)
+            DtMeshTile tile = mesh.GetTile(i);
+            if (tile == null || tile.data == null || tile.data.header == null)
             {
-                DtMeshTile tile = mesh.GetTile(i);
-                if (tile == null || tile.data == null || tile.data.header == null)
-                {
-                    continue;
-                }
-
-                NavMeshTileHeader tileHeader = new NavMeshTileHeader();
-                tileHeader.tileRef = mesh.GetTileRef(tile);
-                using MemoryStream msw = new MemoryStream();
-                using BinaryWriter bw = new BinaryWriter(msw);
-                writer.Write(bw, tile.data, order, cCompatibility);
-                bw.Flush();
-                bw.Close();
-
-                byte[] ba = msw.ToArray();
-                tileHeader.dataSize = ba.Length;
-                RcIO.Write(stream, tileHeader.tileRef, order);
-                RcIO.Write(stream, tileHeader.dataSize, order);
-                if (cCompatibility)
-                {
-                    RcIO.Write(stream, 0, order); // C struct padding
-                }
-
-                stream.Write(ba);
+                continue;
             }
+
+            NavMeshTileHeader tileHeader = new NavMeshTileHeader
+            {
+                tileRef = mesh.GetTileRef(tile)
+            };
+            using MemoryStream msw = new MemoryStream();
+            using BinaryWriter bw = new BinaryWriter(msw);
+            writer.Write(bw, tile.data, order, cCompatibility);
+            bw.Flush();
+            bw.Close();
+
+            byte[] ba = msw.ToArray();
+            tileHeader.dataSize = ba.Length;
+            RcIO.Write(stream, tileHeader.tileRef, order);
+            RcIO.Write(stream, tileHeader.dataSize, order);
+            if (cCompatibility)
+            {
+                RcIO.Write(stream, 0, order); // C struct padding
+            }
+
+            stream.Write(ba);
         }
     }
 }

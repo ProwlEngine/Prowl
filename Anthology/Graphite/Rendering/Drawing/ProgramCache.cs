@@ -12,7 +12,7 @@ namespace Prowl.Graphite.Rendering;
 /// </summary>
 internal sealed class KeywordSet
 {
-    private static readonly Dictionary<string, KeywordSet> s_sets = new(StringComparer.Ordinal);
+    private static readonly Dictionary<string, KeywordSet> s_sets = [with(StringComparer.Ordinal)];
 
     private KeywordSet(int id, IReadOnlyDictionary<string, string> values)
     {
@@ -77,7 +77,7 @@ internal sealed class ProgramCache(GraphicsDevice device, IShaderCompiler? compi
     private readonly record struct Use(bool Mirrored, int Keywords, Entry Entry);
 
     private readonly CompilePolicy _policy = compiler == null ? CompilePolicy.BakedOnly : policy;
-    private readonly Dictionary<BuildKey, Entry> _entries = new();
+    private readonly Dictionary<BuildKey, Entry> _entries = [];
     private List<Use>?[] _uses = new List<Use>?[256];
 
     /// <summary>The hardware constant and slope offsets shadow casters draw with.</summary>
@@ -142,7 +142,7 @@ internal sealed class ProgramCache(GraphicsDevice device, IShaderCompiler? compi
         }
     }
 
-    private readonly Dictionary<GraphicsProgram, PropertyID[]> _userBuffers = new();
+    private readonly Dictionary<GraphicsProgram, PropertyID[]> _userBuffers = [];
 
     /// <summary>The buffers a program reads that the host sets through Globals.SetBuffer.</summary>
     public PropertyID[] UserBuffers(GraphicsProgram program)
@@ -161,7 +161,7 @@ internal sealed class ProgramCache(GraphicsDevice device, IShaderCompiler? compi
     {
         if (id >= _uses.Length)
             Array.Resize(ref _uses, Math.Max(id + 1, _uses.Length * 2));
-        List<Use> uses = _uses[id] ??= new List<Use>(2);
+        List<Use> uses = _uses[id] ??= [with(2)];
         foreach (Use use in uses)
         {
             if (use.Mirrored != mirrored || use.Keywords != keywords.Id)
@@ -233,7 +233,7 @@ internal sealed class ProgramCache(GraphicsDevice device, IShaderCompiler? compi
 
     public void Dispose()
     {
-        HashSet<PassVariants> variants = new();
+        HashSet<PassVariants> variants = [];
         foreach (Entry entry in _entries.Values)
         {
             variants.Add(entry.Variants);
@@ -464,7 +464,7 @@ internal sealed class ProgramCache(GraphicsDevice device, IShaderCompiler? compi
 
         GraphicsProgram built = device.ResourceFactory.CreateGraphicsProgram(description);
         built.Name = $"{program.Shader.Name} {pass.Name}";
-        List<PropertyID> buffers = new();
+        List<PropertyID> buffers = [];
         foreach (ResourceLayoutDescription layout in description.ResourceLayouts ?? [])
         {
             if (layout.Set != GraphiteBindings.UserSet)

@@ -24,8 +24,8 @@ internal static class ConservativeTexelMapper
                                    int materialGroupIndex, int triangleId)
     {
         // map bake UVs into pixel space: apply per-instance offset + scale into [0,1], then multiply by W,H.
-        var offset = instance.UVOffset;
-        var scale = instance.UVScale;
+        Float2 offset = instance.UVOffset;
+        Float2 scale = instance.UVScale;
         Float2 p0 = new Float2((uvBake0.X * scale.X + offset.X) * ws.Width,
                                (uvBake0.Y * scale.Y + offset.Y) * ws.Height);
         Float2 p1 = new Float2((uvBake1.X * scale.X + offset.X) * ws.Width,
@@ -56,14 +56,14 @@ internal static class ConservativeTexelMapper
         float invArea = 1f / areaTimes2;
 
         // world transform for positions, inverse-transpose for normals
-        var W = instance.WorldTransform;
-        var NM = NormalMatrix(W);
+        Float4x4 W = instance.WorldTransform;
+        Float4x4 NM = NormalMatrix(W);
 
         // Per-texel world radius: how big this triangle's pixels are in world space. Every scale-
         // relative decision downstream measures against it, regardless of mesh scale or atlas density.
-        var w_v0 = Raytracing.RayMath.Transform(W, v0L, 1f);
-        var w_v1 = Raytracing.RayMath.Transform(W, v1L, 1f);
-        var w_v2 = Raytracing.RayMath.Transform(W, v2L, 1f);
+        Float3 w_v0 = Raytracing.RayMath.Transform(W, v0L, 1f);
+        Float3 w_v1 = Raytracing.RayMath.Transform(W, v1L, 1f);
+        Float3 w_v2 = Raytracing.RayMath.Transform(W, v2L, 1f);
         float worldAreaTwice = Float3.Length(Float3.Cross(w_v1 - w_v0, w_v2 - w_v0));
         float pixelAreaTwice = System.Math.Abs(areaTimes2);
         float worldPerPixel = pixelAreaTwice > 1e-12f ? worldAreaTwice / pixelAreaTwice : 0f;
@@ -108,17 +108,17 @@ internal static class ConservativeTexelMapper
                 w1 = w1 * (1f - CentroidBias) + OneThird * CentroidBias;
                 w2 = w2 * (1f - CentroidBias) + OneThird * CentroidBias;
 
-                var pL = v0L * w0 + v1L * w1 + v2L * w2;
-                var nL = n0 * w0 + n1 * w1 + n2 * w2;
+                Float3 pL = v0L * w0 + v1L * w1 + v2L * w2;
+                Float3 nL = n0 * w0 + n1 * w1 + n2 * w2;
                 if (Float3.Dot(nL, nL) < 1e-10f) continue; // skip degenerate normal
 
                 // to world
-                var pW = Raytracing.RayMath.Transform(W, pL, 1f);
+                Float3 pW = Raytracing.RayMath.Transform(W, pL, 1f);
                 var nW = Float3.Normalize(Raytracing.RayMath.Transform(NM, nL, 0f));
 
-                var uv0 = uv0_0 * w0 + uv1_0 * w1 + uv2_0 * w2;
+                Float2 uv0 = uv0_0 * w0 + uv1_0 * w1 + uv2_0 * w2;
 
-                var smoothW = PhongPosition(pW, w_v0, w_v1, w_v2, wn0, wn1, wn2, faceNormal, w0, w1, w2);
+                Float3 smoothW = PhongPosition(pW, w_v0, w_v1, w_v2, wn0, wn1, wn2, faceNormal, w0, w1, w2);
 
                 int idx = py * ws.Width + px;
                 // Strict-inside wins. A new claimant takes the texel if:
@@ -165,7 +165,7 @@ internal static class ConservativeTexelMapper
                                         Float3 na, Float3 nb, Float3 nc, Float3 faceNormal,
                                         float w0, float w1, float w2)
     {
-        var smooth = BlendProjections(p, a, b, c, na, nb, nc, w0, w1, w2);
+        Float3 smooth = BlendProjections(p, a, b, c, na, nb, nc, w0, w1, w2);
         if (Float3.Dot(smooth - p, faceNormal) >= 0f) return smooth;
 
         for (int edge = 0; edge < 3; edge++)
@@ -177,9 +177,9 @@ internal static class ConservativeTexelMapper
                 _ => c - a,
             };
             e = Float3.NormalizeSafe(e, Float3.UnitX);
-            var fa = FlattenAgainstEdge(na, e, faceNormal);
-            var fb = FlattenAgainstEdge(nb, e, faceNormal);
-            var fc = FlattenAgainstEdge(nc, e, faceNormal);
+            Float3 fa = FlattenAgainstEdge(na, e, faceNormal);
+            Float3 fb = FlattenAgainstEdge(nb, e, faceNormal);
+            Float3 fc = FlattenAgainstEdge(nc, e, faceNormal);
             smooth = BlendProjections(p, a, b, c, fa, fb, fc, w0, w1, w2);
             if (Float3.Dot(smooth - p, faceNormal) >= 0f) return smooth;
         }
@@ -190,16 +190,16 @@ internal static class ConservativeTexelMapper
                                            Float3 na, Float3 nb, Float3 nc,
                                            float w0, float w1, float w2)
     {
-        var pa = p - na * Float3.Dot(p - a, na);
-        var pb = p - nb * Float3.Dot(p - b, nb);
-        var pc = p - nc * Float3.Dot(p - c, nc);
+        Float3 pa = p - na * Float3.Dot(p - a, na);
+        Float3 pb = p - nb * Float3.Dot(p - b, nb);
+        Float3 pc = p - nc * Float3.Dot(p - c, nc);
         return pa * w0 + pb * w1 + pc * w2;
     }
 
     /// <summary>Drop the component of <paramref name="n"/> that leans across the edge, keeping the plane spanned by the edge and the face normal.</summary>
     private static Float3 FlattenAgainstEdge(Float3 n, Float3 edge, Float3 faceNormal)
     {
-        var flattened = edge * Float3.Dot(n, edge) + faceNormal * Float3.Dot(n, faceNormal);
+        Float3 flattened = edge * Float3.Dot(n, edge) + faceNormal * Float3.Dot(n, faceNormal);
         return Float3.NormalizeSafe(flattened, faceNormal);
     }
 
@@ -243,9 +243,9 @@ internal static class ConservativeTexelMapper
     private static void ClampToTriangle(Float2 a, Float2 b, Float2 c, Float2 p, out float wa, out float wb, out float wc)
     {
         // Closest point on each edge, pick the nearest of the three edge results.
-        float dab = ClosestParam(a, b, p, out var qab);
-        float dbc = ClosestParam(b, c, p, out var qbc);
-        float dca = ClosestParam(c, a, p, out var qca);
+        float dab = ClosestParam(a, b, p, out Float2 qab);
+        float dbc = ClosestParam(b, c, p, out Float2 qbc);
+        float dca = ClosestParam(c, a, p, out Float2 qca);
         Float2 q;
         if (dab <= dbc && dab <= dca) q = qab;
         else if (dbc <= dca) q = qbc;

@@ -85,7 +85,7 @@ internal sealed class UvChart
         UvMin = new Double2(1e32, 1e32);
         UvMax = new Double2(-1e32, -1e32);
 
-        var fit = OrientedBox2DFit.Fit(UVs, UVs.Length);
+        OrientedBox2D fit = OrientedBox2DFit.Fit(UVs, UVs.Length);
         Double2 axisX = fit.AxisX;
         Double2 axisY = fit.AxisY;
         Double2 ext = fit.Extent;

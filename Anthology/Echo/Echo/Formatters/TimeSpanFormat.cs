@@ -25,7 +25,7 @@ internal sealed class TimeSpanFormat : ISerializationFormat
     {
         if (value.TagType == EchoType.Compound)
         {
-            if (value.TryGet("ticks", out var ticksTag) && ticksTag.TagType == EchoType.Long)
+            if (value.TryGet("ticks", out EchoObject? ticksTag) && ticksTag.TagType == EchoType.Long)
             {
                 long ticks = ticksTag.LongValue;
                 return new TimeSpan(ticks);

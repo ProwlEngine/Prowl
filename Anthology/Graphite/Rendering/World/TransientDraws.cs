@@ -30,13 +30,13 @@ internal sealed class TransientDraws : RenderProvider
 
     private const uint PositionStream = 1u << (int)VertexSemantic.Position, ColorStream = 1u << (int)VertexSemantic.Color;
 
-    private List<Draw> _host = new(), _render = new();
-    private List<uint> _hostWords = new(), _renderWords = new();
-    private List<uint> _hostIndices = new(), _renderIndices = new();
-    private List<Float4x4> _hostInstances = new(), _renderInstances = new();
-    private List<Float4> _hostInstanceColors = new(), _renderInstanceColors = new();
-    private readonly List<MeshPlacement> _placed = new();
-    private readonly List<MeshChunk> _chunks = new();
+    private List<Draw> _host = [], _render = [];
+    private List<uint> _hostWords = [], _renderWords = [];
+    private List<uint> _hostIndices = [], _renderIndices = [];
+    private List<Float4x4> _hostInstances = [], _renderInstances = [];
+    private List<Float4> _hostInstanceColors = [], _renderInstanceColors = [];
+    private readonly List<MeshPlacement> _placed = [];
+    private readonly List<MeshChunk> _chunks = [];
 
     /// <summary>Copies a draw for the next frame. Host thread.</summary>
     public void Add(in TransientDraw draw, ReadOnlySpan<Float4x4> instances, ReadOnlySpan<Float4> instanceColors)

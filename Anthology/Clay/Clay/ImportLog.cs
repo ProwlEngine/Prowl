@@ -38,7 +38,7 @@ public sealed class ImportLogEntry
 /// </summary>
 public sealed class ImportLog
 {
-    private readonly List<ImportLogEntry> _entries = new();
+    private readonly List<ImportLogEntry> _entries = [];
 
     /// <summary>Logged entries, in the order they were emitted.</summary>
     public IReadOnlyList<ImportLogEntry> Entries => _entries;
@@ -69,7 +69,7 @@ public sealed class ImportLog
         {
             for (int i = 0; i < _entries.Count; i++)
             {
-                var s = _entries[i].Severity;
+                ImportLogSeverity s = _entries[i].Severity;
                 if (s == ImportLogSeverity.Warning || s == ImportLogSeverity.Error)
                     return true;
             }

@@ -659,7 +659,7 @@ internal sealed class HandleStore<T> where T : struct
     private bool[] _dirty = new bool[16];
     private uint[] _sequence = new uint[16];
     private uint _nextSequence;
-    private readonly List<int> _dirtyList = new();
+    private readonly List<int> _dirtyList = [];
     private readonly Stack<int> _free = new();
     private int _count;
 
@@ -752,7 +752,7 @@ internal sealed class WorldLighting
     private LightSlots[] _lightSlots = new LightSlots[16];
     private int[] _lightGeneration = new int[16];
     private bool[] _lightAlive = new bool[16];
-    private readonly List<int> _directionalLights = new();
+    private readonly List<int> _directionalLights = [];
     private bool _lightMembership = true;
     private int _sun = -1;
 
@@ -775,7 +775,7 @@ internal sealed class WorldLighting
     private bool _hasProbes;
     private uint _probeSlot, _probeSampler, _probeMips;
     private float _skyExposure = 1;
-    private readonly List<int> _directionalOrder = new();
+    private readonly List<int> _directionalOrder = [];
 
     private struct LightSlots
     {
@@ -828,7 +828,7 @@ internal sealed class WorldLighting
     public int LightCapacity => _lights.Length;
 
     /// <summary>The live spot and point lights with shadows on, by index, lowest first.</summary>
-    public SortedSet<int> ShadowCasters { get; } = new();
+    public SortedSet<int> ShadowCasters { get; } = [];
 
     public bool IsAlive(int index) => _lightAlive[index];
 
@@ -839,7 +839,7 @@ internal sealed class WorldLighting
 
     /// <summary>The directional lights' indices in the order shaders read them, the sun first.</summary>
     public IReadOnlyList<int> DirectionalOrder => _shaderOrder;
-    private readonly List<int> _shaderOrder = new();
+    private readonly List<int> _shaderOrder = [];
 
     internal void ReceiveLight(int index, int generation, uint sequence, bool alive, in LightDesc given)
     {
@@ -1410,7 +1410,7 @@ internal sealed class StaticRegions<TRecord> where TRecord : unmanaged
     private sealed class Region((long, long, long) key)
     {
         public readonly (long X, long Y, long Z) Key = key;
-        public readonly List<int> Items = new();
+        public readonly List<int> Items = [];
         public Double3 Origin, Min, Max;
         public RangeAllocation Records, Nodes;
         public uint Root = LightTreeBuilder.Invalid;
@@ -1424,12 +1424,12 @@ internal sealed class StaticRegions<TRecord> where TRecord : unmanaged
 
     private readonly Stack<int> _walk = new();
 
-    private readonly Dictionary<(long, long, long), Region> _regions = new();
-    private readonly List<Region> _live = new();
-    private readonly List<Region> _dirty = new();
-    private readonly List<Region> _retry = new();
-    private readonly List<Region> _visible = new();
-    private readonly List<int> _repack = new();
+    private readonly Dictionary<(long, long, long), Region> _regions = [];
+    private readonly List<Region> _live = [];
+    private readonly List<Region> _dirty = [];
+    private readonly List<Region> _retry = [];
+    private readonly List<Region> _visible = [];
+    private readonly List<int> _repack = [];
     private readonly RangeAllocator _recordSpace = new(MaxEntries);
     private readonly RangeAllocator _nodeSpace = new(MaxEntries);
     private readonly LightTreeBuilder _builder = new();
@@ -1897,8 +1897,8 @@ internal sealed class SpatialIndex<TRecord> : SpatialIndex where TRecord : unman
     private readonly StaticRegions<TRecord> _static;
     private readonly Func<int, Double3, TRecord> _pack;
     private readonly Action<RendererError> _report;
-    private readonly List<int> _moving = new();
-    private readonly List<int> _culled = new();
+    private readonly List<int> _moving = [];
+    private readonly List<int> _culled = [];
     private readonly NearestItems _binned = new(MaxBinned);
     private int[] _movingSlot = [];
     private Double3[] _center = [];
@@ -2055,7 +2055,7 @@ internal sealed class SpatialIndex<TRecord> : SpatialIndex where TRecord : unman
 /// <summary>The slots host spatial sets get by name, shared by every world of a renderer. Host thread.</summary>
 internal sealed class SpatialSlots
 {
-    private readonly Dictionary<string, (int Slot, Type Type, int Worlds)> _slots = new(StringComparer.Ordinal);
+    private readonly Dictionary<string, (int Slot, Type Type, int Worlds)> _slots = [with(StringComparer.Ordinal)];
 
     /// <summary>The slot for a name, from the renderer's registry when the world has one, else the world's own.</summary>
     public int Slot(SpatialSlots? renderer, string name, Type type)

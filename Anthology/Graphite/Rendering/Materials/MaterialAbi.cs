@@ -167,7 +167,7 @@ internal static class MaterialLayout
     public static MaterialAbi Abi(MaterialSchema schema)
     {
         StringBuilder record = new("struct Graphite_MaterialRecord\n{\n");
-        Dictionary<string, (string Type, string Read, string With)> properties = new(StringComparer.Ordinal);
+        Dictionary<string, (string Type, string Read, string With)> properties = [with(StringComparer.Ordinal)];
         uint offset = 0;
         int padding = 0;
         void Member(string type, string name, uint at, uint size)
@@ -292,8 +292,8 @@ internal static class MaterialLayout
     /// </summary>
     public static ResourceLayoutDescription[] Layouts(string shaderName, ResourceLayoutDescription[] reflected, ResourceLayoutDescription frameTable, ResourceLayoutDescription viewTable)
     {
-        List<ResourceLayoutElementDescription> pass = new();
-        List<ResourceLayoutElementDescription> user = new();
+        List<ResourceLayoutElementDescription> pass = [];
+        List<ResourceLayoutElementDescription> user = [];
         foreach (ResourceLayoutDescription layout in reflected)
         {
             foreach (ResourceLayoutElementDescription element in layout.Elements)
@@ -341,8 +341,8 @@ internal static class MaterialLayout
     {
         const uint OpVariable = 59, OpStore = 62, OpAccessChain = 65, OpInBoundsAccessChain = 66, OpDecorate = 71, DecorationLocation = 30, Output = 3;
         ReadOnlySpan<uint> words = MemoryMarshal.Cast<byte, uint>(spirv);
-        HashSet<uint> located = new();
-        HashSet<uint> pointers = new();
+        HashSet<uint> located = [];
+        HashSet<uint> pointers = [];
         for (int at = 5; at < words.Length;)
         {
             int count = (int)(words[at] >> 16);

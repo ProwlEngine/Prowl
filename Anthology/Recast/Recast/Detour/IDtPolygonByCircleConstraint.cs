@@ -18,12 +18,12 @@ freely, subject to the following restrictions:
 */
 
 using System;
+
 using Prowl.Recast.Core.Numerics;
 
-namespace Prowl.Recast.Detour
+namespace Prowl.Recast.Detour;
+
+public interface IDtPolygonByCircleConstraint
 {
-    public interface IDtPolygonByCircleConstraint
-    {
-        bool Apply(Span<float> polyVerts, RcVec3f circleCenter, float radius, Span<float> constrainedVerts, out int constrainedVertCount);
-    }
+    bool Apply(Span<float> polyVerts, RcVec3f circleCenter, float radius, Span<float> constrainedVerts, out int constrainedVertCount);
 }

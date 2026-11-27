@@ -181,7 +181,7 @@ public sealed class ShaderDefinition
         if (Properties == null)
             return set;
 
-        HashSet<PropertyID> targets = new();
+        HashSet<PropertyID> targets = [];
         foreach (ResourceLayoutDescription layout in pass.GetDescription(variantKey.Index).ResourceLayouts)
         {
             foreach (ResourceLayoutElementDescription element in layout.Elements)

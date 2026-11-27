@@ -37,7 +37,7 @@ public struct BvhBuildSettings
     {
         if (MaxLeafSize <= 0)
             return Default;
-        var s = this;
+        BvhBuildSettings s = this;
         if (s.SahBinCount < 2) s.SahBinCount = 12;
         return s;
     }

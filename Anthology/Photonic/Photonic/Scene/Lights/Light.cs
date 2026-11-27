@@ -47,7 +47,7 @@ public abstract class Light
     {
         get
         {
-            var c3 = Transform.c3;
+            Float4 c3 = Transform.c3;
             return new Float3(c3.X, c3.Y, c3.Z);
         }
     }
@@ -61,7 +61,7 @@ public abstract class Light
     {
         get
         {
-            var c2 = Transform.c2;
+            Float4 c2 = Transform.c2;
             return Float3.Normalize(new Float3(c2.X, c2.Y, c2.Z));
         }
     }

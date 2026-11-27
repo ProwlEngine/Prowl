@@ -12,16 +12,16 @@ public static partial class SpirVOptimizer
     static void AdceFunctions(SpvModule m)
     {
         uint glslSet = 0;
-        foreach (var ins in m.Instrs) if (ins.Opcode == 11 && ins.Operands.Length >= 2 && DecodeSpvString(ins.Operands, 1) == "GLSL.std.450") { glslSet = ins.Operands[0]; break; }
+        foreach (SpvInstr ins in m.Instrs) if (ins.Opcode == 11 && ins.Operands.Length >= 2 && DecodeSpvString(ins.Operands, 1) == "GLSL.std.450") { glslSet = ins.Operands[0]; break; }
         var entryPoints = new HashSet<uint>();
-        foreach (var ins in m.Instrs) if (ins.Opcode == 15 && ins.Operands.Length >= 2) entryPoints.Add(ins.Operands[1]);
+        foreach (SpvInstr ins in m.Instrs) if (ins.Opcode == 15 && ins.Operands.Length >= 2) entryPoints.Add(ins.Operands[1]);
         // One def map for the whole sweep: a function only rewrites its own body, so after it changes just its
         // re-created labels need refreshing (stale entries for deleted locals are never looked up again).
         // A new OpUndef shifts the module, so that case rebuilds the map.
-        var def = m.DefMap();
+        DefTable def = m.DefMap();
         foreach (uint fnId in ReachableFunctions(m))
         {
-            var (fs, fe, undefs) = AdceFunction(m, fnId, glslSet, entryPoints, def);
+            (int fs, int fe, bool undefs) = AdceFunction(m, fnId, glslSet, entryPoints, def);
             if (undefs) def = m.DefMap();
             else for (int i = fs; i < fe; i++) if (m.Instrs[i].Opcode == OpLabel) def[m.Instrs[i].Operands[0]] = m.Instrs[i];
         }
@@ -53,12 +53,12 @@ public static partial class SpirVOptimizer
         int fs = m.FindFunction(fnId);
         if (fs < 0) return (0, 0, false);
         int fe = fs; while (m.Instrs[fe].Opcode != OpFunctionEnd) fe++;
-        var blocks = ParseBlocks(m, fs, fe, out int firstLabel);
+        List<Blk> blocks = ParseBlocks(m, fs, fe, out int firstLabel);
         if (blocks.Count == 0) return (0, 0, false);
         // Only this function's users are ever consulted (every lookup is filtered to the function).
-        var users = s_adceUsers ??= new(); users.Build(m.Instrs, fs, fe, m.Header[3]);
+        UserIndex users = s_adceUsers ??= new(); users.Build(m.Instrs, fs, fe, m.Header[3]);
         var byLabel = new Dictionary<uint, Blk>(blocks.Count);
-        foreach (var b in blocks) byLabel[b.Label] = b;
+        foreach (Blk b in blocks) byLabel[b.Label] = b;
 
         // The function's own instructions carry a stamp (in the function / live) and their block in Tag, so the
         // liveness walk below is field reads, not set and map lookups.
@@ -69,7 +69,7 @@ public static partial class SpirVOptimizer
             Blk? cur = null;
             for (int i = firstLabel; i < fe; i++)
             {
-                var ins = m.Instrs[i];
+                SpvInstr ins = m.Instrs[i];
                 if (ins.Opcode == OpLabel) { cur = byLabel[ins.Operands[0]]; cur.LabelInst = ins; cur.Containing = null; }
                 else if (ins.Opcode == OpFunctionCall) hasCalls = true;
                 ins.Mark = inFn; ins.Tag = cur;
@@ -80,10 +80,10 @@ public static partial class SpirVOptimizer
 
         // StructuredCFGAnalysis: each block's innermost containing construct (a header is in the outer one, a
         // merge block back in the construct around its header).
-        var order = StructuredOrder(blocks);
+        List<Blk> order = StructuredOrder(blocks);
         {
             var state = new List<(Blk? Construct, uint Merge)> { (null, 0) };
-            foreach (var b in order)
+            foreach (Blk b in order)
             {
                 if (b.Label == state[^1].Merge) state.RemoveAt(state.Count - 1);
                 b.Containing = state[^1].Construct;
@@ -102,7 +102,7 @@ public static partial class SpirVOptimizer
 
         uint RootVar(uint ptr)
         {
-            for (int g = 0; g < 64 && def.TryGetValue(ptr, out var d); g++)
+            for (int g = 0; g < 64 && def.TryGetValue(ptr, out SpvInstr? d); g++)
             {
                 if (d.Opcode is OpAccessChain or OpInBoundsAccessChain or OpPtrAccessChain or OpInBoundsPtrAccessChain or OpCopyObject) ptr = d.Operands[2];
                 else break;
@@ -111,11 +111,11 @@ public static partial class SpirVOptimizer
         }
         bool IsLocalVar(uint v)
         {
-            if (!def.TryGetValue(v, out var d) || d.Opcode != OpVariable || d.Operands.Length < 3) return false;
+            if (!def.TryGetValue(v, out SpvInstr? d) || d.Opcode != OpVariable || d.Operands.Length < 3) return false;
             if (d.Operands[2] == 7) return true;                      // Function
             return d.Operands[2] is 6 or 4 && entryNoCalls;            // Private / Workgroup: one instance per entry point
         }
-        bool IsPointer(uint id) => def.TryGetValue(id, out var d) && d.ResultId == id && TypeOfResult(d) is uint t && def.TryGetValue(t, out var td) && td.Opcode == 32;
+        bool IsPointer(uint id) => def.TryGetValue(id, out SpvInstr? d) && d.ResultId == id && TypeOfResult(d) is uint t && def.TryGetValue(t, out SpvInstr? td) && td.Opcode == 32;
         static uint? TypeOfResult(SpvInstr d) { d.Classify(out int ri, out _); return ri >= 1 ? d.Operands[ri - 1] : null; }
 
         bool SafeToDelete(SpvInstr ins)
@@ -131,8 +131,8 @@ public static partial class SpirVOptimizer
         var liveLocals = new HashSet<uint>();
         void AddStores(uint ptr)
         {
-            var us = users[ptr];
-            foreach (var u in us)
+            ReadOnlySpan<SpvInstr> us = users[ptr];
+            foreach (SpvInstr u in us)
             {
                 if (!InFunction(u)) continue;
                 switch (u.Opcode)
@@ -149,16 +149,16 @@ public static partial class SpirVOptimizer
 
         void AddBreaksAndContinues(SpvInstr mergeInst)
         {
-            var header = BlockOf(mergeInst)!;
+            Blk header = BlockOf(mergeInst)!;
             uint mergeId = mergeInst.Operands[0];
-            foreach (var u in users[mergeId])
+            foreach (SpvInstr u in users[mergeId])
             {
                 if (u.Opcode is not (249 or 250 or 251) || !InFunction(u) || BlockOf(u) is not { } ub) continue;
                 if (InConstruct(header, ub)) { Add(u); Add(ub.Merge); }
             }
             if (mergeInst.Opcode != 246) return;
             uint contId = mergeInst.Operands[1];
-            foreach (var u in users[contId])
+            foreach (SpvInstr u in users[contId])
             {
                 if (!InFunction(u) || BlockOf(u) is not { } ub) continue;
                 if (u.Opcode is 250 or 251)
@@ -171,9 +171,9 @@ public static partial class SpirVOptimizer
                 }
                 else if (u.Opcode == 249)
                 {
-                    var hb = HeaderBranch(ub);
+                    SpvInstr? hb = HeaderBranch(ub);
                     if (hb is null) continue;
-                    var hm = BlockOf(hb)!.Merge;
+                    SpvInstr? hm = BlockOf(hb)!.Merge;
                     if (hm is null || hm.Opcode == 246 || hm.Operands[0] == contId) continue;
                 }
                 else continue;
@@ -190,11 +190,11 @@ public static partial class SpirVOptimizer
             if (isLabel ? b.LiveA == isLive : b.LiveB == isLive) { if (ins.Opcode is 246 or 247) AddBreaksAndContinues(ins); return; }
             if (isLabel) b.LiveA = isLive; else b.LiveB = isLive;
             Add(b.LabelInst);
-            if (b.Merge is { } mg) Add(byLabel.TryGetValue(mg.Operands[0], out var mb) ? mb.LabelInst : null); else Add(b.Term);
+            if (b.Merge is { } mg) Add(byLabel.TryGetValue(mg.Operands[0], out Blk? mb) ? mb.LabelInst : null); else Add(b.Term);
             if (ins.Opcode != OpLabel && IsLoopHeader(b)) { Add(b.Term); Add(b.Merge); }
             // GetBranchForNextHeader: the branch of the header whose construct holds this block.
-            var nb = IsLoopHeader(b) ? b.Containing : b;
-            var next = HeaderBranch(nb);
+            Blk? nb = IsLoopHeader(b) ? b.Containing : b;
+            SpvInstr? next = HeaderBranch(nb);
             if (next is not null) { Add(next); Add(BlockOf(next)!.Merge); }
             if (ins.Opcode is 246 or 247) AddBreaksAndContinues(ins);
         }
@@ -203,8 +203,8 @@ public static partial class SpirVOptimizer
         // an effect outside the function.
         for (int i = fs; i < firstLabel; i++) Add(m.Instrs[i]);
         MarkBlockLive(blocks[0].LabelInst!);
-        foreach (var b in order)
-            foreach (var ins in b.Insts)
+        foreach (Blk b in order)
+            foreach (SpvInstr ins in b.Insts)
             {
                 if (ins.Opcode is 249 or 250 or 251) continue;
                 switch (ins.Opcode)
@@ -217,10 +217,10 @@ public static partial class SpirVOptimizer
             }
         while (work.Count > 0)
         {
-            var ins = work.Dequeue();
+            SpvInstr ins = work.Dequeue();
             ins.Classify(out int ri, out bool[] isId);
             for (int i = 0; i < ins.Operands.Length; i++)
-                if (isId[i] && i != ri && def.TryGetValue(ins.Operands[i], out var d)) Add(d);
+                if (isId[i] && i != ri && def.TryGetValue(ins.Operands[i], out SpvInstr? d)) Add(d);
             MarkBlockLive(ins);
             switch (ins.Opcode)
             {
@@ -238,14 +238,14 @@ public static partial class SpirVOptimizer
         // KillDeadInstructions over the structured order.
         bool modified = false;
         uint retType = m.Instrs[fs].Operands[0];
-        bool voidRet = def.TryGetValue(retType, out var rtd) && rtd.Opcode == 19;
+        bool voidRet = def.TryGetValue(retType, out SpvInstr? rtd) && rtd.Opcode == 19;
         var pendingReturnUndef = new List<SpvInstr>();
         for (int bi = 0; bi < order.Count;)
         {
-            var b = order[bi];
+            Blk b = order[bi];
             uint mergeBlockId = 0;
             int before = b.Insts.Count;
-            foreach (var ins in b.Insts) if (ins.Mark != isLive && ins.Opcode is 246 or 247) mergeBlockId = ins.Operands[0];
+            foreach (SpvInstr ins in b.Insts) if (ins.Mark != isLive && ins.Opcode is 246 or 247) mergeBlockId = ins.Operands[0];
             bool termLive = b.Term.Mark == isLive;
             b.Insts.RemoveAll(ins => ins.Mark != isLive);
             if (b.Insts.Count != before) modified = true;
@@ -253,11 +253,11 @@ public static partial class SpirVOptimizer
             {
                 b.Insts.Add(new SpvInstr(249, [mergeBlockId]));
                 for (bi++; order[bi].Label != mergeBlockId; bi++) { }
-                var mb = order[bi];
+                Blk mb = order[bi];
                 if (mb.Term.Opcode == 255)
                 {
                     // The merge was unreachable: undefined behaviour, so return (an undef) there instead.
-                    var ret = voidRet ? new SpvInstr(253, []) : new SpvInstr(254, [0]);
+                    SpvInstr ret = voidRet ? new SpvInstr(253, []) : new SpvInstr(254, [0]);
                     if (!voidRet) pendingReturnUndef.Add(ret);
                     mb.Insts[^1] = ret;
                     ret.Mark = isLive;
@@ -272,15 +272,15 @@ public static partial class SpirVOptimizer
         // MemPass::CFGCleanup: drop blocks no longer reachable (through successors, merges or continues), and the
         // phi operands that came from them; an argument defined in a removed block becomes undef.
         int reachStamp = SpvInstr.NewStamp(), reachCount = 0;
-        bool Reached(uint label) => byLabel.TryGetValue(label, out var rb) && rb.Reach == reachStamp;
+        bool Reached(uint label) => byLabel.TryGetValue(label, out Blk? rb) && rb.Reach == reachStamp;
         {
             var q = new Queue<Blk>();
-            void Visit(uint label) { var vb = byLabel[label]; if (vb.Reach != reachStamp) { vb.Reach = reachStamp; reachCount++; q.Enqueue(vb); } }
+            void Visit(uint label) { Blk vb = byLabel[label]; if (vb.Reach != reachStamp) { vb.Reach = reachStamp; reachCount++; q.Enqueue(vb); } }
             Visit(blocks[0].Label);
             while (q.Count > 0)
             {
-                var b = q.Dequeue();
-                var t = b.Term;
+                Blk b = q.Dequeue();
+                SpvInstr t = b.Term;
                 switch (t.Opcode)
                 {
                     case 249: if (byLabel.ContainsKey(t.Operands[0])) Visit(t.Operands[0]); break;
@@ -296,17 +296,17 @@ public static partial class SpirVOptimizer
         if (reachCount != blocks.Count) modified = true;
         if (!modified) return (0, 0, false);
         var undefFixups = new List<(SpvInstr Phi, int Index, uint Type)>();
-        foreach (var b in blocks)
+        foreach (Blk b in blocks)
         {
             if (!Reached(b.Label)) continue;
-            foreach (var phi in b.Insts.TakeWhile(x => x.Opcode == 245))
+            foreach (SpvInstr? phi in b.Insts.TakeWhile(x => x.Opcode == 245))
             {
                 var ops = new List<uint> { phi.Operands[0], phi.Operands[1] };
                 for (int i = 2; i + 1 < phi.Operands.Length; i += 2)
                 {
                     if (!Reached(phi.Operands[i + 1])) continue;
                     // A value defined in a dropped block becomes undef.
-                    if (def.TryGetValue(phi.Operands[i], out var dv) && dv.Mark == isLive && dv.Tag is Blk db && !Reached(db.Label)) undefFixups.Add((phi, ops.Count, phi.Operands[0]));
+                    if (def.TryGetValue(phi.Operands[i], out SpvInstr? dv) && dv.Mark == isLive && dv.Tag is Blk db && !Reached(db.Label)) undefFixups.Add((phi, ops.Count, phi.Operands[0]));
                     ops.Add(phi.Operands[i]); ops.Add(phi.Operands[i + 1]);
                 }
                 if (ops.Count != phi.Operands.Length) phi.Operands = [.. ops];
@@ -318,8 +318,8 @@ public static partial class SpirVOptimizer
         int newFe = fe + (m.Instrs.Count - oldCount);
 
         // Undefs last: creating one inserts a global before the first function, shifting indices.
-        foreach (var ret in pendingReturnUndef) ret.Operands = [GetDbeUndef(m, retType)];
-        foreach (var (phi, index, type) in undefFixups) { var ops = phi.Operands; ops[index] = GetDbeUndef(m, type); phi.Operands = ops; }
+        foreach (SpvInstr ret in pendingReturnUndef) ret.Operands = [GetDbeUndef(m, retType)];
+        foreach ((SpvInstr? phi, int index, uint type) in undefFixups) { uint[] ops = phi.Operands; ops[index] = GetDbeUndef(m, type); phi.Operands = ops; }
         return (fs, newFe, pendingReturnUndef.Count > 0 || undefFixups.Count > 0);
     }
 }

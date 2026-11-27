@@ -19,17 +19,17 @@ internal sealed class FbxDocument
     public string? Creator { get; init; }
     public FbxNode Root { get; }
     public FbxPropertyTable GlobalSettings { get; }
-    public Dictionary<long, FbxObject> Objects { get; } = new();
-    public List<FbxConnection> Connections { get; } = new();
+    public Dictionary<long, FbxObject> Objects { get; } = [];
+    public List<FbxConnection> Connections { get; } = [];
 
     /// <summary>Connections keyed by their <see cref="FbxConnection.Source"/> id.</summary>
-    public Dictionary<long, List<FbxConnection>> ConnectionsBySource { get; } = new();
+    public Dictionary<long, List<FbxConnection>> ConnectionsBySource { get; } = [];
 
     /// <summary>Connections keyed by their <see cref="FbxConnection.Destination"/> id.</summary>
-    public Dictionary<long, List<FbxConnection>> ConnectionsByDestination { get; } = new();
+    public Dictionary<long, List<FbxConnection>> ConnectionsByDestination { get; } = [];
 
     /// <summary>Property templates declared under <c>Definitions/</c>, keyed by class tag.</summary>
-    public Dictionary<string, FbxPropertyTable> Templates { get; } = new();
+    public Dictionary<string, FbxPropertyTable> Templates { get; } = [];
 
     public FbxDocument(FbxNode root, uint version, string? creator)
     {
@@ -41,38 +41,38 @@ internal sealed class FbxDocument
         ReadTemplates();
 
         // Read GlobalSettings.
-        var gs = root.FindChild("GlobalSettings");
-        var gsProps = gs?.FindChild("Properties70") ?? gs?.FindChild("Properties60");
+        FbxNode? gs = root.FindChild("GlobalSettings");
+        FbxNode? gsProps = gs?.FindChild("Properties70") ?? gs?.FindChild("Properties60");
         GlobalSettings = gsProps is null
             ? new FbxPropertyTable()
             : FbxPropertyTable.From(gsProps);
 
         // Read every object under Objects/.
-        var objectsNode = root.FindChild("Objects");
+        FbxNode? objectsNode = root.FindChild("Objects");
         if (objectsNode is not null)
         {
-            foreach (var child in objectsNode.Children)
+            foreach (FbxNode child in objectsNode.Children)
                 IngestObject(child);
         }
 
         // Read connections.
-        var connNode = root.FindChild("Connections");
+        FbxNode? connNode = root.FindChild("Connections");
         if (connNode is not null)
         {
-            foreach (var c in connNode.Children.Where(c => c.Name == "C" || c.Name == "Connect"))
+            foreach (FbxNode? c in connNode.Children.Where(c => c.Name == "C" || c.Name == "Connect"))
                 IngestConnection(c);
         }
     }
 
     private void ReadTemplates()
     {
-        var defs = Root.FindChild("Definitions");
+        FbxNode? defs = Root.FindChild("Definitions");
         if (defs is null) return;
-        foreach (var objType in defs.FindChildren("ObjectType"))
+        foreach (FbxNode objType in defs.FindChildren("ObjectType"))
         {
             string className = objType.StringAt(0);
-            var template = objType.FindChild("PropertyTemplate");
-            var props = template?.FindChild("Properties70") ?? template?.FindChild("Properties60");
+            FbxNode? template = objType.FindChild("PropertyTemplate");
+            FbxNode? props = template?.FindChild("Properties70") ?? template?.FindChild("Properties60");
             if (props is not null)
                 Templates[className] = FbxPropertyTable.From(props);
         }
@@ -87,7 +87,7 @@ internal sealed class FbxDocument
         // Some exporters drop non-object metadata records into Objects/; skip them silently if
         // the first property isn't a numeric ID.
         if (node.Properties.Count < 3) return;
-        var p0 = node.Properties[0];
+        FbxProperty p0 = node.Properties[0];
         if (p0.Type != FbxPropertyType.Int16 &&
             p0.Type != FbxPropertyType.Int32 &&
             p0.Type != FbxPropertyType.Int64)
@@ -96,10 +96,10 @@ internal sealed class FbxDocument
         string rawName = node.Properties[1].AsString();
         string subtype = node.Properties[2].AsString();
 
-        var (cleanName, _namespace) = SplitBinaryName(rawName);
+        (string? cleanName, string? _namespace) = SplitBinaryName(rawName);
 
-        var props = node.FindChild("Properties70") ?? node.FindChild("Properties60");
-        var propTable = props is not null ? FbxPropertyTable.From(props) : new FbxPropertyTable();
+        FbxNode? props = node.FindChild("Properties70") ?? node.FindChild("Properties60");
+        FbxPropertyTable propTable = props is not null ? FbxPropertyTable.From(props) : new FbxPropertyTable();
 
         var obj = new FbxObject
         {
@@ -133,7 +133,7 @@ internal sealed class FbxDocument
         int longSlot = 0;
         for (int i = 1; i < c.Properties.Count; i++)
         {
-            var p = c.Properties[i];
+            FbxProperty p = c.Properties[i];
             switch (p.Type)
             {
                 case FbxPropertyType.Int16:
@@ -167,9 +167,9 @@ internal sealed class FbxDocument
 
     private static void AddIndex(Dictionary<long, List<FbxConnection>> idx, long key, FbxConnection conn)
     {
-        if (!idx.TryGetValue(key, out var list))
+        if (!idx.TryGetValue(key, out List<FbxConnection>? list))
         {
-            list = new List<FbxConnection>(2);
+            list = [with(2)];
             idx[key] = list;
         }
         list.Add(conn);
@@ -198,11 +198,11 @@ internal sealed class FbxDocument
     /// <summary>Returns every object connected as a source to <paramref name="destinationId"/>.</summary>
     public IEnumerable<FbxObject> GetSourceObjects(long destinationId, string? typeFilter = null)
     {
-        if (!ConnectionsByDestination.TryGetValue(destinationId, out var list))
+        if (!ConnectionsByDestination.TryGetValue(destinationId, out List<FbxConnection>? list))
             yield break;
-        foreach (var c in list)
+        foreach (FbxConnection c in list)
         {
-            if (!Objects.TryGetValue(c.Source, out var obj)) continue;
+            if (!Objects.TryGetValue(c.Source, out FbxObject? obj)) continue;
             if (typeFilter is not null && obj.ObjectType != typeFilter) continue;
             yield return obj;
         }
@@ -211,11 +211,11 @@ internal sealed class FbxDocument
     /// <summary>Returns every object connected as a destination from <paramref name="sourceId"/>.</summary>
     public IEnumerable<FbxObject> GetDestinationObjects(long sourceId, string? typeFilter = null)
     {
-        if (!ConnectionsBySource.TryGetValue(sourceId, out var list))
+        if (!ConnectionsBySource.TryGetValue(sourceId, out List<FbxConnection>? list))
             yield break;
-        foreach (var c in list)
+        foreach (FbxConnection c in list)
         {
-            if (!Objects.TryGetValue(c.Destination, out var obj)) continue;
+            if (!Objects.TryGetValue(c.Destination, out FbxObject? obj)) continue;
             if (typeFilter is not null && obj.ObjectType != typeFilter) continue;
             yield return obj;
         }

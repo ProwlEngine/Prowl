@@ -4,6 +4,7 @@
 using System;
 
 using Prowl.PaperUI;
+using Prowl.PaperUI.LayoutEngine;
 using Prowl.Quill;
 using Prowl.Scribe;
 using Prowl.Vector;
@@ -335,7 +336,7 @@ public sealed class LabelBuilder
 
     public void Show()
     {
-        var font = _fontOverride ?? _theme.Font;
+        FontFile? font = _fontOverride ?? _theme.Font;
         if (font == null) return;
 
         float fontSize = ResolveFontSize();
@@ -353,7 +354,7 @@ public sealed class LabelBuilder
         float leadingDrawWidth = _leadingDrawWidth;
         if (_leadingIconObj != null && leadingDraw == null)
         {
-            var icon = _leadingIconObj;
+            IOrigamiIcon icon = _leadingIconObj;
             leadingDraw = (cv, r) => icon.Draw(cv, r, textColor);
         }
         if (_dot && leadingDraw == null)
@@ -412,7 +413,7 @@ public sealed class LabelBuilder
             HasInset = _inset,
         };
 
-        var box = _paper.Box(_id)
+        ElementBuilder box = _paper.Box(_id)
             .Width(boxWidth)
             .Height(boxHeight);
 
@@ -421,7 +422,7 @@ public sealed class LabelBuilder
 
         if (clickable)
         {
-            var click = _onClick!;
+            Action click = _onClick!;
             box.OnClick(_ => click());
         }
         else if (!needsHover)
@@ -736,9 +737,9 @@ public sealed class LabelBuilder
 
     private void DrawTooltipOverlay()
     {
-        var thandle = _paper.CurrentParent;
+        ElementHandle thandle = _paper.CurrentParent;
         string tt = _tooltip!;
-        var font = _theme.Font!;
+        FontFile font = _theme.Font!;
         float fontSize = _theme.Metrics.FontSize - 1f;
         Color ttBg = _theme.Neutral.C500;
         Color ttFg = _theme.Ink.C500;
@@ -759,12 +760,12 @@ public sealed class LabelBuilder
 
             _paper.Draw((canvas, _) =>
             {
-                var tr = thandle.Data.LayoutRect;
+                Rect tr = thandle.Data.LayoutRect;
                 float trX = (float)tr.Min.X;
                 float trY = (float)tr.Min.Y;
                 float trW = (float)tr.Size.X;
 
-                var ts = canvas.MeasureText(tt, fontSize, font);
+                Float2 ts = canvas.MeasureText(tt, fontSize, font);
                 float padX = 6f, padY = 2f;
                 float bw = (float)ts.X + padX * 2f;
                 float bh = (float)ts.Y + padY * 2f;

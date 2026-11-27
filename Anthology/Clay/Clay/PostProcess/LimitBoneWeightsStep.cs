@@ -29,7 +29,7 @@ internal sealed class LimitBoneWeightsStep : IPostProcess
         const int MaxInfluencesCap = 32;
         Span<(int index, float weight)> scratch = stackalloc (int, float)[MaxInfluencesCap];
 
-        foreach (var mesh in scene.Meshes)
+        foreach (IntermediateMesh mesh in scene.Meshes)
         {
             if (mesh.VertexJoints is null || mesh.VertexWeights is null)
                 continue;

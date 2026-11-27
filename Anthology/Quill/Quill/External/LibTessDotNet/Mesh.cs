@@ -52,12 +52,12 @@ namespace Prowl.Quill.External
 
             public Mesh()
             {
-                var v = _vHead = MeshUtils.Vertex.Create();
-                var f = _fHead = MeshUtils.Face.Create();
+                MeshUtils.Vertex v = _vHead = MeshUtils.Vertex.Create();
+                MeshUtils.Face f = _fHead = MeshUtils.Face.Create();
 
                 var pair = MeshUtils.EdgePair.Create();
-                var e = _eHead = pair._e;
-                var eSym = _eHeadSym = pair._eSym;
+                MeshUtils.Edge e = _eHead = pair._e;
+                MeshUtils.Edge eSym = _eHeadSym = pair._eSym;
 
                 v._next = v._prev = v;
                 v._anEdge = null;
@@ -119,7 +119,7 @@ namespace Prowl.Quill.External
             /// </summary>
             public MeshUtils.Edge MakeEdge()
             {
-                var e = MeshUtils.MakeEdge(_eHead);
+                MeshUtils.Edge e = MeshUtils.MakeEdge(_eHead);
 
                 MeshUtils.MakeVertex(e, _vHead);
                 MeshUtils.MakeVertex(e._Sym, _vHead);
@@ -202,7 +202,7 @@ namespace Prowl.Quill.External
             /// </summary>
             public void Delete(MeshUtils.Edge eDel)
             {
-                var eDelSym = eDel._Sym;
+                MeshUtils.Edge eDelSym = eDel._Sym;
 
                 // First step: disconnect the origin vertex eDel->Org.  We make all
                 // changes to get a consistent mesh in this "intermediate" state.
@@ -260,8 +260,8 @@ namespace Prowl.Quill.External
             /// </summary>
             public MeshUtils.Edge AddEdgeVertex(MeshUtils.Edge eOrg)
             {
-                var eNew = MeshUtils.MakeEdge(eOrg);
-                var eNewSym = eNew._Sym;
+                MeshUtils.Edge eNew = MeshUtils.MakeEdge(eOrg);
+                MeshUtils.Edge eNewSym = eNew._Sym;
 
                 // Connect the new edge appropriately
                 MeshUtils.Splice(eNew, eOrg._Lnext);
@@ -281,8 +281,8 @@ namespace Prowl.Quill.External
             /// </summary>
             public MeshUtils.Edge SplitEdge(MeshUtils.Edge eOrg)
             {
-                var eTmp = AddEdgeVertex(eOrg);
-                var eNew = eTmp._Sym;
+                MeshUtils.Edge eTmp = AddEdgeVertex(eOrg);
+                MeshUtils.Edge eNew = eTmp._Sym;
 
                 // Disconnect eOrg from eOrg->Dst and connect it to eNew->Org
                 MeshUtils.Splice(eOrg._Sym, eOrg._Sym._Oprev);
@@ -310,8 +310,8 @@ namespace Prowl.Quill.External
             /// </summary>
             public MeshUtils.Edge Connect(MeshUtils.Edge eOrg, MeshUtils.Edge eDst)
             {
-                var eNew = MeshUtils.MakeEdge(eOrg);
-                var eNewSym = eNew._Sym;
+                MeshUtils.Edge eNew = MeshUtils.MakeEdge(eOrg);
+                MeshUtils.Edge eNewSym = eNew._Sym;
 
                 bool joiningLoops = false;
                 if (eDst._Lface != eOrg._Lface)
@@ -351,10 +351,10 @@ namespace Prowl.Quill.External
             /// </summary>
             public void ZapFace(MeshUtils.Face fZap)
             {
-                var eStart = fZap._anEdge;
+                MeshUtils.Edge eStart = fZap._anEdge;
 
                 // walk around face, deleting edges whose right face is also NULL
-                var eNext = eStart._Lnext;
+                MeshUtils.Edge eNext = eStart._Lnext;
                 MeshUtils.Edge e, eSym;
                 do
                 {
@@ -392,8 +392,8 @@ namespace Prowl.Quill.External
                 } while (e != eStart);
 
                 /* delete from circular doubly-linked list */
-                var fPrev = fZap._prev;
-                var fNext = fZap._next;
+                MeshUtils.Face fPrev = fZap._prev;
+                MeshUtils.Face fNext = fZap._next;
                 fNext._prev = fPrev;
                 fPrev._next = fNext;
 
@@ -402,7 +402,7 @@ namespace Prowl.Quill.External
 
             public void MergeConvexFaces(int maxVertsPerFace)
             {
-                for (var f = _fHead._next; f != _fHead; f = f._next)
+                for (MeshUtils.Face f = _fHead._next; f != _fHead; f = f._next)
                 {
                     // Skip faces which are outside the result
                     if (!f._inside)
@@ -410,13 +410,13 @@ namespace Prowl.Quill.External
                         continue;
                     }
 
-                    var eCur = f._anEdge;
-                    var vStart = eCur._Org;
+                    MeshUtils.Edge eCur = f._anEdge;
+                    MeshUtils.Vertex vStart = eCur._Org;
 
                     while (true)
                     {
-                        var eNext = eCur._Lnext;
-                        var eSym = eCur._Sym;
+                        MeshUtils.Edge eNext = eCur._Lnext;
+                        MeshUtils.Edge eSym = eCur._Sym;
 
                         if (eSym != null && eSym._Lface != null && eSym._Lface._inside)
                         {

@@ -74,7 +74,7 @@ public sealed partial class CodeEditor
         _onRightClick ??= HandleRightClick;
         _onDraw ??= DrawEditor;
 
-        var element = paper.Box(id)
+        ElementBuilder element = paper.Box(id)
             .Width(width).Height(height)
             .Clip()
             .Cursor(CurrentCursor(paper))
@@ -119,7 +119,7 @@ public sealed partial class CodeEditor
         if (!_view.Valid) return PaperCursor.Text;
         if (_drag == DragKind.Text || _drag == DragKind.Box) return PaperCursor.Text;
         if (_drag != DragKind.None) return PaperCursor.Default;
-        var p = _pointer;
+        Float2 p = _pointer;
         if (_linkRange != null || CodeLensAt(_pointer) != null) return PaperCursor.Pointer;
         if (p.X < _view.X + _view.GutterW || p.X >= _view.MinimapX || p.Y >= _view.StatusY) return PaperCursor.Default;
         return PaperCursor.Text;
@@ -127,7 +127,7 @@ public sealed partial class CodeEditor
 
     private void TrackPointer(Paper paper)
     {
-        var v = _view;
+        ViewLayout v = _view;
         _pointerInside = v.Valid && paper.IsElementHovered(_handle.Data.ID) && _pointer.X >= v.X && _pointer.Y >= v.Y && _pointer.X < v.X + v.W && _pointer.Y < v.Y + v.H;
 
         _pointerInGutter = _pointerInside && _pointer.X < v.X + v.GutterW && _pointer.Y < v.StatusY;
@@ -151,8 +151,8 @@ public sealed partial class CodeEditor
         _linkRange = null;
         if (goToKey && _pointerInside && InTextArea(_pointer) && Session != null && _drag == DragKind.None)
         {
-            var pos = PositionFromPoint(_pointer, false);
-            var word = WordAt(pos);
+            TextPosition pos = PositionFromPoint(_pointer, false);
+            TextRange word = WordAt(pos);
             if (!word.IsEmpty && IsCodeAt(word.Start.Line, word.Start.Column)) _linkRange = word;
         }
     }
@@ -167,7 +167,7 @@ public sealed partial class CodeEditor
 
     private bool InTextArea(Float2 p)
     {
-        var v = _view;
+        ViewLayout v = _view;
         return p.X >= v.X + v.GutterW && p.X < v.MinimapX && p.Y >= v.TextY && p.Y < v.TextY + v.TextH && !(MaxScrollX() > 0 && p.Y >= v.HBarY);
     }
 
@@ -188,17 +188,17 @@ public sealed partial class CodeEditor
 
     private void HandlePress(ClickEvent e)
     {
-        var paper = _paper!;
-        var v = _view;
+        Paper paper = _paper!;
+        ViewLayout v = _view;
         if (!v.Valid || e.Button != PaperMouseBtn.Left) return;
-        var p = e.LocalPosition;
+        Float2 p = e.LocalPosition;
         CloseHover();
 
         if (p.Y >= v.StatusY) return;
 
         if (p.X >= v.VBarX)
         {
-            var (ty, th) = VerticalThumb();
+            (float ty, float th) = VerticalThumb();
             if (p.Y < ty || p.Y > ty + th) ScrollThumbTo(p.Y - th * 0.5f, th);
             (ty, _) = VerticalThumb();
             _dragGrab = p.Y - ty;
@@ -215,7 +215,7 @@ public sealed partial class CodeEditor
 
         if (MaxScrollX() > 0 && p.Y >= v.HBarY && p.X >= v.TextX && p.X < v.MinimapX)
         {
-            var (tx, tw) = HorizontalThumb();
+            (float tx, float tw) = HorizontalThumb();
             if (p.X < tx || p.X > tx + tw) HScrollThumbTo(p.X - tw * 0.5f, tw);
             (tx, _) = HorizontalThumb();
             _dragGrab = p.X - tx;
@@ -247,7 +247,7 @@ public sealed partial class CodeEditor
                 return;
             }
             var start = new TextPosition(line, 0);
-            var anchor = shift ? Selection.Anchor : start;
+            TextPosition anchor = shift ? Selection.Anchor : start;
             Select(anchor, LineEndOrNext(line));
             _dragOrigin = new CodeSelection(start, LineEndOrNext(line));
             _drag = DragKind.Lines;
@@ -260,10 +260,10 @@ public sealed partial class CodeEditor
         _lastClickTime = now;
         _lastClickPos = p;
 
-        var pos = PositionFromPoint(p);
+        TextPosition pos = PositionFromPoint(p);
 
         int clickedLine = pos.Line;
-        if (TryGetCollapsed(clickedLine, out var fold) && pos.Column >= Document.GetLineLength(clickedLine))
+        if (TryGetCollapsed(clickedLine, out CodeFoldRange fold) && pos.Column >= Document.GetLineLength(clickedLine))
         {
             float endX = ColX(VisualColumn(clickedLine, Document.GetLineLength(clickedLine))) + v.CharW;
             if (p.X >= endX)
@@ -290,7 +290,7 @@ public sealed partial class CodeEditor
 
         if (_clickCount == 2)
         {
-            var w = WordAt(pos);
+            TextRange w = WordAt(pos);
             if (w.IsEmpty) w = new TextRange(pos, pos);
             ReplacePrimary(new CodeSelection(w.Start, w.End), add);
             _dragOrigin = new CodeSelection(w.Start, w.End);
@@ -326,7 +326,7 @@ public sealed partial class CodeEditor
 
     private TextRange? SelectionContaining(TextPosition pos)
     {
-        foreach (var s in _selections)
+        foreach (CodeSelection s in _selections)
             if (!s.IsEmpty && s.Start <= pos && pos < s.End) return s.Range;
         return null;
     }
@@ -344,8 +344,8 @@ public sealed partial class CodeEditor
                 Document.Delete(range);
                 if (dropOffset > end) dropOffset -= end - start;
             }
-            var at = Document.OffsetToPosition(dropOffset);
-            var change = Document.Insert(at, text);
+            TextPosition at = Document.OffsetToPosition(dropOffset);
+            TextChange change = Document.Insert(at, text);
             _selections.Clear();
             _selections.Add(new CodeSelection(at, change.NewEnd));
             _primary = 0;
@@ -365,7 +365,7 @@ public sealed partial class CodeEditor
 
     private void UpdateDrag(Float2 p)
     {
-        var v = _view;
+        ViewLayout v = _view;
         switch (_drag)
         {
             case DragKind.VScroll:
@@ -379,12 +379,12 @@ public sealed partial class CodeEditor
                 break;
             case DragKind.Text:
             {
-                var pos = PositionFromPoint(p);
-                var o = _dragOrigin;
+                    TextPosition pos = PositionFromPoint(p);
+                    CodeSelection o = _dragOrigin;
                 CodeSelection sel;
                 if (_clickCount == 2)
                 {
-                    var w = WordAt(pos);
+                        TextRange w = WordAt(pos);
                     sel = pos < o.Start ? new CodeSelection(o.End, w.IsEmpty ? pos : w.Start) : new CodeSelection(o.Start, w.IsEmpty ? pos : w.End);
                 }
                 else sel = new CodeSelection(o.Anchor, pos);
@@ -395,8 +395,8 @@ public sealed partial class CodeEditor
             {
                 int line = LineAtY(Math.Clamp(p.Y, v.TextY, v.TextY + v.TextH - 1));
                 if (line < 0) line = p.Y < v.TextY ? 0 : Document.LineCount - 1;
-                var o = _dragOrigin;
-                var sel = line < o.Start.Line ? new CodeSelection(o.End, new TextPosition(line, 0)) : new CodeSelection(o.Start, LineEndOrNext(line));
+                    CodeSelection o = _dragOrigin;
+                    CodeSelection sel = line < o.Start.Line ? new CodeSelection(o.End, new TextPosition(line, 0)) : new CodeSelection(o.Start, LineEndOrNext(line));
                 SetPrimaryDuringDrag(sel);
                 break;
             }
@@ -469,7 +469,7 @@ public sealed partial class CodeEditor
         }
         if (_drag != DragKind.Text && _drag != DragKind.Lines && _drag != DragKind.Box && _drag != DragKind.Move) return;
 
-        var v = _view;
+        ViewLayout v = _view;
         float speed = 0;
         if (_pointer.Y < v.TextY) speed = _pointer.Y - v.TextY;
         else if (_pointer.Y > v.TextY + v.TextH) speed = _pointer.Y - (v.TextY + v.TextH);
@@ -487,7 +487,7 @@ public sealed partial class CodeEditor
 
     private void ScrollThumbTo(float thumbTop, float thumbH)
     {
-        var v = _view;
+        ViewLayout v = _view;
         float range = v.TextH - thumbH;
         if (range <= 0) return;
         double t = Math.Clamp((thumbTop - v.Y) / range, 0, 1);
@@ -496,7 +496,7 @@ public sealed partial class CodeEditor
 
     private void HScrollThumbTo(float thumbLeft, float thumbW)
     {
-        var v = _view;
+        ViewLayout v = _view;
         float range = v.TextW - thumbW;
         if (range <= 0) return;
         float t = Math.Clamp((thumbLeft - v.TextX) / range, 0, 1);
@@ -505,7 +505,7 @@ public sealed partial class CodeEditor
 
     private void MinimapScrollTo(float y)
     {
-        var v = _view;
+        ViewLayout v = _view;
         float rowH = 2f * MinimapScale;
         double row = MinimapTopRow() + (y - v.Y) / rowH;
         double target = row * v.LineH - v.TextH * 0.5;
@@ -515,7 +515,7 @@ public sealed partial class CodeEditor
 
     private void HandleScroll(ScrollEvent e)
     {
-        var paper = _paper!;
+        Paper paper = _paper!;
         e.StopPropagation();
         CloseHover();
         if (Ctrl(paper))
@@ -532,11 +532,11 @@ public sealed partial class CodeEditor
 
     private void HandleRightClick(ClickEvent e)
     {
-        var p = e.LocalPosition;
+        Float2 p = e.LocalPosition;
         if (!InTextArea(p)) return;
-        var pos = PositionFromPoint(p);
+        TextPosition pos = PositionFromPoint(p);
         bool inside = false;
-        foreach (var s in _selections) if (!s.IsEmpty && s.Range.Contains(pos)) inside = true;
+        foreach (CodeSelection s in _selections) if (!s.IsEmpty && s.Range.Contains(pos)) inside = true;
         if (!inside) SetCaret(pos);
         OpenContextMenu(p);
     }
@@ -547,12 +547,12 @@ public sealed partial class CodeEditor
 
     private void HandleKey(KeyEvent e)
     {
-        var paper = _paper!;
+        Paper paper = _paper!;
         if (!paper.IsElementFocused(_handle.Data.ID)) return;
         bool ctrl = Ctrl(paper), shift = Shift(paper), alt = Alt(paper);
         // Moving and deleting by word: Option on macOS, Ctrl elsewhere.
         bool word = OperatingSystem.IsMacOS() ? alt : ctrl;
-        var key = e.Key;
+        PaperKey key = e.Key;
 
         if (key is PaperKey.LeftControl or PaperKey.RightControl or PaperKey.LeftShift or PaperKey.RightShift
             or PaperKey.LeftAlt or PaperKey.RightAlt or PaperKey.LeftSuper or PaperKey.RightSuper)
@@ -566,7 +566,7 @@ public sealed partial class CodeEditor
             if (ctrl && HandleChord(key)) return;
         }
 
-        if (Options.Keymap.TryGet(new CodeKeyBinding(key, ctrl, shift, alt), out var command))
+        if (Options.Keymap.TryGet(new CodeKeyBinding(key, ctrl, shift, alt), out CodeEditorCommand command))
         {
             Execute(command, paper);
             return;
@@ -710,7 +710,7 @@ public sealed partial class CodeEditor
     private int FoldStartAround(int line)
     {
         int best = -1;
-        foreach (var f in _folds)
+        foreach (CodeFoldRange f in _folds)
         {
             if (f.StartLine > line) break;
             if (f.EndLine >= line) best = f.StartLine;
@@ -723,7 +723,7 @@ public sealed partial class CodeEditor
         string? token = _language.LineComment;
         if (token == null) return;
         bool allCommented = true;
-        foreach (var (a, b) in SelectedLineBlocks(false))
+        foreach ((int a, int b) in SelectedLineBlocks(false))
             for (int l = a; l <= b; l++)
             {
                 string s = Document[l].TrimStart();
@@ -734,15 +734,15 @@ public sealed partial class CodeEditor
 
     private void SelectAllOccurrences()
     {
-        var w = Selection.IsEmpty ? WordAt(Caret) : Selection.Range;
+        TextRange w = Selection.IsEmpty ? WordAt(Caret) : Selection.Range;
         if (w.IsEmpty || !w.IsSingleLine) return;
         string needle = Document.GetText(w);
         var found = new List<CodeSelection>();
-        var start = TextPosition.Zero;
+        TextPosition start = TextPosition.Zero;
         bool whole = Selection.IsEmpty;
         while (found.Count < 10000)
         {
-            var m = FindNext(needle, start, true, whole, wrap: false);
+            TextRange? m = FindNext(needle, start, true, whole, wrap: false);
             if (m == null) break;
             found.Add(new CodeSelection(m.Value.Start, m.Value.End));
             start = m.Value.End;
@@ -757,7 +757,7 @@ public sealed partial class CodeEditor
 
     private void HandleText(TextInputEvent e)
     {
-        var paper = _paper!;
+        Paper paper = _paper!;
         if (!paper.IsElementFocused(_handle.Data.ID) || IsReadOnly) return;
         char c = e.Character;
         if (char.IsControl(c)) return;

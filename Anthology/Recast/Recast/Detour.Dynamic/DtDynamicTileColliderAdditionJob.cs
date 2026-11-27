@@ -18,31 +18,31 @@ freely, subject to the following restrictions:
 */
 
 using System.Collections.Generic;
+
 using Prowl.Recast.Detour.Dynamic.Colliders;
 
-namespace Prowl.Recast.Detour.Dynamic
+namespace Prowl.Recast.Detour.Dynamic;
+
+public class DtDynamicTileColliderAdditionJob : IDtDaynmicTileJob
 {
-    public class DtDynamicTileColliderAdditionJob : IDtDaynmicTileJob
+    private readonly long _colliderId;
+    private readonly IDtCollider _collider;
+    private readonly ICollection<DtDynamicTile> _affectedTiles;
+
+    public DtDynamicTileColliderAdditionJob(long colliderId, IDtCollider collider, ICollection<DtDynamicTile> affectedTiles)
     {
-        private readonly long _colliderId;
-        private readonly IDtCollider _collider;
-        private readonly ICollection<DtDynamicTile> _affectedTiles;
+        _colliderId = colliderId;
+        _collider = collider;
+        _affectedTiles = affectedTiles;
+    }
 
-        public DtDynamicTileColliderAdditionJob(long colliderId, IDtCollider collider, ICollection<DtDynamicTile> affectedTiles)
-        {
-            _colliderId = colliderId;
-            _collider = collider;
-            _affectedTiles = affectedTiles;
-        }
+    public ICollection<DtDynamicTile> AffectedTiles()
+    {
+        return _affectedTiles;
+    }
 
-        public ICollection<DtDynamicTile> AffectedTiles()
-        {
-            return _affectedTiles;
-        }
-
-        public void Process(DtDynamicTile tile)
-        {
-            tile.AddCollider(_colliderId, _collider);
-        }
+    public void Process(DtDynamicTile tile)
+    {
+        tile.AddCollider(_colliderId, _collider);
     }
 }

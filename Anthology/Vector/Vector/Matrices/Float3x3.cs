@@ -36,7 +36,7 @@ public partial struct Float3x3 : System.IEquatable<Float3x3>, IFormattable
     }
 
     /// <summary>Returns a reference to the Float3 (column) at a specified index.</summary>
-    unsafe public ref Float3 this[int index]
+    public unsafe ref Float3 this[int index]
     {
         get
         {
@@ -63,7 +63,7 @@ public partial struct Float3x3 : System.IEquatable<Float3x3>, IFormattable
         {
             if ((uint)column >= 3)
                 throw new System.ArgumentOutOfRangeException(nameof(column));
-            var temp = this[column];
+            Float3 temp = this[column];
             temp[row] = value;
             this[column] = temp;
         }
@@ -194,8 +194,8 @@ public partial struct Float3x3 : System.IEquatable<Float3x3>, IFormattable
     /// <param name="angle">The angle of rotation in radians.</param>
     public static Float3x3 FromAxisAngle(Float3 axis, float angle)
     {
-        var s = Maths.Sin(angle);
-        var c = Maths.Cos(angle);
+        float s = Maths.Sin(angle);
+        float c = Maths.Cos(angle);
 
         float t = 1.0f - c;
 
@@ -222,8 +222,8 @@ public partial struct Float3x3 : System.IEquatable<Float3x3>, IFormattable
     /// <summary>Returns a Float3x3 matrix that rotates around the X-axis.</summary>
     public static Float3x3 RotateX(float angle)
     {
-        var s = Maths.Sin(angle);
-        var c = Maths.Cos(angle);
+        float s = Maths.Sin(angle);
+        float c = Maths.Cos(angle);
 
         return new Float3x3(
             1.0f, 0.0f, 0.0f,
@@ -235,8 +235,8 @@ public partial struct Float3x3 : System.IEquatable<Float3x3>, IFormattable
     /// <summary>Returns a Float3x3 matrix that rotates around the Y-axis.</summary>
     public static Float3x3 RotateY(float angle)
     {
-        var s = Maths.Sin(angle);
-        var c = Maths.Cos(angle);
+        float s = Maths.Sin(angle);
+        float c = Maths.Cos(angle);
 
         return new Float3x3(
             c, 0.0f, s,
@@ -248,8 +248,8 @@ public partial struct Float3x3 : System.IEquatable<Float3x3>, IFormattable
     /// <summary>Returns a Float3x3 matrix that rotates around the Z-axis.</summary>
     public static Float3x3 RotateZ(float angle)
     {
-        var s = Maths.Sin(angle);
-        var c = Maths.Cos(angle);
+        float s = Maths.Sin(angle);
+        float c = Maths.Cos(angle);
 
         return new Float3x3(
             c, -s, 0.0f,
@@ -375,12 +375,12 @@ public partial struct Float3x3 : System.IEquatable<Float3x3>, IFormattable
     /// <returns>True if the source matrix could be inverted; False otherwise.</returns>
     public static bool Invert(Float3x3 matrix, out Float3x3 result)
     {
-        var m00 = matrix.c0.X; var m01 = matrix.c1.X; var m02 = matrix.c2.X;
-        var m10 = matrix.c0.Y; var m11 = matrix.c1.Y; var m12 = matrix.c2.Y;
-        var m20 = matrix.c0.Z; var m21 = matrix.c1.Z; var m22 = matrix.c2.Z;
+        float m00 = matrix.c0.X; float m01 = matrix.c1.X; float m02 = matrix.c2.X;
+        float m10 = matrix.c0.Y; float m11 = matrix.c1.Y; float m12 = matrix.c2.Y;
+        float m20 = matrix.c0.Z; float m21 = matrix.c1.Z; float m22 = matrix.c2.Z;
 
         // Calculate determinant
-        var det = m00 * (m11 * m22 - m12 * m21) -
+        float det = m00 * (m11 * m22 - m12 * m21) -
                   m01 * (m10 * m22 - m12 * m20) +
                   m02 * (m10 * m21 - m11 * m20);
 
@@ -394,7 +394,7 @@ public partial struct Float3x3 : System.IEquatable<Float3x3>, IFormattable
             return false;
         }
 
-        var invDet = 1f / det;
+        float invDet = 1f / det;
 
         // Calculate cofactors and transpose (adjugate matrix)
         result = new Float3x3(

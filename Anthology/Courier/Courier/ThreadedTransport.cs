@@ -54,8 +54,8 @@ public sealed class ThreadedTransport : Transport
     private ExceptionDispatchInfo? _workerError;
 
     // Worker thread only: each inner connection's proxy.
-    private readonly Dictionary<Connection, ThreadedConnection> _proxies = new();
-    private readonly List<ThreadedConnection> _snapshotScratch = new();
+    private readonly Dictionary<Connection, ThreadedConnection> _proxies = [];
+    private readonly List<ThreadedConnection> _snapshotScratch = [];
 
     /// <param name="inner">The transport to run on the worker. The wrapper takes ownership of it.</param>
     public ThreadedTransport(Transport inner)

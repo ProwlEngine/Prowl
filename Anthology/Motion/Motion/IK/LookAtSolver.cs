@@ -56,8 +56,8 @@ public static class LookAtSolver
         Float3 toTarget = target - headW.position;
         if (Float3.Length(toTarget) > Epsilon)
         {
-            var from = frame.Angles(headW.rotation * headForward);
-            var to = frame.Clamp(frame.Angles(toTarget), maxAngle);
+            (float Yaw, float Pitch) from = frame.Angles(headW.rotation * headForward);
+            (float Yaw, float Pitch) to = frame.Clamp(frame.Angles(toTarget), maxAngle);
 
             float bodyTarget = weight * bodyWeight;
             float headTarget = weight * MathF.Max(bodyWeight, headWeight);
@@ -113,8 +113,8 @@ public static class LookAtSolver
         if (Float3.Length(toTarget) <= Epsilon)
             return;
 
-        var from = frame.Angles(eyeW.rotation * ReferenceLocalForward(rig, index, referenceFrame));
-        var to = frame.Clamp(frame.Angles(toTarget), maxAngle);
+        (float Yaw, float Pitch) from = frame.Angles(eyeW.rotation * ReferenceLocalForward(rig, index, referenceFrame));
+        (float Yaw, float Pitch) to = frame.Clamp(frame.Angles(toTarget), maxAngle);
         Quaternion before = frame.Rotation(from.Yaw, from.Pitch);
         Quaternion after = frame.Rotation(from.Yaw + WrapAngle(to.Yaw - from.Yaw) * fraction, from.Pitch + (to.Pitch - from.Pitch) * fraction);
         RotateBone(pose, index, after * Quaternion.Inverse(before));

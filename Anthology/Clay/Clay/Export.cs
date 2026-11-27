@@ -13,11 +13,11 @@ namespace Prowl.Clay;
 public sealed class ExportModel
 {
     public string Name { get; set; } = "Model";
-    public List<ExportNode> Nodes { get; } = new();
-    public List<ExportMesh> Meshes { get; } = new();
-    public List<ExportMaterial> Materials { get; } = new();
-    public List<ExportTexture> Textures { get; } = new();
-    public List<ExportSkin> Skins { get; } = new();
+    public List<ExportNode> Nodes { get; } = [];
+    public List<ExportMesh> Meshes { get; } = [];
+    public List<ExportMaterial> Materials { get; } = [];
+    public List<ExportTexture> Textures { get; } = [];
+    public List<ExportSkin> Skins { get; } = [];
 }
 
 /// <summary>A node: a transform under its parent, and the mesh and skin it draws, if any.</summary>
@@ -55,8 +55,8 @@ public sealed class ExportMesh
     /// <summary>The four weights of <see cref="Joints"/>, adding up to one.</summary>
     public Float4[]? Weights { get; set; }
 
-    public List<ExportPrimitive> Primitives { get; } = new();
-    public List<ExportMorphTarget> MorphTargets { get; } = new();
+    public List<ExportPrimitive> Primitives { get; } = [];
+    public List<ExportMorphTarget> MorphTargets { get; } = [];
 }
 
 /// <summary>A triangle list of a mesh and the index of its material, -1 for none.</summary>
@@ -111,6 +111,6 @@ public sealed class ExportTexture
 public sealed class ExportSkin
 {
     public string Name { get; set; } = string.Empty;
-    public List<int> Joints { get; } = new();
-    public List<Float4x4> InverseBindMatrices { get; } = new();
+    public List<int> Joints { get; } = [];
+    public List<Float4x4> InverseBindMatrices { get; } = [];
 }

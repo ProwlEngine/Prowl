@@ -60,7 +60,7 @@ public static class RichTextEffects
 
         for (int i = 0; i < effects.Count; i++)
         {
-            var span = effects[i];
+            RichEffectSpan span = effects[i];
             if (!span.Covers(index))
             {
                 continue;
@@ -211,7 +211,7 @@ public static class RichTextEffects
                     float saturation = Math.Clamp(Or(strength, 1f), 0f, 1f);
                     float rate = Or(speed, 0.6f);
                     float hue = Frac(time * rate + local * 0.06f);
-                    var rainbow = FromHue(hue, saturation);
+                        Color rainbow = FromHue(hue, saturation);
                     result.Color = new Color(rainbow.R, rainbow.G, rainbow.B, result.Color.A);
                     break;
                 }

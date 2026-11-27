@@ -14,33 +14,33 @@ namespace Prowl.Prism.Optimizer;
 /// </summary>
 internal static class SpvGrammar
 {
-    static readonly Dictionary<int, (string Kind, string Quant)[]> Instrs = new();
-    static readonly Dictionary<string, (bool Bit, Dictionary<uint, string[]> Vals)> Enums = new();
-    static readonly HashSet<string> IdKinds = new() { "IdResultType", "IdResult", "IdRef", "IdScope", "IdMemorySemantics" };
+    static readonly Dictionary<int, (string Kind, string Quant)[]> Instrs = [];
+    static readonly Dictionary<string, (bool Bit, Dictionary<uint, string[]> Vals)> Enums = [];
+    static readonly HashSet<string> IdKinds = ["IdResultType", "IdResult", "IdRef", "IdScope", "IdMemorySemantics"];
 
     // Opcodes whose id-operand layout is a pure function of the operand COUNT (no value-dependent enum masks,
     // wrapped-op or embedded string) can have their classification memoized by (opcode, length). The rest
     // (OpSpecConstantOp, string-bearing debug ops, image/memory ops with id-bearing enum masks) compute fresh.
-    static readonly HashSet<int> Cacheable = new();
+    static readonly HashSet<int> Cacheable = [];
     static readonly ConcurrentDictionary<long, (int Ri, bool[] IsId)> ClassifyCache = new();
 
     static SpvGrammar()
     {
-        using var stream = Assembly.GetExecutingAssembly().GetManifestResourceStream("spirv.grammar.min.json")!;
+        using Stream stream = Assembly.GetExecutingAssembly().GetManifestResourceStream("spirv.grammar.min.json")!;
         using var doc = JsonDocument.Parse(stream);
-        var root = doc.RootElement;
+        JsonElement root = doc.RootElement;
 
-        foreach (var ins in root.GetProperty("instructions").EnumerateObject())
+        foreach (JsonProperty ins in root.GetProperty("instructions").EnumerateObject())
         {
             var ops = new List<(string, string)>();
-            foreach (var op in ins.Value.EnumerateArray())
+            foreach (JsonElement op in ins.Value.EnumerateArray())
                 ops.Add((op[0].GetString()!, op[1].GetString()!));
             Instrs[int.Parse(ins.Name)] = ops.ToArray();
         }
-        foreach (var en in root.GetProperty("enums").EnumerateObject())
+        foreach (JsonProperty en in root.GetProperty("enums").EnumerateObject())
         {
             var vals = new Dictionary<uint, string[]>();
-            foreach (var v in en.Value.GetProperty("vals").EnumerateObject())
+            foreach (JsonProperty v in en.Value.GetProperty("vals").EnumerateObject())
                 vals[uint.Parse(v.Name)] = v.Value.EnumerateArray().Select(p => p.GetString()!).ToArray();
             Enums[en.Name] = (en.Value.GetProperty("bit").GetBoolean(), vals);
         }
@@ -48,20 +48,20 @@ internal static class SpvGrammar
         // An enum "carries ids" if any of its values pulls in an id operand (directly, via a Pair kind, or via
         // a nested enum). Computed to a fixpoint since a bit-enum value's param can be another enum.
         var enumHasId = new Dictionary<string, bool>();
-        foreach (var name in Enums.Keys) enumHasId[name] = false;
+        foreach (string name in Enums.Keys) enumHasId[name] = false;
         bool ParamCarriesId(string p) => p.Contains("Id") || (Enums.ContainsKey(p) && enumHasId[p]);
         for (bool changed = true; changed;)
         {
             changed = false;
-            foreach (var (name, def) in Enums)
+            foreach ((string? name, (bool Bit, Dictionary<uint, string[]> Vals) def) in Enums)
                 if (!enumHasId[name] && def.Vals.Values.Any(pars => pars.Any(ParamCarriesId)))
                     { enumHasId[name] = true; changed = true; }
         }
 
-        foreach (var (op, defs) in Instrs)
+        foreach ((int op, (string Kind, string Quant)[]? defs) in Instrs)
         {
             bool cacheable = op != 52;   // OpSpecConstantOp reclassifies by its wrapped opcode
-            foreach (var (kind, _) in defs)
+            foreach ((string? kind, string _) in defs)
                 if (kind == "LiteralString" || (Enums.ContainsKey(kind) && enumHasId[kind])) { cacheable = false; break; }
             if (cacheable) Cacheable.Add(op);
         }
@@ -75,13 +75,13 @@ internal static class SpvGrammar
         if (Cacheable.Contains(opcode))
         {
             long key = ((long)opcode << 20) | (uint)operands.Length;
-            if (!ClassifyCache.TryGetValue(key, out var hit))   // no capturing lambda on the hot hit path
+            if (!ClassifyCache.TryGetValue(key, out (int Ri, bool[] IsId) hit))   // no capturing lambda on the hot hit path
             {
                 ClassifyCompute(opcode, new uint[operands.Length], out int r, out bool[] b);
                 hit = ClassifyCache.GetOrAdd(key, (r, b));
             }
-            resultIndex = hit.Item1;
-            isId = hit.Item2;
+            resultIndex = hit.Ri;
+            isId = hit.IsId;
             return;
         }
         ClassifyCompute(opcode, operands, out resultIndex, out isId);
@@ -93,12 +93,12 @@ internal static class SpvGrammar
     {
         isId = new bool[operands.Length];
         resultIndex = -1;
-        if (!Instrs.TryGetValue(opcode, out var defs)) return;
+        if (!Instrs.TryGetValue(opcode, out (string Kind, string Quant)[]? defs)) return;
 
         int p = 0;
         int rIndex = -1;
-        var id = isId;
-        var ops = operands;
+        bool[] id = isId;
+        uint[] ops = operands;
 
         void Emit(string kind)
         {
@@ -122,24 +122,24 @@ internal static class SpvGrammar
                     p = ops.Length;   // consumes the rest of the instruction
                     break;
                 default:
-                    if (Enums.TryGetValue(kind, out var en))
+                    if (Enums.TryGetValue(kind, out (bool Bit, Dictionary<uint, string[]> Vals) en))
                     {
                         uint val = ops[p++];
                         if (en.Bit)
                         {
-                            foreach (var kv in en.Vals)
+                            foreach (KeyValuePair<uint, string[]> kv in en.Vals)
                                 if (kv.Key != 0 && (val & kv.Key) != 0)
-                                    foreach (var param in kv.Value) Emit(param);
+                                    foreach (string param in kv.Value) Emit(param);
                         }
-                        else if (en.Vals.TryGetValue(val, out var pars))
-                            foreach (var param in pars) Emit(param);
+                        else if (en.Vals.TryGetValue(val, out string[]? pars))
+                            foreach (string param in pars) Emit(param);
                     }
                     else p++;   // literal integer / unknown single-word operand
                     break;
             }
         }
 
-        foreach (var (kind, quant) in defs)
+        foreach ((string? kind, string? quant) in defs)
         {
             if (quant == "*") { while (p < ops.Length) Emit(kind); }
             else if (quant == "?") { if (p < ops.Length) Emit(kind); }
@@ -149,8 +149,8 @@ internal static class SpvGrammar
 
         // OpSpecConstantOp (52): the words after the wrapped-opcode literal are that operation's operands
         // (minus its own result-type/result), so classify them with the wrapped opcode's grammar.
-        if (opcode == 52 && operands.Length >= 3 && Instrs.TryGetValue((int)operands[2], out var wrapped))
-            foreach (var (kind, quant) in wrapped)
+        if (opcode == 52 && operands.Length >= 3 && Instrs.TryGetValue((int)operands[2], out (string Kind, string Quant)[]? wrapped))
+            foreach ((string? kind, string? quant) in wrapped)
             {
                 if (kind is "IdResultType" or "IdResult") continue;
                 if (quant == "*") { while (p < operands.Length) Emit(kind); }

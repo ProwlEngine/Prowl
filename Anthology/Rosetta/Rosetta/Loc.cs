@@ -190,7 +190,7 @@ public static partial class Loc
     /// </summary>
     public static string Get(string key, object args)
     {
-        var raw = Resolve(key, CurrentLocale);
+        string raw = Resolve(key, CurrentLocale);
         return Interpolate(raw, args);
     }
 
@@ -200,9 +200,9 @@ public static partial class Loc
     /// </summary>
     public static string GetPlural(string key, int count)
     {
-        var locale = CurrentLocale;
-        var category = PluralRules.GetCategory(locale, count);
-        var raw = Resolve($"{key}.{category}", locale);
+        string locale = CurrentLocale;
+        string category = PluralRules.GetCategory(locale, count);
+        string raw = Resolve($"{key}.{category}", locale);
         return Interpolate(raw, new { count });
     }
 
@@ -211,11 +211,11 @@ public static partial class Loc
     /// </summary>
     public static string GetPlural(string key, int count, object args)
     {
-        var locale = CurrentLocale;
-        var category = PluralRules.GetCategory(locale, count);
-        var raw = Resolve($"{key}.{category}", locale);
+        string locale = CurrentLocale;
+        string category = PluralRules.GetCategory(locale, count);
+        string raw = Resolve($"{key}.{category}", locale);
         // Merge count into args via reflection
-        var dict = ObjectToDict(args);
+        Dictionary<string, string> dict = ObjectToDict(args);
         dict["count"] = count.ToString();
         return Interpolate(raw, dict);
     }
@@ -226,7 +226,7 @@ public static partial class Loc
     /// </summary>
     public static string GetGender(string key, Gender gender)
     {
-        var suffix = gender switch
+        string suffix = gender switch
         {
             Gender.Male => "male",
             Gender.Female => "female",
@@ -240,13 +240,13 @@ public static partial class Loc
     /// </summary>
     public static string GetGender(string key, Gender gender, object args)
     {
-        var suffix = gender switch
+        string suffix = gender switch
         {
             Gender.Male => "male",
             Gender.Female => "female",
             _ => "other"
         };
-        var raw = Resolve($"{key}.{suffix}", CurrentLocale);
+        string raw = Resolve($"{key}.{suffix}", CurrentLocale);
         return Interpolate(raw, args);
     }
 
@@ -302,11 +302,11 @@ public static partial class Loc
         if (_cache.ContainsKey(locale)) return;
 
         var merged = new Dictionary<string, string>();
-        foreach (var provider in _providers)
+        foreach (ILocalizationProvider provider in _providers)
         {
             if (!provider.SupportsLocale(locale)) continue;
-            var entries = provider.Load(locale);
-            foreach (var kvp in entries)
+            IReadOnlyDictionary<string, string> entries = provider.Load(locale);
+            foreach (KeyValuePair<string, string> kvp in entries)
                 merged[kvp.Key] = kvp.Value; // Later providers override earlier ones
         }
         _cache[locale] = merged;
@@ -325,16 +325,16 @@ public static partial class Loc
         return GetInterpolationRegex().Replace(template, match =>
         {
             string name = match.Groups[1].Value;
-            return values.TryGetValue(name, out var val) ? val : match.Value;
+            return values.TryGetValue(name, out string? val) ? val : match.Value;
         });
     }
 
     private static Dictionary<string, string> ObjectToDict(object obj)
     {
         var dict = new Dictionary<string, string>();
-        foreach (var prop in obj.GetType().GetProperties(BindingFlags.Public | BindingFlags.Instance))
+        foreach (PropertyInfo prop in obj.GetType().GetProperties(BindingFlags.Public | BindingFlags.Instance))
         {
-            var val = prop.GetValue(obj);
+            object? val = prop.GetValue(obj);
             if (val != null)
                 dict[prop.Name] = val.ToString()!;
         }

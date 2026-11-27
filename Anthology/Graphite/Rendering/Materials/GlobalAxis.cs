@@ -12,8 +12,8 @@ namespace Prowl.Graphite.Rendering;
 /// </summary>
 public sealed class GlobalAxis
 {
-    private static readonly Dictionary<string, GlobalAxis> s_defined = new(StringComparer.Ordinal);
-    private static readonly Dictionary<string, List<(string Shader, IReadOnlyList<string> Values)>> s_declared = new(StringComparer.Ordinal);
+    private static readonly Dictionary<string, GlobalAxis> s_defined = [with(StringComparer.Ordinal)];
+    private static readonly Dictionary<string, List<(string Shader, IReadOnlyList<string> Values)>> s_declared = [with(StringComparer.Ordinal)];
 
     /// <summary>
     /// The standard surfaces' quality: FULL, LITE for mobile, or MAX for energy compensated lobes, exact Fresnel, rough
@@ -102,8 +102,8 @@ public sealed class GlobalAxis
         {
             if (s_defined.TryGetValue(space.Name, out GlobalAxis? axis) && axis.Mismatch(space.Values) is { } problem)
                 throw new InvalidOperationException($"The shader {shader} declares the global axis {space.Name} with {problem}.");
-            if (!s_declared.TryGetValue(space.Name, out var declared))
-                s_declared[space.Name] = declared = new();
+            if (!s_declared.TryGetValue(space.Name, out List<(string Shader, IReadOnlyList<string> Values)>? declared))
+                s_declared[space.Name] = declared = [];
             if (!declared.Exists(d => d.Shader == shader && Same(d.Values, space.Values)))
                 declared.Add((shader, space.Values));
         }

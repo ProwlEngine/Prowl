@@ -40,7 +40,7 @@ internal static class TopologyOp
             throw new InvalidOperationException($"Bridge cannot join {wide.Count} vertices to {narrow.Count}, the longer run may have at most three edges for every edge of the shorter.");
 
         // Where along the wide run each edge of the narrow run starts, the narrowing ones taking three wide edges
-        var starts = new int[steps + 1];
+        int[] starts = new int[steps + 1];
         for (int i = 0; i < steps; i++)
             starts[i + 1] = starts[i] + ((i + 1) * narrowings / steps > i * narrowings / steps ? 3 : 1);
 
@@ -338,10 +338,10 @@ internal static class TopologyOp
 
     internal static void CopyDefinitions(GeometryData source, GeometryData target)
     {
-        foreach (var d in source.VertexAttributes) target.AddVertexAttribute(d.Name, d.Type.BaseType, d.Type.Dimensions);
-        foreach (var d in source.EdgeAttributes) target.AddEdgeAttribute(d.Name, d.Type.BaseType, d.Type.Dimensions);
-        foreach (var d in source.LoopAttributes) target.AddLoopAttribute(d.Name, d.Type.BaseType, d.Type.Dimensions);
-        foreach (var d in source.FaceAttributes) target.AddFaceAttribute(d.Name, d.Type.BaseType, d.Type.Dimensions);
+        foreach (GeometryData.AttributeDefinition d in source.VertexAttributes) target.AddVertexAttribute(d.Name, d.Type.BaseType, d.Type.Dimensions);
+        foreach (GeometryData.AttributeDefinition d in source.EdgeAttributes) target.AddEdgeAttribute(d.Name, d.Type.BaseType, d.Type.Dimensions);
+        foreach (GeometryData.AttributeDefinition d in source.LoopAttributes) target.AddLoopAttribute(d.Name, d.Type.BaseType, d.Type.Dimensions);
+        foreach (GeometryData.AttributeDefinition d in source.FaceAttributes) target.AddFaceAttribute(d.Name, d.Type.BaseType, d.Type.Dimensions);
     }
 
     /// <summary>
@@ -368,7 +368,7 @@ internal static class TopologyOp
         for (int f = 0; f < faceCount; f++) faceIndex[source.Faces[f]] = f;
 
         // An edge keeps its line wholly when it is a border, has more than two faces or is flagged sharp, and in part by its crease
-        var crease = new float[edgeCount];
+        float[] crease = new float[edgeCount];
         var edgePoints = new Float3[edgeCount];
         for (int e = 0; e < edgeCount; e++)
         {
@@ -444,13 +444,13 @@ internal static class TopologyOp
             int n = corners.Count;
 
             Vertex center = result.AddVertex(facePoints[f]);
-            foreach (var definition in source.VertexAttributes)
+            foreach (GeometryData.AttributeDefinition definition in source.VertexAttributes)
             {
                 if (definition.Type.BaseType != GeometryData.AttributeBaseType.Float) continue;
-                var average = new float[definition.Type.Dimensions];
+                float[] average = new float[definition.Type.Dimensions];
                 foreach (Loop corner in corners)
                 {
-                    if (corner.Vert.Attributes.TryGetValue(definition.Name, out var value) && value is GeometryData.FloatAttributeValue floats)
+                    if (corner.Vert.Attributes.TryGetValue(definition.Name, out GeometryData.AttributeValue? value) && value is GeometryData.FloatAttributeValue floats)
                         for (int d = 0; d < average.Length && d < floats.Data.Length; d++) average[d] += floats.Data[d] / n;
                 }
                 center.Attributes[definition.Name] = new GeometryData.FloatAttributeValue(average);
@@ -469,10 +469,10 @@ internal static class TopologyOp
                 for (int c = 0; c < 4; c++)
                 {
                     target.Attributes = AttributeTransfer.Copy(corner.Attributes);
-                    foreach (var definition in floatLoops)
+                    foreach (GeometryData.AttributeDefinition? definition in floatLoops)
                     {
-                        if (!corner.Attributes.TryGetValue(definition.Name, out var own) || own is not GeometryData.FloatAttributeValue ownFloats) continue;
-                        var mixed = new float[ownFloats.Data.Length];
+                        if (!corner.Attributes.TryGetValue(definition.Name, out GeometryData.AttributeValue? own) || own is not GeometryData.FloatAttributeValue ownFloats) continue;
+                        float[] mixed = new float[ownFloats.Data.Length];
                         for (int d = 0; d < mixed.Length; d++)
                         {
                             float here = ownFloats.Data[d];
@@ -486,7 +486,7 @@ internal static class TopologyOp
                         }
                         target.Attributes[definition.Name] = new GeometryData.FloatAttributeValue(mixed);
                     }
-                    foreach (var pair in corner.Attributes)
+                    foreach (KeyValuePair<string, GeometryData.AttributeValue> pair in corner.Attributes)
                         if (pair.Value is GeometryData.WeightsAttributeValue)
                             target.Attributes[pair.Key] = MixWeights(pair.Key, c, corner, before, after, corners);
                     target = target.Next!;
@@ -500,7 +500,7 @@ internal static class TopologyOp
     private static GeometryData.WeightsAttributeValue MixWeights(string name, int corner, Loop own, Loop before, Loop after, List<Loop> corners)
     {
         var here = (GeometryData.WeightsAttributeValue)own.Attributes[name];
-        GeometryData.WeightsAttributeValue Of(Loop loop) => loop.Attributes.TryGetValue(name, out var value) && value is GeometryData.WeightsAttributeValue weights ? weights : here;
+        GeometryData.WeightsAttributeValue Of(Loop loop) => loop.Attributes.TryGetValue(name, out GeometryData.AttributeValue? value) && value is GeometryData.WeightsAttributeValue weights ? weights : here;
         switch (corner)
         {
             case 0: return GeometryData.WeightsAttributeValue.Blend([here], [1f]);
@@ -508,7 +508,7 @@ internal static class TopologyOp
             case 3: return GeometryData.WeightsAttributeValue.Blend([here, Of(before)], [0.5f, 0.5f]);
             default:
                 var all = new GeometryData.WeightsAttributeValue[corners.Count];
-                var shares = new float[corners.Count];
+                float[] shares = new float[corners.Count];
                 for (int i = 0; i < all.Length; i++)
                 {
                     all[i] = Of(corners[i]);
@@ -519,7 +519,7 @@ internal static class TopologyOp
     }
 
     private static float Component(Loop loop, string name, int index, float fallback)
-        => loop.Attributes.TryGetValue(name, out var value) && value is GeometryData.FloatAttributeValue floats && index < floats.Data.Length ? floats.Data[index] : fallback;
+        => loop.Attributes.TryGetValue(name, out GeometryData.AttributeValue? value) && value is GeometryData.FloatAttributeValue floats && index < floats.Data.Length ? floats.Data[index] : fallback;
 
     /// <summary>Joins pairs of triangles into quads, the pairs that turn and bend least first. Returns the quads made.</summary>
     internal static List<Face> TrisToQuads(GeometryData mesh, IEnumerable<Face>? faces, float degrees)

@@ -48,10 +48,10 @@ internal sealed class PassVariants
     private readonly ShaderPass _pass;
     private readonly VariantSpace[] _axes;
     private readonly int _count;
-    private readonly Dictionary<string, int> _axisByName = new();
+    private readonly Dictionary<string, int> _axisByName = [];
     private readonly Dictionary<string, int>[] _valueIndices;
     private readonly int[] _strides;
-    private readonly Dictionary<int, Slot> _slots = new();
+    private readonly Dictionary<int, Slot> _slots = [];
     private string _source;
     private MaterialAbi? _material;
     private int _session;
@@ -73,7 +73,7 @@ internal sealed class PassVariants
             stride *= axes[i].Values.Count;
             if (stride > int.MaxValue)
                 throw new InvalidOperationException($"Pass '{pass.SourceName}' has over {int.MaxValue} variants, too many to key.");
-            Dictionary<string, int> values = new();
+            Dictionary<string, int> values = [];
             for (int v = 0; v < axes[i].Values.Count; v++)
                 values[axes[i].Values[v]] = v;
             _valueIndices[i] = values;
@@ -400,7 +400,7 @@ internal sealed class PassVariants
     /// <summary>Waits for every variant compiling on a worker.</summary>
     public void WaitPending()
     {
-        List<Task> pending = new();
+        List<Task> pending = [];
         lock (this)
         {
             foreach (Slot slot in _slots.Values)
@@ -425,7 +425,7 @@ internal sealed class PassVariants
     {
         lock (this)
         {
-            List<Variant> present = new();
+            List<Variant> present = [];
             foreach (Slot slot in _slots.Values)
             {
                 if (slot.Variant != null)
@@ -476,7 +476,7 @@ internal sealed class PassVariants
     // A new variant every time, so a baked one seeded in is never changed and seeds again as it shipped
     private void Store(int key, Slot slot, ShaderDescription description)
     {
-        List<(GraphicsBackend, ShaderDescription)> compiled = new();
+        List<(GraphicsBackend, ShaderDescription)> compiled = [];
         if (slot.Variant is { } existing)
         {
             foreach ((GraphicsBackend backend, ShaderDescription other) in existing.Compiled)

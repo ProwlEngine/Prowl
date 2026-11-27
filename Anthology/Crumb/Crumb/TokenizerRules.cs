@@ -38,9 +38,9 @@ internal readonly struct FixedEntry<TKind> where TKind : unmanaged, Enum
 /// </summary>
 public sealed partial class TokenizerRules<TKind> where TKind : unmanaged, Enum
 {
-    private readonly List<FixedEntry<TKind>> _fixed = new();
-    private readonly List<TokenRule<TKind>> _rules = new();
-    private readonly List<(string Start, string End)> _skipComments = new();
+    private readonly List<FixedEntry<TKind>> _fixed = [];
+    private readonly List<TokenRule<TKind>> _rules = [];
+    private readonly List<(string Start, string End)> _skipComments = [];
 
     private CharPredicate? _whitespace;
     private CharPredicate _identifierPart = DefaultIdentifierPart;
@@ -139,16 +139,16 @@ public sealed partial class TokenizerRules<TKind> where TKind : unmanaged, Enum
             return this;
 
         var byFirst = new Dictionary<char, List<FixedEntry<TKind>>>();
-        foreach (var entry in _fixed)
+        foreach (FixedEntry<TKind> entry in _fixed)
         {
             char first = entry.Text[0];
-            if (!byFirst.TryGetValue(first, out var list))
-                byFirst[first] = list = new List<FixedEntry<TKind>>();
+            if (!byFirst.TryGetValue(first, out List<FixedEntry<TKind>>? list))
+                byFirst[first] = list = [];
             list.Add(entry);
         }
 
         var dispatch = new Dictionary<char, FixedEntry<TKind>[]>(byFirst.Count);
-        foreach (var (first, list) in byFirst)
+        foreach ((char first, List<FixedEntry<TKind>>? list) in byFirst)
         {
             // Longest text first so the first successful StartsWith is the longest match.
             list.Sort(static (a, b) => b.Text.Length.CompareTo(a.Text.Length));

@@ -1,37 +1,37 @@
 using System.Collections.Generic;
+
 using Prowl.Recast.Core;
 
-namespace Prowl.Recast.Detour.TileCache.Io.Compress
+namespace Prowl.Recast.Detour.TileCache.Io.Compress;
+
+public class DtTileCacheCompressorFactory : IDtTileCacheCompressorFactory
 {
-    public class DtTileCacheCompressorFactory : IDtTileCacheCompressorFactory
+    public static readonly DtTileCacheCompressorFactory Shared = new DtTileCacheCompressorFactory();
+
+    private readonly Dictionary<int, IRcCompressor> _compressors = [];
+
+    public bool TryAdd(int type, IRcCompressor compressor)
     {
-        public static readonly DtTileCacheCompressorFactory Shared = new DtTileCacheCompressorFactory();
+        if (0 == type)
+            return false;
 
-        private readonly Dictionary<int, IRcCompressor> _compressors = new Dictionary<int, IRcCompressor>();
+        _compressors[type] = compressor;
+        return true;
+    }
 
-        public bool TryAdd(int type, IRcCompressor compressor)
+    public IRcCompressor Create(int compatibility)
+    {
+        // default
+        if (0 == compatibility)
         {
-            if (0 == type)
-                return false;
-
-            _compressors[type] = compressor;
-            return true;
+            return DtTileCacheFastLzCompressor.Shared;
         }
 
-        public IRcCompressor Create(int compatibility)
+        if (!_compressors.TryGetValue(compatibility, out IRcCompressor comp))
         {
-            // default
-            if (0 == compatibility)
-            {
-                return DtTileCacheFastLzCompressor.Shared;
-            }
-
-            if (!_compressors.TryGetValue(compatibility, out var comp))
-            {
-                return null;
-            }
-
-            return comp;
+            return null;
         }
+
+        return comp;
     }
 }

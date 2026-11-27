@@ -144,10 +144,10 @@ public sealed class RangeSliderBuilder<T> where T : struct, INumber<T>
     public void Show()
     {
         if (Origami.IsReadOnly) _disabled = true;
-        var ramp = _theme.Get(_variant);
-        var ink = _theme.Ink;
-        var font = _theme.Font;
-        var metrics = _theme.Metrics;
+        OrigamiRamp ramp = _theme.Get(_variant);
+        OrigamiRamp ink = _theme.Ink;
+        Scribe.FontFile? font = _theme.Font;
+        OrigamiMetrics metrics = _theme.Metrics;
 
         bool interactive = !_disabled && !_readOnly;
 
@@ -173,7 +173,7 @@ public sealed class RangeSliderBuilder<T> where T : struct, INumber<T>
             using (_paper.Row("row").Width(UnitValue.Stretch()).Height(trackRowH).Gap(8).Enter())
             {
                 ElementHandle trackHandle = default;
-                var trackBuilder = _paper.Box("track")
+                ElementBuilder trackBuilder = _paper.Box("track")
                     .Width(UnitValue.Stretch())
                     .Height(trackRowH);
 
@@ -184,7 +184,7 @@ public sealed class RangeSliderBuilder<T> where T : struct, INumber<T>
                     trackBuilder.OnDragStart(e =>
                     {
                         // Decide which thumb to drag based on the closer thumb to the pointer.
-                        var r = trackHandle.Data.LayoutRect;
+                        Rect r = trackHandle.Data.LayoutRect;
                         double t = PointerToT(e.LocalPosition, r, _vertical);
                         int which = (Math.Abs(t - tLo) < Math.Abs(t - tHi)) ? 1 : 2;
                         _paper.SetElementStorage(trackHandle, KeyDragging, which);
@@ -230,7 +230,7 @@ public sealed class RangeSliderBuilder<T> where T : struct, INumber<T>
                     // Two compact numeric fields side by side.
                     using (_paper.Row("nfs").Width(_valueWidth * 2 + 4).Height(trackRowH).Gap(4).Enter())
                     {
-                        var nfLo = new NumericFieldBuilder<T>(_paper, $"{_id}_nf_lo", lo, v =>
+                        NumericFieldBuilder<T> nfLo = new NumericFieldBuilder<T>(_paper, $"{_id}_nf_lo", lo, v =>
                             EmitOrdered(SliderInternal.Clamp(v, _min, _max), hi),
                             _theme).Variant(_variant).Width(_valueWidth).Height(trackRowH)
                             .Min(_min).Max(_max).Format(_format);
@@ -238,7 +238,7 @@ public sealed class RangeSliderBuilder<T> where T : struct, INumber<T>
                         if (_disabled || _readOnly) nfLo.ReadOnly();
                         nfLo.Show();
 
-                        var nfHi = new NumericFieldBuilder<T>(_paper, $"{_id}_nf_hi", hi, v =>
+                        NumericFieldBuilder<T> nfHi = new NumericFieldBuilder<T>(_paper, $"{_id}_nf_hi", hi, v =>
                             EmitOrdered(lo, SliderInternal.Clamp(v, _min, _max)),
                             _theme).Variant(_variant).Width(_valueWidth).Height(trackRowH)
                             .Min(_min).Max(_max).Format(_format);
@@ -295,7 +295,7 @@ public sealed class RangeSliderBuilder<T> where T : struct, INumber<T>
         OrigamiRamp ramp, OrigamiRamp ink, OrigamiMetrics metrics, Prowl.Scribe.FontFile? font)
     {
         bool vertical = _vertical;
-        var onRamp = OnRamp();
+        OrigamiRamp onRamp = OnRamp();
         Color trackBg = Color.FromArgb(20, 255, 255, 255); // light translucent groove
         Color fill = _variant == OrigamiVariant.Subtle ? _theme.Neutral.C500 : onRamp.C500;
         Color thumbCol = _theme.Ink.C600;
@@ -395,7 +395,7 @@ public sealed class RangeSliderBuilder<T> where T : struct, INumber<T>
         // Always create the element so AnimateBool storage persists across show/hide.
         if (font != null)
         {
-            var thandle = _paper.CurrentParent;
+            ElementHandle thandle = _paper.CurrentParent;
             string tt = tooltipText;
             bool wantTooltip = showTooltip;
             bool vert = vertical;
@@ -421,7 +421,7 @@ public sealed class RangeSliderBuilder<T> where T : struct, INumber<T>
                 {
                     _paper.Draw((canvas, _) =>
                     {
-                        var tr = thandle.Data.LayoutRect;
+                        Rect tr = thandle.Data.LayoutRect;
                         float trX = (float)tr.Min.X;
                         float trY = (float)tr.Min.Y;
                         float trW = (float)tr.Size.X;
@@ -440,7 +440,7 @@ public sealed class RangeSliderBuilder<T> where T : struct, INumber<T>
                             hiCx = loCx; hiCy = trY + trH * (1f - (float)tHiLocal);
                         }
 
-                        var ts = canvas.MeasureText(tt, fontSize, font);
+                        Float2 ts = canvas.MeasureText(tt, fontSize, font);
                         float padX = 6f, padY = 2f;
                         float bw = (float)ts.X + padX * 2f;
                         float bh = (float)ts.Y + padY * 2f;
@@ -503,7 +503,7 @@ public sealed class RangeSliderBuilder<T> where T : struct, INumber<T>
 
     private void ApplyDrag(PaperUI.Events.DragEvent e, ElementHandle trackHandle, T curLo, T curHi, int which)
     {
-        var r = trackHandle.Data.LayoutRect;
+        Rect r = trackHandle.Data.LayoutRect;
         double t = PointerToT(e.LocalPosition, r, _vertical);
         T newV = SliderInternal.TToValue<T>(t, _min, _max, _logarithmic);
         if (_step.HasValue && _snapWhileDragging) newV = SliderInternal.Snap(newV, _min, _step.Value);

@@ -36,7 +36,7 @@ public sealed class SkeletonMapping
         ArgumentNullException.ThrowIfNull(source);
         ArgumentNullException.ThrowIfNull(target);
 
-        var boneSource = new int[target.BoneCount];
+        int[] boneSource = new int[target.BoneCount];
         int mapped = 0;
         for (int b = 0; b < boneSource.Length; b++)
         {
@@ -45,7 +45,7 @@ public sealed class SkeletonMapping
                 mapped++;
         }
 
-        var channelSource = new int[target.FloatChannelCount];
+        int[] channelSource = new int[target.FloatChannelCount];
         for (int c = 0; c < channelSource.Length; c++)
             channelSource[c] = source.GetFloatChannelIndex(target.GetFloatChannelID(c));
 

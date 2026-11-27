@@ -18,26 +18,25 @@ freely, subject to the following restrictions:
 3. This notice may not be removed or altered from any source distribution.
 */
 
-namespace Prowl.Recast.Detour
+namespace Prowl.Recast.Detour;
+
+public class DtMeshData
 {
-    public class DtMeshData
-    {
-        public DtMeshHeader header; //< The tile header.
-        public DtPoly[] polys; //< The tile polygons. [Size: dtMeshHeader::polyCount]
-        public float[] verts; //< The tile vertices. [(x, y, z) * dtMeshHeader::vertCount] 
-        public DtPolyDetail[] detailMeshes; //< The tile's detail sub-meshes. [Size: dtMeshHeader::detailMeshCount]
+    public DtMeshHeader header; //< The tile header.
+    public DtPoly[] polys; //< The tile polygons. [Size: dtMeshHeader::polyCount]
+    public float[] verts; //< The tile vertices. [(x, y, z) * dtMeshHeader::vertCount] 
+    public DtPolyDetail[] detailMeshes; //< The tile's detail sub-meshes. [Size: dtMeshHeader::detailMeshCount]
 
-        /// The detail mesh's unique vertices. [(x, y, z) * dtMeshHeader::detailVertCount]
-        public float[] detailVerts;
+    /// The detail mesh's unique vertices. [(x, y, z) * dtMeshHeader::detailVertCount]
+    public float[] detailVerts;
 
-        /// The detail mesh's triangles. [(vertA, vertB, vertC, triFlags) * dtMeshHeader::detailTriCount].
-        /// See dtDetailTriEdgeFlags and dtGetDetailTriEdgeFlags.
-        public int[] detailTris;
+    /// The detail mesh's triangles. [(vertA, vertB, vertC, triFlags) * dtMeshHeader::detailTriCount].
+    /// See dtDetailTriEdgeFlags and dtGetDetailTriEdgeFlags.
+    public int[] detailTris;
 
-        /// The tile bounding volume nodes. [Size: dtMeshHeader::bvNodeCount]
-        /// (Will be null if bounding volumes are disabled.)
-        public DtBVNode[] bvTree;
+    /// The tile bounding volume nodes. [Size: dtMeshHeader::bvNodeCount]
+    /// (Will be null if bounding volumes are disabled.)
+    public DtBVNode[] bvTree;
 
-        public DtOffMeshConnection[] offMeshCons; //< The tile off-mesh connections. [Size: dtMeshHeader::offMeshConCount]
-    }
+    public DtOffMeshConnection[] offMeshCons; //< The tile off-mesh connections. [Size: dtMeshHeader::offMeshConCount]
 }

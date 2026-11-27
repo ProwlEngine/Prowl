@@ -6,7 +6,7 @@ namespace Prowl.Graphite;
 internal sealed class Interner
 {
     private readonly ConcurrentDictionary<string, int> _forward = new();
-    private readonly List<string> _names = new();
+    private readonly List<string> _names = [];
     private readonly object _lock = new();
 
     public int Intern(string key)

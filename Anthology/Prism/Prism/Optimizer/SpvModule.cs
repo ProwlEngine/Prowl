@@ -11,13 +11,13 @@ internal static class Pool
     [ThreadStatic] static Stack<HashSet<SpvInstr>>? _instrSets;
     [ThreadStatic] static Stack<Stack<SpvInstr>>? _instrStacks;
 
-    public static HashSet<uint> UintSet() { var p = _uintSets ??= new(); var s = p.Count > 0 ? p.Pop() : new(); s.Clear(); return s; }
+    public static HashSet<uint> UintSet() { Stack<HashSet<uint>> p = _uintSets ??= new(); HashSet<uint> s = p.Count > 0 ? p.Pop() : []; s.Clear(); return s; }
     public static void Free(HashSet<uint> s) { s.Clear(); (_uintSets ??= new()).Push(s); }
 
-    public static HashSet<SpvInstr> InstrSet() { var p = _instrSets ??= new(); var s = p.Count > 0 ? p.Pop() : new(); s.Clear(); return s; }
+    public static HashSet<SpvInstr> InstrSet() { Stack<HashSet<SpvInstr>> p = _instrSets ??= new(); HashSet<SpvInstr> s = p.Count > 0 ? p.Pop() : []; s.Clear(); return s; }
     public static void Free(HashSet<SpvInstr> s) { s.Clear(); (_instrSets ??= new()).Push(s); }   // cleared now so it pins no instructions
 
-    public static Stack<SpvInstr> InstrStack() { var p = _instrStacks ??= new(); var s = p.Count > 0 ? p.Pop() : new(); s.Clear(); return s; }
+    public static Stack<SpvInstr> InstrStack() { Stack<Stack<SpvInstr>> p = _instrStacks ??= new(); Stack<SpvInstr> s = p.Count > 0 ? p.Pop() : new(); s.Clear(); return s; }
     public static void Free(Stack<SpvInstr> s) { s.Clear(); (_instrStacks ??= new()).Push(s); }
 }
 
@@ -99,7 +99,7 @@ internal sealed class SpvModule
             int count = (int)(first >> 16);
             if (count == 0) break;
             int operandCount = count - 1;
-            var operands = new uint[operandCount];
+            uint[] operands = new uint[operandCount];
             for (int k = 0; k < operandCount && p + 1 + k < words.Length; k++) operands[k] = words[p + 1 + k];
             m.Instrs.Add(new SpvInstr(opcode, operands));
             p += count;
@@ -111,7 +111,7 @@ internal sealed class SpvModule
     {
         var words = new List<uint>(Header.Length + Instrs.Count * 4);
         words.AddRange(Header);
-        foreach (var ins in Instrs)
+        foreach (SpvInstr ins in Instrs)
         {
             words.Add((uint)ins.Opcode | ((uint)ins.WordCount << 16));
             words.AddRange(ins.Operands);
@@ -129,7 +129,7 @@ internal sealed class SpvModule
     public void ReplaceUses(IReadOnlyDictionary<uint, uint> map)
     {
         if (map.Count == 0) return;
-        foreach (var ins in Instrs)
+        foreach (SpvInstr ins in Instrs)
         {
             // Decorations and names are metadata bound to a specific id; a value replacement must NOT move them
             // onto the replacement (spirv-opt drops the old id's decorations, it does not migrate them).
@@ -159,17 +159,17 @@ internal sealed class SpvModule
     /// removing individual users. Reused/recycled on the next UserMapOverHash call.</summary>
     public Dictionary<uint, HashSet<SpvInstr>> UserMapOverHash(IEnumerable<SpvInstr> instrs)
     {
-        var pool = _hsetPool ??= new();
-        var map = _userScratchH ??= new();
-        foreach (var h in map.Values) if (pool.Count < MaxPooled && h.Count <= MaxPooledItems) { h.Clear(); pool.Push(h); }
+        Stack<HashSet<SpvInstr>> pool = _hsetPool ??= new();
+        Dictionary<uint, HashSet<SpvInstr>> map = _userScratchH ??= [];
+        foreach (HashSet<SpvInstr> h in map.Values) if (pool.Count < MaxPooled && h.Count <= MaxPooledItems) { h.Clear(); pool.Push(h); }
         map.Clear();
-        foreach (var ins in instrs)
+        foreach (SpvInstr ins in instrs)
         {
             ins.Classify(out int ri, out bool[] isId);
             for (int i = 0; i < ins.Operands.Length; i++)
                 if (isId[i] && i != ri)
                 {
-                    if (!map.TryGetValue(ins.Operands[i], out var set)) map[ins.Operands[i]] = set = pool.Count > 0 ? pool.Pop() : new();
+                    if (!map.TryGetValue(ins.Operands[i], out HashSet<SpvInstr>? set)) map[ins.Operands[i]] = set = pool.Count > 0 ? pool.Pop() : [];
                     set.Add(ins);
                 }
         }
@@ -186,13 +186,13 @@ internal sealed class SpvModule
     /// <summary>UserMapOver for the instructions at [from, to).</summary>
     public UserTable UserMapRange(int from, int to)
     {
-        var map = _userScratch ??= new();
+        UserTable map = _userScratch ??= new();
         map.Reset(Header[3]);
         for (int k = from; k < to; k++)
         {
-            var ins = Instrs[k];
+            SpvInstr ins = Instrs[k];
             ins.Classify(out int ri, out bool[] isId);
-            var ops = ins.Operands;
+            uint[] ops = ins.Operands;
             for (int i = 0; i < ops.Length; i++)
                 if (isId[i] && i != ri) map.GetOrAdd(ops[i]).Add(ins);
         }
@@ -201,12 +201,12 @@ internal sealed class SpvModule
 
     public UserTable UserMapOver(IEnumerable<SpvInstr> instrs)
     {
-        var map = _userScratch ??= new();
+        UserTable map = _userScratch ??= new();
         map.Reset(Header[3]);
-        foreach (var ins in instrs)
+        foreach (SpvInstr ins in instrs)
         {
             ins.Classify(out int ri, out bool[] isId);
-            var ops = ins.Operands;
+            uint[] ops = ins.Operands;
             for (int i = 0; i < ops.Length; i++)
                 if (isId[i] && i != ri) map.GetOrAdd(ops[i]).Add(ins);
         }
@@ -220,8 +220,8 @@ internal sealed class SpvModule
     /// <summary>An empty list to rebuild the instruction stream into (pass it to <see cref="SetInstrs"/>).</summary>
     public static List<SpvInstr> RentInstrList(int capacity)
     {
-        var l = _spareList; _spareList = null;
-        if (l is null) return new List<SpvInstr>(capacity);
+        List<SpvInstr>? l = _spareList; _spareList = null;
+        if (l is null) return [with(capacity)];
         if (l.Capacity < capacity) l.Capacity = capacity;
         return l;
     }
@@ -232,7 +232,7 @@ internal sealed class SpvModule
     /// <summary>Install a rebuilt instruction list; the old one is cleared and kept as the spare.</summary>
     public void SetInstrs(List<SpvInstr> list)
     {
-        var old = Instrs;
+        List<SpvInstr> old = Instrs;
         Instrs = list;
         if (!ReferenceEquals(old, list)) { old.Clear(); _spareList = old; }
     }
@@ -244,7 +244,7 @@ internal sealed class SpvModule
     public int FindFunction(uint fnId)
     {
         if (_fnStart is not null && _fnStart.TryGetValue(fnId, out int i) && i < Instrs.Count && Instrs[i].Opcode == 54 && Instrs[i].Operands[1] == fnId) return i;
-        (_fnStart ??= new()).Clear();
+        (_fnStart ??= []).Clear();
         for (int k = 0; k < Instrs.Count; k++) if (Instrs[k].Opcode == 54) _fnStart[Instrs[k].Operands[1]] = k;
         return _fnStart.TryGetValue(fnId, out i) ? i : -1;
     }
@@ -259,7 +259,7 @@ internal sealed class SpvModule
     DefTable FillDefs(DefTable map)
     {
         map.Reset(Header[3]);
-        foreach (var ins in Instrs)
+        foreach (SpvInstr ins in Instrs)
         {
             uint r = ins.ResultId;
             if (r != 0) map[r] = ins;
@@ -292,7 +292,7 @@ internal sealed class DefTable
         return value is not null;
     }
 
-    public SpvInstr? GetValueOrDefault(uint id) => TryGetValue(id, out var d) ? d : null;
+    public SpvInstr? GetValueOrDefault(uint id) => TryGetValue(id, out SpvInstr? d) ? d : null;
     public bool ContainsKey(uint id) => TryGetValue(id, out _);
     public void Remove(uint id) { if (id < (uint)_a.Length) _a[id] = null; else _far?.Remove(id); }
     /// <summary>The defining instructions, dense ids in id order, then any placeholder ids.</summary>
@@ -301,18 +301,18 @@ internal sealed class DefTable
         get
         {
             for (int i = 0; i < _hi; i++) if (_a[i] is { } d) yield return d;
-            if (_far is not null) foreach (var d in _far.Values) yield return d;
+            if (_far is not null) foreach (SpvInstr d in _far.Values) yield return d;
         }
     }
 
     public SpvInstr this[uint id]
     {
-        get => TryGetValue(id, out var d) ? d : throw new KeyNotFoundException($"id {id}");
+        get => TryGetValue(id, out SpvInstr? d) ? d : throw new KeyNotFoundException($"id {id}");
         set
         {
             if (id >= (uint)_a.Length)
             {
-                if (id >= DenseLimit) { (_far ??= new())[id] = value; return; }
+                if (id >= DenseLimit) { (_far ??= [])[id] = value; return; }
                 System.Array.Resize(ref _a, Math.Max((int)id + 1, _a.Length * 2));
             }
             _a[id] = value;
@@ -341,9 +341,9 @@ internal sealed class UserIndex
         int total = 0;
         for (int i = from; i < to; i++)
         {
-            var ins = instrs[i];
+            SpvInstr ins = instrs[i];
             ins.Classify(out int ri, out bool[] isId);
-            var ops = ins.Operands;
+            uint[] ops = ins.Operands;
             for (int k = 0; k < ops.Length; k++)
                 if (isId[k] && k != ri && ops[k] < (uint)n) { _start[ops[k] + 1]++; total++; }
         }
@@ -352,9 +352,9 @@ internal sealed class UserIndex
         // Fill using _start[id] as a cursor; afterwards _start[id] has moved to the old _start[id + 1].
         for (int i = from; i < to; i++)
         {
-            var ins = instrs[i];
+            SpvInstr ins = instrs[i];
             ins.Classify(out int ri, out bool[] isId);
-            var ops = ins.Operands;
+            uint[] ops = ins.Operands;
             for (int k = 0; k < ops.Length; k++)
                 if (isId[k] && k != ri && ops[k] < (uint)n) _users[_start[ops[k]]++] = ins;
         }
@@ -385,7 +385,7 @@ internal sealed class IdSet
     public bool Add(uint id)
     {
         if (id < (uint)_mark.Length) { if (_mark[id] == _stamp) return false; _mark[id] = _stamp; return true; }
-        if (id >= DenseLimit) return (_far ??= new()).Add(id);
+        if (id >= DenseLimit) return (_far ??= []).Add(id);
         System.Array.Resize(ref _mark, Math.Max((int)id + 1, _mark.Length * 2));
         _mark[id] = _stamp; return true;
     }
@@ -419,7 +419,7 @@ internal sealed class UserTable
     public List<SpvInstr> GetOrAdd(uint id)
     {
         if (id < (uint)_a.Length && _a[id] is { } l) return l;
-        var n = _pool.Count > 0 ? _pool.Pop() : new List<SpvInstr>();
+        List<SpvInstr> n = _pool.Count > 0 ? _pool.Pop() : [];
         this[id] = n;
         return n;
     }
@@ -431,25 +431,25 @@ internal sealed class UserTable
         return value is not null;
     }
 
-    public List<SpvInstr>? GetValueOrDefault(uint id) => TryGetValue(id, out var l) ? l : null;
+    public List<SpvInstr>? GetValueOrDefault(uint id) => TryGetValue(id, out List<SpvInstr>? l) ? l : null;
 
     public IEnumerable<List<SpvInstr>> Values
     {
         get
         {
             for (int i = 0; i < _hi; i++) if (_a[i] is { } l) yield return l;
-            if (_far is not null) foreach (var l in _far.Values) yield return l;
+            if (_far is not null) foreach (List<SpvInstr> l in _far.Values) yield return l;
         }
     }
 
     public List<SpvInstr> this[uint id]
     {
-        get => TryGetValue(id, out var l) ? l : throw new KeyNotFoundException($"id {id}");
+        get => TryGetValue(id, out List<SpvInstr>? l) ? l : throw new KeyNotFoundException($"id {id}");
         set
         {
             if (id >= (uint)_a.Length)
             {
-                if (id >= DenseLimit) { (_far ??= new())[id] = value; return; }
+                if (id >= DenseLimit) { (_far ??= [])[id] = value; return; }
                 System.Array.Resize(ref _a, Math.Max((int)id + 1, _a.Length * 2));
             }
             _a[id] = value;

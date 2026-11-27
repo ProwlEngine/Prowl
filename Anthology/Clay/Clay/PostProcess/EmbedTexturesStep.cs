@@ -22,7 +22,7 @@ internal sealed class EmbedTexturesStep : IPostProcess
 
     public void Execute(IntermediateScene scene, ImportContext context)
     {
-        foreach (var tex in scene.Textures)
+        foreach (IntermediateTexture tex in scene.Textures)
         {
             if (tex.EncodedBytes is not null)
                 continue; // Already embedded (data URI, GLB bufferView, etc.)

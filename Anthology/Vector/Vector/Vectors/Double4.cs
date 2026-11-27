@@ -88,7 +88,7 @@ public partial struct Double4 : IEquatable<Double4>, IFormattable
 
     public Double4(IEnumerable<double> values)
     {
-        var array = values.ToArray();
+        double[] array = values.ToArray();
         if (array.Length < 4) throw new ArgumentException("Collection must contain at least 4 elements.", nameof(values));
         X = array[0];
         Y = array[1];

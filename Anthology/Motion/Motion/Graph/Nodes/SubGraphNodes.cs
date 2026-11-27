@@ -1,4 +1,5 @@
 using System.Collections.Generic;
+
 using Prowl.Vector.Spatial;
 
 namespace Prowl.Motion;
@@ -16,7 +17,7 @@ public sealed class ReferencedGraphDefinition : PoseNodeDefinition
     public AnimationGraph Graph { get; }
 
     /// <summary>Links from a parent value node to a child control parameter by name.</summary>
-    public List<(int ParentValueNode, string ChildParameter)> ParameterLinks { get; } = new();
+    public List<(int ParentValueNode, string ChildParameter)> ParameterLinks { get; } = [];
 
     public override GraphNodeInstance CreateInstance() => new Instance(this);
 

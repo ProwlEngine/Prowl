@@ -20,20 +20,19 @@ freely, subject to the following restrictions:
 
 using System.Runtime.CompilerServices;
 
-namespace Prowl.Recast.Core
+namespace Prowl.Recast.Core;
+
+public static class RcMath
 {
-    public static class RcMath
+    [MethodImpl(MethodImplOptions.AggressiveInlining)]
+    public static float Sqr(float f)
     {
-        [MethodImpl(MethodImplOptions.AggressiveInlining)]
-        public static float Sqr(float f)
-        {
-            return f * f;
-        }
-        
-        [MethodImpl(MethodImplOptions.AggressiveInlining)]
-        public static float Lerp(float value1, float value2, float amount)
-        {
-            return (value1 * (1.0f - amount)) + (value2 * amount);
-        }
+        return f * f;
+    }
+    
+    [MethodImpl(MethodImplOptions.AggressiveInlining)]
+    public static float Lerp(float value1, float value2, float amount)
+    {
+        return (value1 * (1.0f - amount)) + (value2 * amount);
     }
 }

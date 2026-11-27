@@ -18,13 +18,13 @@ internal static class FbxMaterialMapper
     public sealed class MaterialMapping
     {
         /// <summary>FBX material id -&gt; index in scene.Materials.</summary>
-        public Dictionary<long, int> MaterialIndex { get; } = new();
+        public Dictionary<long, int> MaterialIndex { get; } = [];
     }
 
     public static MaterialMapping MapAll(FbxDocument doc, IntermediateScene scene, FbxTextureMapper.TextureMapping textureMapping, ImportContext ctx)
     {
         var result = new MaterialMapping();
-        foreach (var obj in doc.Objects.Values)
+        foreach (FbxObject obj in doc.Objects.Values)
         {
             if (obj.ObjectType != "Material") continue;
             int idx = scene.Materials.Count;
@@ -36,7 +36,7 @@ internal static class FbxMaterialMapper
 
     private static IntermediateMaterial BuildMaterial(FbxObject obj, FbxDocument doc, IntermediateScene scene, FbxTextureMapper.TextureMapping textureMapping, ImportContext ctx)
     {
-        var p = obj.Properties;
+        FbxPropertyTable p = obj.Properties;
         var mat = new IntermediateMaterial
         {
             Name = string.IsNullOrEmpty(obj.Name) ? $"Material_{obj.Id}" : obj.Name,
@@ -69,19 +69,19 @@ internal static class FbxMaterialMapper
         // Texture slot wiring: walk every OP connection from a Texture to this Material and
         // route by FBX property name. The recognized set is a union of classic FBX, Maya base
         // shader, Maya Stingray, and 3ds Max PBR conventions.
-        if (doc.ConnectionsByDestination.TryGetValue(obj.Id, out var conns))
+        if (doc.ConnectionsByDestination.TryGetValue(obj.Id, out List<FbxConnection>? conns))
         {
-            foreach (var c in conns)
+            foreach (FbxConnection c in conns)
             {
                 if (c.Type != "OP") continue;
-                if (!doc.Objects.TryGetValue(c.Source, out var srcObj)) continue;
+                if (!doc.Objects.TryGetValue(c.Source, out FbxObject? srcObj)) continue;
                 if (srcObj.ObjectType != "Texture") continue;
                 if (!textureMapping.TextureIndex.TryGetValue(srcObj.Id, out int texIdx)) continue;
 
                 // UV transform is read per Texture-object usage (srcObj.Id), not from the shared
                 // IntermediateTexture - two materials can reference the same image but tile/offset
                 // it differently. MapAll populates this for every Texture object unconditionally.
-                var uv = textureMapping.UVTransform[srcObj.Id];
+                (Float2 Offset, Float2 Scale, float Rotation) uv = textureMapping.UVTransform[srcObj.Id];
                 var slot = new IntermediateTextureSlot
                 {
                     TextureIndex = texIdx,

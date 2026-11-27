@@ -20,32 +20,31 @@ freely, subject to the following restrictions:
 
 using Prowl.Recast.Core.Numerics;
 
-namespace Prowl.Recast.Geom
+namespace Prowl.Recast.Geom;
+
+public class RcOffMeshConnection
 {
-    public class RcOffMeshConnection
+    public readonly float[] verts;
+    public readonly float radius;
+
+    public readonly bool bidir;
+    public readonly int area;
+
+    public readonly int flags;
+    public readonly int userId;
+
+    public RcOffMeshConnection(RcVec3f start, RcVec3f end, float radius, bool bidir, int area, int flags)
     {
-        public readonly float[] verts;
-        public readonly float radius;
-
-        public readonly bool bidir;
-        public readonly int area;
-
-        public readonly int flags;
-        public readonly int userId;
-
-        public RcOffMeshConnection(RcVec3f start, RcVec3f end, float radius, bool bidir, int area, int flags)
-        {
-            verts = new float[6];
-            verts[0] = start.X;
-            verts[1] = start.Y;
-            verts[2] = start.Z;
-            verts[3] = end.X;
-            verts[4] = end.Y;
-            verts[5] = end.Z;
-            this.radius = radius;
-            this.bidir = bidir;
-            this.area = area;
-            this.flags = flags;
-        }
+        verts = new float[6];
+        verts[0] = start.X;
+        verts[1] = start.Y;
+        verts[2] = start.Z;
+        verts[3] = end.X;
+        verts[4] = end.Y;
+        verts[5] = end.Z;
+        this.radius = radius;
+        this.bidir = bidir;
+        this.area = area;
+        this.flags = flags;
     }
 }

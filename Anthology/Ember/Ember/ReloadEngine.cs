@@ -78,7 +78,7 @@ public sealed class ReloadEngine
             if (session.Assemblies.IsEmpty)
                 return session.Report.Build();
 
-            foreach (var scoped in ScopedMigrators())
+            foreach (IReloadScopedMigrator scoped in ScopedMigrators())
                 scoped.OnReloadStarting(session.PlanContext);
 
             // The pair brackets the reload, so a walk that throws still has to close it: a framework cache
@@ -90,7 +90,7 @@ public sealed class ReloadEngine
             }
             finally
             {
-                foreach (var scoped in ScopedMigrators())
+                foreach (IReloadScopedMigrator scoped in ScopedMigrators())
                     scoped.OnReloadFinished(session.PlanContext);
             }
 
@@ -111,7 +111,7 @@ public sealed class ReloadEngine
 
     private IEnumerable<IReloadScopedMigrator> ScopedMigrators()
     {
-        foreach (var migrator in Options.Migrators)
+        foreach (IValueMigrator migrator in Options.Migrators)
             if (migrator is IReloadScopedMigrator scoped)
                 yield return scoped;
     }
@@ -120,8 +120,8 @@ public sealed class ReloadEngine
     {
         var context = new RootContext(session.Assemblies, session.Types, session.Members, Options.Scope, session.Report);
 
-        foreach (var provider in Options.Roots)
-            foreach (var root in provider.Enumerate(context))
+        foreach (IRootProvider provider in Options.Roots)
+            foreach (Root root in provider.Enumerate(context))
                 yield return root;
     }
 

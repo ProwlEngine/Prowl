@@ -44,7 +44,7 @@ internal sealed class BinPackTree
 
     private readonly List<Node> _nodes;
 
-    public BinPackTree(int initialCapacity) => _nodes = new List<Node>(initialCapacity);
+    public BinPackTree(int initialCapacity) => _nodes = [with(initialCapacity)];
 
     public void StartPack(Double2 borderInset)
     {
@@ -69,7 +69,7 @@ internal sealed class BinPackTree
 
     private bool TryInsert(int nodeIdx, ref BinRect rect, double border)
     {
-        var node = _nodes[nodeIdx];
+        Node node = _nodes[nodeIdx];
 
         if (node.MaxFreeWidth < rect.Extent.X - Epsilon || node.MaxFreeHeight < rect.Extent.Y - Epsilon)
             return false;
@@ -135,9 +135,9 @@ internal sealed class BinPackTree
     {
         while (nodeIdx != Node.NoChild)
         {
-            var node = _nodes[nodeIdx];
-            var left = _nodes[node.LeftChild];
-            var right = _nodes[node.RightChild];
+            Node node = _nodes[nodeIdx];
+            Node left = _nodes[node.LeftChild];
+            Node right = _nodes[node.RightChild];
 
             double width = System.Math.Max(left.MaxFreeWidth, right.MaxFreeWidth);
             double height = System.Math.Max(left.MaxFreeHeight, right.MaxFreeHeight);

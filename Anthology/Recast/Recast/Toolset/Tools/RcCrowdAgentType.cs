@@ -1,9 +1,8 @@
-namespace Prowl.Recast.Toolset.Tools
+namespace Prowl.Recast.Toolset.Tools;
+
+public enum RcCrowdAgentType
 {
-    public enum RcCrowdAgentType
-    {
-        VILLAGER,
-        TRAVELLER,
-        MOB,
-    }
+    VILLAGER,
+    TRAVELLER,
+    MOB,
 }

@@ -15,7 +15,7 @@ namespace Prowl.OrigamiUI.Charts;
 public abstract class CartesianModule<T>
 {
     internal readonly CartesianChart<T> _chart;
-    internal readonly List<CartesianSeries<T>> _series = new();
+    internal readonly List<CartesianSeries<T>> _series = [];
     internal CartesianSeries<T>? _last;
     internal CartesianSeries<T>? _implicit;
     internal Func<T, double>? _ySelector;

@@ -37,15 +37,15 @@ using System;
 using System.Collections.Generic;
 using System.Diagnostics;
 
+using Real = System.Single;
+
 namespace Prowl.Quill.External
 {
-
-    using Real = System.Single;
     namespace LibTessDotNet
 {
     internal struct Vec3
     {
-        public readonly static Vec3 Zero = new Vec3();
+        public static readonly Vec3 Zero = new Vec3();
 
         public Real X, Y, Z;
 
@@ -88,7 +88,7 @@ namespace Prowl.Quill.External
 
         public static void Normalize(ref Vec3 v)
         {
-            var len = v.X * v.X + v.Y * v.Y + v.Z * v.Z;
+                float len = v.X * v.X + v.Y * v.Y + v.Z * v.Z;
             Debug.Assert(len >= 0.0f);
             len = 1.0f / (Real)Math.Sqrt(len);
             v.X *= len;
@@ -180,7 +180,7 @@ namespace Prowl.Quill.External
                 get
                 {
                     int n = 0;
-                    var eCur = _anEdge;
+                        Edge eCur = _anEdge;
                     do {
                         n++;
                         eCur = eCur._Lnext;
@@ -206,9 +206,11 @@ namespace Prowl.Quill.External
 
             public static EdgePair Create()
             {
-                var pair = new MeshUtils.EdgePair();
-                pair._e = MeshUtils.Edge.Create();
-                pair._e._pair = pair;
+                    var pair = new MeshUtils.EdgePair
+                    {
+                        _e = MeshUtils.Edge.Create()
+                    };
+                    pair._e._pair = pair;
                 pair._eSym = MeshUtils.Edge.Create();
                 pair._eSym._pair = pair;
                 return pair;
@@ -268,15 +270,15 @@ namespace Prowl.Quill.External
             Debug.Assert(eNext != null);
 
             var pair = EdgePair.Create();
-            var e = pair._e;
-            var eSym = pair._eSym;
+                Edge e = pair._e;
+                Edge eSym = pair._eSym;
 
             // Make sure eNext points to the first edge of the edge pair
             Edge.EnsureFirst(ref eNext);
 
-            // Insert in circular doubly-linked list before eNext.
-            // Note that the prev pointer is stored in Sym->next.
-            var ePrev = eNext._Sym._next;
+                // Insert in circular doubly-linked list before eNext.
+                // Note that the prev pointer is stored in Sym->next.
+                Edge ePrev = eNext._Sym._next;
             eSym._next = ePrev;
             ePrev._Sym._next = e;
             e._next = eNext;
@@ -310,8 +312,8 @@ namespace Prowl.Quill.External
         /// </summary>
         public static void Splice(Edge a, Edge b)
         {
-            var aOnext = a._Onext;
-            var bOnext = b._Onext;
+                Edge aOnext = a._Onext;
+                Edge bOnext = b._Onext;
 
             aOnext._Sym._Lnext = b;
             bOnext._Sym._Lnext = a;
@@ -330,18 +332,18 @@ namespace Prowl.Quill.External
         {
             var vNew = MeshUtils.Vertex.Create();
 
-            // insert in circular doubly-linked list before vNext
-            var vPrev = vNext._prev;
+                // insert in circular doubly-linked list before vNext
+                Vertex vPrev = vNext._prev;
             vNew._prev = vPrev;
             vPrev._next = vNew;
             vNew._next = vNext;
             vNext._prev = vNew;
 
             vNew._anEdge = eOrig;
-            // leave coords, s, t undefined
+                // leave coords, s, t undefined
 
-            // fix other edges on this vertex loop
-            var e = eOrig;
+                // fix other edges on this vertex loop
+                Edge e = eOrig;
             do {
                 e._Org = vNew;
                 e = e._Onext;
@@ -359,8 +361,8 @@ namespace Prowl.Quill.External
         {
             var fNew = MeshUtils.Face.Create();
 
-            // insert in circular doubly-linked list before fNext
-            var fPrev = fNext._prev;
+                // insert in circular doubly-linked list before fNext
+                Face fPrev = fNext._prev;
             fNew._prev = fPrev;
             fPrev._next = fNew;
             fNew._next = fNext;
@@ -374,8 +376,8 @@ namespace Prowl.Quill.External
             // convenience for the common case where a face has been split in two.
             fNew._inside = fNext._inside;
 
-            // fix other edges on this face loop
-            var e = eOrig;
+                // fix other edges on this face loop
+                Edge e = eOrig;
             do {
                 e._Lface = fNew;
                 e = e._Lnext;
@@ -391,9 +393,9 @@ namespace Prowl.Quill.External
             // Half-edges are allocated in pairs, see EdgePair above
             Edge.EnsureFirst(ref eDel);
 
-            // delete from circular doubly-linked list
-            var eNext = eDel._next;
-            var ePrev = eDel._Sym._next;
+                // delete from circular doubly-linked list
+                Edge eNext = eDel._next;
+                Edge ePrev = eDel._Sym._next;
             eNext._Sym._next = ePrev;
             ePrev._Sym._next = eNext;
 
@@ -406,18 +408,18 @@ namespace Prowl.Quill.External
         /// </summary>
         public static void KillVertex(Vertex vDel, Vertex newOrg)
         {
-            var eStart = vDel._anEdge;
+                Edge eStart = vDel._anEdge;
 
-            // change the origin of all affected edges
-            var e = eStart;
+                // change the origin of all affected edges
+                Edge e = eStart;
             do {
                 e._Org = newOrg;
                 e = e._Onext;
             } while (e != eStart);
 
-            // delete from circular doubly-linked list
-            var vPrev = vDel._prev;
-            var vNext = vDel._next;
+                // delete from circular doubly-linked list
+                Vertex vPrev = vDel._prev;
+                Vertex vNext = vDel._next;
             vNext._prev = vPrev;
             vPrev._next = vNext;
 
@@ -430,18 +432,18 @@ namespace Prowl.Quill.External
         /// </summary>
         public static void KillFace(Face fDel, Face newLFace)
         {
-            var eStart = fDel._anEdge;
+                Edge eStart = fDel._anEdge;
 
-            // change the left face of all affected edges
-            var e = eStart;
+                // change the left face of all affected edges
+                Edge e = eStart;
             do {
                 e._Lface = newLFace;
                 e = e._Lnext;
             } while (e != eStart);
 
-            // delete from circular doubly-linked list
-            var fPrev = fDel._prev;
-            var fNext = fDel._next;
+                // delete from circular doubly-linked list
+                Face fPrev = fDel._prev;
+                Face fNext = fDel._next;
             fNext._prev = fPrev;
             fPrev._next = fNext;
 
@@ -454,7 +456,7 @@ namespace Prowl.Quill.External
         public static Real FaceArea(Face f)
         {
             Real area = 0;
-            var e = f._anEdge;
+                Edge e = f._anEdge;
             do
             {
                 area += (e._Org._s - e._Dst._s) * (e._Org._t + e._Dst._t);

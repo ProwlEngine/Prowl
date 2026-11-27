@@ -10,8 +10,8 @@
 
 using System.Runtime.CompilerServices;
 
-namespace Prowl.Vector
-{
+namespace Prowl.Vector;
+
 
 public partial struct Int4
 {
@@ -4319,5 +4319,4 @@ public partial struct Int4
 		[MethodImpl(MethodImplOptions.AggressiveInlining)] get => new Int4(this.W, this.W, this.W, this.W);
 	}
 
-}
 }

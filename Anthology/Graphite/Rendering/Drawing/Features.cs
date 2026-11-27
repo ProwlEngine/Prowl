@@ -277,7 +277,7 @@ public abstract class RenderExtension
 /// <summary>Extensions added to a world, a view or the renderer. Host thread.</summary>
 public sealed class ExtensionSet<T> : IEnumerable<T> where T : RenderExtension
 {
-    private readonly List<T> _items = new();
+    private readonly List<T> _items = [];
     private T[] _snapshot = [];
     private int _version, _snapshotVersion = -1;
 
@@ -613,7 +613,7 @@ public sealed class FullscreenProgram : IDisposable
     // The renderer's frame and view tables whole, so the camera's bind as they are, and the program's own resources in the user set
     internal static ResourceLayoutDescription[] LitLayouts(ResourceLayoutDescription[] compiled)
     {
-        List<ResourceLayoutElementDescription> user = new();
+        List<ResourceLayoutElementDescription> user = [];
         foreach (ResourceLayoutDescription layout in compiled)
         {
             if (layout.Set == GraphiteBindings.UserSet)
@@ -639,7 +639,7 @@ public sealed class FullscreenProgram : IDisposable
     // Each "#define NAME 1" line as the keyword it picks: the toggle called NAME, or the value of the axis NAME starts with
     private static List<Keyword> Keywords(IReadOnlyList<VariantSpace> axes, string variant)
     {
-        List<Keyword> keywords = new();
+        List<Keyword> keywords = [];
         foreach (string line in variant.Split('\n', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries))
         {
             string[] parts = line.Split(' ', StringSplitOptions.RemoveEmptyEntries);
@@ -990,7 +990,7 @@ public sealed class FeatureBuilder
         List<(ViewShadows.Cascade Cascade, TextureHandle Handle)> targets = _pass.Cascades;
         targets.Clear();
         View.Frame.Buffers.ReadWorld(FrameGraph, _graph, camera.World);
-        List<RenderTexture> written = new();
+        List<RenderTexture> written = [];
         foreach (ViewShadows.CascadeLight light in camera.Shadows.Lights)
         {
             for (int c = 0; c < light.Count; c++)
@@ -1431,7 +1431,7 @@ internal sealed class FeaturePass
 {
     private readonly FeatureContext _context;
     private readonly Func<PassBuilder, FeaturePass> _setup;
-    private readonly Dictionary<(string Kind, string Name, int Index), RenderResourceID> _ids = new();
+    private readonly Dictionary<(string Kind, string Name, int Index), RenderResourceID> _ids = [];
     private RenderResourceID _colorId;
 
     public FeaturePass(RenderFeature feature, ViewGraph view)
@@ -1452,7 +1452,7 @@ internal sealed class FeaturePass
     public bool AfterUpscale;
 
     /// <summary>The cascades the feature declared this frame, with their textures.</summary>
-    public readonly List<(ViewShadows.Cascade Cascade, TextureHandle Handle)> Cascades = new();
+    public readonly List<(ViewShadows.Cascade Cascade, TextureHandle Handle)> Cascades = [];
     public bool Draws;
     public bool PassedThrough;
     public bool EncodesForDisplay;
@@ -1960,16 +1960,16 @@ public struct DrawItem
 /// <summary>A view list's provider items, opaque ones drawn after the list's buckets, sorted ones among its transparents.</summary>
 internal sealed class ProvidedItems
 {
-    public readonly List<BucketSet.ItemDraw> Opaque = new();
-    public readonly List<BucketSet.ItemDraw> Sorted = new();
+    public readonly List<BucketSet.ItemDraw> Opaque = [];
+    public readonly List<BucketSet.ItemDraw> Sorted = [];
 }
 
 /// <summary>Where a provider adds its items for a view. Valid during Cull only. Render thread.</summary>
 public sealed class DrawItemSink
 {
-    private static readonly System.Runtime.CompilerServices.ConditionalWeakTable<MeshPlacement, BucketSet.ChunkRef[]?[]> s_chunks = new();
-    private readonly List<BucketSet.ItemDraw> _pool = new();
-    private readonly Dictionary<DrawList, ProvidedItems> _lists = new();
+    private static readonly System.Runtime.CompilerServices.ConditionalWeakTable<MeshPlacement, BucketSet.ChunkRef[]?[]> s_chunks = [];
+    private readonly List<BucketSet.ItemDraw> _pool = [];
+    private readonly Dictionary<DrawList, ProvidedItems> _lists = [];
     private int _used;
     private CameraFrame _camera = null!;
     private WorldFrame _world = null!;
@@ -1979,7 +1979,7 @@ public sealed class DrawItemSink
     private RenderableFlags _hidden = RenderableFlags.Hidden;
 
     /// <summary>Indirect items whose instance count is copied from the provider's buffer into the view's commands.</summary>
-    internal readonly List<(BucketSet.ItemDraw Item, DrawList List, RenderResourceID Source, uint Offset)> Counts = new();
+    internal readonly List<(BucketSet.ItemDraw Item, DrawList List, RenderResourceID Source, uint Offset)> Counts = [];
 
     internal void Begin(CameraFrame camera, WorldFrame world, in CullFrustum frustum, uint cullingMask, bool shadowView = false)
     {
@@ -2161,7 +2161,7 @@ public sealed class DrawItemSink
         BucketSet.ChunkRef[]?[] bySubMesh = s_chunks.GetValue(placement, p => new BucketSet.ChunkRef[]?[p.SubMeshes.Length]);
         if (bySubMesh[subMesh] is { } known)
             return known;
-        List<BucketSet.ChunkRef> chunks = new();
+        List<BucketSet.ChunkRef> chunks = [];
         for (int c = 0; c < placement.Chunks.Length; c++)
         {
             MeshChunk chunk = placement.Chunks[c];

@@ -73,7 +73,7 @@ public sealed class DynamicBvh<T>
     public int Add(T item, AABB bounds)
     {
         int id = AllocateNode();
-        var node = _nodes[id];
+        Node node = _nodes[id];
         node.Box = Fatten(bounds);
         node.Item = item;
         node.Height = 0;
@@ -153,15 +153,15 @@ public sealed class DynamicBvh<T>
     {
         Clear();
         int count = items.Count;
-        var ids = new int[count];
+        int[] ids = new int[count];
         if (count == 0) return ids;
 
-        var order = new int[count];
+        int[] order = new int[count];
         var centers = new Float3[count];
         for (int i = 0; i < count; i++)
         {
             int id = AllocateNode();
-            var node = _nodes[id];
+            Node node = _nodes[id];
             node.Box = Fatten(bounds[i]);
             node.Item = items[i];
             ids[i] = id;
@@ -303,7 +303,7 @@ public sealed class DynamicBvh<T>
 
         int id = _freeList;
         _freeList = _nodes[id].Parent;
-        var node = _nodes[id];
+        Node node = _nodes[id];
         node.Parent = Null;
         node.Child1 = Null;
         node.Child2 = Null;
@@ -348,7 +348,7 @@ public sealed class DynamicBvh<T>
         int right = BuildRange(ids, order, centers, keys, start + half, count - half);
 
         int parent = AllocateNode();
-        var node = _nodes[parent];
+        Node node = _nodes[parent];
         node.Child1 = left;
         node.Child2 = right;
         node.Box = _nodes[left].Box.Encapsulating(_nodes[right].Box);
@@ -398,7 +398,7 @@ public sealed class DynamicBvh<T>
         int index = _root;
         while (!_nodes[index].IsLeaf)
         {
-            var n = _nodes[index];
+            Node n = _nodes[index];
             float area = n.Box.SurfaceArea;
             AABB combined = n.Box.Encapsulating(leafBox);
             float combinedArea = combined.SurfaceArea;
@@ -419,7 +419,7 @@ public sealed class DynamicBvh<T>
         int oldParent = _nodes[sibling].Parent;
         int newParent = AllocateNode();
 
-        var np = _nodes[newParent];
+        Node np = _nodes[newParent];
         np.Parent = oldParent;
         np.Box = leafBox.Encapsulating(_nodes[sibling].Box);
         np.Height = _nodes[sibling].Height + 1;
@@ -483,9 +483,9 @@ public sealed class DynamicBvh<T>
         {
             index = Balance(index);
 
-            var n = _nodes[index];
-            var c1 = _nodes[n.Child1];
-            var c2 = _nodes[n.Child2];
+            Node n = _nodes[index];
+            Node c1 = _nodes[n.Child1];
+            Node c2 = _nodes[n.Child2];
             n.Height = 1 + Math.Max(c1.Height, c2.Height);
             n.Box = c1.Box.Encapsulating(c2.Box);
 
@@ -496,20 +496,20 @@ public sealed class DynamicBvh<T>
     // AVL-style rotation that lifts the taller grandchild. Returns the new root of the subtree.
     private int Balance(int iA)
     {
-        var A = _nodes[iA];
+        Node A = _nodes[iA];
         if (A.IsLeaf || A.Height < 2)
             return iA;
 
         int iB = A.Child1, iC = A.Child2;
-        var B = _nodes[iB];
-        var C = _nodes[iC];
+        Node B = _nodes[iB];
+        Node C = _nodes[iC];
         int balance = C.Height - B.Height;
 
         if (balance > 1)
         {
             int iF = C.Child1, iG = C.Child2;
-            var F = _nodes[iF];
-            var G = _nodes[iG];
+            Node F = _nodes[iF];
+            Node G = _nodes[iG];
 
             C.Child1 = iA;
             C.Parent = A.Parent;
@@ -548,8 +548,8 @@ public sealed class DynamicBvh<T>
         if (balance < -1)
         {
             int iD = B.Child1, iE = B.Child2;
-            var D = _nodes[iD];
-            var E = _nodes[iE];
+            Node D = _nodes[iD];
+            Node E = _nodes[iE];
 
             B.Child1 = iA;
             B.Parent = A.Parent;

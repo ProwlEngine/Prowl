@@ -35,10 +35,10 @@ internal static class SeamFixer
             System.Array.Copy(rgb, snapshot, rgb.Length);
             for (int i = 0; i < samples.Length; i++)
             {
-                var s = samples[i];
-                if (!SampleCovered(snapshot, covered, width, height, s.AX, s.AY, out var a)) continue;
-                if (!SampleCovered(snapshot, covered, width, height, s.BX, s.BY, out var b)) continue;
-                var target = (a + b) * 0.5f;
+                Sample s = samples[i];
+                if (!SampleCovered(snapshot, covered, width, height, s.AX, s.AY, out Float3 a)) continue;
+                if (!SampleCovered(snapshot, covered, width, height, s.BX, s.BY, out Float3 b)) continue;
+                Float3 target = (a + b) * 0.5f;
                 BlendNearest(rgb, covered, width, height, s.AX, s.AY, target, strength);
                 BlendNearest(rgb, covered, width, height, s.BX, s.BY, target, strength);
             }

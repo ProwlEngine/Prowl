@@ -247,12 +247,14 @@ internal unsafe partial class VkGraphicsDevice : GraphicsDevice
             return false;
 
         InstanceCreateInfo instanceCI = new(sType: StructureType.InstanceCreateInfo);
-        ApplicationInfo applicationInfo = new(sType: StructureType.ApplicationInfo);
-        applicationInfo.ApiVersion = new Version32(1, 0, 0);
-        applicationInfo.ApplicationVersion = new Version32(1, 0, 0);
-        applicationInfo.EngineVersion = new Version32(1, 0, 0);
-        applicationInfo.PApplicationName = Name;
-        applicationInfo.PEngineName = Name;
+        ApplicationInfo applicationInfo = new(sType: StructureType.ApplicationInfo)
+        {
+            ApiVersion = new Version32(1, 0, 0),
+            ApplicationVersion = new Version32(1, 0, 0),
+            EngineVersion = new Version32(1, 0, 0),
+            PApplicationName = Name,
+            PEngineName = Name
+        };
 
         instanceCI.PApplicationInfo = &applicationInfo;
 

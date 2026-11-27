@@ -19,10 +19,10 @@ internal static class ExtractOp
     internal static GeometryData Extract(GeometryData mesh, IEnumerable<Vertex> vertices, IEnumerable<Edge> edges, IEnumerable<Face> faces)
     {
         var result = new GeometryData();
-        foreach (var a in mesh.VertexAttributes) result.AddVertexAttribute(a.Name, a.Type.BaseType, a.Type.Dimensions);
-        foreach (var a in mesh.EdgeAttributes) result.AddEdgeAttribute(a.Name, a.Type.BaseType, a.Type.Dimensions);
-        foreach (var a in mesh.LoopAttributes) result.AddLoopAttribute(a.Name, a.Type.BaseType, a.Type.Dimensions);
-        foreach (var a in mesh.FaceAttributes) result.AddFaceAttribute(a.Name, a.Type.BaseType, a.Type.Dimensions);
+        foreach (GeometryData.AttributeDefinition a in mesh.VertexAttributes) result.AddVertexAttribute(a.Name, a.Type.BaseType, a.Type.Dimensions);
+        foreach (GeometryData.AttributeDefinition a in mesh.EdgeAttributes) result.AddEdgeAttribute(a.Name, a.Type.BaseType, a.Type.Dimensions);
+        foreach (GeometryData.AttributeDefinition a in mesh.LoopAttributes) result.AddLoopAttribute(a.Name, a.Type.BaseType, a.Type.Dimensions);
+        foreach (GeometryData.AttributeDefinition a in mesh.FaceAttributes) result.AddFaceAttribute(a.Name, a.Type.BaseType, a.Type.Dimensions);
 
         var wantedFaces = new HashSet<Face>(faces);
         var wantedEdges = new HashSet<Edge>(edges);

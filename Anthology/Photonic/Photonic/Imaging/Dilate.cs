@@ -26,8 +26,8 @@ internal static class Dilate
                            float[] scratchRGB, bool[] scratchCovered)
     {
         if (passes <= 0) return;
-        var tmpRGB = scratchRGB;
-        var tmpCov = scratchCovered;
+        float[] tmpRGB = scratchRGB;
+        bool[] tmpCov = scratchCovered;
         for (int p = 0; p < passes; p++)
         {
             System.Array.Copy(rgb, tmpRGB, rgb.Length);

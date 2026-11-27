@@ -22,7 +22,7 @@ internal sealed class ImproveCacheLocalityStep : IPostProcess
 
     public void Execute(IntermediateScene scene, ImportContext context)
     {
-        foreach (var mesh in scene.Meshes)
+        foreach (IntermediateMesh mesh in scene.Meshes)
             OptimizeOne(mesh);
         _ = context;
     }
@@ -39,7 +39,7 @@ internal sealed class ImproveCacheLocalityStep : IPostProcess
             int material = mesh.MaterialForFace(faces[f]);
             if (!triangles.TryGetValue(material, out List<int>? group))
             {
-                triangles[material] = group = new List<int>();
+                triangles[material] = group = [];
                 materials.Add(material);
             }
             group.Add(f);

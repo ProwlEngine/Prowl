@@ -37,30 +37,30 @@ internal static class FbxBlendShapeMapper
         var channelTargets = new Dictionary<long, ChannelTarget>();
         var perGeometryCount = new Dictionary<long, int>();
 
-        foreach (var bs in doc.Objects.Values)
+        foreach (FbxObject bs in doc.Objects.Values)
         {
             if (bs.ObjectType != "Deformer" || bs.Subtype != "BlendShape") continue;
 
             // BlendShape attaches to a Geometry::Mesh via OO src.
             FbxObject? geometry = null;
-            if (doc.ConnectionsBySource.TryGetValue(bs.Id, out var bsOut))
+            if (doc.ConnectionsBySource.TryGetValue(bs.Id, out List<FbxConnection>? bsOut))
             {
-                foreach (var c in bsOut)
+                foreach (FbxConnection c in bsOut)
                 {
                     if (c.Type != "OO") continue;
-                    if (!doc.Objects.TryGetValue(c.Destination, out var dst)) continue;
+                    if (!doc.Objects.TryGetValue(c.Destination, out FbxObject? dst)) continue;
                     if (dst.ObjectType == "Geometry" && dst.Subtype == "Mesh") { geometry = dst; break; }
                 }
             }
             if (geometry is null) continue;
-            if (!meshMapping.GeometryToMeshes.TryGetValue(geometry.Id, out var geoMapping)) continue;
+            if (!meshMapping.GeometryToMeshes.TryGetValue(geometry.Id, out FbxMeshMapper.GeometryMapping? geoMapping)) continue;
 
             // For each BlendShape, walk its child Channels.
-            if (!doc.ConnectionsByDestination.TryGetValue(bs.Id, out var bsIn)) continue;
-            foreach (var c in bsIn)
+            if (!doc.ConnectionsByDestination.TryGetValue(bs.Id, out List<FbxConnection>? bsIn)) continue;
+            foreach (FbxConnection c in bsIn)
             {
                 if (c.Type != "OO") continue;
-                if (!doc.Objects.TryGetValue(c.Source, out var channel)) continue;
+                if (!doc.Objects.TryGetValue(c.Source, out FbxObject? channel)) continue;
                 if (channel.ObjectType != "Deformer" || channel.Subtype != "BlendShapeChannel") continue;
 
                 // The channel's index must match the order blend shapes are appended to the mesh,
@@ -83,12 +83,12 @@ internal static class FbxBlendShapeMapper
         // (binary morph: 0% rest, 100% shape). Multi-shape channels are progressive morphs - we
         // emit one BlendShape per IntermediateMesh with one frame per shape.
         var shapes = new List<FbxObject>();
-        if (doc.ConnectionsByDestination.TryGetValue(channel.Id, out var inConns))
+        if (doc.ConnectionsByDestination.TryGetValue(channel.Id, out List<FbxConnection>? inConns))
         {
-            foreach (var c in inConns)
+            foreach (FbxConnection c in inConns)
             {
                 if (c.Type != "OO") continue;
-                if (!doc.Objects.TryGetValue(c.Source, out var src)) continue;
+                if (!doc.Objects.TryGetValue(c.Source, out FbxObject? src)) continue;
                 if (src.ObjectType == "Geometry" && src.Subtype == "Shape")
                     shapes.Add(src);
             }
@@ -111,7 +111,7 @@ internal static class FbxBlendShapeMapper
         // Each shape contributes one frame across all affected meshes.
         for (int si = 0; si < shapes.Count; si++)
         {
-            var shape = shapes[si];
+            FbxObject shape = shapes[si];
             int[] sparseIndexes = shape.Node.FindChild("Indexes")?.Properties.ElementAtOrDefault(0)?.AsIntArray()
                                 ?? Array.Empty<int>();
             double[] sparseVerts = shape.Node.FindChild("Vertices")?.Properties.ElementAtOrDefault(0)?.AsDoubleArray()
@@ -133,7 +133,7 @@ internal static class FbxBlendShapeMapper
             // Optional normal deltas.
             double[]? normalDeltasRaw = shape.Node.FindChild("Normals")?.Properties.ElementAtOrDefault(0)?.AsDoubleArray();
             bool hasNormalDeltas = normalDeltasRaw is not null && normalDeltasRaw.Length == sparseVerts.Length;
-            var meshNormalDeltas = hasNormalDeltas
+            Float3[][]? meshNormalDeltas = hasNormalDeltas
                 ? Enumerable.Range(0, geoMapping.MeshCount).Select(m => new Float3[scene.Meshes[geoMapping.FirstMeshIndex + m].Positions.Count]).ToArray()
                 : null;
 

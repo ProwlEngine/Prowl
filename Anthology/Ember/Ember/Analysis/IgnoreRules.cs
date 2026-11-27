@@ -19,12 +19,12 @@ internal static class IgnoreRules
 
         if (!field.IsPrivate || field.GetCustomAttribute<CompilerGeneratedAttribute>() == null) return false;
 
-        if (!SyntheticName.TryParse(field.Name, out var name)
+        if (!SyntheticName.TryParse(field.Name, out SyntheticName name)
             || name.Kind != SyntheticKind.AutoPropertyBackingField
             || name.Scope == null)
             return false;
 
-        var flags = BindingFlags.Public | BindingFlags.NonPublic | BindingFlags.DeclaredOnly
+        BindingFlags flags = BindingFlags.Public | BindingFlags.NonPublic | BindingFlags.DeclaredOnly
                   | (field.IsStatic ? BindingFlags.Static : BindingFlags.Instance);
 
         return field.DeclaringType?.GetProperty(name.Scope, flags)?.GetCustomAttribute<ReloadIgnoreAttribute>() != null;

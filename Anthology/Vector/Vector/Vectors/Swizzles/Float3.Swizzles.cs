@@ -10,8 +10,8 @@
 
 using System.Runtime.CompilerServices;
 
-namespace Prowl.Vector
-{
+namespace Prowl.Vector;
+
 
 public partial struct Float3
 {
@@ -1491,5 +1491,4 @@ public partial struct Float3
 		[MethodImpl(MethodImplOptions.AggressiveInlining)] get => new Float4(this.Z, this.Z, this.Z, this.Z);
 	}
 
-}
 }

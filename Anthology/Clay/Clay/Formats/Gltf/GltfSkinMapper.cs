@@ -29,7 +29,7 @@ internal static class GltfSkinMapper
 
         for (int s = 0; s < dom.Skins.Length; s++)
         {
-            var src = dom.Skins[s];
+            GltfSkin src = dom.Skins[s];
             var skin = new IntermediateSkin
             {
                 Name = src.Name,
@@ -86,9 +86,9 @@ internal static class GltfSkinMapper
     {
         var inScene = new HashSet<IntermediateNode>(scene.Nodes);
 
-        foreach (var skin in scene.Skins)
+        foreach (IntermediateSkin skin in scene.Skins)
         {
-            foreach (var bone in skin.BoneNodes)
+            foreach (IntermediateNode bone in skin.BoneNodes)
                 Attach(bone);
             if (skin.RootNode is { } root)
                 Attach(root);
@@ -100,7 +100,7 @@ internal static class GltfSkinMapper
 
             // Attach the whole detached branch rather than the joint alone, so the joint keeps the
             // transforms its ancestors gave it.
-            var top = node;
+            IntermediateNode top = node;
             while (top.Parent is { } parent && !inScene.Contains(parent))
                 top = parent;
 
@@ -112,7 +112,7 @@ internal static class GltfSkinMapper
 
             var subtree = new List<IntermediateNode>();
             NodeGraph.Flatten(top, subtree);
-            foreach (var n in subtree)
+            foreach (IntermediateNode n in subtree)
                 if (inScene.Add(n))
                     scene.Nodes.Add(n);
 

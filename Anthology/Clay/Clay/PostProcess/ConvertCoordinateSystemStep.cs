@@ -53,14 +53,14 @@ internal sealed class ConvertCoordinateSystemStep : IPostProcess
                 return;
         }
 
-        foreach (var node in scene.Nodes)
+        foreach (IntermediateNode node in scene.Nodes)
         {
             node.LocalPosition = map.Vector(node.LocalPosition);
             node.LocalRotation = map.Rotation(node.LocalRotation);
             node.LocalScale = map.Scale(node.LocalScale);
         }
 
-        foreach (var mesh in scene.Meshes)
+        foreach (IntermediateMesh mesh in scene.Meshes)
         {
             map.Vectors(CollectionsMarshal.AsSpan(mesh.Positions));
 
@@ -69,17 +69,17 @@ internal sealed class ConvertCoordinateSystemStep : IPostProcess
 
             if (mesh.Tangents is not null)
             {
-                var tangents = CollectionsMarshal.AsSpan(mesh.Tangents);
+                Span<Float4> tangents = CollectionsMarshal.AsSpan(mesh.Tangents);
                 for (int i = 0; i < tangents.Length; i++)
                 {
-                    var t = tangents[i];
+                    Float4 t = tangents[i];
                     Float3 v = map.Vector(new Float3(t.X, t.Y, t.Z));
                     tangents[i] = new Float4(v.X, v.Y, v.Z, -t.W);
                 }
             }
 
-            var allIndices = mesh.Faces.AllIndices;
-            foreach (var face in mesh.Faces.AsSpan())
+            Span<int> allIndices = mesh.Faces.AllIndices;
+            foreach (IntermediateFace face in mesh.Faces.AsSpan())
             {
                 if (face.Count == 3)
                     (allIndices[face.Start + 1], allIndices[face.Start + 2]) = (allIndices[face.Start + 2], allIndices[face.Start + 1]);
@@ -87,9 +87,9 @@ internal sealed class ConvertCoordinateSystemStep : IPostProcess
                     allIndices.Slice(face.Start, face.Count).Reverse();
             }
 
-            foreach (var bs in mesh.BlendShapes)
+            foreach (IntermediateBlendShape bs in mesh.BlendShapes)
             {
-                foreach (var frame in bs.Frames)
+                foreach (IntermediateBlendShapeFrame frame in bs.Frames)
                 {
                     map.Vectors(frame.DeltaPositions);
                     if (frame.DeltaNormals is { } dn) map.Vectors(dn);
@@ -98,15 +98,15 @@ internal sealed class ConvertCoordinateSystemStep : IPostProcess
             }
         }
 
-        foreach (var skin in scene.Skins)
+        foreach (IntermediateSkin skin in scene.Skins)
         {
             for (int i = 0; i < skin.InverseBindPoses.Count; i++)
                 skin.InverseBindPoses[i] = map.Matrix(skin.InverseBindPoses[i]);
         }
 
-        foreach (var anim in scene.Animations)
+        foreach (IntermediateAnimation anim in scene.Animations)
         {
-            foreach (var binding in anim.Bindings)
+            foreach (IntermediateAnimationBinding binding in anim.Bindings)
                 ConvertBinding(binding, map);
         }
 
@@ -171,7 +171,7 @@ internal sealed class ConvertCoordinateSystemStep : IPostProcess
         {
             int sx = _sources[0], sy = _sources[1], sz = _sources[2];
             float fx = _signs[0], fy = _signs[1], fz = _signs[2];
-            var f = MemoryMarshal.Cast<Float3, float>(values);
+            Span<float> f = MemoryMarshal.Cast<Float3, float>(values);
             for (int i = 0; i < f.Length; i += 3)
             {
                 float x = f[i + sx], y = f[i + sy], z = f[i + sz];

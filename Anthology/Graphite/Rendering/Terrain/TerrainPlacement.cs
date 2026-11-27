@@ -33,7 +33,7 @@ public interface ITerrainInstances
 public sealed class TerrainTreeInstances : ITerrainInstances, IDisposable
 {
     private readonly TerrainData _data;
-    private volatile Dictionary<(int, int), (int Index, TerrainTree Tree)[]> _sorted = new();
+    private volatile Dictionary<(int, int), (int Index, TerrainTree Tree)[]> _sorted = [];
     private readonly ConcurrentDictionary<(int, int), TerrainInstance[]> _cells = new();
     private Double3 _placedAt;
     private long _version;
@@ -108,18 +108,18 @@ public sealed class TerrainTreeInstances : ITerrainInstances, IDisposable
 
     private void Sort()
     {
-        Dictionary<(int, int), List<(int, TerrainTree)>> cells = new();
+        Dictionary<(int, int), List<(int, TerrainTree)>> cells = [];
         IReadOnlyList<TerrainTree> trees = _data.Trees;
         for (int i = 0; i < trees.Count; i++)
         {
             TerrainTree tree = trees[i];
             (int, int) cell = ((int)Math.Floor(tree.Position.X / CellSize), (int)Math.Floor(tree.Position.Z / CellSize));
             if (!cells.TryGetValue(cell, out List<(int, TerrainTree)>? list))
-                cells[cell] = list = new List<(int, TerrainTree)>();
+                cells[cell] = list = [];
             list.Add((i, tree));
         }
-        Dictionary<(int, int), (int, TerrainTree)[]> sorted = new(cells.Count);
-        foreach ((var key, List<(int, TerrainTree)> list) in cells)
+        Dictionary<(int, int), (int, TerrainTree)[]> sorted = [with(cells.Count)];
+        foreach (((int, int) key, List<(int, TerrainTree)> list) in cells)
             sorted[key] = list.ToArray();
         _sorted = sorted;
     }
@@ -212,7 +212,7 @@ public sealed class TerrainDetailInstances : ITerrainInstances, IDisposable
         double spacing = header.Spacing;
         int i0 = Math.Max((int)Math.Ceiling(cx * CellSize / spacing), 0), i1 = Math.Min((int)Math.Ceiling((cx + 1) * CellSize / spacing), header.QuadsX);
         int j0 = Math.Max((int)Math.Ceiling(cz * CellSize / spacing), 0), j1 = Math.Min((int)Math.Ceiling((cz + 1) * CellSize / spacing), header.QuadsZ);
-        List<TerrainInstance> instances = new();
+        List<TerrainInstance> instances = [];
         (int pagesX, int pagesZ) = _data.PagesAt(0);
         for (int j = j0; j < j1; j++)
             for (int i = i0; i < i1; i++)

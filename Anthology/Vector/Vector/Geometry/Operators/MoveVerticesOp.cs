@@ -5,11 +5,11 @@ using System;
 using System.Collections.Generic;
 using System.Linq;
 
+using static Prowl.Vector.Geometry.Operators.EditingCommon;
+
 using Edge = Prowl.Vector.Geometry.GeometryData.Edge;
 using Face = Prowl.Vector.Geometry.GeometryData.Face;
 using Vertex = Prowl.Vector.Geometry.GeometryData.Vertex;
-
-using static Prowl.Vector.Geometry.Operators.EditingCommon;
 
 namespace Prowl.Vector.Geometry.Operators;
 
@@ -102,7 +102,7 @@ internal static class MoveVerticesOp
         List<Vertex> verts = (scope ?? mesh.Vertices).Where(v => mesh.Contains(v)).ToList();
         if (verts.Count < 2 || distance <= 0f) return 0;
 
-        var parent = Enumerable.Range(0, verts.Count).ToArray();
+        int[] parent = Enumerable.Range(0, verts.Count).ToArray();
         int Find(int x) { while (parent[x] != x) x = parent[x] = parent[parent[x]]; return x; }
 
         float cell = MathF.Max(distance, 1e-4f);

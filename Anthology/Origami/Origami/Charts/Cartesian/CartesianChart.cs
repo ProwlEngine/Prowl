@@ -4,14 +4,13 @@
 using System;
 using System.Collections.Generic;
 
+using Prowl.OrigamiUI;
 using Prowl.PaperUI;
 using Prowl.PaperUI.LayoutEngine;
 using Prowl.Quill;
 using Prowl.Vector;
 
 using Color = System.Drawing.Color;
-
-using Prowl.OrigamiUI;
 
 namespace Prowl.OrigamiUI.Charts;
 
@@ -24,7 +23,7 @@ internal sealed class CartesianSeries<T>
     public bool Fill;
     public bool Dashed;
     public bool Hidden;
-    public readonly List<(double X, double Y, T? Payload)> Points = new();
+    public readonly List<(double X, double Y, T? Payload)> Points = [];
 }
 
 internal readonly struct PlotContext
@@ -48,8 +47,8 @@ internal readonly struct PlotContext
 /// <c>.AddBarChart()</c> and <c>.AddScatterPlot()</c>, all sharing one set of axes.</summary>
 public sealed class CartesianChart<T> : ChartCore<CartesianChart<T>, T>
 {
-    private readonly List<CartesianModule<T>> _modules = new();
-    private readonly List<CartesianSeries<T>> _series = new();
+    private readonly List<CartesianModule<T>> _modules = [];
+    private readonly List<CartesianSeries<T>> _series = [];
 
     private Func<T, double>? _xSelector;
     private bool _hasYRange;
@@ -268,7 +267,7 @@ public sealed class CartesianChart<T> : ChartCore<CartesianChart<T>, T>
         double first = Math.Ceiling(min / step - 1e-9) * step;
         int n = Math.Clamp((int)Math.Floor((max - first) / step + 1e-9) + 1, 0, 1000);
 
-        var ticks = new double[n];
+        double[] ticks = new double[n];
         for (int i = 0; i < n; i++) ticks[i] = first + i * step;
         return ticks;
     }
@@ -328,10 +327,10 @@ public sealed class CartesianChart<T> : ChartCore<CartesianChart<T>, T>
         float ox = (float)rect.Min.X, oy = (float)rect.Min.Y;
         float w = (float)rect.Size.X, h = (float)rect.Size.Y;
 
-        var xLabels = new string[xTicks.Length];
+        string[] xLabels = new string[xTicks.Length];
         for (int i = 0; i < xTicks.Length; i++) xLabels[i] = XTickLabel(xTicks[i]);
 
-        var yLabels = new string[yTicks.Length];
+        string[] yLabels = new string[yTicks.Length];
         for (int i = 0; i < yTicks.Length; i++) yLabels[i] = FormatValue(yTicks[i]);
 
         float lineH = MathF.Max(MeasureText(canvas, "0").Y, TextSize);

@@ -152,7 +152,7 @@ internal static class CutOp
             loop = loop.Next!;
         } while (loop != face.Loop);
 
-        var attributes = AttributeTransfer.Copy(face.Attributes);
+        Dictionary<string, GeometryData.AttributeValue> attributes = AttributeTransfer.Copy(face.Attributes);
         List<Edge> old = face.NeighborEdges();
         mesh.RemoveFace(face);
         Face? rebuilt = mesh.AddFace(verts.ToArray());

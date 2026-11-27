@@ -22,13 +22,13 @@ internal sealed class GraphCapture
     private readonly GraphExecution _execution;
     private readonly GraphLayout _layout;
     private readonly int[] _members;
-    private readonly Dictionary<int, GraphBacking[]> _backings = new();
-    private readonly Dictionary<ResourceId, uint> _passEntry = new();
-    private readonly Dictionary<ResourceId, ReferencedResource> _firstReferenced = new();
-    private readonly HashSet<ResourceId> _listed = new();
-    private readonly List<PassReference> _references = new();
-    private readonly Dictionary<ResourceId, (Texture? Texture, DeviceBuffer? Buffer)> _live = new();
-    private readonly HashSet<ResourceId> _instanceTargets = new();
+    private readonly Dictionary<int, GraphBacking[]> _backings = [];
+    private readonly Dictionary<ResourceId, uint> _passEntry = [];
+    private readonly Dictionary<ResourceId, ReferencedResource> _firstReferenced = [];
+    private readonly HashSet<ResourceId> _listed = [];
+    private readonly List<PassReference> _references = [];
+    private readonly Dictionary<ResourceId, (Texture? Texture, DeviceBuffer? Buffer)> _live = [];
+    private readonly HashSet<ResourceId> _instanceTargets = [];
     private readonly CaptureContext _captureContext;
     private GraphTextureStates? _preStates;
     private CommandBuffer? _passCommands;
@@ -44,8 +44,8 @@ internal sealed class GraphCapture
 
     public void DescribeGroup(int groupIndex)
     {
-        List<GraphResourceInfo> resources = new();
-        HashSet<int> seen = new();
+        List<GraphResourceInfo> resources = [];
+        HashSet<int> seen = [];
         PassInfo[] passes = new PassInfo[_members.Length];
         for (int i = 0; i < _members.Length; i++)
         {
@@ -198,7 +198,7 @@ internal sealed class GraphCapture
     {
         FrameResource resource = _execution.Graph.ResourceAt(index);
         bool isTexture = resource.IsTexture;
-        List<GraphBacking> backings = new();
+        List<GraphBacking> backings = [];
         GraphTextureDesc? textureDesc = null;
         GraphBufferDesc? bufferDesc = null;
         GraphResourceOrigin origin = resource.IsTarget ? GraphResourceOrigin.Target

@@ -10,7 +10,7 @@ internal sealed class NullableFormat : ISerializationFormat
 
     public EchoObject Serialize(Type? targetType, object value, SerializationContext context)
     {
-        var underlyingType = Nullable.GetUnderlyingType(value.GetType())
+        Type underlyingType = Nullable.GetUnderlyingType(value.GetType())
             ?? throw new InvalidOperationException("Not a nullable type");
 
         // Create compound to store nullable info
@@ -21,14 +21,14 @@ internal sealed class NullableFormat : ISerializationFormat
 
     public object? Deserialize(EchoObject value, Type targetType, SerializationContext context)
     {
-        var underlyingType = Nullable.GetUnderlyingType(targetType)
+        Type underlyingType = Nullable.GetUnderlyingType(targetType)
             ?? throw new InvalidOperationException("Not a nullable type");
 
         if (value.TagType == EchoType.Null)
             return null;
 
         // If it's a compound, get the value
-        if (value.TagType == EchoType.Compound && value.TryGet("value", out var valueTag))
+        if (value.TagType == EchoType.Compound && value.TryGet("value", out EchoObject? valueTag))
         {
             if (valueTag.TagType == EchoType.Null)
                 return null;

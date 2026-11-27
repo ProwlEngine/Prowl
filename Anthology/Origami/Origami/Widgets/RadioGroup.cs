@@ -119,7 +119,7 @@ public sealed class RadioGroupBuilder<T>
     public void Show()
     {
         if (Origami.IsReadOnly) _disabled = true;
-        var disp = _display ?? (t => t?.ToString() ?? string.Empty);
+        Func<T, string> disp = _display ?? (t => t?.ToString() ?? string.Empty);
         bool hasError = !string.IsNullOrEmpty(_error);
         string? helpLine = hasError ? _error : _helperText;
         float helperH = !string.IsNullOrEmpty(helpLine) ? 16f : 0f;
@@ -127,7 +127,7 @@ public sealed class RadioGroupBuilder<T>
         using (_paper.Column(_id).Width(UnitValue.Stretch()).Height(UnitValue.Auto).Enter())
         {
             // Group container — vertical stacks rows, horizontal flows them in a row.
-            var container = _orientation == RadioGroupOrientation.Vertical
+            ElementBuilder container = _orientation == RadioGroupOrientation.Vertical
                 ? _paper.Column("grp").Width(UnitValue.Stretch()).Height(UnitValue.Auto)
                 : _paper.Row("grp").Width(UnitValue.Stretch()).Height(UnitValue.Auto);
 
@@ -137,14 +137,14 @@ public sealed class RadioGroupBuilder<T>
 
                 for (int i = 0; i < _items.Count; i++)
                 {
-                    var item = _items[i];
+                    T? item = _items[i];
                     bool isSelected = _comparer.Equals(item, _value);
                     bool itemEnabled = _isItemEnabled?.Invoke(item) ?? true;
                     string label = disp(item);
                     string? desc = _description?.Invoke(item);
 
-                    var capturedItem = item;
-                    var radio = new ToggleBuilder(_paper, $"{_id}_r_{i}", isSelected,
+                    T? capturedItem = item;
+                    ToggleBuilder radio = new ToggleBuilder(_paper, $"{_id}_r_{i}", isSelected,
                         v => { if (v) _setter(capturedItem); }, _theme)
                         .Variant(_variant)
                         .AsRadio()

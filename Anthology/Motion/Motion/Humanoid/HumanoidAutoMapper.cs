@@ -1,5 +1,6 @@
 using System.Collections.Generic;
 using System.Text;
+
 using Prowl.Vector;
 
 namespace Prowl.Motion;
@@ -27,9 +28,9 @@ public sealed class HumanoidMapResult
 /// </summary>
 public static class HumanoidAutoMapper
 {
-    private static readonly HashSet<string> s_leftTokens = new() { "left", "l", "lf", "lft", "lt" };
-    private static readonly HashSet<string> s_rightTokens = new() { "right", "r", "rt", "rgt" };
-    private static readonly HashSet<string> s_centerTokens = new() { "center", "centre", "cn", "ctr", "c", "m" };
+    private static readonly HashSet<string> s_leftTokens = ["left", "l", "lf", "lft", "lt"];
+    private static readonly HashSet<string> s_rightTokens = ["right", "r", "rt", "rgt"];
+    private static readonly HashSet<string> s_centerTokens = ["center", "centre", "cn", "ctr", "c", "m"];
     private static readonly char[] s_separators = { '_', '.', '-', ' ', '|', ':' };
 
     /// <summary>Cheap check: does this skeleton resolve to a full, topologically valid humanoid?</summary>
@@ -85,7 +86,7 @@ public static class HumanoidAutoMapper
             return false;
         }
 
-        var usedIndex = new bool[boneCount];
+        bool[] usedIndex = new bool[boneCount];
         void RunPass(bool useClean, bool requireUnderHips)
         {
             for (int b = 0; b < boneCount; b++)

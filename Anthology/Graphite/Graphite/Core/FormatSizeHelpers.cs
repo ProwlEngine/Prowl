@@ -115,46 +115,14 @@ public static class FormatSizeHelpers
     /// <returns>Bytes per element.</returns>
     public static uint GetSizeInBytes(this VertexElementFormat format)
     {
-        switch (format)
+        return format switch
         {
-            case VertexElementFormat.Byte2_Norm:
-            case VertexElementFormat.Byte2:
-            case VertexElementFormat.SByte2_Norm:
-            case VertexElementFormat.SByte2:
-            case VertexElementFormat.Half1:
-                return 2;
-            case VertexElementFormat.Float1:
-            case VertexElementFormat.UInt1:
-            case VertexElementFormat.Int1:
-            case VertexElementFormat.Byte4_Norm:
-            case VertexElementFormat.Byte4:
-            case VertexElementFormat.SByte4_Norm:
-            case VertexElementFormat.SByte4:
-            case VertexElementFormat.UShort2_Norm:
-            case VertexElementFormat.UShort2:
-            case VertexElementFormat.Short2_Norm:
-            case VertexElementFormat.Short2:
-            case VertexElementFormat.Half2:
-                return 4;
-            case VertexElementFormat.Float2:
-            case VertexElementFormat.UInt2:
-            case VertexElementFormat.Int2:
-            case VertexElementFormat.UShort4_Norm:
-            case VertexElementFormat.UShort4:
-            case VertexElementFormat.Short4_Norm:
-            case VertexElementFormat.Short4:
-            case VertexElementFormat.Half4:
-                return 8;
-            case VertexElementFormat.Float3:
-            case VertexElementFormat.UInt3:
-            case VertexElementFormat.Int3:
-                return 12;
-            case VertexElementFormat.Float4:
-            case VertexElementFormat.UInt4:
-            case VertexElementFormat.Int4:
-                return 16;
-            default:
-                throw Illegal.Value<VertexElementFormat>();
-        }
+            VertexElementFormat.Byte2_Norm or VertexElementFormat.Byte2 or VertexElementFormat.SByte2_Norm or VertexElementFormat.SByte2 or VertexElementFormat.Half1 => 2,
+            VertexElementFormat.Float1 or VertexElementFormat.UInt1 or VertexElementFormat.Int1 or VertexElementFormat.Byte4_Norm or VertexElementFormat.Byte4 or VertexElementFormat.SByte4_Norm or VertexElementFormat.SByte4 or VertexElementFormat.UShort2_Norm or VertexElementFormat.UShort2 or VertexElementFormat.Short2_Norm or VertexElementFormat.Short2 or VertexElementFormat.Half2 => 4,
+            VertexElementFormat.Float2 or VertexElementFormat.UInt2 or VertexElementFormat.Int2 or VertexElementFormat.UShort4_Norm or VertexElementFormat.UShort4 or VertexElementFormat.Short4_Norm or VertexElementFormat.Short4 or VertexElementFormat.Half4 => 8,
+            VertexElementFormat.Float3 or VertexElementFormat.UInt3 or VertexElementFormat.Int3 => 12,
+            VertexElementFormat.Float4 or VertexElementFormat.UInt4 or VertexElementFormat.Int4 => 16,
+            _ => throw Illegal.Value<VertexElementFormat>(),
+        };
     }
 }

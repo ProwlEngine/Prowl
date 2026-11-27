@@ -18,7 +18,7 @@ internal sealed class UvFlattener
 
     private readonly MeshRegion _region;
     private readonly HalfEdgeMesh _workMesh = new();
-    private readonly Dictionary<int, int> _vertexBackMap = new();
+    private readonly Dictionary<int, int> _vertexBackMap = [];
 
     // Angle system: one variable per triangle corner.
     private SparseMatrix _angleMatrix = new();
@@ -113,7 +113,7 @@ internal sealed class UvFlattener
         int constraintCount = 2 * interiorVertexCount + _workMesh.Triangles.Count;
         _angleRhs = new double[constraintCount];
 
-        var assembler = _assembler;
+        SparseMatrixAssembler assembler = _assembler;
         assembler.Clear();
         int row = 0;
 
@@ -215,7 +215,7 @@ internal sealed class UvFlattener
         _uv = new double[2 * vertexCount];
 
         var rowBuffer = new ConformalRowBuffer();
-        var assembler = _assembler;
+        SparseMatrixAssembler assembler = _assembler;
         assembler.Clear();
 
         int[] lockedVertex = { -1, -1 };
@@ -225,7 +225,7 @@ internal sealed class UvFlattener
         int pinned = 0;
         if (pins != null)
         {
-            foreach (var pin in pins)
+            foreach (KeyValuePair<int, Double2> pin in pins)
             {
                 if (!_vertexBackMap.TryGetValue(pin.Key, out int work) || locked[work]) continue;
                 locked[work] = true;
@@ -491,15 +491,15 @@ internal sealed class UvFlattener
     }
 
     // Right rotation: (a, b, c) -> (c, a, b). After up to two of these, the largest sine sits at slot 2.
-    private static void RotateRight<T>(T[] a) { var tmp = a[2]; a[2] = a[1]; a[1] = a[0]; a[0] = tmp; }
+    private static void RotateRight<T>(T[] a) { T? tmp = a[2]; a[2] = a[1]; a[1] = a[0]; a[0] = tmp; }
 }
 
 /// <summary>Scratch storage for assembling one LSCM row at a time.</summary>
 internal sealed class ConformalRowBuffer
 {
-    public List<(int Index, double Value)> Free = new(6);
-    public List<(int Index, double Value)> LockedTerms = new(6);
-    public List<(int Index, double Value)> LockedValues = new(6);
+    public List<(int Index, double Value)> Free = [with(6)];
+    public List<(int Index, double Value)> LockedTerms = [with(6)];
+    public List<(int Index, double Value)> LockedValues = [with(6)];
 
     /// <summary>Which vertices are held in place, and for the others their place among the free ones.</summary>
     public bool[] Locked = System.Array.Empty<bool>();

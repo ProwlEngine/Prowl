@@ -24,7 +24,7 @@ public sealed class IconToolbarBuilder
     private readonly OrigamiTheme _theme;
     private readonly int _selected;
     private readonly Action<int> _setter;
-    private readonly List<(IOrigamiIcon icon, string? tooltip)> _items = new();
+    private readonly List<(IOrigamiIcon icon, string? tooltip)> _items = [];
 
     private bool _vertical;
     private bool _container = true;
@@ -64,8 +64,8 @@ public sealed class IconToolbarBuilder
     {
         if (_items.Count == 0) return;
 
-        var ink = _theme.Ink;
-        var acc = _theme.Primary.C500;
+        OrigamiRamp ink = _theme.Ink;
+        Color acc = _theme.Primary.C500;
         float btn = _button;
         const float gap = 3f;
         float pad = _container ? 4f : 0f;
@@ -88,9 +88,9 @@ public sealed class IconToolbarBuilder
             {
                 int idx = i;
                 bool on = i == _selected;
-                var (icon, tooltip) = _items[i];
+                (IOrigamiIcon? icon, string? tooltip) = _items[i];
 
-                var b = _paper.Box($"{_id}_b{i}").Width(btn).Height(btn).Rounded(_theme.Metrics.Rounding)
+                ElementBuilder b = _paper.Box($"{_id}_b{i}").Width(btn).Height(btn).Rounded(_theme.Metrics.Rounding)
                     .OnClick(_ => _setter(idx));
 
                 if (on)

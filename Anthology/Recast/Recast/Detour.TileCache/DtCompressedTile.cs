@@ -18,23 +18,22 @@ freely, subject to the following restrictions:
 3. This notice may not be removed or altered from any source distribution.
 */
 
-namespace Prowl.Recast.Detour.TileCache
+namespace Prowl.Recast.Detour.TileCache;
+
+public class DtCompressedTile
 {
-    public class DtCompressedTile
+    public readonly int index;
+    public int salt; // Counter describing modifications to the tile.
+    public DtTileCacheLayerHeader header;
+
+    public byte[] data;
+    public int compressed; // offset of compressed data
+    public int flags;
+    public DtCompressedTile next;
+
+    public DtCompressedTile(int index)
     {
-        public readonly int index;
-        public int salt; // Counter describing modifications to the tile.
-        public DtTileCacheLayerHeader header;
-
-        public byte[] data;
-        public int compressed; // offset of compressed data
-        public int flags;
-        public DtCompressedTile next;
-
-        public DtCompressedTile(int index)
-        {
-            this.index = index;
-            salt = 1;
-        }
+        this.index = index;
+        salt = 1;
     }
 }

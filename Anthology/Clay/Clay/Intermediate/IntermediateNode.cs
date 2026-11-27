@@ -13,7 +13,7 @@ public sealed class IntermediateNode
 {
     public string Name { get; set; } = string.Empty;
     public IntermediateNode? Parent { get; set; }
-    public List<IntermediateNode> Children { get; } = new();
+    public List<IntermediateNode> Children { get; } = [];
 
     public Float3 LocalPosition { get; set; }
     public Quaternion LocalRotation { get; set; } = Quaternion.Identity;
@@ -24,7 +24,7 @@ public sealed class IntermediateNode
     public int CameraIndex { get; set; } = -1;
     public int LightIndex { get; set; } = -1;
 
-    public Dictionary<string, object?> Metadata { get; } = new();
+    public Dictionary<string, object?> Metadata { get; } = [];
 
     /// <summary>Cached index assigned during bake-out; -1 before then.</summary>
     public int BakeIndex { get; set; } = -1;

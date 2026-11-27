@@ -20,13 +20,12 @@ freely, subject to the following restrictions:
 
 using Prowl.Recast.Core.Numerics;
 
-namespace Prowl.Recast.Detour.Crowd
+namespace Prowl.Recast.Detour.Crowd;
+
+public class DtCrowdAgentDebugInfo
 {
-    public class DtCrowdAgentDebugInfo
-    {
-        public DtCrowdAgent agent;
-        public RcVec3f optStart = new RcVec3f();
-        public RcVec3f optEnd = new RcVec3f();
-        public DtObstacleAvoidanceDebugData vod;
-    }
+    public DtCrowdAgent agent;
+    public RcVec3f optStart = new RcVec3f();
+    public RcVec3f optEnd = new RcVec3f();
+    public DtObstacleAvoidanceDebugData vod;
 }

@@ -13,9 +13,9 @@ using Microsoft.CodeAnalysis.CodeFixes;
 using Microsoft.CodeAnalysis.CodeRefactorings;
 using Microsoft.CodeAnalysis.Text;
 
-using RoslynCodeAction = Microsoft.CodeAnalysis.CodeActions.CodeAction;
 using ApplyChangesOperation = Microsoft.CodeAnalysis.CodeActions.ApplyChangesOperation;
 using CodeActionWithOptions = Microsoft.CodeAnalysis.CodeActions.CodeActionWithOptions;
+using RoslynCodeAction = Microsoft.CodeAnalysis.CodeActions.CodeAction;
 
 namespace Prowl.OrigamiUI.CSharp;
 
@@ -49,7 +49,7 @@ internal static class RoslynCodeActions
             try { types = assembly.GetTypes(); }
             catch (ReflectionTypeLoadException e) { types = e.Types.Where(t => t != null).ToArray()!; }
 
-            foreach (var type in types)
+            foreach (Type type in types)
             {
                 if (type.IsAbstract || type.ContainsGenericParameters || !typeof(T).IsAssignableFrom(type)) continue;
                 if (!exportedForCSharp(type)) continue;
@@ -63,12 +63,12 @@ internal static class RoslynCodeActions
 
     public static async Task<IReadOnlyList<CodeAction>> GetAsync(Document document, TextSpan span, CancellationToken ct)
     {
-        var model = await document.GetSemanticModelAsync(ct).ConfigureAwait(false);
-        var text = await document.GetTextAsync(ct).ConfigureAwait(false);
+        SemanticModel? model = await document.GetSemanticModelAsync(ct).ConfigureAwait(false);
+        SourceText text = await document.GetTextAsync(ct).ConfigureAwait(false);
         if (model == null) return Array.Empty<CodeAction>();
 
         // Fixes apply to diagnostics anywhere on the caret's lines, as Visual Studio's bulb does.
-        var lines = text.Lines;
+        TextLineCollection lines = text.Lines;
         int firstLine = lines.GetLineFromPosition(span.Start).LineNumber;
         int lastLine = lines.GetLineFromPosition(Math.Min(text.Length, span.End)).LineNumber;
         var lineSpan = TextSpan.FromBounds(lines[firstLine].Start, lines[lastLine].End);
@@ -79,9 +79,9 @@ internal static class RoslynCodeActions
             .ToList();
 
         var fixes = new List<RoslynCodeAction>();
-        foreach (var diagnostic in diagnostics)
+        foreach (Diagnostic? diagnostic in diagnostics)
         {
-            foreach (var fixer in s_fixers.Value)
+            foreach (CodeFixProvider fixer in s_fixers.Value)
             {
                 if (!fixer.FixableDiagnosticIds.Contains(diagnostic.Id)) continue;
                 try
@@ -94,7 +94,7 @@ internal static class RoslynCodeActions
         }
 
         var refactorings = new List<RoslynCodeAction>();
-        foreach (var provider in s_refactorings.Value)
+        foreach (CodeRefactoringProvider provider in s_refactorings.Value)
         {
             try
             {
@@ -106,8 +106,8 @@ internal static class RoslynCodeActions
 
         var result = new List<CodeAction>();
         var seen = new HashSet<string>(StringComparer.Ordinal);
-        foreach (var action in fixes) Add(action, "", true);
-        foreach (var action in refactorings) Add(action, "", false);
+        foreach (RoslynCodeAction action in fixes) Add(action, "", true);
+        foreach (RoslynCodeAction action in refactorings) Add(action, "", false);
         return result;
 
         // Grouped actions, such as the variants of "Generate method", become "Group: Variant" entries.
@@ -118,7 +118,7 @@ internal static class RoslynCodeActions
             string title = prefix + action.Title;
             if (!action.NestedActions.IsDefaultOrEmpty)
             {
-                foreach (var nested in action.NestedActions) Add(nested, title + ": ", isFix);
+                foreach (RoslynCodeAction nested in action.NestedActions) Add(nested, title + ": ", isFix);
                 return;
             }
             if (!seen.Add(title)) return;
@@ -128,21 +128,21 @@ internal static class RoslynCodeActions
 
     private static async Task<CodeRenameResult?> ResolveAsync(Document document, RoslynCodeAction action, CancellationToken ct)
     {
-        var operations = await action.GetOperationsAsync(ct).ConfigureAwait(false);
-        var apply = operations.OfType<ApplyChangesOperation>().FirstOrDefault();
+        System.Collections.Immutable.ImmutableArray<Microsoft.CodeAnalysis.CodeActions.CodeActionOperation> operations = await action.GetOperationsAsync(ct).ConfigureAwait(false);
+        ApplyChangesOperation? apply = operations.OfType<ApplyChangesOperation>().FirstOrDefault();
         if (apply == null) return null;
 
-        var before = document.Project.Solution;
-        var after = apply.ChangedSolution;
+        Solution before = document.Project.Solution;
+        Solution after = apply.ChangedSolution;
         var edits = new List<CodeTextEdit>();
         var others = new Dictionary<string, IReadOnlyList<CodeTextEdit>>();
-        foreach (var projectChanges in after.GetChanges(before).GetProjectChanges())
+        foreach (ProjectChanges projectChanges in after.GetChanges(before).GetProjectChanges())
         {
-            foreach (var id in projectChanges.GetChangedDocuments())
+            foreach (DocumentId id in projectChanges.GetChangedDocuments())
             {
-                var oldDocument = before.GetDocument(id)!;
-                var newDocument = after.GetDocument(id)!;
-                var changes = await newDocument.GetTextChangesAsync(oldDocument, ct).ConfigureAwait(false);
+                Document oldDocument = before.GetDocument(id)!;
+                Document newDocument = after.GetDocument(id)!;
+                IEnumerable<Microsoft.CodeAnalysis.Text.TextChange> changes = await newDocument.GetTextChangesAsync(oldDocument, ct).ConfigureAwait(false);
                 var mapped = changes.Select(c => new CodeTextEdit(c.Span.Start, c.Span.Length, c.NewText ?? "")).ToList();
                 if (id == document.Id) edits.AddRange(mapped);
                 else others[oldDocument.FilePath ?? oldDocument.Name] = mapped;

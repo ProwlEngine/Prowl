@@ -18,16 +18,16 @@ namespace Prowl.Vector.Geometry;
 public partial class GeometryData
 {
     // Topological entities
-    public List<Vertex> Vertices { get; } = new List<Vertex>();
-    public List<Edge> Edges { get; } = new List<Edge>();
-    public List<Loop> Loops { get; } = new List<Loop>();
-    public List<Face> Faces { get; } = new List<Face>();
+    public List<Vertex> Vertices { get; } = [];
+    public List<Edge> Edges { get; } = [];
+    public List<Loop> Loops { get; } = [];
+    public List<Face> Faces { get; } = [];
 
     // Attribute definitions - ensures consistency across all elements
-    public List<AttributeDefinition> VertexAttributes { get; } = new List<AttributeDefinition>();
-    public List<AttributeDefinition> EdgeAttributes { get; } = new List<AttributeDefinition>();
-    public List<AttributeDefinition> LoopAttributes { get; } = new List<AttributeDefinition>();
-    public List<AttributeDefinition> FaceAttributes { get; } = new List<AttributeDefinition>();
+    public List<AttributeDefinition> VertexAttributes { get; } = [];
+    public List<AttributeDefinition> EdgeAttributes { get; } = [];
+    public List<AttributeDefinition> LoopAttributes { get; } = [];
+    public List<AttributeDefinition> FaceAttributes { get; } = [];
 
     #region Topology Types
 
@@ -76,7 +76,7 @@ public partial class GeometryData
                 Edge it = Edge;
                 do
                 {
-                    foreach (var f in it.NeighborFaces())
+                    foreach (Face f in it.NeighborFaces())
                         faces.Add(f);
                     it = it.Next(this)!;
                 } while (it != Edge);
@@ -154,7 +154,7 @@ public partial class GeometryData
             var faces = new List<Face>();
             if (Loop != null)
             {
-                var it = Loop;
+                Loop it = Loop;
                 do
                 {
                     faces.Add(it.Face);
@@ -207,7 +207,7 @@ public partial class GeometryData
             var verts = new List<Vertex>();
             if (Loop != null)
             {
-                var it = Loop;
+                Loop it = Loop;
                 do
                 {
                     verts.Add(it.Vert);
@@ -221,7 +221,7 @@ public partial class GeometryData
         {
             if (Loop != null)
             {
-                var it = Loop;
+                Loop it = Loop;
                 do
                 {
                     yield return it.Vert;
@@ -246,7 +246,7 @@ public partial class GeometryData
         {
             if (Loop != null)
             {
-                var it = Loop;
+                Loop it = Loop;
                 do
                 {
                     if (it.Vert == v) return it;
@@ -261,7 +261,7 @@ public partial class GeometryData
             var edges = new List<Edge>();
             if (Loop != null)
             {
-                var it = Loop;
+                Loop it = Loop;
                 do
                 {
                     edges.Add(it.Edge);
@@ -273,9 +273,9 @@ public partial class GeometryData
 
         public Float3 Center()
         {
-            var p = Float3.Zero;
+            Float3 p = Float3.Zero;
             float sum = 0;
-            foreach (var v in NeighborVertices())
+            foreach (Vertex v in NeighborVertices())
             {
                 p += v.Point;
                 sum += 1;
@@ -285,14 +285,14 @@ public partial class GeometryData
 
         public Float3 Normal()
         {
-            var verts = NeighborVertices();
+            List<Vertex> verts = NeighborVertices();
             if (verts.Count < 3)
                 return Float3.Zero;
             Float3 normal = Float3.Zero;
             for (int i = 0; i < verts.Count; i++)
             {
-                var current = verts[i].Point;
-                var next = verts[(i + 1) % verts.Count].Point;
+                Float3 current = verts[i].Point;
+                Float3 next = verts[(i + 1) % verts.Count].Point;
                 normal.X += (current.Y - next.Y) * (current.Z + next.Z);
                 normal.Y += (current.Z - next.Z) * (current.X + next.X);
                 normal.Z += (current.X - next.X) * (current.Y + next.Y);
@@ -305,7 +305,7 @@ public partial class GeometryData
         /// </summary>
         public AABB GetAABB()
         {
-            var verts = NeighborVertices();
+            List<Vertex> verts = NeighborVertices();
             if (verts.Count == 0)
                 return new AABB();
 
@@ -429,7 +429,7 @@ public partial class GeometryData
             }
 
             // Insert loop into edge's radial list
-            var e = fEdges[i];
+            Edge e = fEdges[i];
             if (e.Loop == null)
             {
                 e.Loop = loop;
@@ -463,7 +463,7 @@ public partial class GeometryData
         if (vert1.Edge == null || vert2.Edge == null) return null;
 
         // Walk vert1's full edge ring; the connecting edge, if any, contains vert2.
-        var it = vert1.Edge;
+        Edge? it = vert1.Edge;
         do
         {
             if (it.ContainsVertex(vert2)) return it;
@@ -507,7 +507,7 @@ public partial class GeometryData
 
     private void RemoveLoop(Loop l)
     {
-        var face = l.Face;
+        Face face = l.Face;
         if (face != null)
         {
             RemoveFace(face);
@@ -534,13 +534,13 @@ public partial class GeometryData
     /// </summary>
     public void RemoveFace(Face f)
     {
-        var l = f.Loop;
+        Loop? l = f.Loop;
         if (l != null)
         {
-            var nextL = l;
+            Loop? nextL = l;
             do
             {
-                var currentL = nextL;
+                Loop currentL = nextL;
                 nextL = currentL.Next;
                 currentL.Face = null!; // Prevent recursion
                 RemoveLoop(currentL);
@@ -579,13 +579,13 @@ public partial class GeometryData
         {
             if (value is IntAttributeValue ival)
             {
-                var data = new int[ival.Data.Length];
+                int[] data = new int[ival.Data.Length];
                 ival.Data.CopyTo(data, 0);
                 return new IntAttributeValue { Data = data };
             }
             if (value is FloatAttributeValue fval)
             {
-                var data = new float[fval.Data.Length];
+                float[] data = new float[fval.Data.Length];
                 fval.Data.CopyTo(data, 0);
                 return new FloatAttributeValue { Data = data };
             }
@@ -653,7 +653,7 @@ public partial class GeometryData
             float sum = 0;
             foreach (float weight in Weights) sum += weight;
             if (sum <= Smallest) return this;
-            var weights = new float[Weights.Length];
+            float[] weights = new float[Weights.Length];
             for (int i = 0; i < weights.Length; i++) weights[i] = Weights[i] / sum;
             return new WeightsAttributeValue((int[])Groups.Clone(), weights);
         }
@@ -676,7 +676,7 @@ public partial class GeometryData
             }
             var groups = new List<int>(sums.Count);
             var weights = new List<float>(sums.Count);
-            foreach (var pair in sums)
+            foreach (KeyValuePair<int, float> pair in sums)
             {
                 if (pair.Value <= Smallest) continue;
                 groups.Add(pair.Key);
@@ -785,10 +785,10 @@ public partial class GeometryData
         if (Vertices.Count == 0)
             return new AABB();
 
-        var min = Vertices[0].Point;
-        var max = Vertices[0].Point;
+        Float3 min = Vertices[0].Point;
+        Float3 max = Vertices[0].Point;
 
-        foreach (var vertex in Vertices)
+        foreach (Vertex vertex in Vertices)
         {
             min = new Float3(
                 Maths.Min(min.X, vertex.Point.X),
@@ -836,9 +836,9 @@ public partial class GeometryData
         var vertices = new List<Float3>();
         var indices = new List<uint>();
 
-        foreach (var face in Faces)
+        foreach (Face face in Faces)
         {
-            var faceVerts = face.NeighborVertices();
+            List<Vertex> faceVerts = face.NeighborVertices();
             if (faceVerts.Count < 3) continue;
 
             // Fan triangulation from first vertex
@@ -866,7 +866,7 @@ public partial class GeometryData
         var vertices = new List<Float3>();
         var indices = new List<uint>();
 
-        foreach (var edge in Edges)
+        foreach (Edge edge in Edges)
         {
             uint baseIndex = (uint)vertices.Count;
             vertices.Add(edge.Vert1.Point);

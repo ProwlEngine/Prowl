@@ -133,15 +133,15 @@ public sealed partial class EchoObject : IEquatable<EchoObject>
             // Value is a List<Tag>
             var list = (List<EchoObject>)Value!;
             var newList = new List<EchoObject>(list.Count);
-            foreach (var tag in list)
+            foreach (EchoObject tag in list)
                 newList.Add(tag.Clone());
 
             return new(EchoType.List, newList);
         }
         else if (TagType == EchoType.Compound)
         {
-            var clone = NewCompound(Count);
-            foreach (var (key, tag) in Tags)
+            EchoObject clone = NewCompound(Count);
+            foreach ((string? key, EchoObject? tag) in Tags)
                 clone.AddUnique(key, tag.Clone());
             return clone;
         }
@@ -244,9 +244,9 @@ public sealed partial class EchoObject : IEquatable<EchoObject>
                 if (Count != other.Count) return false;
 
                 // Key order does not affect equality.
-                foreach (var kvp in Tags)
+                foreach (KeyValuePair<string, EchoObject> kvp in Tags)
                 {
-                    if (!other.TryGet(kvp.Key, out var otherVal) || !kvp.Value.Equals(otherVal))
+                    if (!other.TryGet(kvp.Key, out EchoObject? otherVal) || !kvp.Value.Equals(otherVal))
                         return false;
                 }
                 return true;
@@ -294,12 +294,12 @@ public sealed partial class EchoObject : IEquatable<EchoObject>
 
         if (TagType == EchoType.Compound)
         {
-            foreach (var echo in Tags)
+            foreach (KeyValuePair<string, EchoObject> echo in Tags)
                 hash = HashCode.Combine(hash.GetHashCode(), echo.Key, echo.Value.GetHashCode());
         }
         else if (TagType == EchoType.List)
         {
-            foreach (var echo in List)
+            foreach (EchoObject echo in List)
                 hash = HashCode.Combine(hash.GetHashCode(), echo.GetHashCode());
         }
         else hash = HashCode.Combine(TagType.GetHashCode(), Value?.GetHashCode() ?? 0); // Primitive tag type

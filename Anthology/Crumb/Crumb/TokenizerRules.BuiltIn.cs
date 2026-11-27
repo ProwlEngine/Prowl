@@ -23,7 +23,7 @@ public sealed partial class TokenizerRules<TKind>
 
         return Rule((ref Tokenizer<TKind> t, out Token<TKind> token) =>
         {
-            var src = t.Source;
+            ReadOnlySpan<char> src = t.Source;
             int pos = t.Position;
             if (pos >= src.Length || !start(src[pos]))
             {
@@ -52,7 +52,7 @@ public sealed partial class TokenizerRules<TKind>
 
         return Rule((ref t, out token) =>
         {
-            var src = t.Source;
+            ReadOnlySpan<char> src = t.Source;
             int pos = t.Position;
             int len = src.Length;
 
@@ -126,7 +126,7 @@ public sealed partial class TokenizerRules<TKind>
 
         return Rule((ref Tokenizer<TKind> t, out Token<TKind> token) =>
         {
-            var src = t.Source;
+            ReadOnlySpan<char> src = t.Source;
             int pos = t.Position;
             int len = src.Length;
             if (pos >= len || src[pos] != delimiter)
@@ -181,7 +181,7 @@ public sealed partial class TokenizerRules<TKind>
 
         return Rule((ref Tokenizer<TKind> t, out Token<TKind> token) =>
         {
-            var src = t.Source;
+            ReadOnlySpan<char> src = t.Source;
             int pos = t.Position;
             if (!StartsWith(src, pos, open))
             {
@@ -223,7 +223,7 @@ public sealed partial class TokenizerRules<TKind>
 
         return Rule((ref Tokenizer<TKind> t, out Token<TKind> token) =>
         {
-            var src = t.Source;
+            ReadOnlySpan<char> src = t.Source;
             int pos = t.Position;
             if (!StartsWith(src, pos, prefix))
             {

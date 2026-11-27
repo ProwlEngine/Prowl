@@ -114,8 +114,8 @@ public sealed class FoldoutBuilder
     {
         ArgumentNullException.ThrowIfNull(drawContents);
 
-        var ink = _theme.Ink;
-        var metrics = _theme.Metrics;
+        OrigamiRamp ink = _theme.Ink;
+        OrigamiMetrics metrics = _theme.Metrics;
         float rounding = _roundingOverride ?? metrics.ContainerRounding;
 
         // Nebula "w2fold" tokens.
@@ -139,7 +139,7 @@ public sealed class FoldoutBuilder
         const float gap = 8f;                   // flex gap between header children
 
         // Outer card: 1px bd-soft border, overflow hidden.
-        var container = _paper.Column($"{_id}")
+        ElementBuilder container = _paper.Column($"{_id}")
             .Width(UnitValue.Stretch())
             .Height(UnitValue.Auto)
             .Rounded(rounding)
@@ -149,7 +149,7 @@ public sealed class FoldoutBuilder
 
         using (container.Enter())
         {
-            var header = _paper.Row("header")
+            ElementBuilder header = _paper.Row("header")
                 .Width(UnitValue.Stretch())
                 .Height(headH);
 
@@ -200,7 +200,7 @@ public sealed class FoldoutBuilder
                 // Optional leading accent icon (acc-300), vertically centered in the header.
                 if (_icon != null)
                 {
-                    var icon = _icon;
+                    IOrigamiIcon icon = _icon;
                     using (_paper.Box("icon")
                         .Width(14f).Height(headH)
                         .Margin(0, gap, 0, 0)
@@ -226,7 +226,7 @@ public sealed class FoldoutBuilder
                     // and can keep it from also opening or closing the foldout.
                     if (hasToggle)
                     {
-                        var setter = _toggleSetter!;
+                        Action<bool> setter = _toggleSetter!;
                         using (_paper.Column("chk")
                             .Width(UnitValue.Auto).Height(headH)
                             .Margin(0, gap, 0, 0)
@@ -270,7 +270,7 @@ public sealed class FoldoutBuilder
             Color bodyBg = _bodyBgOverride ?? Color.Transparent;
 
             // Body wrapper collapses via an animated height and is clipped so content wipes in/out.
-            var body = _paper.Column("body")
+            ElementBuilder body = _paper.Column("body")
                 .Width(UnitValue.Stretch())
                 .Height(UnitValue.Lerp(0, UnitValue.Auto, anim))
                 .Clip();
@@ -285,7 +285,7 @@ public sealed class FoldoutBuilder
                     .BackgroundColor(bdSoft)
                     .IsNotInteractable();
 
-                var content = _paper.Box("inner")
+                ElementBuilder content = _paper.Box("inner")
                     .Width(UnitValue.Stretch())
                     .Height(UnitValue.Auto)
                     .Padding(12f, 12f, 10f, 10f)

@@ -23,81 +23,80 @@ using System.Collections.Generic;
 using System.Linq;
 using System.Threading;
 
-namespace Prowl.Recast.Core
+namespace Prowl.Recast.Core;
+
+/// Provides an interface for optional logging and performance tracking of the Recast 
+/// build process.
+/// 
+/// This class does not provide logging or timer functionality on its 
+/// own.  Both must be provided by a concrete implementation 
+/// by overriding the protected member functions.  Also, this class does not 
+/// provide an interface for extracting log messages. (Only adding them.) 
+/// So concrete implementations must provide one.
+///
+/// If no logging or timers are required, just pass an instance of this 
+/// class through the Recast build process.
+/// 
+/// @ingroup recast
+public class RcContext
 {
-    /// Provides an interface for optional logging and performance tracking of the Recast 
-    /// build process.
-    /// 
-    /// This class does not provide logging or timer functionality on its 
-    /// own.  Both must be provided by a concrete implementation 
-    /// by overriding the protected member functions.  Also, this class does not 
-    /// provide an interface for extracting log messages. (Only adding them.) 
-    /// So concrete implementations must provide one.
-    ///
-    /// If no logging or timers are required, just pass an instance of this 
-    /// class through the Recast build process.
-    /// 
-    /// @ingroup recast
-    public class RcContext
+    /// Where Warn and Log go when a host sets one. Static because a build owns a context per
+    /// thread, so there is no single instance to configure; unset, messages go to the console.
+    public static Action<RcLogCategory, string> Sink { get; set; }
+
+    private readonly ThreadLocal<Dictionary<string, RcAtomicLong>> _timerStart;
+    private readonly ConcurrentDictionary<string, RcAtomicLong> _timerAccum;
+
+    public RcContext()
     {
-        /// Where Warn and Log go when a host sets one. Static because a build owns a context per
-        /// thread, so there is no single instance to configure; unset, messages go to the console.
-        public static Action<RcLogCategory, string> Sink { get; set; }
+        _timerStart = new ThreadLocal<Dictionary<string, RcAtomicLong>>(() => []);
+        _timerAccum = new ConcurrentDictionary<string, RcAtomicLong>();
+    }
 
-        private readonly ThreadLocal<Dictionary<string, RcAtomicLong>> _timerStart;
-        private readonly ConcurrentDictionary<string, RcAtomicLong> _timerAccum;
+    public RcScopedTimer ScopedTimer(RcTimerLabel label)
+    {
+        return new RcScopedTimer(this, label);
+    }
 
-        public RcContext()
+    public void StartTimer(RcTimerLabel label)
+    {
+        _timerStart.Value[label.Name] = new RcAtomicLong(RcFrequency.Ticks);
+    }
+
+
+    public void StopTimer(RcTimerLabel label)
+    {
+        _timerAccum
+            .GetOrAdd(label.Name, _ => new RcAtomicLong(0))
+            .AddAndGet(RcFrequency.Ticks - _timerStart.Value?[label.Name].Read() ?? 0);
+    }
+
+    public void Warn(string message) => Log(RcLogCategory.RC_LOG_WARNING, message);
+
+    public void Log(RcLogCategory logLevel, string message)
+    {
+        Action<RcLogCategory, string> sink = Sink;
+        if (sink != null)
         {
-            _timerStart = new ThreadLocal<Dictionary<string, RcAtomicLong>>(() => new Dictionary<string, RcAtomicLong>());
-            _timerAccum = new ConcurrentDictionary<string, RcAtomicLong>();
-        }
-
-        public RcScopedTimer ScopedTimer(RcTimerLabel label)
-        {
-            return new RcScopedTimer(this, label);
-        }
-
-        public void StartTimer(RcTimerLabel label)
-        {
-            _timerStart.Value[label.Name] = new RcAtomicLong(RcFrequency.Ticks);
-        }
-
-
-        public void StopTimer(RcTimerLabel label)
-        {
-            _timerAccum
-                .GetOrAdd(label.Name, _ => new RcAtomicLong(0))
-                .AddAndGet(RcFrequency.Ticks - _timerStart.Value?[label.Name].Read() ?? 0);
-        }
-
-        public void Warn(string message) => Log(RcLogCategory.RC_LOG_WARNING, message);
-
-        public void Log(RcLogCategory logLevel, string message)
-        {
-            Action<RcLogCategory, string> sink = Sink;
-            if (sink != null)
+            try
             {
-                try
-                {
-                    sink(logLevel, message);
-                }
-                catch (Exception)
-                {
-                    // A logger cannot be allowed to abort a tile build.
-                }
-
-                return;
+                sink(logLevel, message);
+            }
+            catch (Exception)
+            {
+                // A logger cannot be allowed to abort a tile build.
             }
 
-            Console.WriteLine(message);
+            return;
         }
 
-        public List<RcTelemetryTick> ToList()
-        {
-            return _timerAccum
-                .Select(x => new RcTelemetryTick(x.Key, x.Value.Read()))
-                .ToList();
-        }
+        Console.WriteLine(message);
+    }
+
+    public List<RcTelemetryTick> ToList()
+    {
+        return _timerAccum
+            .Select(x => new RcTelemetryTick(x.Key, x.Value.Read()))
+            .ToList();
     }
 }

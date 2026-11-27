@@ -19,7 +19,7 @@ internal static class BisectPlaneOp
         var side = new Dictionary<GeometryData.Vertex, int>();
         var distances = new Dictionary<GeometryData.Vertex, float>();
 
-        foreach (var v in mesh.Vertices.ToArray())
+        foreach (GeometryData.Vertex v in mesh.Vertices.ToArray())
         {
             float distance = plane.GetSignedDistanceToPoint(v.Point);
             distances[v] = distance;
@@ -33,7 +33,7 @@ internal static class BisectPlaneOp
         }
 
         var crossing = new List<(GeometryData.Edge Edge, float Factor)>();
-        foreach (var edge in mesh.Edges.ToArray())
+        foreach (GeometryData.Edge edge in mesh.Edges.ToArray())
         {
             if (!side.TryGetValue(edge.Vert1, out int s1) || !side.TryGetValue(edge.Vert2, out int s2)) continue;
             if (s1 == 0 || s2 == 0 || s1 == s2) continue;
@@ -42,9 +42,9 @@ internal static class BisectPlaneOp
             crossing.Add((edge, d1 / (d1 - d2)));
         }
 
-        foreach (var (edge, factor) in crossing)
+        foreach ((GeometryData.Edge? edge, float factor) in crossing)
         {
-            var made = SplitEdgeOp.SplitEdge(mesh, edge, edge.Vert1, factor, out _);
+            GeometryData.Vertex made = SplitEdgeOp.SplitEdge(mesh, edge, edge.Vert1, factor, out _);
             side[made] = 0;
             distances[made] = 0f;
         }
@@ -52,13 +52,13 @@ internal static class BisectPlaneOp
         var queue = new Queue<GeometryData.Face>(mesh.Faces);
         while (queue.Count > 0)
         {
-            var face = queue.Dequeue();
+            GeometryData.Face face = queue.Dequeue();
             if (!mesh.Contains(face)) continue;
 
-            var pair = FindCut(face, side, plane);
+            (GeometryData.Vertex A, GeometryData.Vertex B)? pair = FindCut(face, side, plane);
             if (pair == null) continue;
 
-            var (first, second) = SplitFaceOp.SplitFaceBoth(mesh, face, pair.Value.A, pair.Value.B, out _);
+            (GeometryData.Face? first, GeometryData.Face? second) = SplitFaceOp.SplitFaceBoth(mesh, face, pair.Value.A, pair.Value.B, out _);
             if (first != null) queue.Enqueue(first);
             if (second != null) queue.Enqueue(second);
         }
@@ -94,7 +94,7 @@ internal static class BisectPlaneOp
 
         // A cut that leaves each piece on one side is best, but any cut along the plane inside the face makes progress
         foreach (bool cleanOnly in new[] { true, false })
-            foreach (var (a, b, _) in candidates)
+            foreach ((int a, int b, int _) in candidates)
             {
                 if (cleanOnly && !SeparatesSides(verts, a, b, side)) continue;
                 if (!ChordInside(flat, a, b)) continue;
@@ -130,8 +130,8 @@ internal static class BisectPlaneOp
             return (positive, negative);
         }
 
-        var one = Walk(a, b);
-        var other = Walk(b, a);
+        (bool Positive, bool Negative) one = Walk(a, b);
+        (bool Positive, bool Negative) other = Walk(b, a);
         bool oneClean = one.Positive != one.Negative;
         bool otherClean = other.Positive != other.Negative;
         return oneClean && otherClean && (one.Positive && other.Negative || one.Negative && other.Positive);

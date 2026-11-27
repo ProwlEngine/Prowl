@@ -1,10 +1,9 @@
 using System.Collections.Generic;
 
-namespace Prowl.Recast.Core
+namespace Prowl.Recast.Core;
+
+public class RcObjImporterContext
 {
-    public class RcObjImporterContext
-    {
-        public List<float> vertexPositions = new List<float>();
-        public List<int> meshFaces = new List<int>();
-    }
+    public List<float> vertexPositions = [];
+    public List<int> meshFaces = [];
 }

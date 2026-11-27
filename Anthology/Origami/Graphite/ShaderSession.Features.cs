@@ -37,25 +37,25 @@ public sealed partial class ShaderSession
 
     public override Task<CodeCompletionList?> GetCompletionsAsync(int offset, CodeCompletionTrigger trigger, CancellationToken ct) => Run<CodeCompletionList?>(() =>
     {
-        var index = Index();
+        ShaderIndex index = Index();
         string text = index.Text;
         offset = Math.Clamp(offset, 0, text.Length);
         if (InComment(text, offset)) return null;
 
-        var (wordStart, _) = WordAt(text, offset);
+        (int wordStart, int _) = WordAt(text, offset);
         bool typedWord = trigger.Kind == CodeCompletionTriggerKind.Character && IsWordChar(trigger.Character);
 
         if (index.IsShaderFile && !index.InGlsl(offset))
             return List(WrapperCompletions(index, offset, wordStart), wordStart);
 
-        var directive = index.DirectiveAt(offset);
+        Directive? directive = index.DirectiveAt(offset);
         if (directive != null) return DirectiveCompletions(index, directive, offset, wordStart);
 
         // After a dot: the members of whatever is to its left.
         if (wordStart > 0 && text[wordStart - 1] == '.')
         {
-            var visible = Visible(index, wordStart);
-            var type = ReceiverType(index, visible, wordStart - 1);
+            List<ShaderSymbol> visible = Visible(index, wordStart);
+            string? type = ReceiverType(index, visible, wordStart - 1);
             return type == null ? null : List(MemberCompletions(visible, type), wordStart);
         }
         if (trigger.Kind == CodeCompletionTriggerKind.Character && !typedWord) return null;
@@ -96,7 +96,7 @@ public sealed partial class ShaderSession
         int depth = 0;
         for (int j = i; j >= 0 && j > i - 40; j--)
         {
-            var t = index.Token(j);
+            Tok t = index.Token(j);
             if (t.Text == ")") depth++;
             else if (t.Text == "(")
             {
@@ -111,29 +111,29 @@ public sealed partial class ShaderSession
     private IEnumerable<CodeCompletionItem> GlslCompletions(ShaderIndex index, int offset)
     {
         var seen = new HashSet<string>(StringComparer.Ordinal);
-        var stages = index.StagesAt(offset);
+        GlslStages stages = index.StagesAt(offset);
 
-        foreach (var s in Visible(index, offset).OrderByDescending(s => s.IsLocal))
+        foreach (ShaderSymbol? s in Visible(index, offset).OrderByDescending(s => s.IsLocal))
         {
             if (s.Kind == ShaderSymbolKind.Field && s.Container != null) continue;
             if (!seen.Add(s.Name)) continue;
             yield return Item(s.Name, SymbolKind(s.Kind), s.Kind == ShaderSymbolKind.Function ? s.Detail : s.Type.Length > 0 ? s.Type : s.Kind.ToString().ToLowerInvariant());
         }
 
-        foreach (var define in ShaderSyntax.StageDefines.Keys)
+        foreach (string define in ShaderSyntax.StageDefines.Keys)
             if (seen.Add(define)) yield return Item(define, CodeSymbolKind.Constant, "define");
 
         if (index.IsShaderFile && index.SectionAt(offset) == null)
-            foreach (var section in ShaderSyntax.Sections.Keys)
+            foreach (string section in ShaderSyntax.Sections.Keys)
                 if (seen.Add(section)) yield return Item(section, CodeSymbolKind.Keyword, "section");
 
-        foreach (var t in GlslBuiltins.Types)
+        foreach (string t in GlslBuiltins.Types)
             if (seen.Add(t)) yield return Item(t, CodeSymbolKind.Struct, "type");
-        foreach (var k in GlslBuiltins.Keywords.Concat(GlslBuiltins.ControlKeywords))
+        foreach (string? k in GlslBuiltins.Keywords.Concat(GlslBuiltins.ControlKeywords))
             if (seen.Add(k)) yield return Item(k, CodeSymbolKind.Keyword);
-        foreach (var f in GlslBuiltins.Functions)
+        foreach (GlslBuiltinFunction f in GlslBuiltins.Functions)
             if ((f.Stages & stages) != 0 && seen.Add(f.Name)) yield return Item(f.Name, CodeSymbolKind.Method, $"{f.ReturnType} {f.Name}({f.Parameters})");
-        foreach (var v in GlslBuiltins.Variables)
+        foreach (GlslBuiltinVariable v in GlslBuiltins.Variables)
             if ((v.Stages & stages) != 0 && seen.Add(v.Name)) yield return Item(v.Name, CodeSymbolKind.Field, v.Type);
     }
 
@@ -144,7 +144,7 @@ public sealed partial class ShaderSession
         {
             string scalar = ScalarOf(type);
             string[] sets = { "xyzw", "rgba", "stpq" };
-            foreach (var set in sets)
+            foreach (string set in sets)
             {
                 for (int k = 0; k < size; k++) yield return Item(set[k].ToString(), CodeSymbolKind.Field, scalar);
                 if (size >= 2) yield return Item(set.Substring(0, 2), CodeSymbolKind.Field, VectorOf(type, 2));
@@ -155,7 +155,7 @@ public sealed partial class ShaderSession
         }
 
         var seen = new HashSet<string>(StringComparer.Ordinal);
-        foreach (var f in MembersOf(visible, type))
+        foreach (ShaderSymbol f in MembersOf(visible, type))
             if (seen.Add(f.Name)) yield return Item(f.Name, CodeSymbolKind.Field, f.Type);
     }
 
@@ -180,8 +180,8 @@ public sealed partial class ShaderSession
 
         if (directive.Name == "pragma")
         {
-            var before = text.Substring(directive.ArgsOffset, offset - directive.ArgsOffset);
-            var words = before.Split((char[]?)null, StringSplitOptions.RemoveEmptyEntries);
+            string before = text.Substring(directive.ArgsOffset, offset - directive.ArgsOffset);
+            string[] words = before.Split((char[]?)null, StringSplitOptions.RemoveEmptyEntries);
             bool firstWord = words.Length == 0 || (words.Length == 1 && !char.IsWhiteSpace(before[^1]));
             if (firstWord) return List(ShaderSyntax.Pragmas.Keys.Select(p => Item(p, CodeSymbolKind.Keyword, "pragma")), wordStart);
             if (words[0] == "global" && (words.Length == 1 || (words.Length == 2 && !char.IsWhiteSpace(before[^1]))))
@@ -193,8 +193,8 @@ public sealed partial class ShaderSession
 
         if (directive.Name is "ifdef" or "ifndef" or "if" or "elif" or "undef" or "define")
         {
-            var visible = Visible(index, directive.Offset);
-            var macros = visible.Where(s => s.Kind is ShaderSymbolKind.Macro or ShaderSymbolKind.Variant).Select(s => s.Name)
+            List<ShaderSymbol> visible = Visible(index, directive.Offset);
+            IEnumerable<string> macros = visible.Where(s => s.Kind is ShaderSymbolKind.Macro or ShaderSymbolKind.Variant).Select(s => s.Name)
                 .Concat(ShaderSyntax.StageDefines.Keys).Distinct();
             return List(macros.Select(m => Item(m, CodeSymbolKind.Constant, "define")), wordStart);
         }
@@ -209,7 +209,7 @@ public sealed partial class ShaderSession
         string text = index.Text;
         var stack = new Stack<string>();
         string last = "";
-        foreach (var t in index.WrapperTokens)
+        foreach (Tok t in index.WrapperTokens)
         {
             if (t.Offset >= wordStart) break;
             if (t.Text == "{") stack.Push(last);
@@ -227,7 +227,7 @@ public sealed partial class ShaderSession
         // Inside [ ] after a property: its attributes.
         if (before.LastIndexOf('[') > before.LastIndexOf(']'))
         {
-            foreach (var (name, doc) in ShaderSyntax.Attributes) yield return Item(name, CodeSymbolKind.Method, doc);
+            foreach ((string? name, string? doc) in ShaderSyntax.Attributes) yield return Item(name, CodeSymbolKind.Method, doc);
             yield break;
         }
 
@@ -235,33 +235,33 @@ public sealed partial class ShaderSession
         {
             // _Name("Display", |) takes the property type.
             if (before.Contains('(') && before.Contains(','))
-                foreach (var (type, doc) in ShaderSyntax.PropertyTypes) yield return Item(type, CodeSymbolKind.Class, doc);
+                foreach ((string? type, string? doc) in ShaderSyntax.PropertyTypes) yield return Item(type, CodeSymbolKind.Class, doc);
             yield break;
         }
 
         if (string.Equals(block, "Tags", StringComparison.OrdinalIgnoreCase))
         {
-            var key = TagKeyPrefix().Match(before);
-            if (key.Success && ShaderSyntax.TagValues.TryGetValue(key.Groups[1].Value, out var values))
-                foreach (var v in values) yield return Item(v, CodeSymbolKind.EnumMember);
+            Match key = TagKeyPrefix().Match(before);
+            if (key.Success && ShaderSyntax.TagValues.TryGetValue(key.Groups[1].Value, out string[]? values))
+                foreach (string v in values) yield return Item(v, CodeSymbolKind.EnumMember);
             else if (before.Count(c => c == '"') % 2 == 1)
-                foreach (var (tag, doc) in ShaderSyntax.TagDocs) yield return Item(tag, CodeSymbolKind.Property, doc);
+                foreach ((string? tag, string? doc) in ShaderSyntax.TagDocs) yield return Item(tag, CodeSymbolKind.Property, doc);
             yield break;
         }
 
         bool inStencil = string.Equals(block, "Stencil", StringComparison.OrdinalIgnoreCase);
         if (!firstOnLine && words.Count > 0)
         {
-            var values = ShaderSyntax.ValuesFor(words[0], inStencil);
-            if (values != null) foreach (var v in values) yield return Item(v, CodeSymbolKind.EnumMember, words[0]);
+            string[]? values = ShaderSyntax.ValuesFor(words[0], inStencil);
+            if (values != null) foreach (string v in values) yield return Item(v, CodeSymbolKind.EnumMember, words[0]);
             else if (string.Equals(words[0], "Surface", StringComparison.OrdinalIgnoreCase))
-                foreach (var m in new[] { "Lit", "Unlit" }) yield return Item(m, CodeSymbolKind.EnumMember, "surface model");
+                foreach (string? m in new[] { "Lit", "Unlit" }) yield return Item(m, CodeSymbolKind.EnumMember, "surface model");
             yield break;
         }
 
         if (inStencil)
         {
-            foreach (var (c, doc) in ShaderSyntax.StencilCommands) yield return Item(c, CodeSymbolKind.Keyword, doc);
+            foreach ((string? c, string? doc) in ShaderSyntax.StencilCommands) yield return Item(c, CodeSymbolKind.Keyword, doc);
             yield break;
         }
 
@@ -271,12 +271,12 @@ public sealed partial class ShaderSession
                 yield return Item("Shader", CodeSymbolKind.Keyword, ShaderSyntax.Blocks["Shader"]);
                 break;
             case "shader":
-                foreach (var b in new[] { "Properties", "Surface", "Pass", "Fallback" }) yield return Item(b, CodeSymbolKind.Keyword, ShaderSyntax.Blocks[b]);
+                foreach (string? b in new[] { "Properties", "Surface", "Pass", "Fallback" }) yield return Item(b, CodeSymbolKind.Keyword, ShaderSyntax.Blocks[b]);
                 break;
             case "pass":
-                foreach (var b in new[] { "Name", "Tags", "Stencil" }) yield return Item(b, CodeSymbolKind.Keyword, ShaderSyntax.Blocks[b]);
+                foreach (string? b in new[] { "Name", "Tags", "Stencil" }) yield return Item(b, CodeSymbolKind.Keyword, ShaderSyntax.Blocks[b]);
                 yield return Item("GLSLPROGRAM", CodeSymbolKind.Keyword, "Opens the pass's GLSL, closed by ENDGLSL.");
-                foreach (var (c, doc) in ShaderSyntax.Commands) yield return Item(c, CodeSymbolKind.Keyword, doc);
+                foreach ((string? c, string? doc) in ShaderSyntax.Commands) yield return Item(c, CodeSymbolKind.Keyword, doc);
                 break;
             case "surface":
                 yield return Item("GLSLPROGRAM", CodeSymbolKind.Keyword, "Opens the surface function's GLSL, closed by ENDGLSL.");
@@ -302,32 +302,32 @@ public sealed partial class ShaderSession
 
     public override Task<CodeQuickInfo?> GetQuickInfoAsync(int offset, CancellationToken ct) => Run<CodeQuickInfo?>(() =>
     {
-        var index = Index();
+        ShaderIndex index = Index();
         string text = index.Text;
-        var (a, b) = WordAt(text, offset);
+        (int a, int b) = WordAt(text, offset);
         string word = text.Substring(a, b - a);
 
-        foreach (var include in index.Includes)
+        foreach (IncludeRef include in index.Includes)
             if (offset >= include.Offset && offset <= include.Offset + include.Length)
             {
-                var source = _workspace.Resolve(include.Name, _path);
+                ShaderSource? source = _workspace.Resolve(include.Name, _path);
                 return Info(a, b, new[] { new CodeTaggedText("#include " + include.Name) },
                     source == null ? "Not found." : source.Path == include.Name ? "Graphite library file." : source.Path);
             }
 
         if (word.Length == 0) return null;
 
-        var directive = index.DirectiveAt(offset);
+        Directive? directive = index.DirectiveAt(offset);
         if (directive != null)
         {
-            if (ShaderSyntax.Directives.TryGetValue(word, out var doc) && a <= directive.ArgsOffset) return Info(a, b, new[] { new CodeTaggedText("#" + word) }, doc);
+            if (ShaderSyntax.Directives.TryGetValue(word, out string? doc) && a <= directive.ArgsOffset) return Info(a, b, new[] { new CodeTaggedText("#" + word) }, doc);
             if (directive.Name == "pragma" && ShaderSyntax.Pragmas.TryGetValue(word, out doc)) return Info(a, b, new[] { new CodeTaggedText("#pragma " + word) }, doc);
         }
 
         if (index.IsShaderFile && !index.InGlsl(a))
         {
             string? doc = null;
-            if (ShaderSyntax.Blocks.TryGetValue(word, out var d)) doc = d;
+            if (ShaderSyntax.Blocks.TryGetValue(word, out string? d)) doc = d;
             else if (ShaderSyntax.Commands.TryGetValue(word, out d) || ShaderSyntax.StencilCommands.TryGetValue(word, out d)) doc = d;
             else if (ShaderSyntax.PropertyTypes.TryGetValue(word, out d)) doc = d;
             else if (ShaderSyntax.Attributes.TryGetValue(word, out d)) doc = d;
@@ -335,13 +335,13 @@ public sealed partial class ShaderSession
             if (doc != null) return Info(a, b, new[] { new CodeTaggedText(word, CodeTokenKind.Keyword) }, doc);
         }
 
-        var symbol = SymbolAt(index, offset, out _, out _);
+        ShaderSymbol? symbol = SymbolAt(index, offset, out _, out _);
         if (symbol != null)
         {
             var docs = new List<string>();
             if (symbol.Doc.Length > 0) docs.Add(symbol.Doc);
             if (symbol.Owner.Path != null) docs.Add("From " + symbol.Owner.Path);
-            var property = symbol.Kind == ShaderSymbolKind.Uniform ? index.Symbols.FirstOrDefault(s => s.Kind == ShaderSymbolKind.Property && s.Name == symbol.Name) : null;
+            ShaderSymbol? property = symbol.Kind == ShaderSymbolKind.Uniform ? index.Symbols.FirstOrDefault(s => s.Kind == ShaderSymbolKind.Property && s.Name == symbol.Name) : null;
             if (property != null) docs.Add("Material property " + property.Detail);
             return new CodeQuickInfo
             {
@@ -351,22 +351,22 @@ public sealed partial class ShaderSession
             };
         }
 
-        if (index.IsShaderFile && ShaderSyntax.Sections.TryGetValue(word, out var section)) return Info(a, b, new[] { new CodeTaggedText(word, CodeTokenKind.Keyword) }, section);
-        if (ShaderSyntax.StageDefines.TryGetValue(word, out var stageDoc)) return Info(a, b, new[] { new CodeTaggedText(word, CodeTokenKind.Constant) }, stageDoc);
+        if (index.IsShaderFile && ShaderSyntax.Sections.TryGetValue(word, out string? section)) return Info(a, b, new[] { new CodeTaggedText(word, CodeTokenKind.Keyword) }, section);
+        if (ShaderSyntax.StageDefines.TryGetValue(word, out string? stageDoc)) return Info(a, b, new[] { new CodeTaggedText(word, CodeTokenKind.Constant) }, stageDoc);
 
         var overloads = GlslBuiltins.Functions.Where(f => f.Name == word).ToList();
         if (overloads.Count > 0)
         {
-            var first = overloads[0];
+            GlslBuiltinFunction first = overloads[0];
             var docs = new List<string> { first.Doc };
             if (overloads.Count > 1) docs.Add(string.Join("\n", overloads.Skip(1).Take(8).Select(f => $"{f.ReturnType} {f.Name}({f.Parameters})"))
                 + (overloads.Count > 9 ? $"\n(+{overloads.Count - 9} more)" : ""));
             return new CodeQuickInfo { SpanStart = a, SpanLength = b - a, Signature = Tagged($"{first.ReturnType} {first.Name}({first.Parameters})", word, CodeTokenKind.Method), Documentation = docs };
         }
 
-        var variable = GlslBuiltins.Variables.FirstOrDefault(v => v.Name == word);
+        GlslBuiltinVariable? variable = GlslBuiltins.Variables.FirstOrDefault(v => v.Name == word);
         if (variable != null) return Info(a, b, Tagged($"{(variable.Output ? "out" : "in")} {variable.Type} {variable.Name}", word, CodeTokenKind.Field), variable.Doc);
-        if (GlslBuiltins.TypeDocs.TryGetValue(word, out var typeDoc)) return Info(a, b, new[] { new CodeTaggedText(word, CodeTokenKind.Struct) }, typeDoc);
+        if (GlslBuiltins.TypeDocs.TryGetValue(word, out string? typeDoc)) return Info(a, b, new[] { new CodeTaggedText(word, CodeTokenKind.Struct) }, typeDoc);
         return null;
     }, ct);
 
@@ -379,7 +379,7 @@ public sealed partial class ShaderSession
 
     public override Task<CodeSignatureHelp?> GetSignatureHelpAsync(int offset, CancellationToken ct) => Run<CodeSignatureHelp?>(() =>
     {
-        var index = Index();
+        ShaderIndex index = Index();
         string text = index.Text;
 
         // Walk back to the unclosed '(' the caret is inside, counting the commas at its level.
@@ -400,16 +400,16 @@ public sealed partial class ShaderSession
 
         int nameEnd = open;
         while (nameEnd > 0 && text[nameEnd - 1] == ' ') nameEnd--;
-        var (a, _) = WordAt(text, nameEnd);
+        (int a, int _) = WordAt(text, nameEnd);
         string name = text.Substring(a, nameEnd - a);
         if (name.Length == 0) return null;
 
         var signatures = new List<CodeSignature>();
-        foreach (var s in Visible(index, a).Where(s => s.Name == name && s.Parameters != null))
+        foreach (ShaderSymbol? s in Visible(index, a).Where(s => s.Name == name && s.Parameters != null))
             signatures.Add(Signature(s.Type, name, s.Parameters!.Select(p => p.Name.Length > 0 && p.Type.Length > 0 ? $"{p.Type} {p.Name}" : p.Type + p.Name).ToList(), s.Doc));
-        var stages = index.StagesAt(a);
-        foreach (var f in GlslBuiltins.Functions.Where(f => f.Name == name && (f.Stages & stages) != 0))
-            signatures.Add(Signature(f.ReturnType, name, f.Parameters.Length == 0 ? new List<string>() : f.Parameters.Split(", ").ToList(), f.Doc));
+        GlslStages stages = index.StagesAt(a);
+        foreach (GlslBuiltinFunction? f in GlslBuiltins.Functions.Where(f => f.Name == name && (f.Stages & stages) != 0))
+            signatures.Add(Signature(f.ReturnType, name, f.Parameters.Length == 0 ? [] : f.Parameters.Split(", ").ToList(), f.Doc));
         if (signatures.Count == 0) return null;
 
         int best = signatures.FindIndex(s => s.Parameters.Count > commas);
@@ -468,11 +468,11 @@ public sealed partial class ShaderSession
 
     public override Task<IReadOnlyList<CodeDiagnostic>> GetDiagnosticsAsync(CancellationToken ct) => Run<IReadOnlyList<CodeDiagnostic>>(() =>
     {
-        var index = Index();
+        ShaderIndex index = Index();
         var result = new List<CodeDiagnostic>();
         string text = index.Text;
 
-        foreach (var include in index.Includes)
+        foreach (IncludeRef include in index.Includes)
             if (_workspace.Resolve(include.Name, _path) == null)
                 result.Add(new CodeDiagnostic { Start = include.Offset, Length = include.Length, Severity = CodeDiagnosticSeverity.Error, Id = "include", Message = $"Cannot find include '{include.Name}'." });
 
@@ -488,7 +488,7 @@ public sealed partial class ShaderSession
         catch (ParseException e)
         {
             int at = OffsetOf(text, e.Line, e.Column);
-            var (a, b) = WordAt(text, at);
+            (int a, int b) = WordAt(text, at);
             string message = LineColumnSuffix().Replace(e.Message, "");
             result.Add(new CodeDiagnostic { Start = a, Length = Math.Max(1, b - a), Severity = CodeDiagnosticSeverity.Error, Id = "shader", Message = message });
             return;
@@ -511,14 +511,14 @@ public sealed partial class ShaderSession
             }
         }
 
-        foreach (var pass in passes)
+        foreach (ShaderPass pass in passes)
         {
             ct.ThrowIfCancellationRequested();
             string file = pass.Name.Length > 0 ? $"{(pass.SourceName.Length > 0 ? pass.SourceName : "shader")}/{pass.Name}" : (pass.SourceName.Length > 0 ? pass.SourceName : "shader");
             int fallback = OffsetOf(text, Math.Max(1, pass.SourceLine), 1);
             try
             {
-                var program = _workspace.Compiler.CompileProgram(pass, ReadOnlySpan<Keyword>.Empty);
+                GlslProgram program = _workspace.Compiler.CompileProgram(pass, ReadOnlySpan<Keyword>.Empty);
                 AddCompilerMessages(text, program.Warnings, file, fallback, CodeDiagnosticSeverity.Warning, result);
             }
             catch (ShaderCompileException e) when (e.Line > 0)
@@ -536,7 +536,7 @@ public sealed partial class ShaderSession
 
     private static string FirstMessage(string message)
     {
-        var m = CompilerError().Match(message);
+        Match m = CompilerError().Match(message);
         return m.Success ? m.Groups["text"].Value.Trim() : message;
     }
 
@@ -549,7 +549,7 @@ public sealed partial class ShaderSession
             any = true;
             string where = m.Groups["file"].Value;
             int line = m.Groups["line"].Success ? int.Parse(m.Groups["line"].Value) : 0;
-            var sev = m.Groups["severity"].Value == "warning" ? CodeDiagnosticSeverity.Warning : severity;
+            CodeDiagnosticSeverity sev = m.Groups["severity"].Value == "warning" ? CodeDiagnosticSeverity.Warning : severity;
             result.Add(Place(text, where == file || where.Length == 0 ? null : where, line, 0, 0, sev, m.Groups["text"].Value.Trim(), fallback));
         }
         return any;
@@ -563,7 +563,7 @@ public sealed partial class ShaderSession
     {
         if (includeFile != null)
         {
-            var include = Index().Includes.FirstOrDefault(i => includeFile.EndsWith(i.Name, StringComparison.Ordinal) || i.Name.EndsWith(includeFile, StringComparison.Ordinal));
+            IncludeRef? include = Index().Includes.FirstOrDefault(i => includeFile.EndsWith(i.Name, StringComparison.Ordinal) || i.Name.EndsWith(includeFile, StringComparison.Ordinal));
             string where = line > 0 ? $"{includeFile}({line}{(column > 0 ? "," + column : "")})" : includeFile;
             return new CodeDiagnostic { Start = include?.Offset ?? fallback, Length = include?.Length ?? 0, Severity = severity, Id = "glsl", Message = $"{where}: {message}" };
         }
@@ -594,7 +594,7 @@ public sealed partial class ShaderSession
         {
             Prowl.Prism.Glsl.Parser.Parse(source, _workspace.Defines, (name, isSystem, requesting) =>
             {
-                var resolved = _workspace.Resolve(name, requesting == "" ? _path : requesting);
+                ShaderSource? resolved = _workspace.Resolve(name, requesting == "" ? _path : requesting);
                 return resolved == null ? null : new Prowl.Prism.Glsl.IncludeResult(resolved.Path, resolved.Text);
             });
         }

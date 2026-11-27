@@ -60,7 +60,7 @@ internal readonly record struct FaceStamp(ShadowInputs Key, int Size, int PageSi
 internal sealed class ShadowLights
 {
     private LightShadow?[] _byIndex = [];
-    private readonly List<(int Index, LightShadow Light)> _list = new();
+    private readonly List<(int Index, LightShadow Light)> _list = [];
 
     public LightShadow this[int index] => _byIndex[index]!;
 
@@ -115,7 +115,7 @@ internal sealed class ShadowTileAllocator
     public const int SmallestTile = 16;
 
     // Free squares of each size, the lowest row then leftmost first so tiles pack toward one corner
-    private readonly Dictionary<int, SortedSet<long>> _free = new();
+    private readonly Dictionary<int, SortedSet<long>> _free = [];
 
     public ShadowTileAllocator(int size) => Reset(size);
 
@@ -229,7 +229,7 @@ internal sealed class ShadowTileAllocator
     private SortedSet<long> FreeSet(int size)
     {
         if (!_free.TryGetValue(size, out SortedSet<long>? set))
-            _free[size] = set = new SortedSet<long>();
+            _free[size] = set = [];
         return set;
     }
 
@@ -288,7 +288,7 @@ internal sealed class ShadowPage(PersistentTexture persistent, bool isStatic, in
     public uint Slot => Persistent.Slot;
     public bool IsStatic { get; } = isStatic;
     public ShadowTileAllocator Tiles { get; } = new(size);
-    public readonly List<ShadowDraw> Draws = new();
+    public readonly List<ShadowDraw> Draws = [];
     public int LastUsed;
 }
 
@@ -373,7 +373,7 @@ internal static class ShadowRecorder
 /// <summary>The passes that draw a world's shadow pages, in the order they run.</summary>
 internal static class ShadowPasses
 {
-    private static readonly List<TextureBlit> s_blits = new();
+    private static readonly List<TextureBlit> s_blits = [];
 
     public static void Add(FramePipeline frame, FrameGraph graph, WorldFrame world)
     {
@@ -399,7 +399,7 @@ internal static class ShadowPasses
         TextureHandle scratch = default;
         graph.AddPass("Graphite.ShadowShrink", builder =>
         {
-            List<(ShadowPage Page, TextureHandle Handle)> pages = new();
+            List<(ShadowPage Page, TextureHandle Handle)> pages = [];
             foreach (ShadowPage page in shadows.AllPages())
                 pages.Add((page, builder.Read(graph.Import(page.Texture), TextureState.TransferSrc, TextureState.TransferSrc)));
             scratch = builder.Write(graph.Create(shadows.ScratchId, ShadowRecorder.Desc(shadows.PageSize / 2, frame.ShadowFormat)), TextureState.TransferDst, TextureState.TransferDst);
@@ -422,7 +422,7 @@ internal static class ShadowPasses
         graph.AddPass("Graphite.ShadowShrinkCopies", builder =>
         {
             TextureHandle source = builder.Read(scratch, TextureState.TransferSrc, TextureState.TransferSrc);
-            List<(ShadowPage Page, TextureHandle Handle)> pages = new();
+            List<(ShadowPage Page, TextureHandle Handle)> pages = [];
             foreach (ShadowPage page in shadows.AllPages())
                 pages.Add((page, builder.Write(graph.Import(page.Texture), TextureState.TransferDst, TextureState.TransferDst)));
             return (pages, source);
@@ -464,7 +464,7 @@ internal static class ShadowPasses
         WorldShadows shadows = world.Shadows!;
         graph.AddPass("Graphite.ShadowCopies", builder =>
         {
-            Dictionary<ShadowPage, TextureHandle> pages = new();
+            Dictionary<ShadowPage, TextureHandle> pages = [];
             foreach (ShadowPage page in shadows.AllPages())
             {
                 TextureHandle texture = graph.Import(page.Texture);
@@ -543,7 +543,7 @@ internal sealed class LightShadow
     public readonly CullFrustum[] Culls = new CullFrustum[6];
 
     /// <summary>The shaders its casters last drew with, and its static copy's, so a global keyword they read redraws them.</summary>
-    public readonly List<Shader> Shaders = new(), StaticShaders = new();
+    public readonly List<Shader> Shaders = [], StaticShaders = [];
     public readonly ShadowFace[] Written = new ShadowFace[6];
 
     /// <summary>Its priority this frame, frames it waited on the draw budget, and whether its tiles hold a drawing.</summary>
@@ -561,18 +561,18 @@ internal sealed class LightShadow
 internal sealed class LightGrid
 {
     private const float BaseCell = 16;
-    private readonly Dictionary<(int Level, long X, long Y, long Z), List<int>> _cells = new();
-    private readonly List<List<int>> _pool = new();
+    private readonly Dictionary<(int Level, long X, long Y, long Z), List<int>> _cells = [];
+    private readonly List<List<int>> _pool = [];
     private readonly List<int>[] _levels = new List<int>[48];
-    private readonly HashSet<int> _found = new();
+    private readonly HashSet<int> _found = [];
 
     // Lights too big for any level's cells, which every change looks at
-    private readonly List<int> _everywhere = new();
+    private readonly List<int> _everywhere = [];
 
     public LightGrid()
     {
         for (int l = 0; l < _levels.Length; l++)
-            _levels[l] = new List<int>();
+            _levels[l] = [];
     }
 
     public void Clear()
@@ -606,7 +606,7 @@ internal sealed class LightGrid
                 {
                     if (!_cells.TryGetValue((level, x, y, z), out List<int>? list))
                     {
-                        list = _pool.Count > 0 ? _pool[^1] : new List<int>();
+                        list = _pool.Count > 0 ? _pool[^1] : [];
                         if (_pool.Count > 0)
                             _pool.RemoveAt(_pool.Count - 1);
                         _cells[(level, x, y, z)] = list;
@@ -856,16 +856,16 @@ internal sealed class WorldShadows(TableHost tables, int worldId)
     public const int FacesPerLight = 6;
 
     public GpuTable Faces { get; } = tables.Of<ShadowFace>("Faces", 64 * FacesPerLight);
-    public readonly List<ShadowPage> Pages = new();
-    public readonly List<ShadowPage> StaticPages = new();
+    public readonly List<ShadowPage> Pages = [];
+    public readonly List<ShadowPage> StaticPages = [];
     public readonly ShadowLights Lights = new();
     public readonly LightGrid Grid = new();
     public readonly ShadowPlanner Planner = new();
     public int PageSize;
 
     /// <summary>The shrinks and static copies this frame's plan queued, which the world's passes record.</summary>
-    public readonly List<ShadowShrink> Shrinks = new();
-    public readonly List<ShadowCopy> Copies = new();
+    public readonly List<ShadowShrink> Shrinks = [];
+    public readonly List<ShadowCopy> Copies = [];
 
     /// <summary>The scratch page shrinks read down into, its tiles packed again each frame, and the tiles a shrinking light holds in it, live then static.</summary>
     public ShadowTileAllocator? ScratchTiles;
@@ -912,7 +912,7 @@ internal sealed class ViewShadows : IDisposable
     {
         public PersistentTexture? Texture;
         public CameraFrame? Camera;
-        public readonly List<ShadowDraw> Draws = new();
+        public readonly List<ShadowDraw> Draws = [];
 
         /// <summary>
         /// What it was last drawn with: the world position of its centre, its radius and its projection times the light's
@@ -950,8 +950,8 @@ internal sealed class ViewShadows : IDisposable
         return null;
     }
 
-    public readonly List<CascadeLight> Lights = new();
-    public readonly List<CascadeRecord> Records = new();
+    public readonly List<CascadeLight> Lights = [];
+    public readonly List<CascadeRecord> Records = [];
 
     public void Dispose()
     {
@@ -1071,17 +1071,17 @@ internal sealed partial class FramePipeline
     internal int ShadowsShrunk { get; private set; }
     internal int ShadowCopiesMade { get; private set; }
     private GraphicsProgram? _tileClear;
-    private readonly List<ShadowPlan> _shadowPlans = new(), _shadowPlanPool = new(), _shadowQueue = new();
-    private readonly List<(int Index, LightShadow Light, float Key)> _shadowDraws = new();
-    private readonly List<CascadeSlot> _cascadeSlots = new();
+    private readonly List<ShadowPlan> _shadowPlans = [], _shadowPlanPool = [], _shadowQueue = [];
+    private readonly List<(int Index, LightShadow Light, float Key)> _shadowDraws = [];
+    private readonly List<CascadeSlot> _cascadeSlots = [];
 
     // Cameras faces draw with, rented for a frame each, and one that asks providers about cached faces
     private readonly Stack<CameraFrame> _shadowCameraPool = new();
-    private readonly List<CameraFrame> _shadowCamerasDrawn = new();
+    private readonly List<CameraFrame> _shadowCamerasDrawn = [];
     private CameraFrame? _providerProbe;
 
     // The views lights cast for this frame, each with its frustum, first layer and height in pixels
-    private readonly List<(CullFrustum Frustum, Double3 Position, float Pixels, bool Orthographic)> _shadowViewers = new();
+    private readonly List<(CullFrustum Frustum, Double3 Position, float Pixels, bool Orthographic)> _shadowViewers = [];
     private readonly ShadowPage?[] _resizePages = new ShadowPage?[6], _probePages = new ShadowPage?[6];
     private readonly ShadowTile[] _resizeTiles = new ShadowTile[6], _probeTiles = new ShadowTile[6];
     private readonly ShadowPage?[] _oldPages = new ShadowPage?[6];
@@ -1093,14 +1093,14 @@ internal sealed partial class FramePipeline
 
     // The largest power of two shadow map up to a cap that the device can make, at least the smallest one asked for
     private uint LargestShadowMap(uint cap) => Math.Max(256u, Math.Min(cap, 1u << BitOperations.Log2(Math.Max(_device.Limits.MaxTextureDimension2D, 1u))));
-    private readonly List<IDisposable> _shadowRetired = new();
+    private readonly List<IDisposable> _shadowRetired = [];
     private Sampler? _shadowSampler;
 
     /// <summary>Clears one tile of a depth target to the far plane.</summary>
     public GraphicsProgram TileClearProgram => _tileClear ??= ShadowRecorder.TileClear(_device, _compiler);
 
     /// <summary>The materials whose draws or records changed this frame, whose casters' lights draw again.</summary>
-    public List<Material> ChangedMaterials { get; set; } = new();
+    public List<Material> ChangedMaterials { get; set; } = [];
 
     /// <summary>The depth format of shadow pages and cascades.</summary>
     public PixelFormat ShadowFormat { get; init; } = PixelFormat.D16_UNorm;
@@ -1253,12 +1253,12 @@ internal sealed partial class FramePipeline
                 continue;
             if (!lighting.IsAlive(index))
             {
-                (gone ??= new()).Add(index);
+                (gone ??= []).Add(index);
                 continue;
             }
             ref readonly LightDesc desc = ref lighting.Light(index);
             if (!desc.Shadow.Enabled || desc.Type is not (LightType.Spot or LightType.Point))
-                (gone ??= new()).Add(index);
+                (gone ??= []).Add(index);
         }
         foreach (int index in gone ?? [])
         {

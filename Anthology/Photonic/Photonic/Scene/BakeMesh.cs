@@ -73,8 +73,8 @@ public sealed class BakeMesh
         private readonly string _name;
         private Float3[]? _positions;
         private Float3[]? _normals;
-        private readonly System.Collections.Generic.Dictionary<string, Float2[]> _uvLayers = new();
-        private readonly System.Collections.Generic.List<MaterialGroup> _groups = new();
+        private readonly System.Collections.Generic.Dictionary<string, Float2[]> _uvLayers = [];
+        private readonly System.Collections.Generic.List<MaterialGroup> _groups = [];
 
         internal Builder(BakeScene scene, string name) { _scene = scene; _name = name; }
 
@@ -128,7 +128,7 @@ public sealed class BakeMesh
             if (normals.Length == 0) return false;
             for (int i = 0; i < normals.Length; i++)
             {
-                var n = normals[i];
+                Float3 n = normals[i];
                 if ((float)(n.X * n.X + n.Y * n.Y + n.Z * n.Z) > 1e-12f) return false;
             }
             return true;

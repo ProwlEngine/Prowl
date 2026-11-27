@@ -1,9 +1,8 @@
 using Prowl.Recast.Core.Numerics;
 
-namespace Prowl.Recast.Detour.Extras.Jumplink
+namespace Prowl.Recast.Detour.Extras.Jumplink;
+
+public interface IDtTrajectory
 {
-    public interface IDtTrajectory
-    {
-        RcVec3f Apply(RcVec3f start, RcVec3f end, float u);
-    }
+    RcVec3f Apply(RcVec3f start, RcVec3f end, float u);
 }

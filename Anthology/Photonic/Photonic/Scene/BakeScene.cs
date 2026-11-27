@@ -1,5 +1,5 @@
-using Prowl.Vector;
 using Prowl.Photonic.Scene.Lights;
+using Prowl.Vector;
 
 namespace Prowl.Photonic;
 
@@ -15,10 +15,10 @@ public sealed class BakeScene
     /// <summary>True once <see cref="End"/> has been called; further mutation throws.</summary>
     public bool Ended { get; private set; }
 
-    private readonly System.Collections.Generic.Dictionary<string, BakeMesh> _meshes = new();
-    private readonly System.Collections.Generic.Dictionary<string, BakeMaterial> _materials = new();
-    private readonly System.Collections.Generic.Dictionary<string, BakeTexture> _textures = new();
-    private readonly System.Collections.Generic.List<Light> _lights = new();
+    private readonly System.Collections.Generic.Dictionary<string, BakeMesh> _meshes = [];
+    private readonly System.Collections.Generic.Dictionary<string, BakeMaterial> _materials = [];
+    private readonly System.Collections.Generic.Dictionary<string, BakeTexture> _textures = [];
+    private readonly System.Collections.Generic.List<Light> _lights = [];
 
     /// <summary>Default attenuation applied to point/spot lights that don't override it themselves.</summary>
     public Sampling.IAttenuation DefaultAttenuation { get; set; } = new Sampling.InverseSquareAttenuation();
@@ -50,7 +50,7 @@ public sealed class BakeScene
     internal void RegisterMesh(BakeMesh mesh) => _meshes.Add(mesh.Name, mesh);
 
     /// <summary>Find an existing mesh, or null.</summary>
-    public BakeMesh? FindMesh(string name) => _meshes.TryGetValue(name, out var m) ? m : null;
+    public BakeMesh? FindMesh(string name) => _meshes.TryGetValue(name, out BakeMesh? m) ? m : null;
 
     /// <summary>Create a material. Returns the new instance; populate properties directly.</summary>
     public BakeMaterial CreateMaterial(string name)
@@ -63,7 +63,7 @@ public sealed class BakeScene
     }
 
     /// <summary>Find an existing material, or null.</summary>
-    public BakeMaterial? FindMaterial(string name) => _materials.TryGetValue(name, out var m) ? m : null;
+    public BakeMaterial? FindMaterial(string name) => _materials.TryGetValue(name, out BakeMaterial? m) ? m : null;
 
     /// <summary>Register an RGBA byte texture (linear or sRGB; <paramref name="inputGamma"/> says which).</summary>
     public BakeTexture CreateTextureRGBA(string name, int width, int height, byte[] pixelsRGBA, float inputGamma = 2.2f)
@@ -76,7 +76,7 @@ public sealed class BakeScene
     }
 
     /// <summary>Find an existing texture, or null.</summary>
-    public BakeTexture? FindTexture(string name) => _textures.TryGetValue(name, out var t) ? t : null;
+    public BakeTexture? FindTexture(string name) => _textures.TryGetValue(name, out BakeTexture? t) ? t : null;
 
     // ---- lights ------------------------------------------------------------------------------------
 

@@ -69,9 +69,9 @@ public class GizmoDraw3D
     public void Arc(float radius, float startAngleDeg, float endAngleDeg, Stroke3D stroke)
     {
         if (!hasViewport || !hasMVP) return;
-        var startRad = startAngleDeg * GizmoUtils.Deg2Rad;
-        var endRad = endAngleDeg * GizmoUtils.Deg2Rad;
-        var points = ArcPoints(radius, startRad, endRad);
+        float startRad = startAngleDeg * GizmoUtils.Deg2Rad;
+        float endRad = endAngleDeg * GizmoUtils.Deg2Rad;
+        List<Float2> points = ArcPoints(radius, startRad, endRad);
         if (points.Count < 2) return;
 
         bool closed = points.Count > 0 && Float2.Length(points[0] - points[^1]) < 1e-2f;
@@ -83,7 +83,7 @@ public class GizmoDraw3D
     public void Quad(float radius, Stroke3D stroke)
     {
         if (!hasViewport || !hasMVP) return;
-        var points = QuadPoints(radius * 2f);
+        List<Float2> points = QuadPoints(radius * 2f);
         if (points.Count < 4) return;
         DrawPolyline(points, stroke, points.Count, true);
     }
@@ -91,7 +91,7 @@ public class GizmoDraw3D
     public void FilledCircle(float radius, Stroke3D stroke)
     {
         if (!hasViewport || !hasMVP) return;
-        var points = ArcPoints(radius, 0, MathF.Tau);
+        List<Float2> points = ArcPoints(radius, 0, MathF.Tau);
         if (points.Count < 3) return;
         DrawFilledPoly(points, points.Count - 1, stroke.Color);
     }
@@ -99,7 +99,7 @@ public class GizmoDraw3D
     public void LineSegment(Float3 from, Float3 to, Stroke3D stroke)
     {
         if (!hasViewport || !hasMVP || _canvas == null) return;
-        if (!WorldToScreen(from, out var a) || !WorldToScreen(to, out var b)) return;
+        if (!WorldToScreen(from, out Float2 a) || !WorldToScreen(to, out Float2 b)) return;
 
         _canvas.SetStrokeColor(stroke.Color);
         _canvas.SetStrokeWidth(stroke.Thickness);
@@ -112,7 +112,7 @@ public class GizmoDraw3D
     public void Arrow(Float3 from, Float3 to, Stroke3D stroke)
     {
         if (!hasViewport || !hasMVP || _canvas == null) return;
-        if (!WorldToScreen(from, out var start) || !WorldToScreen(to, out var end)) return;
+        if (!WorldToScreen(from, out Float2 start) || !WorldToScreen(to, out Float2 end)) return;
 
         Float2 dir = Float2.Normalize(end - start);
         Float2 cross = new Float2(-dir.Y, dir.X) * stroke.Thickness / 2f;
@@ -129,22 +129,22 @@ public class GizmoDraw3D
     public void Polygon(IEnumerable<Float3> points3D, Stroke3D stroke)
     {
         if (!hasViewport || !hasMVP) return;
-        var sp = ProjectPoints(points3D);
+        List<Float2> sp = ProjectPoints(points3D);
         if (sp.Count > 2) DrawFilledPoly(sp, sp.Count, stroke.Color);
     }
 
     public void Polyline(IEnumerable<Float3> points3D, Stroke3D stroke)
     {
         if (!hasViewport || !hasMVP) return;
-        var sp = ProjectPoints(points3D);
+        List<Float2> sp = ProjectPoints(points3D);
         if (sp.Count > 1) DrawPolyline(sp, stroke, sp.Count, false);
     }
 
     public void Sector(float radius, float startAngleDeg, float endAngleDeg, Stroke3D stroke)
     {
         if (!hasViewport || !hasMVP) return;
-        var startRad = startAngleDeg * GizmoUtils.Deg2Rad;
-        var endRad = endAngleDeg * GizmoUtils.Deg2Rad;
+        float startRad = startAngleDeg * GizmoUtils.Deg2Rad;
+        float endRad = endAngleDeg * GizmoUtils.Deg2Rad;
 
         float angleDelta = endRad - startRad;
         int stepCount = Steps(MathF.Abs(angleDelta));
@@ -158,14 +158,14 @@ public class GizmoDraw3D
         }
 
         var points = new List<Float2>();
-        if (WorldToScreen(Float3.Zero, out var center)) points.Add(center);
+        if (WorldToScreen(Float3.Zero, out Float2 center)) points.Add(center);
 
         float sinAngle = MathF.Sin(startRad), cosAngle = MathF.Cos(startRad);
         float sinStep = MathF.Sin(stepSize), cosStep = MathF.Cos(stepSize);
 
         for (int i = 0; i < stepCount; i++)
         {
-            if (WorldToScreen(new Float3(cosAngle * radius, 0, sinAngle * radius), out var pt))
+            if (WorldToScreen(new Float3(cosAngle * radius, 0, sinAngle * radius), out Float2 pt))
                 points.Add(pt);
             float ns = sinAngle * cosStep + cosAngle * sinStep;
             float nc = cosAngle * cosStep - sinAngle * sinStep;
@@ -189,7 +189,7 @@ public class GizmoDraw3D
         for (int i = 0; i < stepCount; i++)
         {
             float step = stepSize * i;
-            if (WorldToScreen(new Float3(MathF.Cos(startRad + step) * radius, 0, MathF.Sin(startRad + step) * radius), out var pt))
+            if (WorldToScreen(new Float3(MathF.Cos(startRad + step) * radius, 0, MathF.Sin(startRad + step) * radius), out Float2 pt))
                 points.Add(pt);
         }
         return points;
@@ -200,16 +200,16 @@ public class GizmoDraw3D
         float h = size / 2f;
         var points = new List<Float2>();
         Float3[] corners = [new(-h, 0, -h), new(h, 0, -h), new(h, 0, h), new(-h, 0, h)];
-        foreach (var c in corners)
-            if (WorldToScreen(c, out var pt)) points.Add(pt);
+        foreach (Float3 c in corners)
+            if (WorldToScreen(c, out Float2 pt)) points.Add(pt);
         return points;
     }
 
     private List<Float2> ProjectPoints(IEnumerable<Float3> points3D)
     {
         var result = new List<Float2>();
-        foreach (var p in points3D)
-            if (WorldToScreen(p, out var sp)) result.Add(sp);
+        foreach (Float3 p in points3D)
+            if (WorldToScreen(p, out Float2 sp)) result.Add(sp);
         return result;
     }
 
@@ -240,7 +240,7 @@ public class GizmoDraw3D
 
     private bool WorldToScreen(Float3 pos, out Float2 screenPos)
     {
-        var result = GizmoUtils.WorldToScreen(_viewport, _mvp, pos);
+        Float2? result = GizmoUtils.WorldToScreen(_viewport, _mvp, pos);
         if (result.HasValue) { screenPos = result.Value; return true; }
         screenPos = Float2.Zero;
         return false;

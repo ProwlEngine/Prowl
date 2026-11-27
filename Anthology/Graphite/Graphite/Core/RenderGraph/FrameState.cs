@@ -5,7 +5,7 @@ namespace Prowl.Graphite;
 
 internal sealed class FrameResource
 {
-    public readonly List<int> Writers = new();
+    public readonly List<int> Writers = [];
     public RenderResourceID Id;
     public int Scope;
     public bool IsTexture;
@@ -76,7 +76,7 @@ internal sealed class DataRenderer<T>(T data, Action<PassContext, T> render) : P
 
 internal sealed class FramePass
 {
-    public readonly List<ResourceAccess> Accesses = new();
+    public readonly List<ResourceAccess> Accesses = [];
     public string Name = "";
     public int Group;
     public PassRenderer Render = null!;

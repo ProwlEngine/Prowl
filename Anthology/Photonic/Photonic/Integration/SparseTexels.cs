@@ -48,8 +48,8 @@ internal sealed class SparseTexelSet
         int lineStride = stride;
         int w = ws.Width, h = ws.Height;
 
-        var isPoint = new bool[w * h];
-        var isContact = new bool[w * h];
+        bool[] isPoint = new bool[w * h];
+        bool[] isContact = new bool[w * h];
         int contactTexels = 0;
         for (int i = 0; i < isContact.Length; i++)
         {
@@ -85,7 +85,7 @@ internal sealed class SparseTexelSet
     public void AddPoints(bool[] extra, int count)
     {
         if (count <= 0) return;
-        var grown = new int[Points.Length + count];
+        int[] grown = new int[Points.Length + count];
         System.Array.Copy(Points, grown, Points.Length);
 
         int at = Points.Length;
@@ -214,7 +214,7 @@ internal sealed class SparseTexelSet
         int w = ws.Width, h = ws.Height;
         int cellsX = (w + stride - 1) / stride;
         int cellsY = (h + stride - 1) / stride;
-        var scanOrder = BuildScanOrder(stride);
+        (int X, int Y)[] scanOrder = BuildScanOrder(stride);
         var elected = new System.Collections.Generic.List<int>(8);
 
         for (int cy = 0; cy < cellsY; cy++)
@@ -247,7 +247,7 @@ internal sealed class SparseTexelSet
     public static void AddDirect(TargetWorkspace ws, Float3[] direct, System.Threading.Tasks.ParallelOptions parallelOpts)
     {
         int w = ws.Width, h = ws.Height;
-        var pixels = ws.Working();
+        float[] pixels = ws.Working();
         System.Threading.Tasks.Parallel.For(0, h, parallelOpts, y =>
         {
             for (int x = 0; x < w; x++)
@@ -290,7 +290,7 @@ internal sealed class SparseTexelSet
     {
         if (Float3.Dot(texel.Normal, point.Normal) < 0.5f) return false;
 
-        var delta = point.Position - texel.Position;
+        Float3 delta = point.Position - texel.Position;
         float radius = System.MathF.Max(texel.WorldRadius, 1e-5f);
         if (System.MathF.Abs(Float3.Dot(delta, texel.Normal)) > radius * 2f) return false;
         return Float3.LengthSquared(delta) <= radius * radius * stride * stride * 16f;

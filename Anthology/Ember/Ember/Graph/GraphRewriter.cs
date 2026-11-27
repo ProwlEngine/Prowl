@@ -17,11 +17,11 @@ internal sealed class GraphRewriter
     private readonly ReportBuilder _report;
     private readonly MigrationContext _context;
 
-    private readonly Dictionary<object, object?> _map = new(ReferenceEqualityComparer.Instance);
+    private readonly Dictionary<object, object?> _map = [with(ReferenceEqualityComparer.Instance)];
     private readonly Queue<Task> _fill = new();
     private readonly Queue<Task> _rebuild = new();
-    private readonly List<AttachTask> _attach = new();
-    private readonly Dictionary<Type, bool> _finalizable = new();
+    private readonly List<AttachTask> _attach = [];
+    private readonly Dictionary<Type, bool> _finalizable = [];
 
     private readonly record struct Task(MigrationPlan Plan, object Source, object Target);
     private readonly record struct AttachTask(object Target, ReloadState State);
@@ -41,10 +41,10 @@ internal sealed class GraphRewriter
         {
             _context.Phase = ReloadPhase.Map;
 
-            foreach (var root in roots)
+            foreach (Root root in roots)
                 MapRoot(root, commits);
 
-            foreach (var instance in explicitRoots)
+            foreach (object instance in explicitRoots)
                 Map(instance);
         }
 
@@ -54,7 +54,7 @@ internal sealed class GraphRewriter
             Drain();
 
             // Anything a detach hook stashed is migrated before the matching attach hook sees it.
-            foreach (var task in _attach)
+            foreach (AttachTask task in _attach)
                 task.State.Remap(Map);
 
             Drain();
@@ -67,7 +67,7 @@ internal sealed class GraphRewriter
         }
 
         _context.Phase = ReloadPhase.Commit;
-        foreach (var (destination, value) in commits)
+        foreach ((ValueSlot destination, object? value) in commits)
             TryCommit(destination, value);
 
         using (_report.Time(ReloadPhase.Notify))
@@ -162,11 +162,11 @@ internal sealed class GraphRewriter
             return value;
         }
 
-        var plan = _planner.For(type);
+        MigrationPlan plan = _planner.For(type);
         // A boxed struct has no identity, so it is never recorded, and it is filled now rather than queued:
         // the box is written back by value and has to be complete when it is stored.
         if (type.IsValueType) return MapBoxed(plan, value);
-        var allocation = SafeAllocate(plan, value);
+        Allocation allocation = SafeAllocate(plan, value);
 
         _report.ObjectsVisited++;
 
@@ -176,7 +176,7 @@ internal sealed class GraphRewriter
             return null;
         }
 
-        var target = allocation.Instance;
+        object target = allocation.Instance;
         _map[value] = target;
 
         if (allocation.IsPreserved)
@@ -213,15 +213,15 @@ internal sealed class GraphRewriter
     // answer is worked out once per type rather than paid per instance.
     private bool HasFinalizer(Type type)
     {
-        if (_finalizable.TryGetValue(type, out var cached)) return cached;
+        if (_finalizable.TryGetValue(type, out bool cached)) return cached;
 
-        var finalizer = type.GetMethod("Finalize", BindingFlags.Instance | BindingFlags.NonPublic, Type.EmptyTypes);
+        MethodInfo? finalizer = type.GetMethod("Finalize", BindingFlags.Instance | BindingFlags.NonPublic, Type.EmptyTypes);
         return _finalizable[type] = finalizer != null && finalizer.DeclaringType != typeof(object);
     }
 
     private object? MapBoxed(MigrationPlan plan, object value)
     {
-        var allocation = SafeAllocate(plan, value);
+        Allocation allocation = SafeAllocate(plan, value);
         if (allocation.IsDrop || allocation.Instance is not { } target) return null;
 
         _report.ObjectsVisited++;
@@ -253,7 +253,7 @@ internal sealed class GraphRewriter
             HandOverOwnership(source, existingTarget);
         }
 
-        var plan = _planner.For(source.GetType());
+        MigrationPlan plan = _planner.For(source.GetType());
         if (plan.NeedsFill)
             _fill.Enqueue(new Task(plan, source, existingTarget));
         else if (!ReferenceEquals(source, existingTarget) && source.GetType() == existingTarget.GetType())
@@ -295,7 +295,7 @@ internal sealed class GraphRewriter
 
     private void Drain()
     {
-        while (_fill.TryDequeue(out var task))
+        while (_fill.TryDequeue(out Task task))
         {
             SafeFill(task.Plan, task.Source, task.Target);
 
@@ -322,7 +322,7 @@ internal sealed class GraphRewriter
             int pending = _rebuild.Count;
             for (int i = 0; i < pending; i++)
             {
-                var task = _rebuild.Dequeue();
+                Task task = _rebuild.Dequeue();
                 SafeRebuild(task.Plan, task.Source, task.Target);
             }
 
@@ -347,7 +347,7 @@ internal sealed class GraphRewriter
         if (source is IReloadAware detaching)
         {
             state = new ReloadState();
-            var captured = state;
+            ReloadState captured = state;
             Guard(() => detaching.OnReloadDetach(captured), ReloadCode.DetachHookThrew, source);
         }
 
@@ -362,14 +362,14 @@ internal sealed class GraphRewriter
         if (source is IReloadAware detaching)
         {
             state = new ReloadState();
-            var captured = state;
+            ReloadState captured = state;
             Guard(() => detaching.OnReloadDetach(captured), ReloadCode.DetachHookThrew, source);
             state.Remap(Map);
         }
 
         if (target is IReloadAware attaching)
         {
-            var captured = state ?? new ReloadState();
+            ReloadState captured = state ?? new ReloadState();
             Guard(() => attaching.OnReloadAttach(captured), ReloadCode.AttachHookThrew, target);
         }
     }
@@ -380,12 +380,12 @@ internal sealed class GraphRewriter
     {
         for (int i = _attach.Count - 1; i >= 0; i--)
         {
-            var task = _attach[i];
+            AttachTask task = _attach[i];
             var target = (IReloadAware)task.Target;
             Guard(() => target.OnReloadAttach(task.State), ReloadCode.AttachHookThrew, task.Target);
         }
 
-        foreach (var dropped in _report.Dropped)
+        foreach (object dropped in _report.Dropped)
             if (dropped is IReloadObserver observer)
                 Guard(observer.OnReloadDropped, ReloadCode.ObserverHookThrew, dropped);
     }

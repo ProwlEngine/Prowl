@@ -17,29 +17,28 @@ freely, subject to the following restrictions:
 3. This notice may not be removed or altered from any source distribution.
 */
 
-using Prowl.Recast.Core;
 using Prowl.Recast;
+using Prowl.Recast.Core;
 
-namespace Prowl.Recast.Detour.Dynamic.Colliders
+namespace Prowl.Recast.Detour.Dynamic.Colliders;
+
+public abstract class DtCollider : IDtCollider
 {
-    public abstract class DtCollider : IDtCollider
+    protected readonly int area;
+    protected readonly float flagMergeThreshold;
+    protected readonly float[] _bounds;
+
+    public DtCollider(int area, float flagMergeThreshold, float[] bounds)
     {
-        protected readonly int area;
-        protected readonly float flagMergeThreshold;
-        protected readonly float[] _bounds;
-
-        public DtCollider(int area, float flagMergeThreshold, float[] bounds)
-        {
-            this.area = area;
-            this.flagMergeThreshold = flagMergeThreshold;
-            this._bounds = bounds;
-        }
-
-        public float[] Bounds()
-        {
-            return _bounds;
-        }
-
-        public abstract void Rasterize(RcHeightfield hf, RcContext context);
+        this.area = area;
+        this.flagMergeThreshold = flagMergeThreshold;
+        this._bounds = bounds;
     }
+
+    public float[] Bounds()
+    {
+        return _bounds;
+    }
+
+    public abstract void Rasterize(RcHeightfield hf, RcContext context);
 }

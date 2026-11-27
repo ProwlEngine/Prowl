@@ -27,10 +27,10 @@ internal sealed class CameraFrame : IDisposable
     public readonly SceneDrawer Drawer;
 
     /// <summary>The features this frame's pick runs on the view.</summary>
-    public readonly List<RenderFeature> Selected = new();
+    public readonly List<RenderFeature> Selected = [];
 
     /// <summary>The colours and scene a feature drew onto this frame, so the first to draw one clears it.</summary>
-    public readonly HashSet<RenderResourceID> Written = new();
+    public readonly HashSet<RenderResourceID> Written = [];
 
     /// <summary>Whether a feature before the one recording encoded the colour for display, as tonemappers do.</summary>
     public bool DisplayEncoded;
@@ -119,8 +119,10 @@ internal sealed class CameraFrame : IDisposable
             DepthFormat = depthFormat,
             ArrayLayers = layers,
         };
-        BackDepth = new RenderTexture(_device, PersistentTexture.Describe(desc));
-        BackDepth.Name = $"Graphite.BackDepth {View.ViewId}";
+        BackDepth = new RenderTexture(_device, PersistentTexture.Describe(desc))
+        {
+            Name = $"Graphite.BackDepth {View.ViewId}"
+        };
     }
 
     public void ReleaseBackDepth()
@@ -154,8 +156,10 @@ internal sealed class CameraFrame : IDisposable
             _frame.Store.Retire(current);
         if (!wanted)
             return null;
-        RenderTexture created = new(_device, PersistentTexture.Describe(GraphTextureDesc.Sized((int)width, (int)height, format) with { ArrayLayers = layers > 1 ? layers : 0 }));
-        created.Name = $"{name} {View.ViewId}";
+        RenderTexture created = new(_device, PersistentTexture.Describe(GraphTextureDesc.Sized((int)width, (int)height, format) with { ArrayLayers = layers > 1 ? layers : 0 }))
+        {
+            Name = $"{name} {View.ViewId}"
+        };
         return created;
     }
 
@@ -176,8 +180,10 @@ internal sealed class CameraFrame : IDisposable
     {
         if (MeasuredExposure != null)
             return;
-        MeasuredExposure = new RenderTexture(_device, PersistentTexture.Describe(GraphTextureDesc.Sized(1, 1, PixelFormat.R32_Float)));
-        MeasuredExposure.Name = $"Graphite.MeasuredExposure {View.ViewId}";
+        MeasuredExposure = new RenderTexture(_device, PersistentTexture.Describe(GraphTextureDesc.Sized(1, 1, PixelFormat.R32_Float)))
+        {
+            Name = $"Graphite.MeasuredExposure {View.ViewId}"
+        };
         ExposureState = _device.ResourceFactory.CreateBuffer(new BufferDescription(16, BufferUsage.StructuredBufferReadWrite));
         ExposureState.Name = $"Graphite.Exposure {View.ViewId}";
     }
@@ -225,7 +231,7 @@ internal sealed class CameraFrame : IDisposable
 
     /// <summary>The camera relative spheres of the binned items, each binned set's after the one before.</summary>
     public readonly GpuArray BinSpheres;
-    public readonly List<System.Numerics.Vector4> BinSphereList = new();
+    public readonly List<System.Numerics.Vector4> BinSphereList = [];
 
     /// <summary>How many items of each binned set the view binned this frame, and its screen tiles across and down.</summary>
     public readonly int[] BinCounts = new int[SpatialBinPass.Sets];
@@ -283,7 +289,7 @@ internal sealed class CameraFrame : IDisposable
     public DeviceBuffer? VoxelTarget;
 
     /// <summary>This frame's instance counts copied from providers' buffers into the view's commands, as byte offsets.</summary>
-    public readonly List<(RenderResourceID Source, uint Offset, uint Destination)> Counts = new();
+    public readonly List<(RenderResourceID Source, uint Offset, uint Destination)> Counts = [];
 
     public void PlanCounts()
     {
@@ -504,7 +510,7 @@ internal sealed class CameraFrame : IDisposable
         foreach ((RenderFeature feature, Type type) in States.Keys)
         {
             if (!Known(feature))
-                (stale ??= new()).Add((feature, type));
+                (stale ??= []).Add((feature, type));
         }
         foreach ((RenderFeature, Type) key in stale ?? [])
         {
@@ -545,14 +551,14 @@ internal sealed class CameraFrame : IDisposable
     public List<DrawList> Lists { get; }
 
     /// <summary>The pass types the view's selected features draw, each with its list.</summary>
-    public readonly List<(PassType Type, DrawList List)> PassLists = new();
-    private readonly Dictionary<PassType, DrawList> _passListPool = new();
+    public readonly List<(PassType Type, DrawList List)> PassLists = [];
+    private readonly Dictionary<PassType, DrawList> _passListPool = [];
 
     /// <summary>Where each list's commands start in the uploaded command buffer.</summary>
     public int[] CommandBases { get; private set; } = new int[3];
 
     /// <summary>State features keep for this view, made the first time each asks.</summary>
-    public readonly Dictionary<(RenderFeature Feature, Type Type), object> States = new();
+    public readonly Dictionary<(RenderFeature Feature, Type Type), object> States = [];
 
     /// <summary>The list of a pass type the view draws, made the first time it is asked for.</summary>
     public DrawList ListFor(PassType type)

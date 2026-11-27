@@ -1,62 +1,62 @@
 using System;
+
 using Prowl.Recast.Core;
 using Prowl.Recast.Core.Numerics;
 
-namespace Prowl.Recast.Detour.Extras.Jumplink
+namespace Prowl.Recast.Detour.Extras.Jumplink;
+
+public class DtJumpTrajectory : IDtTrajectory
 {
-    public class DtJumpTrajectory : IDtTrajectory
+    private readonly float jumpHeight;
+
+    public DtJumpTrajectory(float jumpHeight)
     {
-        private readonly float jumpHeight;
+        this.jumpHeight = jumpHeight;
+    }
 
-        public DtJumpTrajectory(float jumpHeight)
+    public RcVec3f Apply(RcVec3f start, RcVec3f end, float u)
+    {
+        return new RcVec3f
         {
-            this.jumpHeight = jumpHeight;
+            X = RcMath.Lerp(start.X, end.X, u),
+            Y = InterpolateHeight(start.Y, end.Y, u),
+            Z = RcMath.Lerp(start.Z, end.Z, u)
+        };
+    }
+
+    private float InterpolateHeight(float ys, float ye, float u)
+    {
+        if (u == 0f)
+        {
+            return ys;
+        }
+        else if (u == 1.0f)
+        {
+            return ye;
         }
 
-        public RcVec3f Apply(RcVec3f start, RcVec3f end, float u)
+        float h1, h2;
+        if (ys >= ye)
         {
-            return new RcVec3f
-            {
-                X = RcMath.Lerp(start.X, end.X, u),
-                Y = InterpolateHeight(start.Y, end.Y, u),
-                Z = RcMath.Lerp(start.Z, end.Z, u)
-            };
+            // jump down
+            h1 = jumpHeight;
+            h2 = jumpHeight + ys - ye;
+        }
+        else
+        {
+            // jump up
+            h1 = jumpHeight + ys - ye;
+            h2 = jumpHeight;
         }
 
-        private float InterpolateHeight(float ys, float ye, float u)
+        float t = (float)(Math.Sqrt(h1) / (Math.Sqrt(h2) + Math.Sqrt(h1)));
+        if (u <= t)
         {
-            if (u == 0f)
-            {
-                return ys;
-            }
-            else if (u == 1.0f)
-            {
-                return ye;
-            }
-
-            float h1, h2;
-            if (ys >= ye)
-            {
-                // jump down
-                h1 = jumpHeight;
-                h2 = jumpHeight + ys - ye;
-            }
-            else
-            {
-                // jump up
-                h1 = jumpHeight + ys - ye;
-                h2 = jumpHeight;
-            }
-
-            float t = (float)(Math.Sqrt(h1) / (Math.Sqrt(h2) + Math.Sqrt(h1)));
-            if (u <= t)
-            {
-                float v1 = 1.0f - (u / t);
-                return ys + h1 - h1 * v1 * v1;
-            }
-
-            float v = (u - t) / (1.0f - t);
-            return ys + h1 - h2 * v * v;
+            float v1 = 1.0f - (u / t);
+            return ys + h1 - h1 * v1 * v1;
         }
+
+        float v = (u - t) / (1.0f - t);
+        return ys + h1 - h2 * v * v;
     }
 }

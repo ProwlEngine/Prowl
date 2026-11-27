@@ -1,4 +1,5 @@
 using System.Collections.Generic;
+
 using Prowl.Vector;
 using Prowl.Vector.Spatial;
 
@@ -604,7 +605,7 @@ public sealed class ConditionSelectorDefinition : PoseNodeDefinition
 
         public override void Bind(GraphBindContext context)
         {
-            var children = new int[_def.Entries.Length];
+            int[] children = new int[_def.Entries.Length];
             for (int i = 0; i < children.Length; i++)
                 children[i] = _def.Entries[i].Child;
             BindOptions(context, children);

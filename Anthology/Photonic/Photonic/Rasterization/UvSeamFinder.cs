@@ -38,18 +38,18 @@ internal static class UvSeamFinder
 
     public static SeamSegment[] Find(BakeMesh mesh, string bakeUVLayer)
     {
-        if (!mesh.UVLayers.TryGetValue(bakeUVLayer, out var uv)) return System.Array.Empty<SeamSegment>();
-        var positions = mesh.Positions;
+        if (!mesh.UVLayers.TryGetValue(bakeUVLayer, out Float2[]? uv)) return System.Array.Empty<SeamSegment>();
+        Float3[] positions = mesh.Positions;
         if (positions.Length == 0) return System.Array.Empty<SeamSegment>();
 
-        var extent = mesh.Bounds.Max - mesh.Bounds.Min;
+        Float3 extent = mesh.Bounds.Max - mesh.Bounds.Min;
         float weldEpsilon = System.MathF.Max(1e-5f, Float3.Length(extent) * 1e-5f);
-        var weld = BuildWeldMap(positions, weldEpsilon);
+        int[] weld = BuildWeldMap(positions, weldEpsilon);
 
         var buckets = new Dictionary<(int, int), List<Edge>>(positions.Length);
         for (int g = 0; g < mesh.MaterialGroups.Count; g++)
         {
-            var indices = mesh.MaterialGroups[g].Indices;
+            int[] indices = mesh.MaterialGroups[g].Indices;
             for (int i = 0; i + 2 < indices.Length; i += 3)
             {
                 AddEdge(buckets, weld, indices[i], indices[i + 1]);
@@ -58,20 +58,20 @@ internal static class UvSeamFinder
             }
         }
 
-        var normals = mesh.Normals;
+        Float3[] normals = mesh.Normals;
         var seams = new List<SeamSegment>();
-        foreach (var bucket in buckets.Values)
+        foreach (List<Edge> bucket in buckets.Values)
         {
             int count = System.Math.Min(bucket.Count, 4);
             for (int i = 0; i < count; i++)
             for (int j = i + 1; j < count; j++)
             {
-                var a = bucket[i];
-                var b = bucket[j];
+                    Edge a = bucket[i];
+                    Edge b = bucket[j];
                 if (!NormalsMatch(normals, a.V0, b.V0) || !NormalsMatch(normals, a.V1, b.V1)) continue;
 
-                var a0 = uv[a.V0]; var a1 = uv[a.V1];
-                var b0 = uv[b.V0]; var b1 = uv[b.V1];
+                    Float2 a0 = uv[a.V0]; Float2 a1 = uv[a.V1];
+                    Float2 b0 = uv[b.V0]; Float2 b1 = uv[b.V1];
                 if (Float2.Distance(a0, b0) <= UvEpsilon && Float2.Distance(a1, b1) <= UvEpsilon) continue;
                 if (SharesUvSegment(a0, a1, b0, b1)) continue;
 
@@ -87,17 +87,17 @@ internal static class UvSeamFinder
         if (w0 == w1) return;
         // Order both the key and the stored endpoints by welded id, so the two sides of a seam are
         // bucketed together and their endpoints line up without a second matching step.
-        var key = w0 < w1 ? (w0, w1) : (w1, w0);
-        var edge = w0 < w1 ? new Edge(v0, v1) : new Edge(v1, v0);
-        if (!buckets.TryGetValue(key, out var list)) buckets[key] = list = new List<Edge>(2);
+        (int, int) key = w0 < w1 ? (w0, w1) : (w1, w0);
+        Edge edge = w0 < w1 ? new Edge(v0, v1) : new Edge(v1, v0);
+        if (!buckets.TryGetValue(key, out List<Edge>? list)) buckets[key] = list = [with(2)];
         list.Add(edge);
     }
 
     private static bool NormalsMatch(Float3[] normals, int a, int b)
     {
         if (normals.Length == 0) return true;
-        var na = normals[a];
-        var nb = normals[b];
+        Float3 na = normals[a];
+        Float3 nb = normals[b];
         if (Float3.LengthSquared(na) < 1e-8f || Float3.LengthSquared(nb) < 1e-8f) return true;
         return Float3.Dot(Float3.Normalize(na), Float3.Normalize(nb)) >= NormalAgreement;
     }
@@ -108,7 +108,7 @@ internal static class UvSeamFinder
     /// </summary>
     private static bool SharesUvSegment(Float2 a0, Float2 a1, Float2 b0, Float2 b1)
     {
-        var dir = a1 - a0;
+        Float2 dir = a1 - a0;
         float lengthSq = Float2.LengthSquared(dir);
         if (lengthSq < 1e-12f) return false;
 
@@ -127,14 +127,14 @@ internal static class UvSeamFinder
     /// <summary>Maps every vertex to the lowest index sharing its position, via a spatial hash with a one-cell probe.</summary>
     private static int[] BuildWeldMap(Float3[] positions, float epsilon)
     {
-        var weld = new int[positions.Length];
+        int[] weld = new int[positions.Length];
         var cells = new Dictionary<(int, int, int), List<int>>(positions.Length);
         float inv = 1f / epsilon;
         float epsilonSq = epsilon * epsilon;
 
         for (int i = 0; i < positions.Length; i++)
         {
-            var p = positions[i];
+            Float3 p = positions[i];
             int cx = (int)System.MathF.Floor(p.X * inv);
             int cy = (int)System.MathF.Floor(p.Y * inv);
             int cz = (int)System.MathF.Floor(p.Z * inv);
@@ -144,7 +144,7 @@ internal static class UvSeamFinder
             for (int dy = -1; dy <= 1 && representative < 0; dy++)
             for (int dx = -1; dx <= 1 && representative < 0; dx++)
             {
-                if (!cells.TryGetValue((cx + dx, cy + dy, cz + dz), out var list)) continue;
+                if (!cells.TryGetValue((cx + dx, cy + dy, cz + dz), out List<int>? list)) continue;
                 for (int k = 0; k < list.Count; k++)
                 {
                     if (Float3.DistanceSquared(positions[list[k]], p) > epsilonSq) continue;
@@ -154,7 +154,7 @@ internal static class UvSeamFinder
             }
 
             weld[i] = representative >= 0 ? representative : i;
-            if (!cells.TryGetValue((cx, cy, cz), out var own)) cells[(cx, cy, cz)] = own = new List<int>(4);
+            if (!cells.TryGetValue((cx, cy, cz), out List<int>? own)) cells[(cx, cy, cz)] = own = [with(4)];
             own.Add(i);
         }
         return weld;

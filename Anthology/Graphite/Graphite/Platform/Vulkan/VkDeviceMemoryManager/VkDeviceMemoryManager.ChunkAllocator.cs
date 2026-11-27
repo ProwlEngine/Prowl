@@ -34,10 +34,10 @@ internal unsafe partial class VkDeviceMemoryManager
 
             MemoryAllocateInfo memoryAI = new()
             {
-                SType = StructureType.MemoryAllocateInfo
+                SType = StructureType.MemoryAllocateInfo,
+                AllocationSize = _totalMemorySize,
+                MemoryTypeIndex = _memoryTypeIndex
             };
-            memoryAI.AllocationSize = _totalMemorySize;
-            memoryAI.MemoryTypeIndex = _memoryTypeIndex;
             _vk.AllocateMemory(_device, in memoryAI, null, out _memory).CheckResult();
 
             void* mappedPtr = null;

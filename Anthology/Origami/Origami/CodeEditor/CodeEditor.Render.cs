@@ -45,13 +45,13 @@ public sealed partial class CodeEditor
     private float _fontSize = -1f;
 
     // Rows drawn last frame keyed by line string, swapped each frame so rows that scrolled away are dropped.
-    private Dictionary<string, RowRender> _rows = new(ReferenceEqualityComparer.Instance);
-    private Dictionary<string, RowRender> _rowsNext = new(ReferenceEqualityComparer.Instance);
-    private readonly Dictionary<int, TextLayout> _numberLayouts = new();
-    private readonly Dictionary<(float, string), TextLayout> _miscLayouts = new();
-    private readonly Dictionary<string, MinimapLine> _minimap = new(ReferenceEqualityComparer.Instance);
-    private readonly List<CodeToken> _tokens = new();
-    private readonly List<(int Start, int Length)> _matches = new();
+    private Dictionary<string, RowRender> _rows = [with(ReferenceEqualityComparer.Instance)];
+    private Dictionary<string, RowRender> _rowsNext = [with(ReferenceEqualityComparer.Instance)];
+    private readonly Dictionary<int, TextLayout> _numberLayouts = [];
+    private readonly Dictionary<(float, string), TextLayout> _miscLayouts = [];
+    private readonly Dictionary<string, MinimapLine> _minimap = [with(ReferenceEqualityComparer.Instance)];
+    private readonly List<CodeToken> _tokens = [];
+    private readonly List<(int Start, int Length)> _matches = [];
     private CodeEditorColors? _themeColors;
     private OrigamiTheme? _themeColorsFor;
 
@@ -147,7 +147,7 @@ public sealed partial class CodeEditor
     private CodeEditorColors Palette()
     {
         if (Colors != null) return Colors;
-        var theme = Origami.Current;
+        OrigamiTheme theme = Origami.Current;
         if (_themeColors == null || !ReferenceEquals(theme, _themeColorsFor))
         {
             _themeColors = CodeEditorColors.FromTheme(theme);
@@ -162,7 +162,7 @@ public sealed partial class CodeEditor
 
     private TextLayoutSettings TextSettings(Canvas canvas, FontFile font, float size, CodeTokenStyle style = CodeTokenStyle.None)
     {
-        var s = TextLayoutSettings.Default;
+        TextLayoutSettings s = TextLayoutSettings.Default;
         s.Font = FontFor(font, style);
         s.Underline = (style & CodeTokenStyle.Underline) != 0;
         s.PixelSize = size * canvas.FramebufferScale;
@@ -199,7 +199,7 @@ public sealed partial class CodeEditor
         _measuredLigatures = Options.Ligatures;
         _measuredQuality = Options.TextQuality;
 
-        var probe = CreateLayout(canvas, "MMMMMMMMMMMMMMMMMMMM", font, size);
+        TextLayout probe = CreateLayout(canvas, "MMMMMMMMMMMMMMMMMMMM", font, size);
         _charW = probe.Size.X / 20f / scale;
         _glyphH = probe.Lines.Count > 0 ? probe.Lines[0].Height / scale : size * 1.2f;
         _rows.Clear();
@@ -212,16 +212,19 @@ public sealed partial class CodeEditor
 
     private void ComputeLayout(Rect rect)
     {
-        var v = new ViewLayout { Valid = true };
-        v.X = rect.Min.X;
-        v.Y = rect.Min.Y;
-        v.W = rect.Size.X;
-        v.H = rect.Size.Y;
-        v.LineH = MathF.Max(1, MathF.Round(FontSize * Options.LineHeight));
-        v.CharW = _charW;
-        v.GlyphH = _glyphH;
+        var v = new ViewLayout
+        {
+            Valid = true,
+            X = rect.Min.X,
+            Y = rect.Min.Y,
+            W = rect.Size.X,
+            H = rect.Size.Y,
+            LineH = MathF.Max(1, MathF.Round(FontSize * Options.LineHeight)),
+            CharW = _charW,
+            GlyphH = _glyphH,
 
-        v.StatusH = Options.ShowStatusBar ? MathF.Round(MathF.Max(20, FontSize * 1.6f)) : 0;
+            StatusH = Options.ShowStatusBar ? MathF.Round(MathF.Max(20, FontSize * 1.6f)) : 0
+        };
         v.StatusY = v.Y + v.H - v.StatusH;
 
         float x = v.X;
@@ -255,7 +258,7 @@ public sealed partial class CodeEditor
 
     private void UpdateScroll()
     {
-        var v = _view;
+        ViewLayout v = _view;
         float lh = v.LineH;
 
         if (_centerCaret)
@@ -310,7 +313,7 @@ public sealed partial class CodeEditor
     /// <summary>Document position under a screen point, or null outside the text.</summary>
     internal TextPosition PositionFromPoint(Float2 point, bool round = true)
     {
-        var v = _view;
+        ViewLayout v = _view;
         double y = point.Y - v.TextY + _scrollY;
         int row = (int)Math.Floor(y / v.LineH);
         if (row < 0) return TextPosition.Zero;
@@ -324,7 +327,7 @@ public sealed partial class CodeEditor
 
     internal Float2 PointFromPosition(TextPosition p)
     {
-        var v = _view;
+        ViewLayout v = _view;
         float x = v.TextX - _scrollX + VisualColumn(p.Line, p.Column) * v.CharW;
         float y = (float)(v.TextY + LineToDisplayRow(p.Line) * (double)v.LineH - _scrollY);
         return new Float2(x, y);
@@ -337,8 +340,8 @@ public sealed partial class CodeEditor
     private void DrawEditor(Canvas canvas, Rect rect)
     {
         if (_paper != null) _pointer = _paper.PointerPosIn(_handle);
-        var font = EditorFont;
-        var pal = Palette();
+        FontFile? font = EditorFont;
+        CodeEditorColors pal = Palette();
         canvas.RectFilled(rect.Min.X, rect.Min.Y, rect.Size.X, rect.Size.Y, pal.Background);
         if (font == null) return;
 
@@ -346,7 +349,7 @@ public sealed partial class CodeEditor
         Measure(canvas, font);
         ComputeLayout(rect);
         UpdateScroll();
-        var v = _view;
+        ViewLayout v = _view;
 
         int firstRow = Math.Max(0, (int)Math.Floor(_scrollY / v.LineH));
         int rowCount = (int)Math.Ceiling(v.TextH / v.LineH) + 1;
@@ -392,11 +395,11 @@ public sealed partial class CodeEditor
 
     private void DrawLineBackgrounds(Canvas canvas, CodeEditorColors pal, int firstRow, int lastRow)
     {
-        var v = _view;
+        ViewLayout v = _view;
         if (Options.HighlightCurrentLine && IsFocused)
         {
             var seen = new HashSet<int>();
-            foreach (var s in _selections)
+            foreach (CodeSelection s in _selections)
             {
                 if (!s.IsEmpty || !seen.Add(s.Caret.Line) || IsLineHidden(s.Caret.Line)) continue;
                 int row = LineToDisplayRow(s.Caret.Line);
@@ -405,13 +408,13 @@ public sealed partial class CodeEditor
             }
         }
 
-        foreach (var m in _markers)
+        foreach (CodeLineMarker m in _markers)
         {
             if (m.Kind != CodeLineMarkerKind.Execution && m.Kind != CodeLineMarkerKind.LineHighlight) continue;
             if (m.Line < 0 || m.Line >= Document.LineCount || IsLineHidden(m.Line)) continue;
             int row = LineToDisplayRow(m.Line);
             if (row < firstRow || row > lastRow) continue;
-            var c = m.Color ?? (m.Kind == CodeLineMarkerKind.Execution ? new Color32(255, 214, 102, 40) : new Color32(255, 255, 255, 18));
+            Color32 c = m.Color ?? (m.Kind == CodeLineMarkerKind.Execution ? new Color32(255, 214, 102, 40) : new Color32(255, 255, 255, 18));
             canvas.RectFilled(v.TextX - 4, RowY(row), v.MinimapX - v.TextX + 4, v.LineH, c);
         }
     }
@@ -424,17 +427,17 @@ public sealed partial class CodeEditor
 
     private void DrawHighlights(Canvas canvas, CodeEditorColors pal, int firstRow, int lastRow)
     {
-        var v = _view;
+        ViewLayout v = _view;
 
         if (_findBarOpen && FindQuery.Length > 0)
         {
-            var sel = Selection.Range;
+            TextRange sel = Selection.Range;
             for (int row = firstRow; row <= lastRow; row++)
             {
                 int line = DisplayRowToLine(row, out bool lensRow);
                 if (lensRow) continue;
                 LineMatches(line, _matches);
-                foreach (var (start, len) in _matches)
+                foreach ((int start, int len) in _matches)
                 {
                     float x0 = ColX(VisualColumn(line, start)), x1 = ColX(VisualColumn(line, start + len));
                     bool current = sel.Start.Line == line && sel.Start.Column == start && sel.End.Column == start + len;
@@ -443,7 +446,7 @@ public sealed partial class CodeEditor
             }
         }
 
-        foreach (var h in _highlights)
+        foreach (TextRange h in _highlights)
         {
             if (h.Start.Line != h.End.Line) continue;
             int line = h.Start.Line;
@@ -454,9 +457,9 @@ public sealed partial class CodeEditor
             canvas.RoundedRectFilled(x0, RowY(row) + 1, x1 - x0, v.LineH - 2, 2, pal.OccurrenceHighlight);
         }
 
-        if (Options.HighlightMatchingBrackets && IsFocused && TryGetBracketPair(out var open, out var close))
+        if (Options.HighlightMatchingBrackets && IsFocused && TryGetBracketPair(out TextPosition open, out TextPosition close))
         {
-            foreach (var p in new[] { open, close })
+            foreach (TextPosition p in new[] { open, close })
             {
                 if (IsLineHidden(p.Line)) continue;
                 int row = LineToDisplayRow(p.Line);
@@ -487,9 +490,9 @@ public sealed partial class CodeEditor
 
     private void DrawSelections(Canvas canvas, CodeEditorColors pal, int firstRow, int lastRow)
     {
-        var v = _view;
-        var color = IsFocused ? pal.Selection : pal.SelectionInactive;
-        foreach (var s in _selections)
+        ViewLayout v = _view;
+        Color32 color = IsFocused ? pal.Selection : pal.SelectionInactive;
+        foreach (CodeSelection s in _selections)
         {
             if (s.IsEmpty) continue;
             int startRow = Math.Max(firstRow, LineToDisplayRow(s.Start.Line));
@@ -510,7 +513,7 @@ public sealed partial class CodeEditor
 
     private void DrawIndentGuides(Canvas canvas, CodeEditorColors pal, int firstRow, int lastRow)
     {
-        var v = _view;
+        ViewLayout v = _view;
         int tab = Math.Max(1, Options.TabSize);
         int prevIndent = 0;
         for (int row = firstRow; row <= lastRow; row++)
@@ -543,7 +546,7 @@ public sealed partial class CodeEditor
 
     private void DrawTrailingWhitespace(Canvas canvas, CodeEditorColors pal, int firstRow, int lastRow)
     {
-        var v = _view;
+        ViewLayout v = _view;
         for (int row = firstRow; row <= lastRow; row++)
         {
             int line = DisplayRowToLine(row, out bool lensRow);
@@ -569,9 +572,9 @@ public sealed partial class CodeEditor
 
     private void DrawText(Canvas canvas, CodeEditorColors pal, FontFile font, int firstRow, int lastRow)
     {
-        var v = _view;
+        ViewLayout v = _view;
         float scale = canvas.FramebufferScale;
-        var engine = canvas.Text.FontEngine;
+        FontSystem engine = canvas.Text.FontEngine;
 
         int firstCol = Math.Max(0, (int)(_scrollX / v.CharW) - 1);
         int lastCol = firstCol + (int)(v.TextW / v.CharW) + 3;
@@ -585,13 +588,13 @@ public sealed partial class CodeEditor
                 DrawLensRow(canvas, pal, font, line, RowY(row));
                 continue;
             }
-            var r = GetRowRender(canvas, pal, font, line);
+            RowRender r = GetRowRender(canvas, pal, font, line);
             float y = MathF.Round((RowY(row) + (v.LineH - v.GlyphH) * 0.5f) * scale);
 
-            var runs = r.Runs;
+            Run[] runs = r.Runs;
             for (int i = FirstRunAt(runs, firstCol); i < runs.Length; i++)
             {
-                ref var run = ref runs[i];
+                ref Run run = ref runs[i];
                 if (run.Column > lastCol) break;
                 if (run.Layout != null)
                 {
@@ -607,7 +610,7 @@ public sealed partial class CodeEditor
 
             if (Options.ShowWhitespace) DrawWhitespace(canvas, pal, line, RowY(row));
 
-            if (TryGetCollapsed(line, out var fold))
+            if (TryGetCollapsed(line, out CodeFoldRange fold))
                 DrawFoldPlaceholder(canvas, pal, font, line, fold, RowY(row));
         }
     }
@@ -626,7 +629,7 @@ public sealed partial class CodeEditor
 
     private void DrawWhitespace(Canvas canvas, CodeEditorColors pal, int line, float rowY)
     {
-        var v = _view;
+        ViewLayout v = _view;
         string s = Document[line];
         int tab = Math.Max(1, Options.TabSize);
         int vis = 0;
@@ -646,7 +649,7 @@ public sealed partial class CodeEditor
 
     private void DrawFoldPlaceholder(Canvas canvas, CodeEditorColors pal, FontFile font, int line, CodeFoldRange fold, float rowY)
     {
-        var v = _view;
+        ViewLayout v = _view;
         string label = fold.Label ?? "...";
         float x = ColX(VisualColumn(line, Document.GetLineLength(line))) + v.CharW;
         float w = label.Length * v.CharW + v.CharW;
@@ -658,11 +661,11 @@ public sealed partial class CodeEditor
     {
         string text = Document[line];
         int state = GetLineState(line);
-        _semantic.TryGetValue(text, out var semantic);
+        _semantic.TryGetValue(text, out CodeToken[]? semantic);
         int tab = Math.Max(1, Options.TabSize);
         float fontKey = FontSize * canvas.FramebufferScale;
 
-        _rows.TryGetValue(text, out var r);
+        _rows.TryGetValue(text, out RowRender? r);
         r ??= new RowRender();
         _rowsNext[text] = r;
 
@@ -700,9 +703,9 @@ public sealed partial class CodeEditor
     }
 
     // Bracket nesting at the start of each line, counted from the lexed punctuation and rebuilt from the top after an edit.
-    private readonly List<int> _bracketDepths = new();
+    private readonly List<int> _bracketDepths = [];
     private int _bracketDepthVersion = -1;
-    private readonly List<CodeToken> _bracketTokens = new();
+    private readonly List<CodeToken> _bracketTokens = [];
 
     private int BracketDepthAt(int line)
     {
@@ -719,7 +722,7 @@ public sealed partial class CodeEditor
             int depth = _bracketDepths[l];
             string s = Document[l];
             LexLine(l, _bracketTokens);
-            foreach (var t in _bracketTokens)
+            foreach (CodeToken t in _bracketTokens)
             {
                 if (t.Kind != CodeTokenKind.Punctuation) continue;
                 for (int i = t.Start; i < t.End && i < s.Length; i++)
@@ -729,7 +732,7 @@ public sealed partial class CodeEditor
         }
         return _bracketDepths[line];
     }
-    private readonly List<Run> _runScratch = new();
+    private readonly List<Run> _runScratch = [];
 
     // depth is the bracket nesting at the start of the line, or -1 to leave brackets uncoloured.
     private Run[] BuildRuns(Canvas canvas, FontFile font, CodeToken[] tokens, string text, CodeToken[]? semantic, CodeEditorColors pal, int tab, int depth, out bool pending)
@@ -737,12 +740,12 @@ public sealed partial class CodeEditor
         pending = false;
         if (text.Length == 0) return Array.Empty<Run>();
         if (_kinds.Length < text.Length) _kinds = new CodeTokenKind[Math.Max(text.Length, _kinds.Length * 2)];
-        var kinds = _kinds;
+        CodeTokenKind[] kinds = _kinds;
         Array.Clear(kinds, 0, text.Length);
-        foreach (var t in tokens)
+        foreach (CodeToken t in tokens)
             for (int i = t.Start; i < t.End && i < text.Length; i++) kinds[i] = t.Kind;
         if (semantic != null)
-            foreach (var t in semantic)
+            foreach (CodeToken t in semantic)
                 for (int i = t.Start; i < t.End && i < text.Length; i++) kinds[i] = t.Kind;
 
         // Words break at whitespace and at colour changes. Runs are capped so a minified line still
@@ -775,7 +778,7 @@ public sealed partial class CodeEditor
                        && !(depth >= 0 && kinds[i1] == CodeTokenKind.Punctuation && IsBracket(text[i1], out _))) i1++;
             string word = text.Substring(i0, i1 - i0);
             CodeTokenStyle style = pal.Styles[(int)kinds[i0]];
-            var layout = WordLayout(canvas, font, word, style);
+            TextLayout? layout = WordLayout(canvas, font, word, style);
             if (layout == null) pending = true;
             _runScratch.Add(new Run { Column = vis, Text = word, Layout = layout, Color = ToFont(color), Style = style });
             vis += i1 - i0;
@@ -785,9 +788,9 @@ public sealed partial class CodeEditor
     }
 
     // One layout per distinct word, shared across every row, so scrolling and typing rarely lay out new text.
-    private readonly Dictionary<(string, CodeTokenStyle), TextLayout> _layoutCache = new();
+    private readonly Dictionary<(string, CodeTokenStyle), TextLayout> _layoutCache = [];
 
-    private readonly Dictionary<(char, CodeTokenStyle), TextLayout> _glyphLayouts = new();
+    private readonly Dictionary<(char, CodeTokenStyle), TextLayout> _glyphLayouts = [];
     private double _layoutBudget;
     private double _layoutCostPerChar = 0.01;
     private const double LayoutBudgetMs = 1.5;
@@ -796,7 +799,7 @@ public sealed partial class CodeEditor
     // drawn from single glyph layouts and laid out properly on a later, quieter frame.
     private TextLayout? WordLayout(Canvas canvas, FontFile font, string word, CodeTokenStyle style)
     {
-        if (_layoutCache.TryGetValue((word, style), out var layout)) return layout;
+        if (_layoutCache.TryGetValue((word, style), out TextLayout? layout)) return layout;
         bool typing = _time - _lastEditTime < 0.3;
         if (word.Length > 1 && typing && word.Length * _layoutCostPerChar > _layoutBudget) return null;
 
@@ -812,7 +815,7 @@ public sealed partial class CodeEditor
 
     private TextLayout GlyphLayout(Canvas canvas, FontFile font, char c, CodeTokenStyle style = CodeTokenStyle.None)
     {
-        if (_glyphLayouts.TryGetValue((c, style), out var layout)) return layout;
+        if (_glyphLayouts.TryGetValue((c, style), out TextLayout? layout)) return layout;
         layout = CreateLayout(canvas, c.ToString(), font, FontSize, style);
         _glyphLayouts[(c, style)] = layout;
         return layout;
@@ -827,11 +830,11 @@ public sealed partial class CodeEditor
         if (text.Length == 0) return;
         float sz = size ?? FontSize;
         float scale = canvas.FramebufferScale;
-        var engine = canvas.Text.FontEngine;
-        var fc = ToFont(color);
-        var key = (sz, text);
+        FontSystem engine = canvas.Text.FontEngine;
+        FontColor fc = ToFont(color);
+        (float sz, string text) key = (sz, text);
 
-        if (!_miscLayouts.TryGetValue(key, out var layout) && text.Length * _layoutCostPerChar <= _layoutBudget)
+        if (!_miscLayouts.TryGetValue(key, out TextLayout? layout) && text.Length * _layoutCostPerChar <= _layoutBudget)
         {
             if (_miscLayouts.Count > 2048) _miscLayouts.Clear();
             long start = System.Diagnostics.Stopwatch.GetTimestamp();
@@ -855,11 +858,11 @@ public sealed partial class CodeEditor
         }
     }
 
-    private readonly Dictionary<(float, char), TextLayout> _sizedGlyphs = new();
+    private readonly Dictionary<(float, char), TextLayout> _sizedGlyphs = [];
 
     private TextLayout SizedGlyph(Canvas canvas, FontFile font, char c, float size)
     {
-        if (_sizedGlyphs.TryGetValue((size, c), out var layout)) return layout;
+        if (_sizedGlyphs.TryGetValue((size, c), out TextLayout? layout)) return layout;
         layout = CreateLayout(canvas, c.ToString(), font, size);
         _sizedGlyphs[(size, c)] = layout;
         return layout;
@@ -869,14 +872,14 @@ public sealed partial class CodeEditor
 
     private void DrawSquiggles(Canvas canvas, CodeEditorColors pal, int firstLine, int lastLine)
     {
-        var v = _view;
+        ViewLayout v = _view;
         float clipX0 = v.TextX - v.CharW, clipX1 = v.MinimapX + v.CharW;
         for (int di = FirstDiagnosticFrom(firstLine); di < _diagnostics.Count; di++)
         {
-            var d = _diagnostics[di];
+            CodeEditorDiagnostic d = _diagnostics[di];
             if (d.Range.End.Line < firstLine) continue;
             if (d.Range.Start.Line > lastLine) break;
-            var color = d.Severity switch
+            Color32 color = d.Severity switch
             {
                 CodeDiagnosticSeverity.Error => pal.Error,
                 CodeDiagnosticSeverity.Warning => pal.Warning,
@@ -918,12 +921,12 @@ public sealed partial class CodeEditor
     private void DrawCarets(Canvas canvas, CodeEditorColors pal, int firstRow, int lastRow)
     {
         if (!IsFocused) return;
-        var v = _view;
+        ViewLayout v = _view;
         double since = _time - _caretMoveTime;
         bool on = !Options.CaretBlink || since < 0.5 || (since % 1.0) < 0.55;
         if (!on) return;
 
-        foreach (var s in _selections)
+        foreach (CodeSelection s in _selections)
             DrawCaret(canvas, pal, s.Caret, Options.CaretStyle, firstRow, lastRow);
 
         // Where dragged text will land.
@@ -933,7 +936,7 @@ public sealed partial class CodeEditor
 
     private void DrawCaret(Canvas canvas, CodeEditorColors pal, TextPosition at, CaretStyle style, int firstRow, int lastRow)
     {
-        var v = _view;
+        ViewLayout v = _view;
         if (IsLineHidden(at.Line)) return;
         int row = LineToDisplayRow(at.Line);
         if (row < firstRow || row > lastRow) return;
@@ -956,12 +959,12 @@ public sealed partial class CodeEditor
 
     private void DrawGutter(Canvas canvas, CodeEditorColors pal, FontFile font, int firstRow, int lastRow)
     {
-        var v = _view;
+        ViewLayout v = _view;
         canvas.RectFilled(v.X, v.Y, v.GutterW, v.TextH, pal.GutterBackground);
 
         float numSize = FontSize;
         var activeLines = new HashSet<int>();
-        foreach (var s in _selections) activeLines.Add(s.Caret.Line);
+        foreach (CodeSelection s in _selections) activeLines.Add(s.Caret.Line);
 
         bool gutterHover = _pointerInGutter;
         for (int row = firstRow; row <= lastRow; row++)
@@ -973,7 +976,7 @@ public sealed partial class CodeEditor
 
             if (Options.ShowLineNumbers)
             {
-                var color = ToFont(activeLines.Contains(line) ? pal.LineNumberActive : pal.LineNumber);
+                FontColor color = ToFont(activeLines.Contains(line) ? pal.LineNumberActive : pal.LineNumber);
                 DrawNumber(canvas, font, line + 1, v.NumbersX + v.NumbersW - v.CharW * 0.25f, ty, color);
             }
 
@@ -995,13 +998,13 @@ public sealed partial class CodeEditor
     {
         float scale = canvas.FramebufferScale;
         float x = right;
-        var engine = canvas.Text.FontEngine;
+        FontSystem engine = canvas.Text.FontEngine;
         do
         {
             int digit = number % 10;
             number /= 10;
             x -= _charW;
-            if (!_numberLayouts.TryGetValue(digit, out var layout))
+            if (!_numberLayouts.TryGetValue(digit, out TextLayout? layout))
             {
                 layout = CreateLayout(canvas, ((char)('0' + digit)).ToString(), font, FontSize);
                 _numberLayouts[digit] = layout;
@@ -1033,18 +1036,18 @@ public sealed partial class CodeEditor
 
     private void DrawMarkers(Canvas canvas, CodeEditorColors pal, int firstRow, int lastRow)
     {
-        var v = _view;
+        ViewLayout v = _view;
         if (!Options.ShowGlyphMargin) return;
         float cx = v.GlyphX + v.GlyphW * 0.55f;
         float r = MathF.Min(v.GlyphW, v.LineH) * 0.3f;
 
-        foreach (var m in _markers)
+        foreach (CodeLineMarker m in _markers)
         {
             if (m.Line < 0 || m.Line >= Document.LineCount || IsLineHidden(m.Line)) continue;
             int row = LineToDisplayRow(m.Line);
             if (row < firstRow || row > lastRow) continue;
             float cy = RowY(row) + v.LineH * 0.5f;
-            var color = m.Color ?? pal.Breakpoint;
+            Color32 color = m.Color ?? pal.Breakpoint;
             switch (m.Kind)
             {
                 case CodeLineMarkerKind.Breakpoint:
@@ -1075,7 +1078,7 @@ public sealed partial class CodeEditor
         if (_hoverGlyphLine >= 0 && _hoverGlyphLine < Document.LineCount && !IsLineHidden(_hoverGlyphLine))
         {
             bool has = false;
-            foreach (var m in _markers) if (m.Line == _hoverGlyphLine && m.Kind != CodeLineMarkerKind.LineHighlight) has = true;
+            foreach (CodeLineMarker m in _markers) if (m.Line == _hoverGlyphLine && m.Kind != CodeLineMarkerKind.LineHighlight) has = true;
             int row = LineToDisplayRow(_hoverGlyphLine);
             if (!has && row >= firstRow && row <= lastRow)
                 canvas.CircleFilled(cx, RowY(row) + v.LineH * 0.5f, r, new Color32(pal.Breakpoint.R, pal.Breakpoint.G, pal.Breakpoint.B, 90));
@@ -1085,9 +1088,9 @@ public sealed partial class CodeEditor
     private void DrawDiagnosticGlyphs(Canvas canvas, CodeEditorColors pal, int firstRow, int lastRow)
     {
         if (Options.ShowGlyphMargin) return;
-        var v = _view;
+        ViewLayout v = _view;
         int lastLine = -1;
-        foreach (var d in _diagnostics)
+        foreach (CodeEditorDiagnostic d in _diagnostics)
         {
             if (d.Severity < CodeDiagnosticSeverity.Warning || d.Range.Start.Line == lastLine) continue;
             lastLine = d.Range.Start.Line;
@@ -1102,7 +1105,7 @@ public sealed partial class CodeEditor
     // Row shown at the top of the minimap, so the minimap scrolls in step with the editor.
     internal double MinimapTopRow()
     {
-        var v = _view;
+        ViewLayout v = _view;
         float rowH = 2f * MinimapScale;
         double rows = v.TextH / rowH;
         double total = DisplayRowCount;
@@ -1114,7 +1117,7 @@ public sealed partial class CodeEditor
 
     private void DrawMinimap(Canvas canvas, CodeEditorColors pal, int firstRow, int lastRow)
     {
-        var v = _view;
+        ViewLayout v = _view;
         float scale = MinimapScale;
         float rowH = 2f * scale;
         float charW = 1f * scale;
@@ -1135,36 +1138,36 @@ public sealed partial class CodeEditor
             string text = Document[line];
             if (text.Length == 0) continue;
             float y = v.Y + i * rowH - yOffset;
-            var ml = MinimapTokens(line, text);
+            MinimapLine ml = MinimapTokens(line, text);
             int tab = Math.Max(1, Options.TabSize);
 
-            foreach (var t in ml.Tokens)
+            foreach (CodeToken t in ml.Tokens)
             {
                 if (t.Kind == CodeTokenKind.Plain) continue;
                 int c0 = Math.Min(t.Start, text.Length);
                 int vis0 = text.IndexOf('\t') >= 0 ? VisualColumn(line, c0) : c0;
                 if (vis0 >= maxCols) break;
                 int vis1 = Math.Min(maxCols, vis0 + t.Length);
-                var c = pal[t.Kind];
+                Color32 c = pal[t.Kind];
                 canvas.RectFilled(v.MinimapX + 2 + vis0 * charW, y, (vis1 - vis0) * charW, rowH * 0.75f, new Color32(c.R, c.G, c.B, 150));
             }
         }
 
         float sliderY = (float)(v.Y + (firstRow - top) * rowH);
         float sliderH = MathF.Max(4, (lastRow - firstRow) * rowH);
-        var sliderColor = _minimapHover || _drag == DragKind.Minimap ? new Color32(pal.MinimapSlider.R, pal.MinimapSlider.G, pal.MinimapSlider.B, (byte)Math.Min(255, pal.MinimapSlider.A * 2)) : pal.MinimapSlider;
+        Color32 sliderColor = _minimapHover || _drag == DragKind.Minimap ? new Color32(pal.MinimapSlider.R, pal.MinimapSlider.G, pal.MinimapSlider.B, (byte)Math.Min(255, pal.MinimapSlider.A * 2)) : pal.MinimapSlider;
         canvas.RectFilled(v.MinimapX, sliderY, v.MinimapW, sliderH, sliderColor);
     }
 
     private MinimapLine MinimapTokens(int line, string text)
     {
         int state = GetLineState(line);
-        if (_minimap.TryGetValue(text, out var ml) && ml.State == state) return ml;
+        if (_minimap.TryGetValue(text, out MinimapLine? ml) && ml.State == state) return ml;
         if (_minimap.Count > 8000) _minimap.Clear();
 
         LexLine(line, _tokens);
         var list = new List<CodeToken>(_tokens.Count);
-        foreach (var t in _tokens)
+        foreach (CodeToken t in _tokens)
         {
             if (t.Kind != CodeTokenKind.Comment && t.Kind != CodeTokenKind.DocComment && t.Kind != CodeTokenKind.String)
             {
@@ -1192,7 +1195,7 @@ public sealed partial class CodeEditor
 
     internal (float Y, float H) VerticalThumb()
     {
-        var v = _view;
+        ViewLayout v = _view;
         double content = DisplayRowCount * (double)v.LineH + (Options.ScrollBeyondLastLine ? v.TextH - v.LineH : 0);
         double max = MaxScrollY();
         float h = (float)Math.Max(24, v.TextH * Math.Min(1, v.TextH / Math.Max(1, content)));
@@ -1202,7 +1205,7 @@ public sealed partial class CodeEditor
 
     internal (float X, float W) HorizontalThumb()
     {
-        var v = _view;
+        ViewLayout v = _view;
         float max = MaxScrollX();
         float content = max + v.TextW;
         float w = MathF.Max(24, v.TextW * MathF.Min(1, v.TextW / MathF.Max(1, content)));
@@ -1212,13 +1215,13 @@ public sealed partial class CodeEditor
 
     private void DrawScrollbars(Canvas canvas, CodeEditorColors pal)
     {
-        var v = _view;
+        ViewLayout v = _view;
 
         // Overview ruler: where errors, warnings and carets are in the whole file.
         int total = Math.Max(1, DisplayRowCount);
         float trackH = v.TextH;
         int lastRow = -1;
-        foreach (var d in _diagnostics)
+        foreach (CodeEditorDiagnostic d in _diagnostics)
         {
             if (d.Severity < CodeDiagnosticSeverity.Warning) continue;
             int row = LineToDisplayRow(d.Range.Start.Line);
@@ -1227,19 +1230,19 @@ public sealed partial class CodeEditor
             float y = v.Y + row / (float)total * trackH;
             canvas.RectFilled(v.VBarX + (d.Severity == CodeDiagnosticSeverity.Error ? 6 : 2), y, 4, 3, d.Severity == CodeDiagnosticSeverity.Error ? pal.Error : pal.Warning);
         }
-        foreach (var s in _selections)
+        foreach (CodeSelection s in _selections)
             canvas.RectFilled(v.VBarX, v.Y + LineToDisplayRow(s.Caret.Line) / (float)total * trackH, v.VBarW, 2, new Color32(pal.Caret.R, pal.Caret.G, pal.Caret.B, 160));
 
         if (MaxScrollY() > 0)
         {
-            var (ty, th) = VerticalThumb();
+            (float ty, float th) = VerticalThumb();
             bool hot = _vbarHover || _drag == DragKind.VScroll;
             canvas.RectFilled(v.VBarX + 2, ty, v.VBarW - 4, th, hot ? pal.ScrollbarHover : pal.Scrollbar);
         }
 
         if (MaxScrollX() > 0)
         {
-            var (tx, tw) = HorizontalThumb();
+            (float tx, float tw) = HorizontalThumb();
             bool hot = _hbarHover || _drag == DragKind.HScroll;
             canvas.RectFilled(tx, v.HBarY + 2, tw, v.HBarH - 4, hot ? pal.ScrollbarHover : pal.Scrollbar);
         }
@@ -1250,14 +1253,14 @@ public sealed partial class CodeEditor
 
     private void DrawStatusBar(Canvas canvas, CodeEditorColors pal, FontFile font)
     {
-        var v = _view;
+        ViewLayout v = _view;
         canvas.RectFilled(v.X, v.StatusY, v.W, v.StatusH, pal.StatusBar);
 
         int errors = CountDiagnostics(CodeDiagnosticSeverity.Error);
         int warnings = CountDiagnostics(CodeDiagnosticSeverity.Warning);
-        var sel = Selection;
+        CodeSelection sel = Selection;
         int selected = 0;
-        foreach (var s in _selections) if (!s.IsEmpty) selected += Document.PositionToOffset(s.End) - Document.PositionToOffset(s.Start);
+        foreach (CodeSelection s in _selections) if (!s.IsEmpty) selected += Document.PositionToOffset(s.End) - Document.PositionToOffset(s.Start);
 
         int key = HashCode.Combine(Caret, selected, _selections.Count, errors, warnings, Options.TabSize, Options.InsertSpaces, HashCode.Combine(Document.LineEnding, _language.Name, IsDirty, FontSize));
         if (key != _statusKey)

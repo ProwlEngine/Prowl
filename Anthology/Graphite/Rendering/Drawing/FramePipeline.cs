@@ -42,7 +42,7 @@ internal sealed partial class FramePipeline : IDisposable
         public uint Layers;
     }
 
-    private static readonly List<RenderResourceID> s_bufferIds = new();
+    private static readonly List<RenderResourceID> s_bufferIds = [];
 
     private readonly GraphicsDevice _device;
     private readonly IShaderCompiler? _compiler;
@@ -54,9 +54,9 @@ internal sealed partial class FramePipeline : IDisposable
 
     /// <summary>Bins each view's lights, decals and probes by screen tile and depth before its features draw.</summary>
     internal SpatialBinPass SpatialBins { get; }
-    private readonly Dictionary<int, CameraFrame> _cameras = new();
-    private readonly Dictionary<(int Page, PrimitiveTopology Topology), VertexSource> _vertexSources = new();
-    private readonly List<PlannedInstance> _planned = new();
+    private readonly Dictionary<int, CameraFrame> _cameras = [];
+    private readonly Dictionary<(int Page, PrimitiveTopology Topology), VertexSource> _vertexSources = [];
+    private readonly List<PlannedInstance> _planned = [];
     private readonly RenderStore _store;
     private readonly FrameGraph _graph;
 
@@ -78,19 +78,19 @@ internal sealed partial class FramePipeline : IDisposable
 
     /// <summary>The renderer's own view features, which every view runs unless a feature of their group replaces one.</summary>
     internal RenderFeature[] BuiltIns { get; }
-    private readonly List<CameraFrame> _captures = new();
-    private readonly List<IDisposable> _retired = new();
+    private readonly List<CameraFrame> _captures = [];
+    private readonly List<IDisposable> _retired = [];
     private readonly ProviderCountsPass _counts;
     private readonly FrameExports _exports = new();
-    private readonly Dictionary<FrameFeature, FrameFeaturePass> _frameFeaturePasses = new();
-    private readonly List<FrameEntry> _frameFeatures = new();
+    private readonly Dictionary<FrameFeature, FrameFeaturePass> _frameFeaturePasses = [];
+    private readonly List<FrameEntry> _frameFeatures = [];
     private FrameTime _currentTime;
     private readonly ReadbackStaging _readback;
-    private readonly List<int> _sortedViews = new();
+    private readonly List<int> _sortedViews = [];
     private bool[] _placed = [];
-    private readonly HashSet<RenderFeature> _prepared = new();
-    private readonly List<int> _viewOrder = new();
-    private readonly List<WorldFrame> _frameWorlds = new();
+    private readonly HashSet<RenderFeature> _prepared = [];
+    private readonly List<int> _viewOrder = [];
+    private readonly List<WorldFrame> _frameWorlds = [];
     private int _frame;
 
     private readonly RendererTextures _textures;
@@ -365,7 +365,7 @@ internal sealed partial class FramePipeline : IDisposable
     // The counts of the frame just recorded, and what each host view drawn did
     private FrameStats Stats(ReadOnlySpan<ViewDesc> views)
     {
-        List<ViewStats> drawn = new(views.Length);
+        List<ViewStats> drawn = [with(views.Length)];
         foreach (int index in _viewOrder)
         {
             if (_cameras.TryGetValue(views[index].ViewId, out CameraFrame? camera) && camera.LastFrame == _frame)
@@ -474,7 +474,7 @@ internal sealed partial class FramePipeline : IDisposable
     // Views an AutoExposure drives, or drove last frame, take their exposure on the GPU after the view blocks upload
     private void AddExposure()
     {
-        List<(CameraFrame Camera, ExposurePush Push, bool Measured)> exposed = new();
+        List<(CameraFrame Camera, ExposurePush Push, bool Measured)> exposed = [];
         foreach (CameraFrame camera in Active())
         {
             bool fromState = camera.WasAutoExposed && camera.HadPrevious;
@@ -701,7 +701,7 @@ internal sealed partial class FramePipeline : IDisposable
         foreach (FrameFeature feature in _frameFeaturePasses.Keys)
         {
             if (!_frameFeatures.Exists(entry => entry.Feature == feature))
-                (gone ??= new()).Add(feature);
+                (gone ??= []).Add(feature);
         }
         foreach (FrameFeature feature in gone ?? [])
             _frameFeaturePasses.Remove(feature);
@@ -1145,7 +1145,7 @@ internal sealed partial class FramePipeline : IDisposable
         }
     }
 
-    private readonly List<(ulong After, CameraFrame Camera)> _releasing = new();
+    private readonly List<(ulong After, CameraFrame Camera)> _releasing = [];
 
     public void Dispose()
     {

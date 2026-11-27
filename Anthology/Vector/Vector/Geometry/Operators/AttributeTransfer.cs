@@ -5,11 +5,10 @@ using System;
 using System.Collections.Generic;
 using System.Linq;
 
+using AttributeMap = System.Collections.Generic.Dictionary<string, Prowl.Vector.Geometry.GeometryData.AttributeValue>;
+
 
 namespace Prowl.Vector.Geometry.Operators;
-
-using AttributeMap = Dictionary<string, GeometryData.AttributeValue>;
-
 /// <summary>
 /// A face as it was before an operator replaced it, so what it carried can be given to whatever takes its place.
 /// Holds the face attributes, and the loop attributes of every corner, which can be read back by vertex or
@@ -17,9 +16,9 @@ using AttributeMap = Dictionary<string, GeometryData.AttributeValue>;
 /// </summary>
 internal sealed class FaceSnapshot
 {
-    public AttributeMap FaceAttributes = new();
-    public readonly List<GeometryData.Vertex> Vertices = new();
-    public readonly List<AttributeMap> Loops = new();
+    public AttributeMap FaceAttributes = [];
+    public readonly List<GeometryData.Vertex> Vertices = [];
+    public readonly List<AttributeMap> Loops = [];
 
     private PlaneFrame _frame;
     private List<Float2>? _flat;
@@ -27,9 +26,11 @@ internal sealed class FaceSnapshot
 
     public static FaceSnapshot Capture(GeometryData mesh, GeometryData.Face face)
     {
-        var snapshot = new FaceSnapshot();
-        snapshot.FaceAttributes = AttributeTransfer.Copy(face.Attributes);
-        var loop = face.Loop;
+        var snapshot = new FaceSnapshot
+        {
+            FaceAttributes = AttributeTransfer.Copy(face.Attributes)
+        };
+        GeometryData.Loop? loop = face.Loop;
         if (loop == null) return snapshot;
         do
         {
@@ -52,7 +53,7 @@ internal sealed class FaceSnapshot
     /// <summary>Copies the face attributes, except any named.</summary>
     public void ApplyFaceAttributes(GeometryData.Face target, string? except = null)
     {
-        foreach (var pair in FaceAttributes)
+        foreach (KeyValuePair<string, GeometryData.AttributeValue> pair in FaceAttributes)
         {
             if (pair.Key == except) continue;
             target.Attributes[pair.Key] = GeometryData.AttributeValue.Copy(pair.Value);
@@ -62,13 +63,13 @@ internal sealed class FaceSnapshot
     /// <summary>Gives each corner of the target the attributes the source function returns for its vertex.</summary>
     public static void ApplyLoops(GeometryData.Face target, Func<GeometryData.Vertex, AttributeMap?> source)
     {
-        var loop = target.Loop;
+        GeometryData.Loop? loop = target.Loop;
         if (loop == null) return;
         do
         {
             AttributeMap? attributes = source(loop.Vert);
             if (attributes != null)
-                foreach (var pair in attributes)
+                foreach (KeyValuePair<string, GeometryData.AttributeValue> pair in attributes)
                     loop.Attributes[pair.Key] = GeometryData.AttributeValue.Copy(pair.Value);
             loop = loop.Next;
         } while (loop != target.Loop && loop != null);
@@ -100,7 +101,7 @@ internal sealed class FaceSnapshot
     /// <summary>The loop attributes at a point on the face. Float attributes are interpolated across the face, integer ones come from the nearest corner.</summary>
     public AttributeMap Sample(GeometryData mesh, Float3 point)
     {
-        if (Vertices.Count == 0) return new AttributeMap();
+        if (Vertices.Count == 0) return [];
 
         int nearest = 0;
         float nearestDistance = float.MaxValue;
@@ -138,15 +139,15 @@ internal sealed class FaceSnapshot
         int dominant = x >= y && x >= z ? bestA : y >= z ? bestB : bestC;
 
         var result = new AttributeMap();
-        foreach (var definition in mesh.LoopAttributes)
+        foreach (GeometryData.AttributeDefinition definition in mesh.LoopAttributes)
         {
-            if (!Loops[bestA].TryGetValue(definition.Name, out var va) ||
-                !Loops[bestB].TryGetValue(definition.Name, out var vb) ||
-                !Loops[bestC].TryGetValue(definition.Name, out var vc)) continue;
+            if (!Loops[bestA].TryGetValue(definition.Name, out GeometryData.AttributeValue? va) ||
+                !Loops[bestB].TryGetValue(definition.Name, out GeometryData.AttributeValue? vb) ||
+                !Loops[bestC].TryGetValue(definition.Name, out GeometryData.AttributeValue? vc)) continue;
 
             if (va is GeometryData.FloatAttributeValue fa && vb is GeometryData.FloatAttributeValue fb && vc is GeometryData.FloatAttributeValue fc)
             {
-                var data = new float[fa.Data.Length];
+                float[] data = new float[fa.Data.Length];
                 for (int k = 0; k < data.Length; k++) data[k] = fa.Data[k] * x + fb.Data[k] * y + fc.Data[k] * z;
                 result[definition.Name] = new GeometryData.FloatAttributeValue { Data = data };
             }
@@ -154,7 +155,7 @@ internal sealed class FaceSnapshot
             {
                 result[definition.Name] = GeometryData.WeightsAttributeValue.Blend([wa, wb, wc], [x, y, z]);
             }
-            else if (Loops[dominant].TryGetValue(definition.Name, out var nearestValue))
+            else if (Loops[dominant].TryGetValue(definition.Name, out GeometryData.AttributeValue? nearestValue))
             {
                 result[definition.Name] = GeometryData.AttributeValue.Copy(nearestValue);
             }
@@ -178,45 +179,45 @@ internal static class AttributeTransfer
     public static AttributeMap Copy(AttributeMap source)
     {
         var copy = new AttributeMap(source.Count);
-        foreach (var pair in source) copy[pair.Key] = GeometryData.AttributeValue.Copy(pair.Value);
+        foreach (KeyValuePair<string, GeometryData.AttributeValue> pair in source) copy[pair.Key] = GeometryData.AttributeValue.Copy(pair.Value);
         return copy;
     }
 
     public static void Apply(AttributeMap source, AttributeMap target)
     {
-        foreach (var pair in source) target[pair.Key] = GeometryData.AttributeValue.Copy(pair.Value);
+        foreach (KeyValuePair<string, GeometryData.AttributeValue> pair in source) target[pair.Key] = GeometryData.AttributeValue.Copy(pair.Value);
     }
 
     /// <summary>A separate copy of what an element carries, values included.</summary>
     public static AttributeMap Copy(GeometryData.AttributeView source)
     {
         var copy = new AttributeMap();
-        foreach (var pair in source) copy[pair.Key] = GeometryData.AttributeValue.Copy(pair.Value);
+        foreach (KeyValuePair<string, GeometryData.AttributeValue> pair in source) copy[pair.Key] = GeometryData.AttributeValue.Copy(pair.Value);
         return copy;
     }
 
     /// <summary>Gives an element copies of what another carries, over what it had under the same names.</summary>
     public static void Apply(GeometryData.AttributeView source, GeometryData.AttributeView target)
     {
-        foreach (var pair in source) target[pair.Key] = GeometryData.AttributeValue.Copy(pair.Value);
+        foreach (KeyValuePair<string, GeometryData.AttributeValue> pair in source) target[pair.Key] = GeometryData.AttributeValue.Copy(pair.Value);
     }
 
     /// <summary>Gives an element copies of the values in a map, over what it had under the same names.</summary>
     public static void Apply(AttributeMap source, GeometryData.AttributeView target)
     {
-        foreach (var pair in source) target[pair.Key] = GeometryData.AttributeValue.Copy(pair.Value);
+        foreach (KeyValuePair<string, GeometryData.AttributeValue> pair in source) target[pair.Key] = GeometryData.AttributeValue.Copy(pair.Value);
     }
 
     /// <summary>Interpolates every attribute two maps share. Float attributes and weight lists blend, integer attributes take whichever side is nearer.</summary>
     public static AttributeMap Lerp(AttributeMap a, AttributeMap b, float t)
     {
         var result = new AttributeMap();
-        foreach (var pair in a)
+        foreach (KeyValuePair<string, GeometryData.AttributeValue> pair in a)
         {
-            if (!b.TryGetValue(pair.Key, out var other)) { result[pair.Key] = GeometryData.AttributeValue.Copy(pair.Value); continue; }
+            if (!b.TryGetValue(pair.Key, out GeometryData.AttributeValue? other)) { result[pair.Key] = GeometryData.AttributeValue.Copy(pair.Value); continue; }
             if (pair.Value is GeometryData.FloatAttributeValue fa && other is GeometryData.FloatAttributeValue fb && fa.Data.Length == fb.Data.Length)
             {
-                var data = new float[fa.Data.Length];
+                float[] data = new float[fa.Data.Length];
                 for (int i = 0; i < data.Length; i++) data[i] = fa.Data[i] + (fb.Data[i] - fa.Data[i]) * t;
                 result[pair.Key] = new GeometryData.FloatAttributeValue { Data = data };
             }
@@ -235,7 +236,7 @@ internal static class AttributeTransfer
     /// <summary>The average of several maps, for a corner that sits in the middle of a face.</summary>
     public static AttributeMap Average(IReadOnlyList<AttributeMap> maps)
     {
-        if (maps.Count == 0) return new AttributeMap();
+        if (maps.Count == 0) return [];
         AttributeMap result = Copy(maps[0]);
         for (int i = 1; i < maps.Count; i++) result = Lerp(result, maps[i], 1f / (i + 1));
         return result;

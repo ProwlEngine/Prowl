@@ -145,11 +145,11 @@ namespace Prowl.Quill.External
 
             private void ComputeNormal(ref Vec3 norm)
             {
-                var v = _mesh._vHead._next;
+                MeshUtils.Vertex v = _mesh._vHead._next;
 
-                var minVal = new Real[3] { v._coords.X, v._coords.Y, v._coords.Z };
+                float[] minVal = new Real[3] { v._coords.X, v._coords.Y, v._coords.Z };
                 var minVert = new MeshUtils.Vertex[3] { v, v, v };
-                var maxVal = new Real[3] { v._coords.X, v._coords.Y, v._coords.Z };
+                float[] maxVal = new Real[3] { v._coords.X, v._coords.Y, v._coords.Z };
                 var maxVert = new MeshUtils.Vertex[3] { v, v, v };
 
                 for (; v != _mesh._vHead; v = v._next)
@@ -177,13 +177,13 @@ namespace Prowl.Quill.External
                 // Look for a third vertex which forms the triangle with maximum area
                 // (Length of normal == twice the triangle area)
                 Real maxLen2 = 0, tLen2;
-                var v1 = minVert[i];
-                var v2 = maxVert[i];
-                Vec3 d1, d2, tNorm;
-                Vec3.Sub(ref v1._coords, ref v2._coords, out d1);
+                MeshUtils.Vertex v1 = minVert[i];
+                MeshUtils.Vertex v2 = maxVert[i];
+                Vec3 tNorm;
+                Vec3.Sub(ref v1._coords, ref v2._coords, out Vec3 d1);
                 for (v = _mesh._vHead._next; v != _mesh._vHead; v = v._next)
                 {
-                    Vec3.Sub(ref v._coords, ref v2._coords, out d2);
+                    Vec3.Sub(ref v._coords, ref v2._coords, out Vec3 d2);
                     tNorm.X = d1.Y * d2.Z - d1.Z * d2.Y;
                     tNorm.Y = d1.Z * d2.X - d1.X * d2.Z;
                     tNorm.Z = d1.X * d2.Y - d1.Y * d2.X;
@@ -209,7 +209,7 @@ namespace Prowl.Quill.External
                 // When we compute the normal automatically, we choose the orientation
                 // so that the the sum of the signed areas of all contours is non-negative.
                 Real area = 0.0f;
-                for (var f = _mesh._fHead._next; f != _mesh._fHead; f = f._next)
+                for (MeshUtils.Face f = _mesh._fHead._next; f != _mesh._fHead; f = f._next)
                 {
                     if (f._anEdge._winding <= 0)
                     {
@@ -220,7 +220,7 @@ namespace Prowl.Quill.External
                 if (area < 0.0f)
                 {
                     // Reverse the orientation by flipping all the t-coordinates
-                    for (var v = _mesh._vHead._next; v != _mesh._vHead; v = v._next)
+                    for (MeshUtils.Vertex v = _mesh._vHead._next; v != _mesh._vHead; v = v._next)
                     {
                         v._t = -v._t;
                     }
@@ -230,7 +230,7 @@ namespace Prowl.Quill.External
 
             private void ProjectPolygon()
             {
-                var norm = _normal;
+                Vec3 norm = _normal;
 
                 bool computedNormal = false;
                 if (norm.X == 0.0f && norm.Y == 0.0f && norm.Z == 0.0f)
@@ -251,7 +251,7 @@ namespace Prowl.Quill.External
                 _tUnit[(i + 2) % 3] = norm[i] > 0.0f ? SUnitX : -SUnitX;
 
                 // Project the vertices onto the sweep plane
-                for (var v = _mesh._vHead._next; v != _mesh._vHead; v = v._next)
+                for (MeshUtils.Vertex v = _mesh._vHead._next; v != _mesh._vHead; v = v._next)
                 {
                     Vec3.Dot(ref v._coords, ref _sUnit, out v._s);
                     Vec3.Dot(ref v._coords, ref _tUnit, out v._t);
@@ -263,7 +263,7 @@ namespace Prowl.Quill.External
 
                 // Compute ST bounds.
                 bool first = true;
-                for (var v = _mesh._vHead._next; v != _mesh._vHead; v = v._next)
+                for (MeshUtils.Vertex v = _mesh._vHead._next; v != _mesh._vHead; v = v._next)
                 {
                     if (first)
                     {
@@ -315,13 +315,13 @@ namespace Prowl.Quill.External
                 // First, find the half-edge whose origin vertex is rightmost.
                 // Since the sweep goes from left to right, face->anEdge should
                 // be close to the edge we want.
-                var up = face._anEdge;
+                MeshUtils.Edge up = face._anEdge;
                 Debug.Assert(up._Lnext != up && up._Lnext._Lnext != up);
 
                 while (Geom.VertLeq(up._Dst, up._Org)) up = up._Lprev;
                 while (Geom.VertLeq(up._Org, up._Dst)) up = up._Lnext;
 
-                var lo = up._Lprev;
+                MeshUtils.Edge lo = up._Lprev;
 
                 while (up._Lnext != lo)
                 {
@@ -478,7 +478,7 @@ namespace Prowl.Quill.External
 
                     if (NoEmptyPolygons)
                     {
-                        var area = MeshUtils.FaceArea(f);
+                        float area = MeshUtils.FaceArea(f);
                         if (Math.Abs(area) < Real.Epsilon)
                         {
                             continue;
@@ -533,7 +533,7 @@ namespace Prowl.Quill.External
 
                     if (NoEmptyPolygons)
                     {
-                        var area = MeshUtils.FaceArea(f);
+                        float area = MeshUtils.FaceArea(f);
                         if (Math.Abs(area) < Real.Epsilon)
                         {
                             continue;
@@ -635,8 +635,8 @@ namespace Prowl.Quill.External
 
                 for (int i = 0; i < vertices.Length; i++)
                 {
-                    var v0 = vertices[i];
-                    var v1 = vertices[(i + 1) % vertices.Length];
+                    ContourVertex v0 = vertices[i];
+                    ContourVertex v1 = vertices[(i + 1) % vertices.Length];
 
                     area += v0.Position.X * v1.Position.Y;
                     area -= v0.Position.Y * v1.Position.X;
@@ -660,7 +660,7 @@ namespace Prowl.Quill.External
                 bool reverse = false;
                 if (forceOrientation != ContourOrientation.Original)
                 {
-                    var area = SignedArea(vertices);
+                    float area = SignedArea(vertices);
                     reverse = (forceOrientation == ContourOrientation.Clockwise && area < 0.0f) || (forceOrientation == ContourOrientation.CounterClockwise && area > 0.0f);
                 }
 

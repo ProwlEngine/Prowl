@@ -22,7 +22,7 @@ public sealed partial class Lowerer
     void InitConversionRules(TranslationUnit unit)
     {
         _glslVersion = unit.Version;
-        var exts = unit.Extensions ?? [];
+        IReadOnlyList<string> exts = unit.Extensions ?? [];
         _explicitArithmetic = exts.Any(e => e.StartsWith("GL_EXT_shader_explicit_arithmetic_types", StringComparison.Ordinal));
         _gpuShaderInt16 = exts.Contains("GL_AMD_gpu_shader_int16");
         _gpuShaderHalfFloat = exts.Contains("GL_AMD_gpu_shader_half_float");
@@ -132,7 +132,7 @@ public sealed partial class Lowerer
     {
         if (a == b) return a;
         if ((_isEs && (_glslVersion < 310 || !_implicitConversionsExt)) || _glslVersion == 110) return null;
-        foreach (var f in new[] { Scalar.Double, Scalar.Float, Scalar.Half })
+        foreach (Scalar f in new[] { Scalar.Double, Scalar.Float, Scalar.Half })
             if ((a == f && CanPromote(b, f)) || (b == f && CanPromote(a, f))) return f;
         if (!IsIntegral(a) || !IsIntegral(b) || !(CanPromote(a, b) || CanPromote(b, a))) return null;
         int ra = IntWidth(a), rb = IntWidth(b);
@@ -141,7 +141,7 @@ public sealed partial class Lowerer
         if (IsUnsigned(b) && rb > ra) return b;
         // The signed one is at least as wide: it keeps its type if it can hold every value of the
         // unsigned one, else both become its unsigned counterpart.
-        var (signed, unsigned) = IsSigned(a) ? (a, b) : (b, a);
+        (Scalar signed, Scalar unsigned) = IsSigned(a) ? (a, b) : (b, a);
         return IntWidth(signed) > IntWidth(unsigned) ? signed : UnsignedOfWidth(IntWidth(signed));
     }
 
@@ -196,7 +196,7 @@ public sealed partial class Lowerer
         var viable = new List<int>();
         for (int c = 0; c < candidates.Count; c++)
         {
-            var ps = candidates[c];
+            (GlslType Type, bool In, bool Out)[] ps = candidates[c];
             if (ps.Length != args.Count) continue;
             bool ok = true;
             for (int i = 0; i < ps.Length && ok; i++)
@@ -251,13 +251,13 @@ public sealed partial class Lowerer
     static Dictionary<string, BuiltinProto[]> BuildBuiltinProtos()
     {
         var d = new Dictionary<string, BuiltinProto[]>();
-        foreach (var n in new[] { "radians", "degrees", "sin", "cos", "tan", "asin", "acos", "exp", "log", "exp2", "log2",
+        foreach (string? n in new[] { "radians", "degrees", "sin", "cos", "tan", "asin", "acos", "exp", "log", "exp2", "log2",
                      "sinh", "cosh", "tanh", "asinh", "acosh", "atanh", "dFdx", "dFdy", "fwidth", "dFdxFine", "dFdyFine",
                      "dFdxCoarse", "dFdyCoarse", "fwidthFine", "fwidthCoarse" })
             d[n] = [new("G", "G", BasesFH)];
         d["atan"] = [new("G", "G", BasesFH), new("GG", "G", BasesFH)];
         d["pow"] = [new("GG", "G", BasesFH)];
-        foreach (var n in new[] { "sqrt", "inversesqrt", "floor", "ceil", "fract", "trunc", "round", "roundEven", "normalize" })
+        foreach (string? n in new[] { "sqrt", "inversesqrt", "floor", "ceil", "fract", "trunc", "round", "roundEven", "normalize" })
             d[n] = [new("G", "G", BasesFDH)];
         d["abs"] = d["sign"] = [new("G", "G", [.. BasesFDH, .. BasesSignedInt])];
         d["length"] = [new("G", "S", BasesFDH)];
@@ -292,7 +292,7 @@ public sealed partial class Lowerer
     static string ProtoMangle(GlslType[] ps)
     {
         var sb = new System.Text.StringBuilder();
-        foreach (var p in ps)
+        foreach (GlslType p in ps)
         {
             Scalar s = BaseScalar(p);
             string m = s switch
@@ -311,12 +311,12 @@ public sealed partial class Lowerer
     // table order; null for a built-in this table does not model.
     List<(GlslType[] Params, GlslType Ret)>? BuiltinPrototypes(string name, int argCount)
     {
-        if (!BuiltinProtos.TryGetValue(name, out var protos)) return null;
+        if (!BuiltinProtos.TryGetValue(name, out BuiltinProto[]? protos)) return null;
         var list = new List<(GlslType[] Params, GlslType Ret)>();
-        foreach (var p in protos)
+        foreach (BuiltinProto p in protos)
         {
             if (p.Params.Length != argCount) continue;
-            foreach (var b in p.Bases)
+            foreach (Scalar b in p.Bases)
             {
                 // Double prototypes exist on desktop only; the 64-bit and narrow integer and half ones from 450 (ES 310).
                 if (b == Scalar.Double && (_isEs || _glslVersion < 150)) continue;
@@ -335,12 +335,12 @@ public sealed partial class Lowerer
     (GlslType[] Params, GlslType Ret)? ResolveBuiltinPrototype(Call call)
     {
         if (!BuiltinProtos.ContainsKey(call.Name)) return null;
-        var protos = BuiltinPrototypes(call.Name, call.Args.Count);
+        List<(GlslType[] Params, GlslType Ret)>? protos = BuiltinPrototypes(call.Name, call.Args.Count);
         if (protos is null || protos.Count == 0) return null;
         List<GlslType> argTypes;
         try { argTypes = [.. call.Args.Select(InferType)]; }
         catch (GlslParseException) { return null; }
-        foreach (var p in protos)
+        foreach ((GlslType[] Params, GlslType Ret) p in protos)
             if (p.Params.Zip(argTypes).All(t => t.First.Equals(t.Second))) return p;
         int best = SelectCandidate(argTypes, [.. protos.Select(p => p.Params.Select(t => (t, true, false)).ToArray())], out _);
         return best < 0 ? null : protos[best];
@@ -392,7 +392,7 @@ public sealed partial class Lowerer
     // A sparse call's out texel is resolved where it stands in the source, before the argument it preceded.
     Value[] LowerBuiltinArgs(Call call, (Expr Arg, int Slot)? sparseTexel = null)
     {
-        var targets = BuiltinArgTargets(call);
+        GlslType?[]? targets = BuiltinArgTargets(call);
         bool imageOp = IsImageOrTextureBuiltin(call.Name);
         var args = new Value[call.Args.Count];
         for (int i = 0; i < args.Length; i++)
@@ -418,7 +418,7 @@ public sealed partial class Lowerer
     {
         if (i == 0 || call.Args[i] is not Ident cur || call.Args[i - 1] is not Ident prev || cur.Name != prev.Name) return false;
         if (ResolveLocalVar(cur.Name) is null && ResolveGlobal(cur.Name) is null && !Builtins.ContainsKey(cur.Name)) return false;
-        var type = InferType(cur);
+        GlslType type = InferType(cur);
         return (target(i) is not { } t || t.Equals(type)) && (target(i - 1) is not { } p || p.Equals(type));
     }
 
@@ -438,7 +438,7 @@ public sealed partial class Lowerer
     // Folded argument values converted to the resolved prototype's parameter types (null if one cannot be).
     List<CVal>? ConvertConstArgs(Call call, List<CVal> args)
     {
-        var targets = BuiltinArgTargets(call);
+        GlslType?[]? targets = BuiltinArgTargets(call);
         if (targets is null) return args;
         var result = new List<CVal>(args.Count);
         for (int i = 0; i < args.Count; i++)

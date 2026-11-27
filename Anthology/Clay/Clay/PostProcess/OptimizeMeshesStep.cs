@@ -27,7 +27,7 @@ internal sealed class OptimizeMeshesStep : IPostProcess
     public void Execute(IntermediateScene scene, ImportContext context)
     {
         var mergedAway = new HashSet<int>();
-        foreach (var parent in scene.Nodes)
+        foreach (IntermediateNode parent in scene.Nodes)
             MergeChildren(parent, scene, mergedAway);
 
         if (mergedAway.Count == 0) return;
@@ -48,12 +48,12 @@ internal sealed class OptimizeMeshesStep : IPostProcess
     {
         // A merged-away mesh can still be referenced by another node, since one mesh may be
         // instanced under several. Those are not orphans and have to stay.
-        foreach (var node in scene.Nodes)
+        foreach (IntermediateNode node in scene.Nodes)
             mergedAway.Remove(node.MeshIndex);
 
         if (mergedAway.Count == 0) return;
 
-        var remap = new int[scene.Meshes.Count];
+        int[] remap = new int[scene.Meshes.Count];
         var kept = new List<IntermediateMesh>(scene.Meshes.Count - mergedAway.Count);
         for (int i = 0; i < scene.Meshes.Count; i++)
         {
@@ -69,7 +69,7 @@ internal sealed class OptimizeMeshesStep : IPostProcess
         scene.Meshes.Clear();
         scene.Meshes.AddRange(kept);
 
-        foreach (var node in scene.Nodes)
+        foreach (IntermediateNode node in scene.Nodes)
             if (node.MeshIndex >= 0)
                 node.MeshIndex = remap[node.MeshIndex];
     }
@@ -80,11 +80,11 @@ internal sealed class OptimizeMeshesStep : IPostProcess
 
         for (int i = 0; i < parent.Children.Count; i++)
         {
-            var child = parent.Children[i];
+            IntermediateNode child = parent.Children[i];
             if (!IsMergeCandidate(child, scene)) continue;
 
-            var mesh = scene.Meshes[child.MeshIndex];
-            if (!byMaterial.TryGetValue(mesh.MaterialIndex, out var primaryNode))
+            IntermediateMesh mesh = scene.Meshes[child.MeshIndex];
+            if (!byMaterial.TryGetValue(mesh.MaterialIndex, out IntermediateNode? primaryNode))
             {
                 byMaterial[mesh.MaterialIndex] = child;
                 continue;
@@ -94,7 +94,7 @@ internal sealed class OptimizeMeshesStep : IPostProcess
             // walks a list that grows with every append.
             if (primaryNode.MeshIndex == child.MeshIndex) continue;
 
-            var primary = scene.Meshes[primaryNode.MeshIndex];
+            IntermediateMesh primary = scene.Meshes[primaryNode.MeshIndex];
             if (!AreLayoutCompatible(primary, mesh)) continue;
 
             AppendMeshIntoPrimary(primary, primaryNode, mesh, child);
@@ -108,7 +108,7 @@ internal sealed class OptimizeMeshesStep : IPostProcess
         if (node.MeshIndex < 0) return false;
         if (node.SkinIndex >= 0) return false;
         if ((uint)node.MeshIndex >= (uint)scene.Meshes.Count) return false;
-        var m = scene.Meshes[node.MeshIndex];
+        IntermediateMesh m = scene.Meshes[node.MeshIndex];
         if (m.BlendShapes.Count > 0) return false;
         if (m.VertexJoints is not null) return false;
         // Grouping below keys on the mesh's single material, which says nothing about a mesh whose
@@ -161,8 +161,8 @@ internal sealed class OptimizeMeshesStep : IPostProcess
         {
             for (int i = 0; i < source.Tangents.Count; i++)
             {
-                var t = source.Tangents[i];
-                var xformed = TransformDirection(sourceToPrimary, new Float3(t.X, t.Y, t.Z));
+                Float4 t = source.Tangents[i];
+                Float3 xformed = TransformDirection(sourceToPrimary, new Float3(t.X, t.Y, t.Z));
                 primary.Tangents.Add(new Float4(xformed.X, xformed.Y, xformed.Z, mirrored ? -t.W : t.W));
             }
         }
@@ -177,9 +177,9 @@ internal sealed class OptimizeMeshesStep : IPostProcess
         }
 
         var shifted = new List<int>();
-        foreach (var face in source.Faces)
+        foreach (IntermediateFace face in source.Faces)
         {
-            var indices = source.Faces.IndicesOf(face);
+            Span<int> indices = source.Faces.IndicesOf(face);
             shifted.Clear();
             for (int k = 0; k < indices.Length; k++)
             {
@@ -194,14 +194,14 @@ internal sealed class OptimizeMeshesStep : IPostProcess
 
     private static Float3 TransformPoint(Float4x4 m, Float3 p)
     {
-        var v4 = m * new Float4(p.X, p.Y, p.Z, 1f);
+        Float4 v4 = m * new Float4(p.X, p.Y, p.Z, 1f);
         return new Float3(v4.X, v4.Y, v4.Z);
     }
 
     private static Float3 TransformDirection(Float4x4 m, Float3 d)
     {
         // Ignore translation for direction vectors.
-        var v4 = m * new Float4(d.X, d.Y, d.Z, 0f);
+        Float4 v4 = m * new Float4(d.X, d.Y, d.Z, 0f);
         var result = new Float3(v4.X, v4.Y, v4.Z);
         float len = MathF.Sqrt(result.X * result.X + result.Y * result.Y + result.Z * result.Z);
         return len < 1e-12f ? result : new Float3(result.X / len, result.Y / len, result.Z / len);

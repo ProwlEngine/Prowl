@@ -16,8 +16,8 @@ public readonly record struct GlobalProperty(PropertyID Name, MaterialPropertyTy
 public sealed class GlobalProperties
 {
     private readonly GlobalRegistry _registry;
-    private readonly Dictionary<PropertyID, MaterialValue> _values = new();
-    private readonly Dictionary<string, GlobalKeyword> _keywords = new(StringComparer.Ordinal);
+    private readonly Dictionary<PropertyID, MaterialValue> _values = [];
+    private readonly Dictionary<string, GlobalKeyword> _keywords = [with(StringComparer.Ordinal)];
 
     internal GlobalProperties(GlobalRegistry registry, GlobalProperties? fallback)
     {
@@ -47,7 +47,7 @@ public sealed class GlobalProperties
         if (versions == _snapshotVersions)
             return;
 
-        Dictionary<string, string> snapshot = new(StringComparer.Ordinal);
+        Dictionary<string, string> snapshot = [with(StringComparer.Ordinal)];
         if (Fallback != null)
         {
             foreach (GlobalKeyword keyword in Fallback._keywords.Values)
@@ -102,7 +102,7 @@ public sealed class GlobalProperties
     /// <summary>The snapshot's distinct buffers, which views declare so their draws see earlier writes.</summary>
     internal DeviceBuffer[] BufferList { get; private set; } = [];
 
-    private readonly Dictionary<PropertyID, DeviceBuffer> _buffers = new();
+    private readonly Dictionary<PropertyID, DeviceBuffer> _buffers = [];
     private (uint Own, uint Fallback) _bufferVersions = (uint.MaxValue, uint.MaxValue);
 
     internal void SnapshotBuffers()
@@ -114,7 +114,7 @@ public sealed class GlobalProperties
         if (versions == _bufferVersions && !disposed)
             return;
 
-        Dictionary<PropertyID, DeviceBuffer> snapshot = new();
+        Dictionary<PropertyID, DeviceBuffer> snapshot = [];
         foreach (Dictionary<PropertyID, DeviceBuffer> layer in Fallback != null ? [Fallback._buffers, _buffers] : new[] { _buffers })
         {
             foreach (KeyValuePair<PropertyID, DeviceBuffer> pair in layer)
@@ -123,7 +123,7 @@ public sealed class GlobalProperties
                     snapshot[pair.Key] = pair.Value;
             }
         }
-        List<DeviceBuffer> list = new();
+        List<DeviceBuffer> list = [];
         foreach (DeviceBuffer buffer in snapshot.Values)
         {
             if (!list.Contains(buffer))
@@ -289,14 +289,14 @@ internal sealed class GlobalRegistry
     private readonly object _lock = new();
     private readonly GraphicsDevice _device;
     private readonly IMaterialResources _resources;
-    private readonly Dictionary<PropertyID, GlobalProperty> _properties = new();
-    private readonly List<GlobalProperty> _ordered = new();
-    private readonly List<GlobalProperties?> _regions = new();
+    private readonly Dictionary<PropertyID, GlobalProperty> _properties = [];
+    private readonly List<GlobalProperty> _ordered = [];
+    private readonly List<GlobalProperties?> _regions = [];
     private readonly Stack<int> _freeRegions = new();
-    private readonly HashSet<GlobalProperties> _dirty = new();
-    private readonly HashSet<string> _reported = new(StringComparer.Ordinal);
-    private readonly List<int> _pendingFree = new();
-    private readonly List<(ulong Execution, int Region)> _retiringRegions = new();
+    private readonly HashSet<GlobalProperties> _dirty = [];
+    private readonly HashSet<string> _reported = [with(StringComparer.Ordinal)];
+    private readonly List<int> _pendingFree = [];
+    private readonly List<(ulong Execution, int Region)> _retiringRegions = [];
     private readonly RenderStore _store;
     private GpuTable _table;
     private bool _grown;

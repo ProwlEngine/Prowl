@@ -38,12 +38,12 @@ public sealed class TerrainSurface : RenderProvider, IDisposable
     private TerrainCache.Frame? _cacheFrame;
     private RenderWorld? _world;
     private readonly Material? _ownMaterial;
-    private readonly Dictionary<RenderView, CullFrustum> _seen = new();
-    private readonly List<Double3> _viewers = new();
+    private readonly Dictionary<RenderView, CullFrustum> _seen = [];
+    private readonly List<Double3> _viewers = [];
     private RenderView?[] _slotViews = [];
     private long[] _slotFrames = [];
     private long _frame;
-    private volatile Dictionary<RenderView, int> _slots = new();
+    private volatile Dictionary<RenderView, int> _slots = [];
     private volatile TerrainPool.Snapshot _snapshot;
     private Material _material;
     private Material _holeMaterial = null!;
@@ -225,7 +225,7 @@ public sealed class TerrainSurface : RenderProvider, IDisposable
         Dictionary<RenderView, CullFrustum> seen;
         lock (_seen)
         {
-            seen = new Dictionary<RenderView, CullFrustum>(_seen);
+            seen = [with(_seen)];
             _seen.Clear();
         }
         foreach (CullFrustum frustum in seen.Values)
@@ -304,7 +304,7 @@ public sealed class TerrainSurface : RenderProvider, IDisposable
     private static MeshData CardMesh()
     {
         Float3[] positions = new Float3[8];
-        List<uint> indices = new();
+        List<uint> indices = [];
         for (int plane = 0; plane < 2; plane++)
         {
             uint first = (uint)(plane * 4);
@@ -329,7 +329,7 @@ public sealed class TerrainSurface : RenderProvider, IDisposable
     {
         Double2?[] viewers = new Double2?[_slotViews.Length];
         CullFrustum?[] frustums = new CullFrustum?[_slotViews.Length];
-        Dictionary<RenderView, int> slots = new();
+        Dictionary<RenderView, int> slots = [];
         foreach ((RenderView view, CullFrustum frustum) in seen)
         {
             int slot = Array.IndexOf(_slotViews, view);

@@ -20,58 +20,58 @@ freely, subject to the following restrictions:
 using System;
 using System.Collections.Generic;
 using System.Linq;
-using Prowl.Recast.Core;
+
 using Prowl.Recast;
+using Prowl.Recast.Core;
 
-namespace Prowl.Recast.Detour.Dynamic.Colliders
+namespace Prowl.Recast.Detour.Dynamic.Colliders;
+
+public class DtCompositeCollider : IDtCollider
 {
-    public class DtCompositeCollider : IDtCollider
+    private readonly List<IDtCollider> colliders;
+    private readonly float[] _bounds;
+
+    public DtCompositeCollider(List<IDtCollider> colliders)
     {
-        private readonly List<IDtCollider> colliders;
-        private readonly float[] _bounds;
+        this.colliders = colliders;
+        _bounds = Bounds(colliders);
+    }
 
-        public DtCompositeCollider(List<IDtCollider> colliders)
+    public DtCompositeCollider(params IDtCollider[] colliders)
+    {
+        this.colliders = colliders.ToList();
+        _bounds = Bounds(this.colliders);
+    }
+
+    public float[] Bounds()
+    {
+        return _bounds;
+    }
+
+    private static float[] Bounds(List<IDtCollider> colliders)
+    {
+        float[] bounds = new float[]
         {
-            this.colliders = colliders;
-            _bounds = Bounds(colliders);
+            float.PositiveInfinity, float.PositiveInfinity, float.PositiveInfinity,
+            float.NegativeInfinity, float.NegativeInfinity, float.NegativeInfinity
+        };
+        foreach (IDtCollider collider in colliders)
+        {
+            float[] b = collider.Bounds();
+            bounds[0] = Math.Min(bounds[0], b[0]);
+            bounds[1] = Math.Min(bounds[1], b[1]);
+            bounds[2] = Math.Min(bounds[2], b[2]);
+            bounds[3] = Math.Max(bounds[3], b[3]);
+            bounds[4] = Math.Max(bounds[4], b[4]);
+            bounds[5] = Math.Max(bounds[5], b[5]);
         }
 
-        public DtCompositeCollider(params IDtCollider[] colliders)
-        {
-            this.colliders = colliders.ToList();
-            _bounds = Bounds(this.colliders);
-        }
+        return bounds;
+    }
 
-        public float[] Bounds()
-        {
-            return _bounds;
-        }
-
-        private static float[] Bounds(List<IDtCollider> colliders)
-        {
-            float[] bounds = new float[]
-            {
-                float.PositiveInfinity, float.PositiveInfinity, float.PositiveInfinity,
-                float.NegativeInfinity, float.NegativeInfinity, float.NegativeInfinity
-            };
-            foreach (IDtCollider collider in colliders)
-            {
-                float[] b = collider.Bounds();
-                bounds[0] = Math.Min(bounds[0], b[0]);
-                bounds[1] = Math.Min(bounds[1], b[1]);
-                bounds[2] = Math.Min(bounds[2], b[2]);
-                bounds[3] = Math.Max(bounds[3], b[3]);
-                bounds[4] = Math.Max(bounds[4], b[4]);
-                bounds[5] = Math.Max(bounds[5], b[5]);
-            }
-
-            return bounds;
-        }
-
-        public void Rasterize(RcHeightfield hf, RcContext context)
-        {
-            foreach (var c in colliders)
-                c.Rasterize(hf, context);
-        }
+    public void Rasterize(RcHeightfield hf, RcContext context)
+    {
+        foreach (IDtCollider c in colliders)
+            c.Rasterize(hf, context);
     }
 }

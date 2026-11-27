@@ -24,8 +24,9 @@ public sealed class CSharpLexer : ICodeLexer
 
     public static readonly CSharpLexer Instance = new();
 
-    private static readonly HashSet<string> s_keywords = new(StringComparer.Ordinal)
-    {
+    private static readonly HashSet<string> s_keywords =
+    [
+        with(StringComparer.Ordinal),
         "abstract", "as", "base", "bool", "byte", "char", "checked", "class", "const", "decimal", "delegate",
         "double", "enum", "event", "explicit", "extern", "false", "fixed", "float", "implicit", "in", "int",
         "interface", "internal", "is", "lock", "long", "namespace", "new", "null", "object", "operator", "out",
@@ -36,26 +37,28 @@ public sealed class CSharpLexer : ICodeLexer
         "global", "required", "scoped", "file", "notnull", "unmanaged", "managed", "nint", "nuint", "with",
         "and", "or", "not", "where", "alias", "args", "value",
         "from", "select", "group", "into", "orderby", "join", "let", "on", "equals", "by", "ascending", "descending",
-    };
+    ];
 
-    private static readonly HashSet<string> s_contextual = new(StringComparer.Ordinal)
-    {
+    private static readonly HashSet<string> s_contextual =
+    [
+        with(StringComparer.Ordinal),
         "var", "dynamic", "async", "get", "set", "init", "add", "remove", "partial", "record", "nameof",
         "global", "required", "scoped", "file", "notnull", "unmanaged", "managed", "nint", "nuint", "with",
         "and", "or", "not", "where", "alias", "args", "value",
         "from", "select", "group", "into", "orderby", "join", "let", "on", "equals", "by", "ascending", "descending",
-    };
+    ];
 
-    private static readonly HashSet<string> s_control = new(StringComparer.Ordinal)
-    {
+    private static readonly HashSet<string> s_control =
+    [
+        with(StringComparer.Ordinal),
         "if", "else", "switch", "case", "default", "for", "foreach", "while", "do", "break", "continue",
         "return", "goto", "throw", "try", "catch", "finally", "yield", "await", "when",
-    };
+    ];
 
-    private static readonly HashSet<string> s_typeDeclarators = new(StringComparer.Ordinal)
-    {
-        "class", "struct", "interface", "enum", "record", "new", "delegate",
-    };
+    private static readonly HashSet<string> s_typeDeclarators =
+    [
+with(StringComparer.Ordinal),         "class", "struct", "interface", "enum", "record", "new", "delegate",
+    ];
 
     public int Tokenize(string line, int state, List<CodeToken>? tokens)
     {
@@ -347,47 +350,19 @@ public sealed class CSharpLexer : ICodeLexer
             int p = end;
             while (p < _s.Length && _s[p] == ' ') p++;
             char next = At(p);
-            switch (word)
+            return word switch
             {
-                case "var":
-                case "dynamic":
-                    return char.IsLetter(next) || next == '_' || next == '(' || next == '@' || next == '[';
-                case "get":
-                case "set":
-                case "init":
-                case "add":
-                case "remove":
-                    return next == ';' || next == '{' || next == '=' || next == '\0';
-                case "nameof":
-                    return next == '(';
-                case "value":
-                case "args":
-                    return false;
-                case "async":
-                case "partial":
-                case "required":
-                case "scoped":
-                case "file":
-                case "record":
-                case "global":
-                case "unmanaged":
-                case "notnull":
-                case "managed":
-                    return char.IsLetter(next) || next == ':' || next == ',' || next == '>' || next == '{' || next == '(' ;
-                case "nint":
-                case "nuint":
-                    return true;
-                case "where":
-                    return char.IsLetter(next);
-                case "with":
-                    return next == '{';
-                case "and":
-                case "or":
-                case "not":
-                    return next != '=' && next != ';' && next != ')' && next != ',' && next != '.';
-                default:
-                    return char.IsLetter(next) || next == '_';
-            }
+                "var" or "dynamic" => char.IsLetter(next) || next == '_' || next == '(' || next == '@' || next == '[',
+                "get" or "set" or "init" or "add" or "remove" => next == ';' || next == '{' || next == '=' || next == '\0',
+                "nameof" => next == '(',
+                "value" or "args" => false,
+                "async" or "partial" or "required" or "scoped" or "file" or "record" or "global" or "unmanaged" or "notnull" or "managed" => char.IsLetter(next) || next == ':' || next == ',' || next == '>' || next == '{' || next == '(',
+                "nint" or "nuint" => true,
+                "where" => char.IsLetter(next),
+                "with" => next == '{',
+                "and" or "or" or "not" => next != '=' && next != ';' && next != ')' && next != ',' && next != '.',
+                _ => char.IsLetter(next) || next == '_',
+            };
         }
 
         private int StringLiteral(ref int pos)

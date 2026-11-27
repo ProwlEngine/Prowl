@@ -5,11 +5,11 @@ using System;
 using System.Collections.Generic;
 using System.Linq;
 
+using static Prowl.Vector.Geometry.Operators.EditingCommon;
+
 using Edge = Prowl.Vector.Geometry.GeometryData.Edge;
 using Face = Prowl.Vector.Geometry.GeometryData.Face;
 using Vertex = Prowl.Vector.Geometry.GeometryData.Vertex;
-
-using static Prowl.Vector.Geometry.Operators.EditingCommon;
 
 namespace Prowl.Vector.Geometry.Operators;
 
@@ -79,7 +79,7 @@ internal static class FollowMeOp
 
         foreach (List<Vertex> loop in loops)
         {
-            for (int i = 0; i < ringCount; i++) rings[i].Add(new List<Vertex>(loop.Count));
+            for (int i = 0; i < ringCount; i++) rings[i].Add([with(loop.Count)]);
         }
 
         for (int li = 0; li < loops.Count; li++)

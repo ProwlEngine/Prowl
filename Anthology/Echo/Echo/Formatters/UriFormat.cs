@@ -26,8 +26,8 @@ internal sealed class UriFormat : ISerializationFormat
     {
         if (value.TagType == EchoType.Compound)
         {
-            if (value.TryGet("uri", out var uriTag) && uriTag.TagType == EchoType.String &&
-                value.TryGet("kind", out var kindTag) && kindTag.TagType == EchoType.Int)
+            if (value.TryGet("uri", out EchoObject? uriTag) && uriTag.TagType == EchoType.String &&
+                value.TryGet("kind", out EchoObject? kindTag) && kindTag.TagType == EchoType.Int)
             {
                 string uriString = uriTag.StringValue;
                 int kind = kindTag.IntValue;

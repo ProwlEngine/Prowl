@@ -26,7 +26,7 @@ public sealed class TableCell
 
     internal static TableCell Take(string text, Color color, IOrigamiIcon? icon, TextAlignment align)
     {
-        var cell = _pool != null && _pool.Count > 0 ? _pool.Pop() : new TableCell();
+        TableCell cell = _pool != null && _pool.Count > 0 ? _pool.Pop() : new TableCell();
         cell.Text = text;
         cell.Color = color;
         cell.Icon = icon;
@@ -45,7 +45,7 @@ public sealed class TableCell
 /// <summary>A row of cells in a <see cref="TableBuilder"/>. Chain <see cref="Cell(string, Color)"/> calls.</summary>
 public sealed class TableRow
 {
-    internal readonly List<TableCell> Cells = new();
+    internal readonly List<TableCell> Cells = [];
 
     [ThreadStatic] private static Stack<TableRow>? _pool;
 
@@ -93,8 +93,8 @@ public sealed class TableBuilder
     private readonly int _selected;
     private readonly Action<int>? _onSelect;
 
-    private readonly List<(string Header, float Flex, bool Sortable, TextAlignment Align)> _columns = new();
-    private readonly List<TableRow> _rows = new();
+    private readonly List<(string Header, float Flex, bool Sortable, TextAlignment Align)> _columns = [];
+    private readonly List<TableRow> _rows = [];
     private UnitValue _width = UnitValue.Stretch();
     private bool _bordered = true;
 
@@ -290,24 +290,24 @@ public sealed class TableBuilder
     /// <summary>Render the table.</summary>
     public void Show()
     {
-        var m = _theme.Metrics;
-        var font = _theme.Font;
-        var headerFace = _theme.SemiBold ?? font;
-        var ink = _theme.Ink;
+        OrigamiMetrics m = _theme.Metrics;
+        Scribe.FontFile? font = _theme.Font;
+        Scribe.FontFile? headerFace = _theme.SemiBold ?? font;
+        OrigamiRamp ink = _theme.Ink;
         if (font == null || _columns.Count == 0) return;
 
         Color glassIn = _theme.Glass;
         Color bdSoft = _theme.BorderSoft;
         Color hover = _theme.Hover;
         Color accDim = _theme.Selected;
-        var acc = _theme.Primary.C500;
+        Color acc = _theme.Primary.C500;
 
         float headerFont = m.FontSizeSmall;
         float bodyFont = m.FontSize - 1f;
         const float hHead = 26f;
         float hRow = _rowHeight;
 
-        var container = _paper.Column(_id)
+        ElementBuilder container = _paper.Column(_id)
             .Width(_width)
             .Height(_scroll ? UnitValue.Pixels(_scrollH) : UnitValue.Auto)
             .Clip();
@@ -316,11 +316,11 @@ public sealed class TableBuilder
 
         using (container.Enter())
         {
-            var owner = _paper.CurrentParent;
+            ElementHandle owner = _paper.CurrentParent;
             HandleKeys(owner, _cellContent != null ? (_rowCount ?? 0) : _rows.Count);
 
             // ── Header row ──
-            var headRow = _paper.Row("head")
+            ElementBuilder headRow = _paper.Row("head")
                 .Width(UnitValue.Stretch()).Height(hHead)
                 .BackgroundColor(glassIn);
             if (_bordered) headRow.RoundedTop(m.ContainerRounding);
@@ -328,11 +328,11 @@ public sealed class TableBuilder
             {
                 for (int c = 0; c < _columns.Count; c++)
                 {
-                    var col = _columns[c];
+                    (string Header, float Flex, bool Sortable, TextAlignment Align) col = _columns[c];
                     int ci = c;
                     bool active = _sortColumn == c;
                     bool right = col.Align == TextAlignment.MiddleRight;
-                    var hcell = _paper.Row("h", c)
+                    ElementBuilder hcell = _paper.Row("h", c)
                         .Width(UnitValue.Stretch(col.Flex)).Height(hHead)
                         .Padding(10, 10, 0, 0);
                     if (_bordered)
@@ -446,7 +446,7 @@ public sealed class TableBuilder
                 bool selected = _isSelected != null ? _isSelected(i) : i == _selected;
                 bool isLast = i == RowN() - 1;
 
-                var rowBuilder = _paper.Row("r", i)
+                ElementBuilder rowBuilder = _paper.Row("r", i)
                     .Width(UnitValue.Stretch()).Height(hRow)
                     .BackgroundColor(selected ? accDim : Color.Transparent)
                     .Hovered.BackgroundColor(selected ? accDim : hover).End();
@@ -505,7 +505,7 @@ public sealed class TableBuilder
                 {
                     for (int c = 0; c < _columns.Count; c++)
                     {
-                        var col = _columns[c];
+                        (string Header, float Flex, bool Sortable, TextAlignment Align) col = _columns[c];
 
                         using (_paper.Row("c", c)
                             .Width(UnitValue.Stretch(col.Flex)).Height(hRow)
@@ -520,8 +520,8 @@ public sealed class TableBuilder
 
                             if (cell.Icon != null)
                             {
-                                var icon = cell.Icon;
-                                var iconCol = cell.Color;
+                                IOrigamiIcon icon = cell.Icon;
+                                Color iconCol = cell.Color;
                                 float isz = bodyFont;
                                 _paper.Box("i")
                                     .Width(19).Height(hRow)

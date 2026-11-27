@@ -19,7 +19,7 @@ public partial class Paper
     // O(1) id -> index lookup, kept in sync with CreateElement/DestroyElement/ClearElements.
     // Replaces the per-frame O(N) linear scan FindElementHandleByID used to do (it runs many
     // times per frame across the interaction/hover/focus/hit-test paths).
-    private readonly Dictionary<int, int> _idToIndex = new Dictionary<int, int>();
+    private readonly Dictionary<int, int> _idToIndex = [];
 
     public int ElementCount => _elementCount;
 
@@ -63,7 +63,7 @@ public partial class Paper
         // per element per frame, which is the largest single cost of building a frame.
         ref ElementData elementData = ref _elements[index];
         List<int> childIndices = elementData.ChildIndices;
-        if (childIndices == null) childIndices = new List<int>();
+        if (childIndices == null) childIndices = [];
         else childIndices.Clear();
         ReturnCommandList(elementData._renderCommands);
         ReturnCommandList(elementData._foregroundRenderCommands);
@@ -83,12 +83,12 @@ public partial class Paper
         if (!handle.IsValid)
             return;
 
-        ref var elementData = ref handle.Data;
+        ref ElementData elementData = ref handle.Data;
 
         // Remove from parent's children list
         if (elementData.ParentIndex != -1)
         {
-            ref var parentData = ref GetElementData(elementData.ParentIndex);
+            ref ElementData parentData = ref GetElementData(elementData.ParentIndex);
             parentData.ChildIndices.Remove(handle.Index);
         }
 
@@ -118,10 +118,10 @@ public partial class Paper
 
     internal void InitializeRootElement(float width, float height)
     {
-        var rootHandle = CreateElement(0);
+        ElementHandle rootHandle = CreateElement(0);
         _rootElementIndex = rootHandle.Index;
 
-        ref var rootData = ref rootHandle.Data;
+        ref ElementData rootData = ref rootHandle.Data;
         rootData._elementStyle.SetDirectValue(GuiProp.Width, UnitValue.Pixels(width));
         rootData._elementStyle.SetDirectValue(GuiProp.Height, UnitValue.Pixels(height));
     }
@@ -153,7 +153,7 @@ public partial class Paper
             if (_freeIndices.Contains(i))
                 continue;
 
-            ref var element = ref _elements[i];
+            ref ElementData element = ref _elements[i];
 
             // Validate parent-child relationships
             if (element.ParentIndex != -1)
@@ -161,7 +161,7 @@ public partial class Paper
                 if (element.ParentIndex < 0 || element.ParentIndex >= _elementCount)
                     throw new InvalidOperationException($"Element {i} has invalid parent index {element.ParentIndex}");
 
-                ref var parent = ref _elements[element.ParentIndex];
+                ref ElementData parent = ref _elements[element.ParentIndex];
                 if (!parent.ChildIndices.Contains(i))
                     throw new InvalidOperationException($"Element {i} claims parent {element.ParentIndex} but parent doesn't list it as child");
             }
@@ -171,7 +171,7 @@ public partial class Paper
                 if (childIndex < 0 || childIndex >= _elementCount)
                     throw new InvalidOperationException($"Element {i} has invalid child index {childIndex}");
 
-                ref var child = ref _elements[childIndex];
+                ref ElementData child = ref _elements[childIndex];
                 if (child.ParentIndex != i)
                     throw new InvalidOperationException($"Element {i} claims child {childIndex} but child doesn't reference it as parent");
             }

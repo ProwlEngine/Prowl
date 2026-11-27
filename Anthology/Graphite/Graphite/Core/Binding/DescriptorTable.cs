@@ -16,7 +16,7 @@ namespace Prowl.Graphite;
 public abstract class DescriptorTable : GraphicsResource
 {
     private readonly ResourceLayoutDescription _layout;
-    private readonly Dictionary<PropertyID, int> _elementsByName = new();
+    private readonly Dictionary<PropertyID, int> _elementsByName = [];
     private readonly DescriptorTableEntry[][] _entries;
 
     /// <summary>The layout the table was created from.</summary>

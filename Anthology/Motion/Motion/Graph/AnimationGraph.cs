@@ -1,4 +1,5 @@
 using System.Collections.Generic;
+
 using Prowl.Vector;
 
 namespace Prowl.Motion;
@@ -9,10 +10,10 @@ namespace Prowl.Motion;
 /// </summary>
 public sealed class AnimationGraph
 {
-    private readonly List<GraphNodeDefinition> _nodes = new();
-    private readonly List<ControlParameterDefinition> _parameters = new();
-    private readonly Dictionary<string, int> _parameterByName = new();
-    private readonly Dictionary<string, int> _nodeByName = new();
+    private readonly List<GraphNodeDefinition> _nodes = [];
+    private readonly List<ControlParameterDefinition> _parameters = [];
+    private readonly Dictionary<string, int> _parameterByName = [];
+    private readonly Dictionary<string, int> _nodeByName = [];
     private int _rootIndex = -1;
 
     public int NodeCount => _nodes.Count;

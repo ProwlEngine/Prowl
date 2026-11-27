@@ -40,7 +40,7 @@ public sealed partial class CodeEditor
         order.Sort((a, b) => _selections[b].Start.CompareTo(_selections[a].Start));
         foreach (int i in order)
         {
-            var result = edit(i, _selections[i]);
+            CodeSelection? result = edit(i, _selections[i]);
             if (result != null) _selections[i] = result.Value;
         }
     }
@@ -48,14 +48,14 @@ public sealed partial class CodeEditor
     public void UndoEdit()
     {
         if (IsReadOnly) return;
-        var step = Undo.PopUndo();
+        CodeUndoStep? step = Undo.PopUndo();
         if (step == null) return;
         _replaying = true;
         try
         {
             for (int i = step.Changes.Count - 1; i >= 0; i--)
             {
-                var c = step.Changes[i];
+                TextChange c = step.Changes[i];
                 Document.Replace(new TextRange(c.Range.Start, c.NewEnd), c.OldText);
             }
         }
@@ -67,12 +67,12 @@ public sealed partial class CodeEditor
     public void RedoEdit()
     {
         if (IsReadOnly) return;
-        var step = Undo.PopRedo();
+        CodeUndoStep? step = Undo.PopRedo();
         if (step == null) return;
         _replaying = true;
         try
         {
-            foreach (var c in step.Changes) Document.Replace(c.Range, c.NewText);
+            foreach (TextChange c in step.Changes) Document.Replace(c.Range, c.NewText);
         }
         finally { _replaying = false; }
         RestoreSelections(step.After);
@@ -87,10 +87,10 @@ public sealed partial class CodeEditor
         sorted.Sort((a, b) => b.Start.CompareTo(a.Start));
         Edit(kind, () =>
         {
-            foreach (var e in sorted)
+            foreach (CodeTextEdit e in sorted)
             {
-                var a = Document.OffsetToPosition(e.Start);
-                var b = Document.OffsetToPosition(e.Start + e.Length);
+                TextPosition a = Document.OffsetToPosition(e.Start);
+                TextPosition b = Document.OffsetToPosition(e.Start + e.Length);
                 Document.Replace(new TextRange(a, b), e.NewText);
             }
         });
@@ -120,7 +120,7 @@ public sealed partial class CodeEditor
 
         if (Options.AutoClosePairs)
         {
-            foreach (var (open, close) in _language.AutoClosingPairs)
+            foreach ((char open, char close) in _language.AutoClosingPairs)
             {
                 if (s.IsEmpty && c == close && next == close && (open != close || IsInsideOwnString(s.Caret)))
                     return new CodeSelection(new TextPosition(s.Caret.Line, s.Caret.Column + 1));
@@ -129,12 +129,12 @@ public sealed partial class CodeEditor
 
                 if (!s.IsEmpty && (open != close || s.Start.Line == s.End.Line))
                 {
-                    var start = s.Start;
-                    var end = s.End;
+                    TextPosition start = s.Start;
+                    TextPosition end = s.End;
                     Document.Insert(end, close.ToString());
                     Document.Insert(start, open.ToString());
                     var innerStart = new TextPosition(start.Line, start.Column + 1);
-                    var innerEnd = end.Line == start.Line ? new TextPosition(end.Line, end.Column + 1) : end;
+                    TextPosition innerEnd = end.Line == start.Line ? new TextPosition(end.Line, end.Column + 1) : end;
                     return s.IsReversed ? new CodeSelection(innerEnd, innerStart) : new CodeSelection(innerStart, innerEnd);
                 }
 
@@ -147,8 +147,8 @@ public sealed partial class CodeEditor
             }
         }
 
-        var change = Document.Replace(s.Range, c.ToString());
-        var caret = change.NewEnd;
+        TextChange change = Document.Replace(s.Range, c.ToString());
+        TextPosition caret = change.NewEnd;
 
         if (Options.AutoIndent && _language.OutdentsOn(c))
             caret = ReindentClosingLine(caret);
@@ -160,7 +160,7 @@ public sealed partial class CodeEditor
         bool nextOk = next == '\0' || char.IsWhiteSpace(next) || next == ')' || next == ']' || next == '}' || next == ';' || next == ',';
         if (!nextOk) return false;
 
-        var kind = TokenKindBefore(at);
+        CodeTokenKind kind = TokenKindBefore(at);
         bool inText = kind is CodeTokenKind.String or CodeTokenKind.Char or CodeTokenKind.Comment or CodeTokenKind.DocComment;
         if (open == close)
         {
@@ -173,7 +173,7 @@ public sealed partial class CodeEditor
     // A quote is overtyped only when it closes the literal the caret is in.
     private bool IsInsideOwnString(TextPosition p)
     {
-        var kind = TokenKindBefore(p);
+        CodeTokenKind kind = TokenKindBefore(p);
         return kind is CodeTokenKind.String or CodeTokenKind.Char or CodeTokenKind.StringEscape || p.Column > 0 && Document[p.Line][p.Column - 1] is '"' or '\'';
     }
 
@@ -183,7 +183,7 @@ public sealed partial class CodeEditor
         string line = Document[caret.Line];
         int first = FirstNonBlank(line);
         if (first != caret.Column - 1) return caret;
-        if (!TryFindMatchingBracket(caret, out var open, out _)) return caret;
+        if (!TryFindMatchingBracket(caret, out TextPosition open, out _)) return caret;
         if (open.Line == caret.Line) return caret;
 
         string indent = IndentOf(Document[open.Line]);
@@ -210,14 +210,14 @@ public sealed partial class CodeEditor
             {
                 string inner = indent + IndentUnit;
                 var removeWs = new TextRange(s.Start, new TextPosition(s.End.Line, s.End.Column + (after.Length - afterTrim.Length)));
-                var change = Document.Replace(removeWs, "\n" + inner + "\n" + indent);
+                TextChange change = Document.Replace(removeWs, "\n" + inner + "\n" + indent);
                 return new CodeSelection(new TextPosition(change.Range.Start.Line + 1, inner.Length));
             }
 
             string newIndent = deeper ? indent + IndentUnit : indent;
             int wsAfter = after.Length - afterTrim.Length;
             var range = new TextRange(s.Start, new TextPosition(s.End.Line, s.End.Column + wsAfter));
-            var c = Document.Replace(range, "\n" + newIndent);
+            TextChange c = Document.Replace(range, "\n" + newIndent);
 
             // An empty line left behind keeps no trailing indentation.
             string left = Document[c.Range.Start.Line];
@@ -231,7 +231,7 @@ public sealed partial class CodeEditor
     {
         if (before.Length == 0) return false;
         char open = before[^1];
-        foreach (var (o, c) in _language.Brackets)
+        foreach ((char o, char c) in _language.Brackets)
             if (o == open && c == closer) return true;
         return false;
     }
@@ -269,7 +269,7 @@ public sealed partial class CodeEditor
         Edit(CodeEditKind.Deleting, () => ForEachSelection((_, s) =>
         {
             if (!s.IsEmpty) return new CodeSelection(Document.Delete(s.Range).NewEnd);
-            var p = s.Caret;
+            TextPosition p = s.Caret;
             if (p == TextPosition.Zero) return null;
 
             TextPosition from;
@@ -291,7 +291,7 @@ public sealed partial class CodeEditor
                 }
                 else if (Options.AutoClosePairs && p.Column < line.Length)
                 {
-                    foreach (var (o, cl) in _language.AutoClosingPairs)
+                    foreach ((char o, char cl) in _language.AutoClosingPairs)
                         if (line[p.Column - 1] == o && line[p.Column] == cl)
                             return new CodeSelection(Document.Delete(new TextRange(from, new TextPosition(p.Line, p.Column + 1))).NewEnd);
                 }
@@ -305,7 +305,7 @@ public sealed partial class CodeEditor
         Edit(CodeEditKind.Deleting, () => ForEachSelection((_, s) =>
         {
             if (!s.IsEmpty) return new CodeSelection(Document.Delete(s.Range).NewEnd);
-            var p = s.Caret;
+            TextPosition p = s.Caret;
             TextPosition to;
             if (word) to = WordRight(p);
             else if (p.Column >= Document.GetLineLength(p.Line))
@@ -322,7 +322,7 @@ public sealed partial class CodeEditor
     {
         Edit(CodeEditKind.Other, () =>
         {
-            foreach (var (a, b) in SelectedLineBlocks(descending: true))
+            foreach ((int a, int b) in SelectedLineBlocks(descending: true))
             {
                 TextRange range;
                 if (b + 1 < Document.LineCount) range = new TextRange(a, 0, b + 1, 0);
@@ -338,7 +338,7 @@ public sealed partial class CodeEditor
     private List<(int First, int Last)> SelectedLineBlocks(bool descending)
     {
         var blocks = new List<(int, int)>();
-        foreach (var s in OrderedSelections())
+        foreach (CodeSelection s in OrderedSelections())
         {
             int a = s.Start.Line, b = s.End.Line;
             if (b > a && s.End.Column == 0) b--;
@@ -361,7 +361,7 @@ public sealed partial class CodeEditor
     public void Indent()
     {
         bool anySelection = false;
-        foreach (var s in _selections) if (!s.IsEmpty) anySelection = true;
+        foreach (CodeSelection s in _selections) if (!s.IsEmpty) anySelection = true;
 
         if (!anySelection)
         {
@@ -381,7 +381,7 @@ public sealed partial class CodeEditor
 
         Edit(CodeEditKind.Other, () =>
         {
-            foreach (var (a, b) in SelectedLineBlocks(true))
+            foreach ((int a, int b) in SelectedLineBlocks(true))
                 for (int line = a; line <= b; line++)
                     if (Document.GetLineLength(line) > 0) Document.Insert(new TextPosition(line, 0), IndentUnit);
         });
@@ -392,7 +392,7 @@ public sealed partial class CodeEditor
         Edit(CodeEditKind.Other, () =>
         {
             int tab = Math.Max(1, Options.TabSize);
-            foreach (var (a, b) in SelectedLineBlocks(true))
+            foreach ((int a, int b) in SelectedLineBlocks(true))
                 for (int line = a; line <= b; line++)
                 {
                     string s = Document[line];
@@ -411,7 +411,7 @@ public sealed partial class CodeEditor
 
         Edit(CodeEditKind.Other, () =>
         {
-            foreach (var (a, b) in SelectedLineBlocks(true))
+            foreach ((int a, int b) in SelectedLineBlocks(true))
             {
                 bool allCommented = true;
                 int minIndent = int.MaxValue;
@@ -448,14 +448,14 @@ public sealed partial class CodeEditor
 
         Edit(CodeEditKind.Other, () => ForEachSelection((_, s) =>
         {
-            var range = s.IsEmpty ? WordAt(s.Caret) : s.Range;
+            TextRange range = s.IsEmpty ? WordAt(s.Caret) : s.Range;
             string text = Document.GetText(range);
             if (text.StartsWith(open, StringComparison.Ordinal) && text.EndsWith(close, StringComparison.Ordinal) && text.Length >= open.Length + close.Length)
             {
-                var c = Document.Replace(range, text.Substring(open.Length, text.Length - open.Length - close.Length));
+                TextChange c = Document.Replace(range, text.Substring(open.Length, text.Length - open.Length - close.Length));
                 return new CodeSelection(c.Range.Start, c.NewEnd);
             }
-            var r = Document.Replace(range, open + text + close);
+            TextChange r = Document.Replace(range, open + text + close);
             return new CodeSelection(new TextPosition(r.Range.Start.Line, r.Range.Start.Column + open.Length),
                 new TextPosition(r.NewEnd.Line, r.NewEnd.Column - close.Length));
         }));
@@ -468,21 +468,21 @@ public sealed partial class CodeEditor
     /// <summary>Copies the selected lines below them. The carets follow the copy when <paramref name="down"/> is true.</summary>
     public void DuplicateLines(bool down = true)
     {
-        var blocks = SelectedLineBlocks(true);
+        List<(int First, int Last)> blocks = SelectedLineBlocks(true);
         Edit(CodeEditKind.Other, () =>
         {
-            var saved = SnapshotSelections();
-            foreach (var (a, b) in blocks)
+            CodeSelection[] saved = SnapshotSelections();
+            foreach ((int a, int b) in blocks)
             {
                 string block = Document.GetText(new TextRange(a, 0, b, Document.GetLineLength(b)));
                 Document.Insert(new TextPosition(b, Document.GetLineLength(b)), "\n" + block);
             }
 
             _selections.Clear();
-            foreach (var s in saved)
+            foreach (CodeSelection s in saved)
             {
                 int shift = 0;
-                foreach (var (a, b) in blocks)
+                foreach ((int a, int b) in blocks)
                 {
                     int count = b - a + 1;
                     if (b < s.Start.Line) shift += count;
@@ -497,8 +497,8 @@ public sealed partial class CodeEditor
     /// <summary>Alt+Up and Alt+Down: swaps the selected lines with the line above or below.</summary>
     public void MoveLines(int direction)
     {
-        var blocks = SelectedLineBlocks(direction > 0);
-        foreach (var (a, b) in blocks)
+        List<(int First, int Last)> blocks = SelectedLineBlocks(direction > 0);
+        foreach ((int a, int b) in blocks)
         {
             if (direction < 0 && a == 0) return;
             if (direction > 0 && b >= Document.LineCount - 1) return;
@@ -506,8 +506,8 @@ public sealed partial class CodeEditor
 
         Edit(CodeEditKind.Other, () =>
         {
-            var saved = SnapshotSelections();
-            foreach (var (a, b) in blocks)
+            CodeSelection[] saved = SnapshotSelections();
+            foreach ((int a, int b) in blocks)
             {
                 if (direction < 0)
                 {
@@ -524,10 +524,10 @@ public sealed partial class CodeEditor
             }
 
             _selections.Clear();
-            foreach (var s in saved)
+            foreach (CodeSelection s in saved)
             {
                 bool moved = false;
-                foreach (var (a, b) in blocks)
+                foreach ((int a, int b) in blocks)
                     if (s.Start.Line >= a && s.Start.Line <= b) moved = true;
                 int d = moved ? direction : 0;
                 _selections.Add(new CodeSelection(Document.Clamp(new TextPosition(s.Anchor.Line + d, s.Anchor.Column)),
@@ -540,10 +540,10 @@ public sealed partial class CodeEditor
     {
         Edit(CodeEditKind.Other, () => ForEachSelection((_, s) =>
         {
-            var range = s.IsEmpty ? WordAt(s.Caret) : s.Range;
+            TextRange range = s.IsEmpty ? WordAt(s.Caret) : s.Range;
             if (range.IsEmpty) return null;
             string text = Document.GetText(range);
-            var c = Document.Replace(range, upper ? text.ToUpperInvariant() : text.ToLowerInvariant());
+            TextChange c = Document.Replace(range, upper ? text.ToUpperInvariant() : text.ToLowerInvariant());
             return s.IsEmpty ? s : new CodeSelection(c.Range.Start, c.NewEnd);
         }));
     }
@@ -573,7 +573,7 @@ public sealed partial class CodeEditor
         if (text.Length == 0)
         {
             var sb = new StringBuilder();
-            foreach (var (a, b) in SelectedLineBlocks(false))
+            foreach ((int a, int b) in SelectedLineBlocks(false))
                 sb.Append(Document.GetText(new TextRange(a, 0, b, Document.GetLineLength(b)))).Append('\n');
             text = sb.ToString();
             _lineCopyText = text;
@@ -584,7 +584,7 @@ public sealed partial class CodeEditor
     public void Cut(Paper paper)
     {
         bool empty = true;
-        foreach (var s in _selections) if (!s.IsEmpty) empty = false;
+        foreach (CodeSelection s in _selections) if (!s.IsEmpty) empty = false;
         Copy(paper);
         if (IsReadOnly) return;
         if (empty) DeleteLines();
@@ -619,7 +619,7 @@ public sealed partial class CodeEditor
                 for (int i = order.Count - 1; i >= 0; i--)
                 {
                     int idx = order[i];
-                    var c = Document.Replace(_selections[idx].Range, parts[i]);
+                    TextChange c = Document.Replace(_selections[idx].Range, parts[i]);
                     _selections[idx] = new CodeSelection(c.NewEnd);
                 }
             });

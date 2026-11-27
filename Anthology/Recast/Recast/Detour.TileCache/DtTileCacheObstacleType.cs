@@ -1,9 +1,8 @@
-namespace Prowl.Recast.Detour.TileCache
+namespace Prowl.Recast.Detour.TileCache;
+
+public enum DtTileCacheObstacleType
 {
-    public enum DtTileCacheObstacleType
-    {
-        DT_OBSTACLE_CYLINDER,
-        DT_OBSTACLE_BOX, // AABB
-        DT_OBSTACLE_ORIENTED_BOX // OBB
-    };
-}
+    DT_OBSTACLE_CYLINDER,
+    DT_OBSTACLE_BOX, // AABB
+    DT_OBSTACLE_ORIENTED_BOX // OBB
+};

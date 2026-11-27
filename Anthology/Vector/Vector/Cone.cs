@@ -265,10 +265,10 @@ public struct Cone : IEquatable<Cone>, IFormattable, IBoundingShape
         Float3 perpendicular2 = Float3.Cross(axisNorm, perpendicular1);
 
         // Add apex vertex
-        var apex = geometryData.AddVertex(Apex);
+        GeometryData.Vertex apex = geometryData.AddVertex(Apex);
 
         // Add base center vertex
-        var baseCenter = geometryData.AddVertex(BaseCenter);
+        GeometryData.Vertex baseCenter = geometryData.AddVertex(BaseCenter);
 
         // Generate base circle vertices
         var baseVerts = new GeometryData.Vertex[resolution];

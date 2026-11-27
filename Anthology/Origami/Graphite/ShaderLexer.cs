@@ -157,7 +157,7 @@ public sealed class ShaderLexer : ICodeLexer
         if (tokens == null) return Run(s.Substring(from), mode, null);
         var rest = new List<CodeToken>();
         int end = Run(s.Substring(from), mode, rest);
-        foreach (var t in rest) tokens.Add(new CodeToken(t.Start + from, t.Length, t.Kind));
+        foreach (CodeToken t in rest) tokens.Add(new CodeToken(t.Start + from, t.Length, t.Kind));
         return end;
     }
 

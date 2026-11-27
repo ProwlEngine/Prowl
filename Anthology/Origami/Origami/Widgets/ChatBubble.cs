@@ -111,10 +111,10 @@ public sealed class ChatBubbleBuilder
 
     public void Show()
     {
-        var m = _theme.Metrics;
-        var font = _theme.Font;
-        var ink = _theme.Ink;
-        var ramp = _theme.Get(_variant);
+        OrigamiMetrics m = _theme.Metrics;
+        FontFile? font = _theme.Font;
+        OrigamiRamp ink = _theme.Ink;
+        OrigamiRamp ramp = _theme.Get(_variant);
 
         bool me = _variant != OrigamiVariant.Default;          // saturated variant = own message
         Color solidBg = _bgColor ?? _theme.Neutral.C500;       // "them": raised surface
@@ -140,7 +140,7 @@ public sealed class ChatBubbleBuilder
         }
 
         // Outer row: [avatar] [bubble] (them) or right-aligned [bubble] (me). Avatar carries the gap.
-        var row = _paper.Row($"{_id}_row").Width(UnitValue.Auto).Height(UnitValue.Auto);
+        ElementBuilder row = _paper.Row($"{_id}_row").Width(UnitValue.Auto).Height(UnitValue.Auto);
         if (_tail == BubbleTailDirection.Right) row.Margin(UnitValue.Stretch(), 0, 0, 0);
         using (row.Enter())
         {
@@ -223,7 +223,7 @@ public sealed class ChatBubbleBuilder
 
         if (_avatarTexture != null)
         {
-            var capturedTex = _avatarTexture;
+            object capturedTex = _avatarTexture;
             _paper.Box($"{_id}_av")
                 .Width(size).Height(size)
                 .Margin(aml, amr, UnitValue.Stretch(), 0) // bottom-align + gap to the bubble
@@ -241,9 +241,9 @@ public sealed class ChatBubbleBuilder
         }
         else if (_avatarInitials != null && font != null)
         {
-            var col = _avatarColor ?? _theme.Primary.C400;
-            var initials = _avatarInitials;
-            var fontSize = m.FontSize;
+            Color col = _avatarColor ?? _theme.Primary.C400;
+            string initials = _avatarInitials;
+            float fontSize = m.FontSize;
             _paper.Box($"{_id}_av")
                 .Width(size).Height(size)
                 .Margin(aml, amr, UnitValue.Stretch(), 0) // bottom-align + gap to the bubble
@@ -254,7 +254,7 @@ public sealed class ChatBubbleBuilder
                     float rad = aw * 0.5f, cx = ax + rad, cy = ay + rad;
                     canvas.CircleFilled(cx, cy, rad,
                         Color32.FromArgb(255, (byte)col.R, (byte)col.G, (byte)col.B));
-                    var ts = canvas.MeasureText(initials, fontSize, font);
+                    Float2 ts = canvas.MeasureText(initials, fontSize, font);
                     canvas.DrawText(initials, cx - (float)ts.X * 0.5f, cy - (float)ts.Y * 0.5f,
                         Color32.FromArgb(255, 255, 255, 255), fontSize, font);
                 }));

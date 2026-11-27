@@ -47,13 +47,13 @@ public sealed class ScrollViewBuilder
     // ── Pending programmatic scroll requests ──────────────────────────────
     // Static so callers can request a scroll without holding a builder.
     // Cleared once consumed by the matching ScrollView render.
-    internal static readonly Dictionary<string, Float2> s_pendingScrollTo = new();
+    internal static readonly Dictionary<string, Float2> s_pendingScrollTo = [];
 
     // Delta-based scroll nudges (added to current scroll, consumed each frame)
-    internal static readonly Dictionary<string, Float2> s_pendingScrollBy = new();
+    internal static readonly Dictionary<string, Float2> s_pendingScrollBy = [];
 
     // Spans of content (top, bottom) to bring into view, keyed by scroll view id.
-    internal static readonly Dictionary<string, Float2> s_pendingReveal = new();
+    internal static readonly Dictionary<string, Float2> s_pendingReveal = [];
 
     private readonly Paper _paper;
     private readonly string _id;
@@ -174,18 +174,18 @@ public sealed class ScrollViewBuilder
     {
         ArgumentNullException.ThrowIfNull(drawContents);
 
-        var ramp = _theme.Get(_variant);
+        OrigamiRamp ramp = _theme.Get(_variant);
 
         // Apply any pending programmatic scroll requests for this id (snap; smooth-scroll later).
         Float2? pending = null;
-        if (s_pendingScrollTo.TryGetValue(_id, out var target))
+        if (s_pendingScrollTo.TryGetValue(_id, out Float2 target))
         {
             pending = target;
             s_pendingScrollTo.Remove(_id);
         }
 
         ElementHandle outerHandle = default;
-        var outer = _paper.Box(_id)
+        ElementBuilder outer = _paper.Box(_id)
             .Width(_width).Height(_height)
             .Clip()
             .OnScroll(e =>
@@ -230,7 +230,7 @@ public sealed class ScrollViewBuilder
             }
 
             // Apply pending scroll-by (delta nudges).
-            if (s_pendingScrollBy.TryGetValue(_id, out var delta))
+            if (s_pendingScrollBy.TryGetValue(_id, out Float2 delta))
             {
                 s_pendingScrollBy.Remove(_id);
                 float curX = _paper.GetElementStorage(outerHandle, "scrollX", 0f);
@@ -239,7 +239,7 @@ public sealed class ScrollViewBuilder
                 _paper.SetElementStorage(outerHandle, "scrollY", MathF.Max(0f, curY + (float)delta.Y));
             }
 
-            if (s_pendingReveal.Remove(_id, out var span))
+            if (s_pendingReveal.Remove(_id, out Float2 span))
             {
                 float curY = _paper.GetElementStorage(outerHandle, "scrollY", 0f);
                 float viewH = _height - _padTop - _padBottom;
@@ -275,7 +275,7 @@ public sealed class ScrollViewBuilder
             // Width is Auto when horizontal scroll is enabled (content can extend), otherwise
             // shrunk to viewport width minus the vertical scrollbar.
             float viewportW = _width - _padLeft - _padRight - reserveV;
-            var content = _paper.Column("content")
+            ElementBuilder content = _paper.Column("content")
                 .PositionType(PositionType.SelfDirected)
                 .Position(_padLeft - animScrollX, _padTop - animScrollY)
                 .Height(UnitValue.Auto)
@@ -284,7 +284,7 @@ public sealed class ScrollViewBuilder
             if (_horizontal) content.Width(UnitValue.Auto);
             else content.Width(viewportW);
 
-            var capturedHandle = outerHandle;
+            ElementHandle capturedHandle = outerHandle;
             content.OnPostLayout((handle, rect) =>
             {
                 _paper.SetElementStorage(capturedHandle, "contentH", (float)rect.Size.Y + _padTop + _padBottom);
@@ -328,7 +328,7 @@ public sealed class ScrollViewBuilder
             // adjust scrollY directly - no cross-frame state needed.
             if (_vertical && DragDrop.IsDragging)
             {
-                var capturedOuter2 = outerHandle;
+                ElementHandle capturedOuter2 = outerHandle;
                 float capturedHeight = _height;
                 string capturedId = _id;
                 outer.OnPostLayout((handle, rect) =>
@@ -368,7 +368,7 @@ public sealed class ScrollViewBuilder
         float thumbH = MathF.Max(20f, trackH * ratio);
         float thumbY = maxScroll > 0f ? (scrollY / maxScroll) * (trackH - thumbH) : 0f;
 
-        var thumb = _paper.Box($"{_id}_vthumb")
+        ElementBuilder thumb = _paper.Box($"{_id}_vthumb")
             .PositionType(PositionType.SelfDirected)
             .Position(_width - _scrollbarSize, thumbY)
             .Transition(GuiProp.Top, 0.1f, Easing.EaseOut)
@@ -380,7 +380,7 @@ public sealed class ScrollViewBuilder
         // during the drag we recompute scrollY from absolute pointer position rather than
         // TotalDelta. The thumb itself moves with scroll each frame, which can confuse
         // delta-based tracking — pointer-anchored math is robust against that.
-        var capturedHandle = outerHandle;
+        ElementHandle capturedHandle = outerHandle;
         thumb.OnDragStart(e =>
         {
             _paper.SetElementStorage(capturedHandle, "vDragStartScroll", scrollY);
@@ -411,7 +411,7 @@ public sealed class ScrollViewBuilder
         float thumbW = MathF.Max(20f, trackW * ratio);
         float thumbX = maxScroll > 0f ? (scrollX / maxScroll) * (trackW - thumbW) : 0f;
 
-        var thumb = _paper.Box($"{_id}_hthumb")
+        ElementBuilder thumb = _paper.Box($"{_id}_hthumb")
             .PositionType(PositionType.SelfDirected)
             .Position(thumbX, _height - _scrollbarSize)
             .Transition(GuiProp.Left, 0.1f, Easing.EaseOut)
@@ -419,7 +419,7 @@ public sealed class ScrollViewBuilder
             .BackgroundColor(WithScaledAlpha(ScrollThumbColor(), vis))
             .Hovered.BackgroundColor(WithScaledAlpha(ScrollThumbHoverColor(), vis)).End();
 
-        var capturedHandle = outerHandle;
+        ElementHandle capturedHandle = outerHandle;
         thumb.OnDragStart(e =>
         {
             _paper.SetElementStorage(capturedHandle, "hDragStartScroll", scrollX);
@@ -451,7 +451,7 @@ public sealed class ScrollViewBuilder
         float duration = 0.33f * _paper.TransitionScale;
         if (!_smoothScroll || duration <= 0f) return target;
 
-        var ease = _paper.GetElementStorage<ScrollEase?>(outerHandle, key, null);
+        ScrollEase? ease = _paper.GetElementStorage<ScrollEase?>(outerHandle, key, null);
         if (ease == null)
         {
             ease = new ScrollEase { Target = target, Start = target, Time = duration, Value = target };

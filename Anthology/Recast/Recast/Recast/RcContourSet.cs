@@ -19,38 +19,38 @@ freely, subject to the following restrictions:
 */
 
 using System.Collections.Generic;
+
 using Prowl.Recast.Core.Numerics;
 
-namespace Prowl.Recast
+namespace Prowl.Recast;
+
+/** Represents a group of related contours. */
+public class RcContourSet
 {
-    /** Represents a group of related contours. */
-    public class RcContourSet
-    {
-        /** A list of the contours in the set. */
-        public List<RcContour> conts = new List<RcContour>();
+    /** A list of the contours in the set. */
+    public List<RcContour> conts = [];
 
-        /** The minimum bounds in world space. [(x, y, z)] */
-        public RcVec3f bmin = new RcVec3f();
+    /** The minimum bounds in world space. [(x, y, z)] */
+    public RcVec3f bmin = new RcVec3f();
 
-        /** The maximum bounds in world space. [(x, y, z)] */
-        public RcVec3f bmax = new RcVec3f();
+    /** The maximum bounds in world space. [(x, y, z)] */
+    public RcVec3f bmax = new RcVec3f();
 
-        /** The size of each cell. (On the xz-plane.) */
-        public float cs;
+    /** The size of each cell. (On the xz-plane.) */
+    public float cs;
 
-        /** The height of each cell. (The minimum increment along the y-axis.) */
-        public float ch;
+    /** The height of each cell. (The minimum increment along the y-axis.) */
+    public float ch;
 
-        /** The width of the set. (Along the x-axis in cell units.) */
-        public int width;
+    /** The width of the set. (Along the x-axis in cell units.) */
+    public int width;
 
-        /** The height of the set. (Along the z-axis in cell units.) */
-        public int height;
+    /** The height of the set. (Along the z-axis in cell units.) */
+    public int height;
 
-        /** The AABB border size used to generate the source data from which the contours were derived. */
-        public int borderSize;
+    /** The AABB border size used to generate the source data from which the contours were derived. */
+    public int borderSize;
 
-        /** The max edge error that this contour set was simplified with. */
-        public float maxError;
-    }
+    /** The max edge error that this contour set was simplified with. */
+    public float maxError;
 }

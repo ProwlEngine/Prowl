@@ -26,8 +26,8 @@ public static class GlslBuiltins
 
     static GlslBuiltins()
     {
-        Keywords = new HashSet<string>
-        {
+        Keywords =
+        [
             "attribute", "const", "uniform", "varying", "buffer", "shared", "coherent", "volatile", "restrict",
             "readonly", "writeonly", "layout", "centroid", "flat", "smooth", "noperspective", "patch", "sample",
             "in", "out", "inout", "invariant", "precise", "subroutine", "precision", "highp", "mediump", "lowp",
@@ -36,12 +36,12 @@ public static class GlslBuiltins
             "resource", "goto", "inline", "noinline", "public", "static", "extern", "external", "interface",
             "long", "short", "half", "fixed", "unsigned", "superp", "input", "output", "filter", "sizeof",
             "cast", "namespace", "using",
-        };
+        ];
 
-        ControlKeywords = new HashSet<string>
-        {
+        ControlKeywords =
+        [
             "if", "else", "switch", "case", "default", "for", "while", "do", "break", "continue", "return", "discard",
-        };
+        ];
 
         Types = BuildTypes();
         TypeDocs = BuildTypeDocs();
@@ -55,7 +55,7 @@ public static class GlslBuiltins
 
         for (int n = 2; n <= 4; n++)
         {
-            foreach (var prefix in new[] { "", "d", "i", "u", "b" })
+            foreach (string? prefix in new[] { "", "d", "i", "u", "b" })
                 types.Add(prefix + "vec" + n);
 
             types.Add("mat" + n);
@@ -68,9 +68,9 @@ public static class GlslBuiltins
         }
 
         string[] samplerDims = { "1D", "2D", "3D", "Cube", "2DRect", "1DArray", "2DArray", "CubeArray", "Buffer", "2DMS", "2DMSArray" };
-        foreach (var prefix in new[] { "", "i", "u" })
+        foreach (string? prefix in new[] { "", "i", "u" })
         {
-            foreach (var dim in samplerDims)
+            foreach (string dim in samplerDims)
             {
                 types.Add(prefix + "sampler" + dim);
                 types.Add(prefix + "image" + dim);
@@ -80,7 +80,7 @@ public static class GlslBuiltins
             types.Add(prefix + "subpassInputMS");
         }
 
-        foreach (var dim in new[] { "1D", "2D", "2DRect", "1DArray", "2DArray", "Cube", "CubeArray" })
+        foreach (string? dim in new[] { "1D", "2D", "2DRect", "1DArray", "2DArray", "Cube", "CubeArray" })
             types.Add("sampler" + dim + "Shadow");
 
         return types;
@@ -189,7 +189,7 @@ public static class GlslBuiltins
 
         const string minDoc = "Returns y if y is less than x, otherwise returns x.";
         const string maxDoc = "Returns y if x is less than y, otherwise returns x.";
-        foreach (var (gen, scalar) in new[] { ("genType", "float"), ("genDType", "double"), ("genIType", "int"), ("genUType", "uint") })
+        foreach ((string? gen, string? scalar) in new[] { ("genType", "float"), ("genDType", "double"), ("genIType", "int"), ("genUType", "uint") })
         {
             F("min", gen, gen + " x, " + gen + " y", minDoc);
             F("min", gen, gen + " x, " + scalar + " y", minDoc);
@@ -203,7 +203,7 @@ public static class GlslBuiltins
         const string mixSelectDoc = "Selects which vector each returned component comes from. Where a is false the component of x is returned, where a is true the component of y is returned.";
         FD("mix", "genType x, genType y, genType a", mixDoc);
         FD("mix", "genType x, genType y, float a", mixDoc);
-        foreach (var gen in new[] { "genType", "genDType", "genIType", "genUType", "genBType" })
+        foreach (string? gen in new[] { "genType", "genDType", "genIType", "genUType", "genBType" })
             F("mix", gen, gen + " x, " + gen + " y, genBType a", mixSelectDoc);
 
         FD("step", "genType edge, genType x", "Returns 0.0 if x is less than edge, otherwise returns 1.0.");
@@ -263,10 +263,10 @@ public static class GlslBuiltins
         F("inverse", "mat", "mat m", "Returns the inverse of the square matrix m. Undefined if m is singular or poorly conditioned.");
         F("inverse", "dmat", "dmat m", "Returns the inverse of the square matrix m. Undefined if m is singular or poorly conditioned.");
 
-        foreach (var (name, op) in new[] { ("lessThan", "x less than y"), ("lessThanEqual", "x less than or equal to y"), ("greaterThan", "x greater than y"), ("greaterThanEqual", "x greater than or equal to y"), ("equal", "x equal to y"), ("notEqual", "x not equal to y") })
+        foreach ((string? name, string? op) in new[] { ("lessThan", "x less than y"), ("lessThanEqual", "x less than or equal to y"), ("greaterThan", "x greater than y"), ("greaterThanEqual", "x greater than or equal to y"), ("equal", "x equal to y"), ("notEqual", "x not equal to y") })
         {
-            var doc = "Returns the component wise compare of " + op + ".";
-            foreach (var vec in new[] { "vec", "dvec", "ivec", "uvec" })
+            string doc = "Returns the component wise compare of " + op + ".";
+            foreach (string? vec in new[] { "vec", "dvec", "ivec", "uvec" })
                 F(name, "bvec", vec + " x, " + vec + " y", doc);
             if (name is "equal" or "notEqual")
                 F(name, "bvec", "bvec x, bvec y", doc);
@@ -296,16 +296,16 @@ public static class GlslBuiltins
 
         AddTextureFunctions(F, FB, FC);
 
-        foreach (var (op, desc) in new[] { ("Increment", "Atomically increments the counter and returns its value before the increment."), ("Decrement", "Atomically decrements the counter and returns its value after the decrement.") })
+        foreach ((string? op, string? desc) in new[] { ("Increment", "Atomically increments the counter and returns its value before the increment."), ("Decrement", "Atomically decrements the counter and returns its value after the decrement.") })
             F("atomicCounter" + op, "uint", "atomic_uint c", desc);
         F("atomicCounter", "uint", "atomic_uint c", "Returns the current value of the counter.");
-        foreach (var (op, desc) in new[] { ("Add", "adds data to"), ("Subtract", "subtracts data from"), ("Min", "sets to the minimum of itself and data"), ("Max", "sets to the maximum of itself and data"), ("And", "bitwise ANDs data into"), ("Or", "bitwise ORs data into"), ("Xor", "bitwise XORs data into"), ("Exchange", "replaces with data") })
+        foreach ((string? op, string? desc) in new[] { ("Add", "adds data to"), ("Subtract", "subtracts data from"), ("Min", "sets to the minimum of itself and data"), ("Max", "sets to the maximum of itself and data"), ("And", "bitwise ANDs data into"), ("Or", "bitwise ORs data into"), ("Xor", "bitwise XORs data into"), ("Exchange", "replaces with data") })
             F("atomicCounter" + op, "uint", "atomic_uint c, uint data", "Atomically " + desc + " the counter and returns its value before the operation.");
         F("atomicCounterCompSwap", "uint", "atomic_uint c, uint compare, uint data", "Atomically compares compare with the counter, replacing the counter with data if they are equal. Returns the value before the operation.");
 
-        foreach (var (op, desc) in new[] { ("Add", "Adds data to mem"), ("Min", "Stores the minimum of mem and data in mem"), ("Max", "Stores the maximum of mem and data in mem"), ("And", "Stores the bitwise AND of mem and data in mem"), ("Or", "Stores the bitwise OR of mem and data in mem"), ("Xor", "Stores the bitwise XOR of mem and data in mem"), ("Exchange", "Replaces mem with data") })
+        foreach ((string? op, string? desc) in new[] { ("Add", "Adds data to mem"), ("Min", "Stores the minimum of mem and data in mem"), ("Max", "Stores the maximum of mem and data in mem"), ("And", "Stores the bitwise AND of mem and data in mem"), ("Or", "Stores the bitwise OR of mem and data in mem"), ("Xor", "Stores the bitwise XOR of mem and data in mem"), ("Exchange", "Replaces mem with data") })
         {
-            var doc = desc + " atomically and returns the original value of mem. mem must be a buffer or shared variable.";
+            string doc = desc + " atomically and returns the original value of mem. mem must be a buffer or shared variable.";
             F("atomic" + op, "uint", "inout uint mem, uint data", doc);
             F("atomic" + op, "int", "inout int mem, int data", doc);
         }
@@ -315,7 +315,7 @@ public static class GlslBuiltins
 
         AddImageFunctions(F);
 
-        foreach (var (name, desc) in new[]
+        foreach ((string? name, string? desc) in new[]
         {
             ("dFdx", "Returns the partial derivative of p with respect to the window x coordinate, using either local or fine differencing."),
             ("dFdy", "Returns the partial derivative of p with respect to the window y coordinate, using either local or fine differencing."),
@@ -373,10 +373,10 @@ public static class GlslBuiltins
         F("textureSize", "ivec3", "gsampler2DMSArray sampler", sizeNoLod);
 
         const string queryLod = "Returns the mipmap array that would be accessed in x and the computed level of detail relative to the base level in y.";
-        foreach (var (s, p) in new[] { ("gsampler1D", "float"), ("gsampler2D", "vec2"), ("gsampler3D", "vec3"), ("gsamplerCube", "vec3"), ("gsampler1DArray", "float"), ("gsampler2DArray", "vec2"), ("gsamplerCubeArray", "vec3"), ("sampler1DShadow", "float"), ("sampler2DShadow", "vec2"), ("samplerCubeShadow", "vec3"), ("sampler1DArrayShadow", "float"), ("sampler2DArrayShadow", "vec2"), ("samplerCubeArrayShadow", "vec3") })
+        foreach ((string? s, string? p) in new[] { ("gsampler1D", "float"), ("gsampler2D", "vec2"), ("gsampler3D", "vec3"), ("gsamplerCube", "vec3"), ("gsampler1DArray", "float"), ("gsampler2DArray", "vec2"), ("gsamplerCubeArray", "vec3"), ("sampler1DShadow", "float"), ("sampler2DShadow", "vec2"), ("samplerCubeShadow", "vec3"), ("sampler1DArrayShadow", "float"), ("sampler2DArrayShadow", "vec2"), ("samplerCubeArrayShadow", "vec3") })
             F("textureQueryLod", "vec2", s + " sampler, " + p + " P", queryLod, GlslStages.Fragment);
 
-        foreach (var s in new[] { "gsampler1D", "gsampler2D", "gsampler3D", "gsamplerCube", "gsampler1DArray", "gsampler2DArray", "gsamplerCubeArray", "sampler1DShadow", "sampler2DShadow", "samplerCubeShadow", "sampler1DArrayShadow", "sampler2DArrayShadow", "samplerCubeArrayShadow" })
+        foreach (string? s in new[] { "gsampler1D", "gsampler2D", "gsampler3D", "gsamplerCube", "gsampler1DArray", "gsampler2DArray", "gsamplerCubeArray", "sampler1DShadow", "sampler2DShadow", "samplerCubeShadow", "sampler1DArrayShadow", "sampler2DArrayShadow", "samplerCubeArrayShadow" })
             F("textureQueryLevels", "int", s + " sampler", "Returns the number of mipmap levels accessible in the texture bound to sampler, or 0 if no texture is bound.");
 
         F("textureSamples", "int", "gsampler2DMS sampler", "Returns the number of samples of the multisample texture bound to sampler.");
@@ -479,7 +479,7 @@ public static class GlslBuiltins
 
         const string projLod = "Samples the texture with projection like textureProj and an explicit level of detail like textureLod.";
         const string projLodOffset = "Samples the texture with projection and an explicit level of detail, with a constant texel offset added before lookup.";
-        foreach (var (ret, s, p, o) in new[] { ("gvec4", "gsampler1D", "vec2", "int"), ("gvec4", "gsampler1D", "vec4", "int"), ("gvec4", "gsampler2D", "vec3", "ivec2"), ("gvec4", "gsampler2D", "vec4", "ivec2"), ("gvec4", "gsampler3D", "vec4", "ivec3"), ("float", "sampler1DShadow", "vec4", "int"), ("float", "sampler2DShadow", "vec4", "ivec2") })
+        foreach ((string? ret, string? s, string? p, string? o) in new[] { ("gvec4", "gsampler1D", "vec2", "int"), ("gvec4", "gsampler1D", "vec4", "int"), ("gvec4", "gsampler2D", "vec3", "ivec2"), ("gvec4", "gsampler2D", "vec4", "ivec2"), ("gvec4", "gsampler3D", "vec4", "ivec3"), ("float", "sampler1DShadow", "vec4", "int"), ("float", "sampler2DShadow", "vec4", "ivec2") })
         {
             F("textureProjLod", ret, s + " sampler, " + p + " P, float lod", projLod);
             F("textureProjLodOffset", ret, s + " sampler, " + p + " P, float lod, " + o + " offset", projLodOffset);
@@ -487,7 +487,7 @@ public static class GlslBuiltins
 
         const string grad = "Samples the texture with explicit gradients dPdx and dPdy used to compute the level of detail.";
         const string gradOffset = "Samples the texture with explicit gradients like textureGrad, with a constant texel offset added before lookup.";
-        foreach (var (ret, s, p, d, o) in new[]
+        foreach ((string? ret, string? s, string? p, string? d, string? o) in new[]
         {
             ("gvec4", "gsampler1D", "float", "float", "int"),
             ("gvec4", "gsampler2D", "vec2", "vec2", "ivec2"),
@@ -505,7 +505,7 @@ public static class GlslBuiltins
             ("gvec4", "gsamplerCubeArray", "vec4", "vec3", null),
         })
         {
-            var pars = s + " sampler, " + p + " P, " + d + " dPdx, " + d + " dPdy";
+            string pars = s + " sampler, " + p + " P, " + d + " dPdx, " + d + " dPdy";
             F("textureGrad", ret, pars, grad);
             if (o != null)
                 F("textureGradOffset", ret, pars + ", " + o + " offset", gradOffset);
@@ -513,7 +513,7 @@ public static class GlslBuiltins
 
         const string projGrad = "Samples the texture with projection like textureProj and explicit gradients like textureGrad.";
         const string projGradOffset = "Samples the texture with projection and explicit gradients, with a constant texel offset added before lookup.";
-        foreach (var (ret, s, p, d, o) in new[]
+        foreach ((string? ret, string? s, string? p, string? d, string? o) in new[]
         {
             ("gvec4", "gsampler1D", "vec2", "float", "int"),
             ("gvec4", "gsampler1D", "vec4", "float", "int"),
@@ -527,7 +527,7 @@ public static class GlslBuiltins
             ("float", "sampler2DShadow", "vec4", "vec2", "ivec2"),
         })
         {
-            var pars = s + " sampler, " + p + " P, " + d + " dPdx, " + d + " dPdy";
+            string pars = s + " sampler, " + p + " P, " + d + " dPdx, " + d + " dPdy";
             F("textureProjGrad", ret, pars, projGrad);
             F("textureProjGradOffset", ret, pars + ", " + o + " offset", projGradOffset);
         }
@@ -546,7 +546,7 @@ public static class GlslBuiltins
 
         const string gatherOffset = "Gathers four texels like textureGather, with a texel offset added to the coordinates before lookup.";
         const string gatherOffsets = "Gathers four texels like textureGather, using a separate texel offset from offsets for each of the four texels.";
-        foreach (var (name, o, doc) in new[] { ("textureGatherOffset", "ivec2 offset", gatherOffset), ("textureGatherOffsets", "ivec2 offsets[4]", gatherOffsets) })
+        foreach ((string? name, string? o, string? doc) in new[] { ("textureGatherOffset", "ivec2 offset", gatherOffset), ("textureGatherOffsets", "ivec2 offsets[4]", gatherOffsets) })
         {
             FC(name, "gvec4", "gsampler2D sampler, vec2 P, " + o, doc);
             FC(name, "gvec4", "gsampler2DArray sampler, vec3 P, " + o, doc);
@@ -560,7 +560,7 @@ public static class GlslBuiltins
     static void AddImageFunctions(Adder F)
     {
         const string size = "Returns the dimensions of the image. Array images report the layer count in the last component.";
-        foreach (var (ret, img) in new[] { ("int", "gimage1D"), ("ivec2", "gimage2D"), ("ivec3", "gimage3D"), ("ivec2", "gimageCube"), ("ivec3", "gimageCubeArray"), ("ivec2", "gimage2DRect"), ("ivec2", "gimage1DArray"), ("ivec3", "gimage2DArray"), ("int", "gimageBuffer"), ("ivec2", "gimage2DMS"), ("ivec3", "gimage2DMSArray") })
+        foreach ((string? ret, string? img) in new[] { ("int", "gimage1D"), ("ivec2", "gimage2D"), ("ivec3", "gimage3D"), ("ivec2", "gimageCube"), ("ivec3", "gimageCubeArray"), ("ivec2", "gimage2DRect"), ("ivec2", "gimage1DArray"), ("ivec3", "gimage2DArray"), ("int", "gimageBuffer"), ("ivec2", "gimage2DMS"), ("ivec3", "gimage2DMSArray") })
             F("imageSize", ret, img + " image", size);
         F("imageSamples", "int", "gimage2DMS image", "Returns the number of samples of the multisample image.");
         F("imageSamples", "int", "gimage2DMSArray image", "Returns the number of samples of the multisample image.");
@@ -580,13 +580,13 @@ public static class GlslBuiltins
         };
 
         const string compSwap = "Atomically compares compare with the texel at P, replacing it with data if they are equal. Returns the original texel value.";
-        foreach (var p in imageParams)
+        foreach (string p in imageParams)
         {
             F("imageLoad", "gvec4", p, "Loads the texel at coordinate P from the image.");
             F("imageStore", "void", p + ", gvec4 data", "Stores data into the texel at coordinate P of the image.");
-            foreach (var (op, desc) in atomics)
+            foreach ((string? op, string? desc) in atomics)
             {
-                var doc = desc + " at P atomically and returns the original texel value.";
+                string doc = desc + " at P atomically and returns the original texel value.";
                 F("imageAtomic" + op, "uint", p + ", uint data", doc);
                 F("imageAtomic" + op, "int", p + ", int data", doc);
             }
@@ -599,8 +599,8 @@ public static class GlslBuiltins
     static List<GlslBuiltinVariable> BuildVariables()
     {
         const GlslStages V = GlslStages.Vertex, Fr = GlslStages.Fragment, C = GlslStages.Compute;
-        return new List<GlslBuiltinVariable>
-        {
+        return
+        [
             new("gl_Position", "vec4", "The clip space position of the current vertex.", V, true),
             new("gl_PointSize", "float", "The size in pixels of the point to be rasterized.", V, true),
             new("gl_ClipDistance", "float[]", "Clip distances for user clip planes. A vertex is inside a plane when its distance is 0 or greater.", V, true),
@@ -632,6 +632,6 @@ public static class GlslBuiltins
             new("gl_LocalInvocationIndex", "uint", "The flattened one dimensional index of the current invocation within its workgroup.", C),
 
             new("gl_ViewIndex", "int", "The index of the view being rendered when multiview is enabled (GL_EXT_multiview).", GlslStages.All),
-        };
+        ];
     }
 }

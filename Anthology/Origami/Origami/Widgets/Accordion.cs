@@ -31,7 +31,7 @@ public sealed class AccordionBuilder
     private readonly Paper _paper;
     private readonly string _id;
     private readonly OrigamiTheme _theme;
-    private readonly List<SectionDef> _sections = new();
+    private readonly List<SectionDef> _sections = [];
     private float _spacing = 7f;
     private string? _defaultOpen;
     private bool _allowAllClosed = true;
@@ -67,18 +67,18 @@ public sealed class AccordionBuilder
     {
         if (_sections.Count == 0) return;
 
-        var parentH = _paper.CurrentParent;
+        ElementHandle parentH = _paper.CurrentParent;
         string key = $"{_id}_open";
         string openId = _paper.GetElementStorage(parentH, key, _defaultOpen ?? "");
 
         using (_paper.Column(_id).Width(UnitValue.Stretch()).Height(UnitValue.Auto).Gap(_spacing).Enter())
         {
-            foreach (var s in _sections)
+            foreach (SectionDef s in _sections)
             {
                 string sid = s.Id;
                 bool isOpen = openId == sid;
 
-                var fold = Origami.Foldout(_paper, $"{_id}_{sid}", s.Title)
+                FoldoutBuilder fold = Origami.Foldout(_paper, $"{_id}_{sid}", s.Title)
                     .Expanded(isOpen, expand =>
                     {
                         // Single-open: expanding a section becomes the open one; collapsing clears it

@@ -17,10 +17,10 @@ namespace Prowl.OrigamiUI;
 /// </remarks>
 public sealed class CodeDocument
 {
-    private readonly List<string> _lines = new() { string.Empty };
+    private readonly List<string> _lines = [string.Empty];
 
     // Prefix sums of line start offsets, valid for lines [0, _offsetsValid).
-    private readonly List<int> _lineOffsets = new() { 0 };
+    private readonly List<int> _lineOffsets = [0];
     private int _offsetsValid = 1;
 
     private int _longestLine;
@@ -63,7 +63,7 @@ public sealed class CodeDocument
             if (_longestDirty)
             {
                 int max = 0;
-                foreach (var l in _lines) if (l.Length > max) max = l.Length;
+                foreach (string l in _lines) if (l.Length > max) max = l.Length;
                 _longestLine = max;
                 _longestDirty = false;
             }
@@ -98,8 +98,8 @@ public sealed class CodeDocument
 
     public string GetText(TextRange range)
     {
-        var s = Clamp(range.Start);
-        var e = Clamp(range.End);
+        TextPosition s = Clamp(range.Start);
+        TextPosition e = Clamp(range.End);
         if (s.Line == e.Line) return _lines[s.Line].Substring(s.Column, e.Column - s.Column);
 
         var sb = new StringBuilder();
@@ -159,8 +159,8 @@ public sealed class CodeDocument
         text ??= string.Empty;
         if (text.IndexOf('\r') >= 0) text = text.Replace("\r\n", "\n").Replace('\r', '\n');
 
-        var start = Clamp(range.Start);
-        var end = Clamp(range.End);
+        TextPosition start = Clamp(range.Start);
+        TextPosition end = Clamp(range.End);
         range = new TextRange(start, end);
 
         int startOffset = PositionToOffset(start);
@@ -200,7 +200,7 @@ public sealed class CodeDocument
                 _lines.InsertRange(start.Line + common, inserted.GetRange(common, inserted.Count - common));
 
             newEnd = new TextPosition(start.Line + lastIdx, lastLen);
-            foreach (var l in inserted) TrackLongest(l.Length);
+            foreach (string l in inserted) TrackLongest(l.Length);
         }
 
         if (shrinks && !range.IsEmpty) _longestDirty = true;

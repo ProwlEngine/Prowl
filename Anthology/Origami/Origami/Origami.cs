@@ -5,6 +5,7 @@ using System;
 using System.Collections.Generic;
 
 using Prowl.PaperUI;
+using Prowl.Vector;
 
 namespace Prowl.OrigamiUI;
 
@@ -224,8 +225,8 @@ public static partial class Origami
     public static void ScrollBy(string scrollViewId, Prowl.Vector.Float2 delta)
     {
         ArgumentNullException.ThrowIfNull(scrollViewId);
-        var pending = ScrollViewBuilder.s_pendingScrollBy;
-        pending[scrollViewId] = pending.TryGetValue(scrollViewId, out var existing) ? existing + delta : delta;
+        Dictionary<string, Float2> pending = ScrollViewBuilder.s_pendingScrollBy;
+        pending[scrollViewId] = pending.TryGetValue(scrollViewId, out Float2 existing) ? existing + delta : delta;
     }
 
     /// <summary>
@@ -257,7 +258,7 @@ public static partial class Origami
         Action<int> setter, IReadOnlyList<string> options)
     {
         ArgumentNullException.ThrowIfNull(options);
-        var indices = new int[options.Count];
+        int[] indices = new int[options.Count];
         for (int i = 0; i < options.Count; i++) indices[i] = i;
         return new DropdownBuilder<int>(paper, id, selectedIndex, setter, indices, Current)
             .Display(i => (uint)i < (uint)options.Count ? options[i] : string.Empty);
@@ -482,7 +483,7 @@ public static partial class Origami
     public static VectorField2Builder<float> Float2Field(Paper paper, string id,
         Prowl.Vector.Float2 value, Action<Prowl.Vector.Float2> setter)
     {
-        var v = value;
+        Float2 v = value;
         return new VectorField2Builder<float>(paper, id, Current,
             (float)v.X, (float)v.Y,
             x => { v.X = x; setter(v); }, y => { v.Y = y; setter(v); });
@@ -491,7 +492,7 @@ public static partial class Origami
     public static VectorField3Builder<float> Float3Field(Paper paper, string id,
         Prowl.Vector.Float3 value, Action<Prowl.Vector.Float3> setter)
     {
-        var v = value;
+        Float3 v = value;
         return new VectorField3Builder<float>(paper, id, Current,
             (float)v.X, (float)v.Y, (float)v.Z,
             x => { v.X = x; setter(v); }, y => { v.Y = y; setter(v); }, z => { v.Z = z; setter(v); });
@@ -500,7 +501,7 @@ public static partial class Origami
     public static VectorField4Builder<float> Float4Field(Paper paper, string id,
         Prowl.Vector.Float4 value, Action<Prowl.Vector.Float4> setter)
     {
-        var v = value;
+        Float4 v = value;
         return new VectorField4Builder<float>(paper, id, Current,
             (float)v.X, (float)v.Y, (float)v.Z, (float)v.W,
             x => { v.X = x; setter(v); }, y => { v.Y = y; setter(v); },
@@ -511,7 +512,7 @@ public static partial class Origami
     public static VectorField2Builder<double> Double2Field(Paper paper, string id,
         Prowl.Vector.Double2 value, Action<Prowl.Vector.Double2> setter)
     {
-        var v = value;
+        Double2 v = value;
         return new VectorField2Builder<double>(paper, id, Current,
             (double)v.X, (double)v.Y,
             x => { v.X = x; setter(v); }, y => { v.Y = y; setter(v); });
@@ -520,7 +521,7 @@ public static partial class Origami
     public static VectorField3Builder<double> Double3Field(Paper paper, string id,
         Prowl.Vector.Double3 value, Action<Prowl.Vector.Double3> setter)
     {
-        var v = value;
+        Double3 v = value;
         return new VectorField3Builder<double>(paper, id, Current,
             (double)v.X, (double)v.Y, (double)v.Z,
             x => { v.X = x; setter(v); }, y => { v.Y = y; setter(v); }, z => { v.Z = z; setter(v); });
@@ -529,7 +530,7 @@ public static partial class Origami
     public static VectorField4Builder<double> Double4Field(Paper paper, string id,
         Prowl.Vector.Double4 value, Action<Prowl.Vector.Double4> setter)
     {
-        var v = value;
+        Double4 v = value;
         return new VectorField4Builder<double>(paper, id, Current,
             (double)v.X, (double)v.Y, (double)v.Z, (double)v.W,
             x => { v.X = x; setter(v); }, y => { v.Y = y; setter(v); },
@@ -540,7 +541,7 @@ public static partial class Origami
     public static VectorField2Builder<int> Int2Field(Paper paper, string id,
         Prowl.Vector.Int2 value, Action<Prowl.Vector.Int2> setter)
     {
-        var v = value;
+        Int2 v = value;
         return new VectorField2Builder<int>(paper, id, Current,
             v.X, v.Y,
             x => { v.X = x; setter(v); }, y => { v.Y = y; setter(v); });
@@ -549,7 +550,7 @@ public static partial class Origami
     public static VectorField3Builder<int> Int3Field(Paper paper, string id,
         Prowl.Vector.Int3 value, Action<Prowl.Vector.Int3> setter)
     {
-        var v = value;
+        Int3 v = value;
         return new VectorField3Builder<int>(paper, id, Current,
             v.X, v.Y, v.Z,
             x => { v.X = x; setter(v); }, y => { v.Y = y; setter(v); }, z => { v.Z = z; setter(v); });
@@ -558,7 +559,7 @@ public static partial class Origami
     public static VectorField4Builder<int> Int4Field(Paper paper, string id,
         Prowl.Vector.Int4 value, Action<Prowl.Vector.Int4> setter)
     {
-        var v = value;
+        Int4 v = value;
         return new VectorField4Builder<int>(paper, id, Current,
             v.X, v.Y, v.Z, v.W,
             x => { v.X = x; setter(v); }, y => { v.Y = y; setter(v); },
@@ -713,11 +714,11 @@ public static partial class Origami
     {
         ArgumentNullException.ThrowIfNull(setter);
 
-        var all = Enum.GetValues<TEnum>();
+        TEnum[] all = Enum.GetValues<TEnum>();
         var nonZero = new List<TEnum>(all.Length);
-        var valueU = Convert.ToUInt64(value);
+        ulong valueU = Convert.ToUInt64(value);
         var current = new List<TEnum>(all.Length);
-        foreach (var v in all)
+        foreach (TEnum v in all)
         {
             ulong u = Convert.ToUInt64(v);
             if (u == 0) continue;
@@ -728,7 +729,7 @@ public static partial class Origami
         return new MultiDropdownBuilder<TEnum>(paper, id, current, list =>
         {
             ulong combined = 0;
-            foreach (var f in list) combined |= Convert.ToUInt64(f);
+            foreach (TEnum f in list) combined |= Convert.ToUInt64(f);
             setter((TEnum)Enum.ToObject(typeof(TEnum), combined));
         }, nonZero, Current);
     }

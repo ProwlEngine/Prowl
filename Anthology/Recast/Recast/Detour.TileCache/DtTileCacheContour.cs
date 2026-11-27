@@ -18,13 +18,12 @@ freely, subject to the following restrictions:
 3. This notice may not be removed or altered from any source distribution.
 */
 
-namespace Prowl.Recast.Detour.TileCache
+namespace Prowl.Recast.Detour.TileCache;
+
+public class DtTileCacheContour
 {
-    public class DtTileCacheContour
-    {
-        public int nverts;
-        public int[] verts;
-        public byte reg;
-        public byte area;
-    }
+    public int nverts;
+    public int[] verts;
+    public byte reg;
+    public byte area;
 }

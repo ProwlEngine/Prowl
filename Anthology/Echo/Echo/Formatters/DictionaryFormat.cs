@@ -16,10 +16,10 @@ internal sealed class DictionaryFormat : ISerializationFormat
 
     private static (Type keyType, Type valueType) GetTypeArgs(Type dictType)
     {
-        if (_typeArgCache.TryGetValue(dictType, out var cached))
+        if (_typeArgCache.TryGetValue(dictType, out (Type keyType, Type valueType) cached))
             return cached;
-        var args = dictType.GetGenericArguments();
-        var result = (args[0], args[1]);
+        Type[] args = dictType.GetGenericArguments();
+        (Type, Type) result = (args[0], args[1]);
         _typeArgCache.TryAdd(dictType, result);
         return result;
     }
@@ -29,11 +29,11 @@ internal sealed class DictionaryFormat : ISerializationFormat
     // carry an $id for reference tracking.
     public EchoObject Serialize(Type? targetType, object value, SerializationContext context)
     {
-        var reference = CollectionReferences.TryWriteReference(value, context, out int id);
+        EchoObject? reference = CollectionReferences.TryWriteReference(value, context, out int id);
         if (reference != null) return reference;
 
         var dict = (IDictionary)value;
-        var (keyType, valueType) = GetTypeArgs(value.GetType());
+        (Type? keyType, Type? valueType) = GetTypeArgs(value.GetType());
 
         var entries = new List<EchoObject>(dict.Count);
         foreach (DictionaryEntry kvp in dict)
@@ -47,7 +47,7 @@ internal sealed class DictionaryFormat : ISerializationFormat
         var compound = EchoObject.NewCompound();
         compound["entries"] = new EchoObject(entries);
 
-        var comparerTag = ComparerSupport.Serialize(ComparerSupport.GetComparer(dict), keyType, context);
+        EchoObject? comparerTag = ComparerSupport.Serialize(ComparerSupport.GetComparer(dict), keyType, context);
         if (comparerTag != null) compound["$comparer"] = comparerTag;
 
         return CollectionReferences.WrapCompoundBody(compound, id);
@@ -55,25 +55,25 @@ internal sealed class DictionaryFormat : ISerializationFormat
 
     public object? Deserialize(EchoObject value, Type targetType, SerializationContext context)
     {
-        if (CollectionReferences.TryReadReference(value, context, out var existing))
+        if (CollectionReferences.TryReadReference(value, context, out object? existing))
             return existing;
 
-        var (keyType, valueType) = GetTypeArgs(targetType);
+        (Type? keyType, Type? valueType) = GetTypeArgs(targetType);
 
-        var comparer = ComparerSupport.Deserialize(value.Get("$comparer"), context);
+        object? comparer = ComparerSupport.Deserialize(value.Get("$comparer"), context);
         IDictionary dict = ComparerSupport.CreateCollection(targetType, comparer) as IDictionary
             ?? throw new InvalidOperationException($"Failed to create instance of type: {targetType}");
         CollectionReferences.Register(value, dict, context);
 
         // Current form (and the legacy non-string-key form): an "entries" list of {key,value} compounds.
-        if (value.TryGet("entries", out var entriesTag) && entriesTag.TagType == EchoType.List)
+        if (value.TryGet("entries", out EchoObject? entriesTag) && entriesTag.TagType == EchoType.List)
         {
-            foreach (var entry in entriesTag.List)
+            foreach (EchoObject entry in entriesTag.List)
             {
-                if (!entry.TryGet("key", out var keyTag) || !entry.TryGet("value", out var valueTag))
+                if (!entry.TryGet("key", out EchoObject? keyTag) || !entry.TryGet("value", out EchoObject? valueTag))
                     throw new InvalidOperationException("Invalid dictionary entry format");
 
-                var key = Serializer.Deserialize(keyTag, keyType, context);
+                object? key = Serializer.Deserialize(keyTag, keyType, context);
                 if (key != null)
                     dict[key] = Serializer.Deserialize(valueTag, valueType, context);
             }

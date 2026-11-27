@@ -304,8 +304,8 @@ public static partial class SystemInformation
         {
             foreach (string directory in ConfigDirectories())
             {
-                var values = _iniFiles.GetOrAdd(Path.Combine(directory, relativePath), ReadIni);
-                if (values.TryGetValue((group, key), out var text) && Number(text) is double n)
+                Dictionary<(string, string), string> values = _iniFiles.GetOrAdd(Path.Combine(directory, relativePath), ReadIni);
+                if (values.TryGetValue((group, key), out string? text) && Number(text) is double n)
                     return n;
             }
             return null;
@@ -321,7 +321,7 @@ public static partial class SystemInformation
 
             string? system = Environment.GetEnvironmentVariable("XDG_CONFIG_DIRS");
             if (string.IsNullOrEmpty(system)) system = "/etc/xdg";
-            foreach (var d in system.Split(':', StringSplitOptions.RemoveEmptyEntries))
+            foreach (string d in system.Split(':', StringSplitOptions.RemoveEmptyEntries))
                 yield return d;
 
             yield return "/etc"; // GTK's usual system-wide location
@@ -355,7 +355,7 @@ public static partial class SystemInformation
         }
 
         private static double? Number(string text) =>
-            double.TryParse(text, NumberStyles.Float, CultureInfo.InvariantCulture, out var n)
+            double.TryParse(text, NumberStyles.Float, CultureInfo.InvariantCulture, out double n)
             && double.IsFinite(n) && n >= 0 ? n : null;
 
         private static int? RunGSettings(string schema, string key)
@@ -372,7 +372,7 @@ public static partial class SystemInformation
             try
             {
 #if NET11_0_OR_GREATER
-                var result = Process.RunAndCaptureText(
+                ProcessTextOutput result = Process.RunAndCaptureText(
                     fileName: exe,
                     arguments: ["get", schema, key],
                     timeout: TimeSpan.FromSeconds(1));

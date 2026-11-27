@@ -9,7 +9,7 @@ namespace Prowl.Scribe;
 sealed class LruCache<K, V> where K : notnull
 {
     int _capacity;
-    readonly Dictionary<K, LinkedListNode<(K key, V val)>> _map = new Dictionary<K, LinkedListNode<(K key, V val)>>();
+    readonly Dictionary<K, LinkedListNode<(K key, V val)>> _map = [];
     readonly LinkedList<(K key, V val)> _lru = new LinkedList<(K key, V val)>();
 
     public LruCache(int capacity) { _capacity = Math.Max(1, capacity); }
@@ -17,7 +17,7 @@ sealed class LruCache<K, V> where K : notnull
 
     public bool TryGetValue(K k, out V v)
     {
-        if (_map.TryGetValue(k, out var node))
+        if (_map.TryGetValue(k, out LinkedListNode<(K key, V val)>? node))
         {
             _lru.Remove(node); _lru.AddFirst(node);
             v = node.Value.val; return true;
@@ -27,7 +27,7 @@ sealed class LruCache<K, V> where K : notnull
 
     public void Add(K k, V v)
     {
-        if (_map.TryGetValue(k, out var node))
+        if (_map.TryGetValue(k, out LinkedListNode<(K key, V val)>? node))
         {
             node.Value = (k, v);
             _lru.Remove(node); _lru.AddFirst(node);
@@ -45,7 +45,7 @@ sealed class LruCache<K, V> where K : notnull
     {
         while (_map.Count > _capacity)
         {
-            var last = _lru.Last; if (last == null) break;
+            LinkedListNode<(K key, V val)>? last = _lru.Last; if (last == null) break;
             _map.Remove(last.Value.key);
             _lru.RemoveLast();
         }

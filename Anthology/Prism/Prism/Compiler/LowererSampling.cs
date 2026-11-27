@@ -163,7 +163,7 @@ public sealed partial class Lowerer
             _ => Op.ImageSampleImplicitLod,
         };
         (op, resultTypeId) = SampleForm(op, resultTypeId, resultType);
-        var inst = InstrPool.Rent(op, resultTypeId, _m.AllocId()).Add(args[0].Id, coordId);
+        Instruction inst = InstrPool.Rent(op, resultTypeId, _m.AllocId()).Add(args[0].Id, coordId);
         if (dref != 0) inst.Add(dref);
         if (mask != 0) inst.Add(mask);
         foreach (uint id in operands) inst.Add(id);

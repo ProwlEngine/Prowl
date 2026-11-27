@@ -4,6 +4,7 @@
 using System;
 using System.Collections;
 using System.Collections.Generic;
+using System.Drawing;
 using System.Linq;
 using System.Reflection;
 
@@ -31,21 +32,21 @@ public abstract class FieldDrawer
 /// <summary>Registry mapping types to their FieldDrawer instances.</summary>
 public sealed class FieldDrawerRegistry
 {
-    private readonly Dictionary<Type, FieldDrawer> _drawers = new();
+    private readonly Dictionary<Type, FieldDrawer> _drawers = [];
 
     public void Register<T>(FieldDrawer drawer) => _drawers[typeof(T)] = drawer;
     public void Register(Type type, FieldDrawer drawer) => _drawers[type] = drawer;
 
     public FieldDrawer? GetDrawer(Type type)
     {
-        if (_drawers.TryGetValue(type, out var drawer)) return drawer;
-        var current = type.BaseType;
+        if (_drawers.TryGetValue(type, out FieldDrawer? drawer)) return drawer;
+        Type? current = type.BaseType;
         while (current != null && current != typeof(object))
         {
             if (_drawers.TryGetValue(current, out drawer)) return drawer;
             current = current.BaseType;
         }
-        foreach (var iface in type.GetInterfaces())
+        foreach (Type iface in type.GetInterfaces())
             if (_drawers.TryGetValue(iface, out drawer)) return drawer;
         return null;
     }
@@ -80,7 +81,7 @@ public abstract class AttributeHandler
 /// <summary>Registry mapping attribute types to their handlers.</summary>
 public sealed class AttributeHandlerRegistry
 {
-    private readonly Dictionary<Type, AttributeHandler> _handlers = new();
+    private readonly Dictionary<Type, AttributeHandler> _handlers = [];
 
     public void Register<TAttr>(AttributeHandler handler) where TAttr : Attribute
         => _handlers[typeof(TAttr)] = handler;
@@ -108,21 +109,21 @@ public abstract class CustomObjectEditor
 /// <summary>Registry mapping types to their CustomObjectEditor.</summary>
 public sealed class CustomObjectEditorRegistry
 {
-    private readonly Dictionary<Type, CustomObjectEditor> _editors = new();
+    private readonly Dictionary<Type, CustomObjectEditor> _editors = [];
 
     // Caches the resolved editor (or null) per queried type so the base-chain + interface walk
     // (which allocates via GetInterfaces) doesn't run every frame. Weakly keyed so hot-reloaded
     // script types evict with their AssemblyLoadContext; reset when registrations change.
     private sealed class Resolved { public CustomObjectEditor? Editor; }
-    private System.Runtime.CompilerServices.ConditionalWeakTable<Type, Resolved> _resolveCache = new();
+    private System.Runtime.CompilerServices.ConditionalWeakTable<Type, Resolved> _resolveCache = [];
 
-    public void Register<T>(CustomObjectEditor editor) { _editors[typeof(T)] = editor; _resolveCache = new(); }
-    public void Register(Type type, CustomObjectEditor editor) { _editors[type] = editor; _resolveCache = new(); }
+    public void Register<T>(CustomObjectEditor editor) { _editors[typeof(T)] = editor; _resolveCache = []; }
+    public void Register(Type type, CustomObjectEditor editor) { _editors[type] = editor; _resolveCache = []; }
 
     public CustomObjectEditor? GetEditor(Type type)
     {
         // TryGetValue first so cache hits allocate nothing (a factory lambda would capture `this`).
-        if (_resolveCache.TryGetValue(type, out var cached)) return cached.Editor;
+        if (_resolveCache.TryGetValue(type, out Resolved? cached)) return cached.Editor;
         var resolved = new Resolved { Editor = ResolveEditor(type) };
         _resolveCache.Add(type, resolved);
         return resolved.Editor;
@@ -130,19 +131,19 @@ public sealed class CustomObjectEditorRegistry
 
     private CustomObjectEditor? ResolveEditor(Type type)
     {
-        if (_editors.TryGetValue(type, out var editor)) return editor;
-        var current = type.BaseType;
+        if (_editors.TryGetValue(type, out CustomObjectEditor? editor)) return editor;
+        Type? current = type.BaseType;
         while (current != null && current != typeof(object))
         {
             if (_editors.TryGetValue(current, out editor)) return editor;
             current = current.BaseType;
         }
-        foreach (var iface in type.GetInterfaces())
+        foreach (Type iface in type.GetInterfaces())
             if (_editors.TryGetValue(iface, out editor)) return editor;
         return null;
     }
 
-    public void Clear() { _editors.Clear(); _resolveCache = new(); }
+    public void Clear() { _editors.Clear(); _resolveCache = []; }
 }
 
 // ════════════════════════════════════════════════════════════════
@@ -320,7 +321,7 @@ public static class PropertyGridRenderer
         object representative = targets[0];
         if (representative == null) return;
 
-        var m = Origami.Current.Metrics;
+        OrigamiMetrics m = Origami.Current.Metrics;
         bool isRoot = depth == 0;
         bool multi = targets.Count > 1;
 
@@ -339,26 +340,26 @@ public static class PropertyGridRenderer
 
         using (paper.Column($"{id}_root").Gap(m.SpacingLarge).Height(UnitValue.Auto).Enter())
         {
-            var type = representative.GetType();
-            var fields = multi ? CommonSerializableFields(targets) : GetSerializableFields(type);
+            Type type = representative.GetType();
+            FieldInfo[] fields = multi ? CommonSerializableFields(targets) : GetSerializableFields(type);
 
-            var buttonMethods = GetButtonMethods(type);
+            ButtonMethod[] buttonMethods = GetButtonMethods(type);
 
             for (int i = 0; i < fields.Length; i++)
             {
-                var field = fields[i];
+                FieldInfo field = fields[i];
                 if (filter != null && !filter(field)) continue;
                 string fieldId = $"{id}_{field.Name}";
 
-                var meta = GetFieldMeta(field);
-                var attrs = meta.Attributes;
+                FieldMeta meta = GetFieldMeta(field);
+                Attribute[] attrs = meta.Attributes;
                 bool handled = false;
 
                 // Pre-draw attribute handlers (operate on the representative)
                 int begun = 0;
                 for (; begun < attrs.Length; begun++)
                 {
-                    var handler = config.Handlers.GetHandler(attrs[begun].GetType());
+                    AttributeHandler? handler = config.Handlers.GetHandler(attrs[begun].GetType());
                     if (handler != null && !handler.OnBeforeDraw(paper, fieldId, attrs[begun], field, representative, depth))
                         break;
                 }
@@ -370,9 +371,9 @@ public static class PropertyGridRenderer
                     Action<object?> applyAll = v => SetFieldOnAllAndNotify(config, field, targets, v, onChange);
 
                     // Attribute-driven draw replacement
-                    foreach (var attr in attrs)
+                    foreach (Attribute attr in attrs)
                     {
-                        var handler = config.Handlers.GetHandler(attr.GetType());
+                        AttributeHandler? handler = config.Handlers.GetHandler(attr.GetType());
                         if (handler != null)
                         {
                             string label = meta.Label;
@@ -385,8 +386,8 @@ public static class PropertyGridRenderer
 
                     if (!handled)
                     {
-                        var value = field.GetValue(representative);
-                        var fieldType = field.FieldType;
+                        object? value = field.GetValue(representative);
+                        Type fieldType = field.FieldType;
                         string label = meta.Label;
                         DrawField(paper, fieldId, label, fieldType, value, config, applyAll, depth, isMixed: isMixed);
                     }
@@ -399,9 +400,9 @@ public static class PropertyGridRenderer
             }
 
             // [Button] methods (invoked on every target)
-            foreach (var button in buttonMethods)
+            foreach (ButtonMethod button in buttonMethods)
             {
-                var method = button.Method;
+                MethodInfo method = button.Method;
                 Origami.Button(paper, $"{id}_btn_{method.Name}", button.Label, () =>
                 {
                     for (int t = 0; t < targets.Count; t++)
@@ -438,17 +439,17 @@ public static class PropertyGridRenderer
         config.OnBeforeDrawField?.Invoke(fieldType, value);
 
         // Try fallback (host's PropertyEditorRegistry) before our own layout
-        var drawer = config.Drawers.GetDrawer(fieldType);
+        FieldDrawer? drawer = config.Drawers.GetDrawer(fieldType);
         if (drawer == null && config.FallbackFieldDrawer != null)
         {
             if (config.FallbackFieldDrawer(paper, id, label, fieldType, value, onChange, depth))
                 return;
         }
 
-        var theme = Origami.Current;
-        var m = theme.Metrics;
-        var font = theme.Font;
-        var ink = theme.Ink;
+        OrigamiTheme theme = Origami.Current;
+        OrigamiMetrics m = theme.Metrics;
+        Scribe.FontFile? font = theme.Font;
+        OrigamiRamp ink = theme.Ink;
 
         // Complex collections (element type has its own fields) span the full section width with a
         // self-labelled header. Simple collections (leaf element types like Material refs, colors,
@@ -478,9 +479,9 @@ public static class PropertyGridRenderer
             // Override (prefab) / mixed (multi-select) marker: a small accent / amber dot before the label.
             if (isOverridden || isMixed)
             {
-                var dot = isOverridden ? theme.Primary.C500 : theme.Amber.C400;
+                Color dot = isOverridden ? theme.Primary.C500 : theme.Amber.C400;
                 Action<string>? onMarkerClicked = isOverridden && overriddenField != null ? _onMarkerClicked : null;
-                var marker = paper.Box("ov").Width(8).Height(m.RowHeight);
+                ElementBuilder marker = paper.Box("ov").Width(8).Height(m.RowHeight);
                 if (onMarkerClicked != null)
                 {
                     marker.Cursor(PaperCursor.Pointer).OnClick(overriddenField!, (name, _) => onMarkerClicked(name));
@@ -497,7 +498,7 @@ public static class PropertyGridRenderer
             {
                 bool isNumeric = IsNumericType(fieldType);
                 // A tall card (simple collection) top-aligns its label; scalar fields centre it.
-                var lbl = paper.Box("lbl")
+                ElementBuilder lbl = paper.Box("lbl")
                     .Width(m.LabelWidth).Height(m.RowHeight)
                     .Margin(0, 0, isLeafCollection ? UnitValue.Pixels(4) : UnitValue.Stretch(), UnitValue.Stretch())
                     .Text(label, font)
@@ -542,7 +543,7 @@ public static class PropertyGridRenderer
         object? value, PropertyGridConfig config, Action<object?> onChange, int depth)
     {
         // 1. Registered FieldDrawer
-        var drawer = config.Drawers.GetDrawer(fieldType);
+        FieldDrawer? drawer = config.Drawers.GetDrawer(fieldType);
         if (drawer != null)
         {
             drawer.Draw(paper, id, value, fieldType, onChange, depth);
@@ -578,14 +579,14 @@ public static class PropertyGridRenderer
         // 4. Nested object
         if (value != null)
         {
-            var customEditor = config.CustomEditors.GetEditor(value.GetType());
+            CustomObjectEditor? customEditor = config.CustomEditors.GetEditor(value.GetType());
             if (customEditor != null)
             {
                 DrawNestedObjectWithCustomEditor(paper, id, fieldType, value, config, onChange, depth, customEditor);
                 return;
             }
 
-            var nestedFields = GetSerializableFields(value.GetType());
+            FieldInfo[] nestedFields = GetSerializableFields(value.GetType());
             if (nestedFields.Length > 0)
             {
                 DrawNestedObject(paper, id, fieldType, value, config, onChange, depth);
@@ -602,8 +603,8 @@ public static class PropertyGridRenderer
 
         // 6. Fallback: read-only "unsupported type" note.
         {
-            var font = Origami.Current.Font;
-            var met = Origami.Current.Metrics;
+            Scribe.FontFile? font = Origami.Current.Font;
+            OrigamiMetrics met = Origami.Current.Metrics;
             if (font != null)
             {
                 string typeName = fieldType.Name.Split('`')[0]; // strip generic arity (Dictionary`2 -> Dictionary)
@@ -627,8 +628,8 @@ public static class PropertyGridRenderer
             return;
         }
 
-        var names = Enum.GetNames(enumType);
-        var values = Enum.GetValues(enumType);
+        string[] names = Enum.GetNames(enumType);
+        Array values = Enum.GetValues(enumType);
         int currentIdx = value != null ? Array.IndexOf(values, value) : 0;
         if (currentIdx < 0) currentIdx = 0;
 
@@ -641,7 +642,7 @@ public static class PropertyGridRenderer
 
         var nonZero = new List<object>();
         var current = new List<object>();
-        foreach (var v in Enum.GetValues(enumType))
+        foreach (object? v in Enum.GetValues(enumType))
         {
             ulong u = Convert.ToUInt64(v);
             if (u == 0) continue;              // skip the None/0 entry - clearing all boxes = no bits
@@ -650,13 +651,13 @@ public static class PropertyGridRenderer
         }
 
         var before = new HashSet<ulong>();
-        foreach (var c in current) before.Add(Convert.ToUInt64(c));
+        foreach (object c in current) before.Add(Convert.ToUInt64(c));
 
         Origami.MultiDropdown<object>(paper, id, current,
             selected =>
             {
                 var after = new HashSet<ulong>();
-                foreach (var f in selected) after.Add(Convert.ToUInt64(f));
+                foreach (object f in selected) after.Add(Convert.ToUInt64(f));
 
                 ulong bits = valueU;
                 foreach (ulong u in before) if (!after.Contains(u)) bits &= ~u;
@@ -687,18 +688,18 @@ public static class PropertyGridRenderer
             ? collectionType.GetElementType()!
             : collectionType.GetGenericArguments()[0];
 
-        var theme = Origami.Current;
-        var m = theme.Metrics;
-        var font = theme.Font;
+        OrigamiTheme theme = Origami.Current;
+        OrigamiMetrics m = theme.Metrics;
+        Scribe.FontFile? font = theme.Font;
         if (font == null) return;
-        var semi = theme.SemiBold ?? font;
-        var mono = theme.Mono ?? font;
+        Scribe.FontFile semi = theme.SemiBold ?? font;
+        Scribe.FontFile mono = theme.Mono ?? font;
 
         UnitValue ST = UnitValue.Stretch();
-        var bd = theme.BorderSoft;
-        var glass = theme.Glass;
-        var tHi = theme.Ink.C500; var tMid = theme.Ink.C300; var tLo = theme.Ink.C200; var tDim = theme.Ink.C100;
-        var acc = theme.Primary.C700;
+        Color bd = theme.BorderSoft;
+        Color glass = theme.Glass;
+        Color tHi = theme.Ink.C500; Color tMid = theme.Ink.C300; Color tLo = theme.Ink.C200; Color tDim = theme.Ink.C100;
+        Color acc = theme.Primary.C700;
         var redBg = System.Drawing.Color.FromArgb(40, theme.Red.C500);
 
         // Null collection: a full-width Create button.
@@ -711,8 +712,8 @@ public static class PropertyGridRenderer
         }
 
         // Stable ids keep Paper element identity across reorders/removals.
-        var colEl = paper.CurrentParent;
-        var stableIds = paper.GetElementStorage<List<string>>(colEl, "stableIds", null!) ?? new List<string>();
+        ElementHandle colEl = paper.CurrentParent;
+        List<string> stableIds = paper.GetElementStorage<List<string>>(colEl, "stableIds", null!) ?? [];
         while (stableIds.Count < list.Count) stableIds.Add(Guid.NewGuid().ToString("N")[..8]);
         while (stableIds.Count > list.Count) stableIds.RemoveAt(stableIds.Count - 1);
         paper.SetElementStorage(colEl, "stableIds", stableIds);
@@ -765,7 +766,7 @@ public static class PropertyGridRenderer
         void MoveTo(int from, int to)
         {
             if (from == to || from < 0 || from >= list.Count || to < 0 || to >= list.Count) return;
-            var v = list[from]; var s = stableIds[from];
+            object? v = list[from]; string s = stableIds[from];
             if (from < to) for (int j = from; j < to; j++) { list[j] = list[j + 1]; stableIds[j] = stableIds[j + 1]; }
             else for (int j = from; j > to; j--) { list[j] = list[j - 1]; stableIds[j] = stableIds[j - 1]; }
             list[to] = v; stableIds[to] = s; Commit(); onChange(list);
@@ -776,8 +777,8 @@ public static class PropertyGridRenderer
         // accurate regardless of individual row heights (nested cards expand to different sizes).
         void CaptureRow(int i, ElementBuilder el) => el.OnPostLayout((h, r) =>
         {
-            var cys = paper.GetElementStorage<List<float>>(colEl, "rowCys", null!);
-            if (cys == null) { cys = new List<float>(); paper.SetElementStorage(colEl, "rowCys", cys); }
+            List<float> cys = paper.GetElementStorage<List<float>>(colEl, "rowCys", null!);
+            if (cys == null) { cys = []; paper.SetElementStorage(colEl, "rowCys", cys); }
             while (cys.Count <= i) cys.Add(0f);
             cys[i] = (float)(r.Min.Y + r.Size.Y * 0.5f);
         });
@@ -788,7 +789,7 @@ public static class PropertyGridRenderer
                 .OnDragging(sk, (k, _) =>
                 {
                     int cur = stableIds.IndexOf(k);
-                    var cys = paper.GetElementStorage<List<float>>(colEl, "rowCys", null!);
+                    List<float> cys = paper.GetElementStorage<List<float>>(colEl, "rowCys", null!);
                     if (cur < 0 || cys == null) return;
                     float py = (float)paper.PointerPosIn(colEl).Y;
                     int target = cur; float best = float.MaxValue;
@@ -819,7 +820,7 @@ public static class PropertyGridRenderer
             using (paper.Column($"{id}_coll").Width(ST).Height(UnitValue.Auto)
                 .Rounded(cr).BorderColor(bd).BorderWidth(1).Clip().Enter())
             {
-                var listEl = paper.CurrentParent;
+                ElementHandle listEl = paper.CurrentParent;
                 bool expanded = paper.GetElementStorage<bool>(listEl, "exp", config.ExpandByDefault);
                 float anim = paper.AnimateBool(expanded, 0.18f);
                 float headBottom = expanded || anim > 0.001f ? 0f : cr;
@@ -847,12 +848,12 @@ public static class PropertyGridRenderer
                     for (int i = 0; i < list.Count; i++)
                     {
                         int idx = i; string sk = stableIds[i];
-                        var rowB = paper.Row($"{id}_r_{sk}").Width(ST).Height(UnitValue.Auto).MinHeight(rowH).Padding(m.PaddingSmall, m.Padding, m.PaddingSmall, m.PaddingSmall).Gap(m.SpacingLarge);
+                        ElementBuilder rowB = paper.Row($"{id}_r_{sk}").Width(ST).Height(UnitValue.Auto).MinHeight(rowH).Padding(m.PaddingSmall, m.Padding, m.PaddingSmall, m.PaddingSmall).Gap(m.SpacingLarge);
                         if (BeingDragged(sk)) rowB.BackgroundColor(theme.Selected);
                         CaptureRow(idx, rowB);
                         using (rowB.Enter())
                         {
-                            var grip = paper.Box($"{id}_g_{sk}").Width(12).Height(rowH).Icon(paper, Origami.Current.Icons.GripVertical, tDim, size: 13f);
+                            ElementBuilder grip = paper.Box($"{id}_g_{sk}").Width(12).Height(rowH).Icon(paper, Origami.Current.Icons.GripVertical, tDim, size: 13f);
                             GripDrag(sk, grip);
 
                             paper.Box($"{id}_i_{sk}").Width(14).Height(rowH).IsNotInteractable()
@@ -883,16 +884,16 @@ public static class PropertyGridRenderer
         {
             float rowH = m.RowHeight + 4f;
             float cr = m.ContainerRounding;
-            var cardB = paper.Column($"{id}_nel_{sk}").Width(ST).Height(UnitValue.Auto)
+            ElementBuilder cardB = paper.Column($"{id}_nel_{sk}").Width(ST).Height(UnitValue.Auto)
                 .Rounded(cr).BorderColor(bd).BorderWidth(1)
                 .BackgroundColor(BeingDragged(sk) ? theme.Selected : System.Drawing.Color.FromArgb(6, 255, 255, 255)).Clip();
             CaptureRow(i, cardB);
             using (cardB.Enter())
             {
-                var nelEl = paper.CurrentParent;
+                ElementHandle nelEl = paper.CurrentParent;
                 bool exp = paper.GetElementStorage<bool>(nelEl, "exp", config.ExpandByDefault);
 
-                var nh = paper.Row($"{id}_nh_{sk}").Width(ST).Height(UnitValue.Auto).MinHeight(rowH).Padding(m.SpacingLarge, m.SpacingLarge, 0, 0).Gap(m.SpacingMedium)
+                ElementBuilder nh = paper.Row($"{id}_nh_{sk}").Width(ST).Height(UnitValue.Auto).MinHeight(rowH).Padding(m.SpacingLarge, m.SpacingLarge, 0, 0).Gap(m.SpacingMedium)
                     .Hovered.BackgroundColor(theme.Hover).End()
                     .OnClick(sk, (k, _) => paper.SetElementStorage(nelEl, "exp", !paper.GetElementStorage<bool>(nelEl, "exp", config.ExpandByDefault)))
                     .Cursor(PaperCursor.Pointer);
@@ -903,7 +904,7 @@ public static class PropertyGridRenderer
                     // rather than blanket .StopEventPropagation(), so the wheel still bubbles to a
                     // parent ScrollView. The reorder drag (GripDrag) bubbles harmlessly - the header
                     // has no drag handler.
-                    var grip = paper.Box($"{id}_ng_{sk}").Width(12).Height(rowH).OnClick(e => e.StopPropagation()).Icon(paper, Origami.Current.Icons.GripVertical, tDim, size: 12f);
+                    ElementBuilder grip = paper.Box($"{id}_ng_{sk}").Width(12).Height(rowH).OnClick(e => e.StopPropagation()).Icon(paper, Origami.Current.Icons.GripVertical, tDim, size: 12f);
                     GripDrag(sk, grip);
 
                     paper.Box($"{id}_nc_{sk}").Width(11).Height(rowH).IsNotInteractable()
@@ -927,9 +928,9 @@ public static class PropertyGridRenderer
                     paper.Box($"{id}_nd_{sk}").Width(ST).Height(1).BackgroundColor(bd).IsNotInteractable();
                     using (paper.Column($"{id}_nbody_{sk}").Width(ST).Height(UnitValue.Auto).Padding(0, 0, m.SpacingSmall, m.PaddingSmall).Enter())
                     {
-                        var elem = list[i];
+                        object? elem = list[i];
                         int capIdx = i;
-                        var customEd = elem != null ? config.CustomEditors.GetEditor(elem.GetType()) : null;
+                        CustomObjectEditor? customEd = elem != null ? config.CustomEditors.GetEditor(elem.GetType()) : null;
                         if (customEd != null)
                             customEd.OnGUI(paper, $"{id}_nce_{sk}", elem!, changed => { list[capIdx] = changed; onChange(list); });
                         else if (elem != null)
@@ -946,13 +947,13 @@ public static class PropertyGridRenderer
         // ── Nested (complex element) list ──────────────────────
         void DrawNested()
         {
-            var color = DepthColor(depth);
+            Color color = DepthColor(depth);
             float headH = m.RowHeight + 6f;
             float cr = m.ContainerRounding;
             using (paper.Column($"{id}_nl").Width(ST).Height(UnitValue.Auto)
                 .Rounded(cr).BorderColor(bd).BorderWidth(1).BackgroundColor(System.Drawing.Color.FromArgb(36, 0, 0, 0)).Clip().Enter())
             {
-                var listEl = paper.CurrentParent;
+                ElementHandle listEl = paper.CurrentParent;
                 bool expanded = paper.GetElementStorage<bool>(listEl, "exp", config.ExpandByDefault);
                 float anim = paper.AnimateBool(expanded, 0.18f);
                 float headBottom = expanded || anim > 0.001f ? 0f : cr;
@@ -1007,7 +1008,7 @@ public static class PropertyGridRenderer
         object value, PropertyGridConfig config, Action<object?> onChange, int depth)
     {
         if (depth + 1 > config.MaxDepth) return;
-        var actualType = value.GetType();
+        Type actualType = value.GetType();
 
         Origami.Foldout(paper, $"{id}_fold", actualType.Name).DefaultExpanded(config.ExpandByDefault).Body(() =>
         {
@@ -1042,9 +1043,9 @@ public static class PropertyGridRenderer
 
     private static void DrawNullObject(Paper paper, string id, Type fieldType, PropertyGridConfig config, Action<object?> onChange)
     {
-        var theme = Origami.Current;
-        var m = theme.Metrics;
-        var font = theme.Font;
+        OrigamiTheme theme = Origami.Current;
+        OrigamiMetrics m = theme.Metrics;
+        Scribe.FontFile? font = theme.Font;
 
         using (paper.Row($"{id}_null").Height(m.RowHeight).Gap(m.SpacingMedium).Enter())
         {
@@ -1082,9 +1083,9 @@ public static class PropertyGridRenderer
 
         for (int i = 0; i < targets.Count; i++)
         {
-            var t = targets[i];
+            object t = targets[i];
             if (t == null) continue;
-            var f = ResolveFieldOn(t, field);
+            FieldInfo? f = ResolveFieldOn(t, field);
             if (f == null) continue;
             if (!(inPlace && i > 0))
                 try { f.SetValue(t, value); } catch { continue; }
@@ -1099,17 +1100,17 @@ public static class PropertyGridRenderer
     /// <summary>The serializable fields shared (by name and type) across every target.</summary>
     public static FieldInfo[] CommonSerializableFields(IReadOnlyList<object> targets)
     {
-        var rep = GetSerializableFields(targets[0].GetType());
+        FieldInfo[] rep = GetSerializableFields(targets[0].GetType());
         if (targets.Count == 1) return rep;
 
         var result = new List<FieldInfo>(rep.Length);
-        foreach (var f in rep)
+        foreach (FieldInfo f in rep)
         {
             bool inAll = true;
             for (int i = 1; i < targets.Count; i++)
             {
                 if (targets[i] == null) { inAll = false; break; }
-                var tf = ResolveField(targets[i].GetType(), f.Name);
+                FieldInfo? tf = ResolveField(targets[i].GetType(), f.Name);
                 if (tf == null || tf.FieldType != f.FieldType) { inAll = false; break; }
             }
             if (inAll) result.Add(f);
@@ -1119,7 +1120,7 @@ public static class PropertyGridRenderer
 
     private static FieldInfo? ResolveField(Type type, string name)
     {
-        foreach (var f in GetSerializableFields(type))
+        foreach (FieldInfo f in GetSerializableFields(type))
             if (f.Name == name) return f;
         return null;
     }
@@ -1130,11 +1131,11 @@ public static class PropertyGridRenderer
         bool got = false;
         for (int i = 0; i < targets.Count; i++)
         {
-            var t = targets[i];
+            object t = targets[i];
             if (t == null) continue;
-            var f = ResolveField(t.GetType(), repField.Name);
+            FieldInfo? f = ResolveField(t.GetType(), repField.Name);
             if (f == null) continue;
-            var v = f.GetValue(t);
+            object? v = f.GetValue(t);
             if (!got) { first = v; got = true; }
             else if (!ValuesEqual(first, v)) return true;
         }
@@ -1174,12 +1175,12 @@ public static class PropertyGridRenderer
 
     // ── Numeric drag helpers ────────────────────────────────
 
-    private static readonly HashSet<Type> s_numericTypes = new()
-    {
+    private static readonly HashSet<Type> s_numericTypes =
+    [
         typeof(float), typeof(double), typeof(decimal),
         typeof(int), typeof(uint), typeof(long), typeof(ulong),
         typeof(short), typeof(ushort), typeof(byte), typeof(sbyte),
-    };
+    ];
 
     private static bool IsNumericType(Type type) => s_numericTypes.Contains(type);
 
@@ -1243,9 +1244,9 @@ public static class PropertyGridRenderer
         public MethodInfo Method = null!;
         public string Label = "";
     }
-    private static readonly System.Runtime.CompilerServices.ConditionalWeakTable<Type, FieldInfo[]> s_fieldCache = new();
-    private static readonly System.Runtime.CompilerServices.ConditionalWeakTable<FieldInfo, FieldMeta> s_fieldMeta = new();
-    private static readonly System.Runtime.CompilerServices.ConditionalWeakTable<Type, ButtonMethod[]> s_buttonCache = new();
+    private static readonly System.Runtime.CompilerServices.ConditionalWeakTable<Type, FieldInfo[]> s_fieldCache = [];
+    private static readonly System.Runtime.CompilerServices.ConditionalWeakTable<FieldInfo, FieldMeta> s_fieldMeta = [];
+    private static readonly System.Runtime.CompilerServices.ConditionalWeakTable<Type, ButtonMethod[]> s_buttonCache = [];
 
     /// <summary>Cached attributes + display label for a field.</summary>
     private static FieldMeta GetFieldMeta(FieldInfo field)
@@ -1263,8 +1264,8 @@ public static class PropertyGridRenderer
                        && m2.GetCustomAttributes().Any(a => a.GetType().Name == "ButtonAttribute"))
              .Select(m2 =>
              {
-                 var btnAttr = m2.GetCustomAttributes().First(a => a.GetType().Name == "ButtonAttribute");
-                 var labelProp = btnAttr.GetType().GetProperty("Label");
+                 Attribute btnAttr = m2.GetCustomAttributes().First(a => a.GetType().Name == "ButtonAttribute");
+                 PropertyInfo? labelProp = btnAttr.GetType().GetProperty("Label");
                  return new ButtonMethod
                  {
                      Method = m2,
@@ -1281,11 +1282,11 @@ public static class PropertyGridRenderer
     {
         const BindingFlags flags = BindingFlags.Public | BindingFlags.NonPublic | BindingFlags.Instance | BindingFlags.DeclaredOnly;
         var fields = new List<FieldInfo>();
-        var current = type;
+        Type? current = type;
 
         while (current != null && current != typeof(object))
         {
-            foreach (var field in current.GetFields(flags))
+            foreach (FieldInfo field in current.GetFields(flags))
             {
                 if (field.IsStatic) continue;
                 bool shouldSerialize = field.IsPublic || field.GetCustomAttribute<SerializeFieldAttribute>() != null;

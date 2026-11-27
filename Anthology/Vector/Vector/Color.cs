@@ -525,8 +525,8 @@ public struct Color : IEquatable<Color>
     public static Color LerpColorSpace(Color from, Color to, float t)
     {
         // Convert to HSV for more natural color interpolation
-        var hsvFrom = RGBToHSV(from);
-        var hsvTo = RGBToHSV(to);
+        Float4 hsvFrom = RGBToHSV(from);
+        Float4 hsvTo = RGBToHSV(to);
 
         // Handle hue wrapping for shortest path interpolation
         float deltaHue = hsvTo.X - hsvFrom.X;

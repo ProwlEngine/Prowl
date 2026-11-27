@@ -29,11 +29,11 @@ public sealed class FixedStructureFormat : ISerializationFormat
         // Reflection fallback
         var list = EchoObject.NewList();
 
-        var fields = value.GetSerializableFields()
+        CachedFieldInfo[] fields = value.GetSerializableFields()
             .OrderBy(f => f.MetadataToken)
             .ToArray();
 
-        foreach (var cachedField in fields)
+        foreach (CachedFieldInfo cachedField in fields)
         {
             try
             {
@@ -70,7 +70,7 @@ public sealed class FixedStructureFormat : ISerializationFormat
         // Reflection fallback
         var listValue = (List<EchoObject>)value.Value!;
 
-        var fields = result.GetSerializableFields()
+        CachedFieldInfo[] fields = result.GetSerializableFields()
             .OrderBy(f => f.MetadataToken)
             .ToArray();
 
@@ -83,8 +83,8 @@ public sealed class FixedStructureFormat : ISerializationFormat
 
         for (int i = 0; i < fields.Length; i++)
         {
-            var cachedField = fields[i];
-            var fieldValue = listValue[i];
+            CachedFieldInfo cachedField = fields[i];
+            EchoObject fieldValue = listValue[i];
 
             try
             {

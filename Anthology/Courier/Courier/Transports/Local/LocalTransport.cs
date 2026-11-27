@@ -20,7 +20,7 @@ namespace Prowl.Courier.Transports.Local;
 /// </remarks>
 public sealed class LocalTransport : Transport
 {
-    private readonly List<Connection> _closing = new();
+    private readonly List<Connection> _closing = [];
     private readonly ConcurrentQueue<Packet> _inbox = new();
     private readonly object _inboxGate = new();
     private bool _accepting = true;
@@ -224,7 +224,7 @@ public sealed class LocalTransport : Transport
         }
 
         _closing.Clear();
-        List<Packet> abandoned = new();
+        List<Packet> abandoned = [];
         lock (_inboxGate)
         {
             _accepting = false;

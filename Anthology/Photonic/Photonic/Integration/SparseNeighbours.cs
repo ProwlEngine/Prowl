@@ -51,7 +51,7 @@ internal sealed class SparseNeighbours
         System.Array.Fill(neighbours.Index, -1);
 
         var grid = PointGrid.Build(ws, points);
-        var isolated = new bool[w * h];
+        bool[] isolated = new bool[w * h];
 
         System.Threading.Tasks.Parallel.For(0, h, parallelOpts, y =>
         {
@@ -64,7 +64,7 @@ internal sealed class SparseNeighbours
                 int idx = y * w + x;
                 if (!ws.Covered[idx]) continue;
 
-                var texel = ws.Samples[idx];
+                TexelSample texel = ws.Samples[idx];
                 int count = grid.FindNearest(ws, points, idx, texel, found, distance);
                 if (count == 0)
                 {
@@ -120,7 +120,7 @@ internal sealed class SparseNeighbours
         float total = 0f;
         for (int i = 0; i < count; i++)
         {
-            var point = ws.Samples[found[i]];
+            TexelSample point = ws.Samples[found[i]];
 
             float facing = Float3.Dot(texel.Normal, point.Normal);
             if (facing <= 0f) { weight[i] = 0f; continue; }   // a right angle or worse: different surface
@@ -152,9 +152,9 @@ internal sealed class SparseNeighbours
                 // anything convex passes through the solid, and would report every sphere and tube as
                 // blocking its own interpolation.
                 float lift = System.MathF.Max(floor * 2f, distance[i] * 0.15f);
-                var from = texel.Position + texel.Normal * lift;
-                var to = point.Position + point.Normal * lift;
-                var delta = to - from;
+                Float3 from = texel.Position + texel.Normal * lift;
+                Float3 to = point.Position + point.Normal * lift;
+                Float3 delta = to - from;
                 float span = Float3.Length(delta);
                 if (span > options.EffectiveRayBias * 8f
                     && blas.AnyHit(from, delta / span, options.EffectiveRayBias, span - options.EffectiveRayBias * 4f))
@@ -171,8 +171,8 @@ internal sealed class SparseNeighbours
     public void Apply(TargetWorkspace ws, SparseTexelSet points, System.Threading.Tasks.ParallelOptions parallelOpts)
     {
         int w = ws.Width, h = ws.Height;
-        var pixels = ws.Working();
-        var scratch = ws.ScratchRGB();
+        float[] pixels = ws.Working();
+        float[] scratch = ws.ScratchRGB();
 
         System.Threading.Tasks.Parallel.For(0, h, parallelOpts, y =>
         {
@@ -244,7 +244,7 @@ internal sealed class SparseNeighbours
 
         public static PointGrid Build(TargetWorkspace ws, SparseTexelSet points)
         {
-            var list = points.Points;
+            int[] list = points.Points;
             int buckets = System.Math.Max(64, Primes.Above(list.Length * 2));
 
             // Cell size follows the spacing the points were elected at, so a cell holds roughly one.
@@ -259,13 +259,13 @@ internal sealed class SparseNeighbours
             if (!(cell > 1e-6f)) cell = 1f;
             float inverseCell = 1f / cell;
 
-            var counts = new int[buckets + 1];
+            int[] counts = new int[buckets + 1];
             foreach (int p in list) counts[Bucket(ws.Samples[p].Position, inverseCell, buckets)]++;
 
-            var start = new int[buckets + 1];
+            int[] start = new int[buckets + 1];
             for (int i = 0; i < buckets; i++) start[i + 1] = start[i] + counts[i];
-            var entries = new int[list.Length];
-            var cursor = (int[])start.Clone();
+            int[] entries = new int[list.Length];
+            int[] cursor = (int[])start.Clone();
             foreach (int p in list) entries[cursor[Bucket(ws.Samples[p].Position, inverseCell, buckets)]++] = p;
 
             return new PointGrid(inverseCell, start, entries, buckets);
@@ -303,7 +303,7 @@ internal sealed class SparseNeighbours
                         int point = _entries[e];
                         if (strict && points.IsContact[point] != contact) continue;
 
-                        var candidate = ws.Samples[point];
+                                TexelSample candidate = ws.Samples[point];
                         if (Float3.Dot(texel.Normal, candidate.Normal) <= 0f) continue;
 
                         float d = Float3.Distance(candidate.Position, texel.Position);

@@ -6,206 +6,100 @@ internal static partial class VkFormats
 {
     internal static Format ToVkPixelFormat(PixelFormat format, bool toDepthFormat = false)
     {
-        switch (format)
+        return format switch
         {
-            case PixelFormat.R8_UNorm:
-                return Format.R8Unorm;
-            case PixelFormat.R8_SNorm:
-                return Format.R8SNorm;
-            case PixelFormat.R8_UInt:
-                return Format.R8Uint;
-            case PixelFormat.R8_SInt:
-                return Format.R8Sint;
-
-            case PixelFormat.R16_UNorm:
-                return toDepthFormat ? Format.D16Unorm : Format.R16Unorm;
-            case PixelFormat.R16_SNorm:
-                return Format.R16SNorm;
-            case PixelFormat.R16_UInt:
-                return Format.R16Uint;
-            case PixelFormat.R16_SInt:
-                return Format.R16Sint;
-            case PixelFormat.R16_Float:
-                return Format.R16Sfloat;
-
-            case PixelFormat.R32_UInt:
-                return Format.R32Uint;
-            case PixelFormat.R32_SInt:
-                return Format.R32Sint;
-            case PixelFormat.R32_Float:
-                return toDepthFormat ? Format.D32Sfloat : Format.R32Sfloat;
-
-            case PixelFormat.R8_G8_UNorm:
-                return Format.R8G8Unorm;
-            case PixelFormat.R8_G8_SNorm:
-                return Format.R8G8SNorm;
-            case PixelFormat.R8_G8_UInt:
-                return Format.R8G8Uint;
-            case PixelFormat.R8_G8_SInt:
-                return Format.R8G8Sint;
-
-            case PixelFormat.R16_G16_UNorm:
-                return Format.R16G16Unorm;
-            case PixelFormat.R16_G16_SNorm:
-                return Format.R16G16SNorm;
-            case PixelFormat.R16_G16_UInt:
-                return Format.R16G16Uint;
-            case PixelFormat.R16_G16_SInt:
-                return Format.R16G16Sint;
-            case PixelFormat.R16_G16_Float:
-                return Format.R16G16Sfloat;
-
-            case PixelFormat.R32_G32_UInt:
-                return Format.R32G32Uint;
-            case PixelFormat.R32_G32_SInt:
-                return Format.R32G32Sint;
-            case PixelFormat.R32_G32_Float:
-                return Format.R32G32Sfloat;
-
-            case PixelFormat.R8_G8_B8_A8_UNorm:
-                return Format.R8G8B8A8Unorm;
-            case PixelFormat.R8_G8_B8_A8_UNorm_SRgb:
-                return Format.R8G8B8A8Srgb;
-            case PixelFormat.B8_G8_R8_A8_UNorm:
-                return Format.B8G8R8A8Unorm;
-            case PixelFormat.B8_G8_R8_A8_UNorm_SRgb:
-                return Format.B8G8R8A8Srgb;
-            case PixelFormat.R8_G8_B8_A8_SNorm:
-                return Format.R8G8B8A8SNorm;
-            case PixelFormat.R8_G8_B8_A8_UInt:
-                return Format.R8G8B8A8Uint;
-            case PixelFormat.R8_G8_B8_A8_SInt:
-                return Format.R8G8B8A8Sint;
-
-            case PixelFormat.R16_G16_B16_A16_UNorm:
-                return Format.R16G16B16A16Unorm;
-            case PixelFormat.R16_G16_B16_A16_SNorm:
-                return Format.R16G16B16A16SNorm;
-            case PixelFormat.R16_G16_B16_A16_UInt:
-                return Format.R16G16B16A16Uint;
-            case PixelFormat.R16_G16_B16_A16_SInt:
-                return Format.R16G16B16A16Sint;
-            case PixelFormat.R16_G16_B16_A16_Float:
-                return Format.R16G16B16A16Sfloat;
-
-            case PixelFormat.R32_G32_B32_A32_UInt:
-                return Format.R32G32B32A32Uint;
-            case PixelFormat.R32_G32_B32_A32_SInt:
-                return Format.R32G32B32A32Sint;
-            case PixelFormat.R32_G32_B32_A32_Float:
-                return Format.R32G32B32A32Sfloat;
-
-            case PixelFormat.BC1_Rgb_UNorm:
-                return Format.BC1RgbUnormBlock;
-            case PixelFormat.BC1_Rgb_UNorm_SRgb:
-                return Format.BC1RgbSrgbBlock;
-            case PixelFormat.BC1_Rgba_UNorm:
-                return Format.BC1RgbaUnormBlock;
-            case PixelFormat.BC1_Rgba_UNorm_SRgb:
-                return Format.BC1RgbaSrgbBlock;
-            case PixelFormat.BC2_UNorm:
-                return Format.BC2UnormBlock;
-            case PixelFormat.BC2_UNorm_SRgb:
-                return Format.BC2SrgbBlock;
-            case PixelFormat.BC3_UNorm:
-                return Format.BC3UnormBlock;
-            case PixelFormat.BC3_UNorm_SRgb:
-                return Format.BC3SrgbBlock;
-            case PixelFormat.BC4_UNorm:
-                return Format.BC4UnormBlock;
-            case PixelFormat.BC4_SNorm:
-                return Format.BC4SNormBlock;
-            case PixelFormat.BC5_UNorm:
-                return Format.BC5UnormBlock;
-            case PixelFormat.BC5_SNorm:
-                return Format.BC5SNormBlock;
-            case PixelFormat.BC7_UNorm:
-                return Format.BC7UnormBlock;
-            case PixelFormat.BC7_UNorm_SRgb:
-                return Format.BC7SrgbBlock;
-
-            case PixelFormat.ETC2_R8_G8_B8_UNorm:
-                return Format.Etc2R8G8B8UnormBlock;
-            case PixelFormat.ETC2_R8_G8_B8_A1_UNorm:
-                return Format.Etc2R8G8B8A1UnormBlock;
-            case PixelFormat.ETC2_R8_G8_B8_A8_UNorm:
-                return Format.Etc2R8G8B8A8UnormBlock;
-
-            case PixelFormat.ASTC_4x4_UNorm:
-                return Format.Astc4x4UnormBlock;
-            case PixelFormat.ASTC_4x4_UNorm_SRgb:
-                return Format.Astc4x4SrgbBlock;
-            case PixelFormat.ASTC_5x4_UNorm:
-                return Format.Astc5x4UnormBlock;
-            case PixelFormat.ASTC_5x4_UNorm_SRgb:
-                return Format.Astc5x4SrgbBlock;
-            case PixelFormat.ASTC_5x5_UNorm:
-                return Format.Astc5x5UnormBlock;
-            case PixelFormat.ASTC_5x5_UNorm_SRgb:
-                return Format.Astc5x5SrgbBlock;
-            case PixelFormat.ASTC_6x5_UNorm:
-                return Format.Astc6x5UnormBlock;
-            case PixelFormat.ASTC_6x5_UNorm_SRgb:
-                return Format.Astc6x5SrgbBlock;
-            case PixelFormat.ASTC_6x6_UNorm:
-                return Format.Astc6x6UnormBlock;
-            case PixelFormat.ASTC_6x6_UNorm_SRgb:
-                return Format.Astc6x6SrgbBlock;
-            case PixelFormat.ASTC_8x5_UNorm:
-                return Format.Astc8x5UnormBlock;
-            case PixelFormat.ASTC_8x5_UNorm_SRgb:
-                return Format.Astc8x5SrgbBlock;
-            case PixelFormat.ASTC_8x6_UNorm:
-                return Format.Astc8x6UnormBlock;
-            case PixelFormat.ASTC_8x6_UNorm_SRgb:
-                return Format.Astc8x6SrgbBlock;
-            case PixelFormat.ASTC_8x8_UNorm:
-                return Format.Astc8x8UnormBlock;
-            case PixelFormat.ASTC_8x8_UNorm_SRgb:
-                return Format.Astc8x8SrgbBlock;
-            case PixelFormat.ASTC_10x5_UNorm:
-                return Format.Astc10x5UnormBlock;
-            case PixelFormat.ASTC_10x5_UNorm_SRgb:
-                return Format.Astc10x5SrgbBlock;
-            case PixelFormat.ASTC_10x6_UNorm:
-                return Format.Astc10x6UnormBlock;
-            case PixelFormat.ASTC_10x6_UNorm_SRgb:
-                return Format.Astc10x6SrgbBlock;
-            case PixelFormat.ASTC_10x8_UNorm:
-                return Format.Astc10x8UnormBlock;
-            case PixelFormat.ASTC_10x8_UNorm_SRgb:
-                return Format.Astc10x8SrgbBlock;
-            case PixelFormat.ASTC_10x10_UNorm:
-                return Format.Astc10x10UnormBlock;
-            case PixelFormat.ASTC_10x10_UNorm_SRgb:
-                return Format.Astc10x10SrgbBlock;
-            case PixelFormat.ASTC_12x10_UNorm:
-                return Format.Astc12x10UnormBlock;
-            case PixelFormat.ASTC_12x10_UNorm_SRgb:
-                return Format.Astc12x10SrgbBlock;
-            case PixelFormat.ASTC_12x12_UNorm:
-                return Format.Astc12x12UnormBlock;
-            case PixelFormat.ASTC_12x12_UNorm_SRgb:
-                return Format.Astc12x12SrgbBlock;
-
-            case PixelFormat.D32_Float_S8_UInt:
-                return Format.D32SfloatS8Uint;
-            case PixelFormat.D32_Float:
-                return Format.D32Sfloat;
-            case PixelFormat.D16_UNorm:
-                return Format.D16Unorm;
-            case PixelFormat.D24_UNorm_S8_UInt:
-                return Format.D24UnormS8Uint;
-
-            case PixelFormat.R10_G10_B10_A2_UNorm:
-                return Format.A2B10G10R10UnormPack32;
-            case PixelFormat.R10_G10_B10_A2_UInt:
-                return Format.A2B10G10R10UintPack32;
-            case PixelFormat.R11_G11_B10_Float:
-                return Format.B10G11R11UfloatPack32;
-
-            default:
-                throw new RenderException($"Invalid {nameof(PixelFormat)}: {format}");
-        }
+            PixelFormat.R8_UNorm => Format.R8Unorm,
+            PixelFormat.R8_SNorm => Format.R8SNorm,
+            PixelFormat.R8_UInt => Format.R8Uint,
+            PixelFormat.R8_SInt => Format.R8Sint,
+            PixelFormat.R16_UNorm => toDepthFormat ? Format.D16Unorm : Format.R16Unorm,
+            PixelFormat.R16_SNorm => Format.R16SNorm,
+            PixelFormat.R16_UInt => Format.R16Uint,
+            PixelFormat.R16_SInt => Format.R16Sint,
+            PixelFormat.R16_Float => Format.R16Sfloat,
+            PixelFormat.R32_UInt => Format.R32Uint,
+            PixelFormat.R32_SInt => Format.R32Sint,
+            PixelFormat.R32_Float => toDepthFormat ? Format.D32Sfloat : Format.R32Sfloat,
+            PixelFormat.R8_G8_UNorm => Format.R8G8Unorm,
+            PixelFormat.R8_G8_SNorm => Format.R8G8SNorm,
+            PixelFormat.R8_G8_UInt => Format.R8G8Uint,
+            PixelFormat.R8_G8_SInt => Format.R8G8Sint,
+            PixelFormat.R16_G16_UNorm => Format.R16G16Unorm,
+            PixelFormat.R16_G16_SNorm => Format.R16G16SNorm,
+            PixelFormat.R16_G16_UInt => Format.R16G16Uint,
+            PixelFormat.R16_G16_SInt => Format.R16G16Sint,
+            PixelFormat.R16_G16_Float => Format.R16G16Sfloat,
+            PixelFormat.R32_G32_UInt => Format.R32G32Uint,
+            PixelFormat.R32_G32_SInt => Format.R32G32Sint,
+            PixelFormat.R32_G32_Float => Format.R32G32Sfloat,
+            PixelFormat.R8_G8_B8_A8_UNorm => Format.R8G8B8A8Unorm,
+            PixelFormat.R8_G8_B8_A8_UNorm_SRgb => Format.R8G8B8A8Srgb,
+            PixelFormat.B8_G8_R8_A8_UNorm => Format.B8G8R8A8Unorm,
+            PixelFormat.B8_G8_R8_A8_UNorm_SRgb => Format.B8G8R8A8Srgb,
+            PixelFormat.R8_G8_B8_A8_SNorm => Format.R8G8B8A8SNorm,
+            PixelFormat.R8_G8_B8_A8_UInt => Format.R8G8B8A8Uint,
+            PixelFormat.R8_G8_B8_A8_SInt => Format.R8G8B8A8Sint,
+            PixelFormat.R16_G16_B16_A16_UNorm => Format.R16G16B16A16Unorm,
+            PixelFormat.R16_G16_B16_A16_SNorm => Format.R16G16B16A16SNorm,
+            PixelFormat.R16_G16_B16_A16_UInt => Format.R16G16B16A16Uint,
+            PixelFormat.R16_G16_B16_A16_SInt => Format.R16G16B16A16Sint,
+            PixelFormat.R16_G16_B16_A16_Float => Format.R16G16B16A16Sfloat,
+            PixelFormat.R32_G32_B32_A32_UInt => Format.R32G32B32A32Uint,
+            PixelFormat.R32_G32_B32_A32_SInt => Format.R32G32B32A32Sint,
+            PixelFormat.R32_G32_B32_A32_Float => Format.R32G32B32A32Sfloat,
+            PixelFormat.BC1_Rgb_UNorm => Format.BC1RgbUnormBlock,
+            PixelFormat.BC1_Rgb_UNorm_SRgb => Format.BC1RgbSrgbBlock,
+            PixelFormat.BC1_Rgba_UNorm => Format.BC1RgbaUnormBlock,
+            PixelFormat.BC1_Rgba_UNorm_SRgb => Format.BC1RgbaSrgbBlock,
+            PixelFormat.BC2_UNorm => Format.BC2UnormBlock,
+            PixelFormat.BC2_UNorm_SRgb => Format.BC2SrgbBlock,
+            PixelFormat.BC3_UNorm => Format.BC3UnormBlock,
+            PixelFormat.BC3_UNorm_SRgb => Format.BC3SrgbBlock,
+            PixelFormat.BC4_UNorm => Format.BC4UnormBlock,
+            PixelFormat.BC4_SNorm => Format.BC4SNormBlock,
+            PixelFormat.BC5_UNorm => Format.BC5UnormBlock,
+            PixelFormat.BC5_SNorm => Format.BC5SNormBlock,
+            PixelFormat.BC7_UNorm => Format.BC7UnormBlock,
+            PixelFormat.BC7_UNorm_SRgb => Format.BC7SrgbBlock,
+            PixelFormat.ETC2_R8_G8_B8_UNorm => Format.Etc2R8G8B8UnormBlock,
+            PixelFormat.ETC2_R8_G8_B8_A1_UNorm => Format.Etc2R8G8B8A1UnormBlock,
+            PixelFormat.ETC2_R8_G8_B8_A8_UNorm => Format.Etc2R8G8B8A8UnormBlock,
+            PixelFormat.ASTC_4x4_UNorm => Format.Astc4x4UnormBlock,
+            PixelFormat.ASTC_4x4_UNorm_SRgb => Format.Astc4x4SrgbBlock,
+            PixelFormat.ASTC_5x4_UNorm => Format.Astc5x4UnormBlock,
+            PixelFormat.ASTC_5x4_UNorm_SRgb => Format.Astc5x4SrgbBlock,
+            PixelFormat.ASTC_5x5_UNorm => Format.Astc5x5UnormBlock,
+            PixelFormat.ASTC_5x5_UNorm_SRgb => Format.Astc5x5SrgbBlock,
+            PixelFormat.ASTC_6x5_UNorm => Format.Astc6x5UnormBlock,
+            PixelFormat.ASTC_6x5_UNorm_SRgb => Format.Astc6x5SrgbBlock,
+            PixelFormat.ASTC_6x6_UNorm => Format.Astc6x6UnormBlock,
+            PixelFormat.ASTC_6x6_UNorm_SRgb => Format.Astc6x6SrgbBlock,
+            PixelFormat.ASTC_8x5_UNorm => Format.Astc8x5UnormBlock,
+            PixelFormat.ASTC_8x5_UNorm_SRgb => Format.Astc8x5SrgbBlock,
+            PixelFormat.ASTC_8x6_UNorm => Format.Astc8x6UnormBlock,
+            PixelFormat.ASTC_8x6_UNorm_SRgb => Format.Astc8x6SrgbBlock,
+            PixelFormat.ASTC_8x8_UNorm => Format.Astc8x8UnormBlock,
+            PixelFormat.ASTC_8x8_UNorm_SRgb => Format.Astc8x8SrgbBlock,
+            PixelFormat.ASTC_10x5_UNorm => Format.Astc10x5UnormBlock,
+            PixelFormat.ASTC_10x5_UNorm_SRgb => Format.Astc10x5SrgbBlock,
+            PixelFormat.ASTC_10x6_UNorm => Format.Astc10x6UnormBlock,
+            PixelFormat.ASTC_10x6_UNorm_SRgb => Format.Astc10x6SrgbBlock,
+            PixelFormat.ASTC_10x8_UNorm => Format.Astc10x8UnormBlock,
+            PixelFormat.ASTC_10x8_UNorm_SRgb => Format.Astc10x8SrgbBlock,
+            PixelFormat.ASTC_10x10_UNorm => Format.Astc10x10UnormBlock,
+            PixelFormat.ASTC_10x10_UNorm_SRgb => Format.Astc10x10SrgbBlock,
+            PixelFormat.ASTC_12x10_UNorm => Format.Astc12x10UnormBlock,
+            PixelFormat.ASTC_12x10_UNorm_SRgb => Format.Astc12x10SrgbBlock,
+            PixelFormat.ASTC_12x12_UNorm => Format.Astc12x12UnormBlock,
+            PixelFormat.ASTC_12x12_UNorm_SRgb => Format.Astc12x12SrgbBlock,
+            PixelFormat.D32_Float_S8_UInt => Format.D32SfloatS8Uint,
+            PixelFormat.D32_Float => Format.D32Sfloat,
+            PixelFormat.D16_UNorm => Format.D16Unorm,
+            PixelFormat.D24_UNorm_S8_UInt => Format.D24UnormS8Uint,
+            PixelFormat.R10_G10_B10_A2_UNorm => Format.A2B10G10R10UnormPack32,
+            PixelFormat.R10_G10_B10_A2_UInt => Format.A2B10G10R10UintPack32,
+            PixelFormat.R11_G11_B10_Float => Format.B10G11R11UfloatPack32,
+            _ => throw new RenderException($"Invalid {nameof(PixelFormat)}: {format}"),
+        };
     }
 }

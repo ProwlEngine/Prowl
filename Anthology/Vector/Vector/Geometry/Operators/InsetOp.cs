@@ -17,8 +17,8 @@ internal static class InsetOp
 
     private sealed class VertexInfo
     {
-        public List<int> Faces = new();
-        public HashSet<GeometryData.Vertex> SharedEdgeNeighbors = new();
+        public List<int> Faces = [];
+        public HashSet<GeometryData.Vertex> SharedEdgeNeighbors = [];
         public bool IsShared => Faces.Count > 1;
     }
 
@@ -32,7 +32,7 @@ internal static class InsetOp
     /// </summary>
     internal static void InsetFaces(GeometryData mesh, IEnumerable<GeometryData.Face> facesToInset, float thickness, InsetMode mode = InsetMode.Shared, InsetMeasure measure = InsetMeasure.Fraction)
     {
-        var faces = GeometryData.LogicalFaces(facesToInset.Where(mesh.Contains));
+        List<GeometryData.Face> faces = GeometryData.LogicalFaces(facesToInset.Where(mesh.Contains));
         if (faces.Count == 0) return;
 
         thickness = measure == InsetMeasure.Fraction ? Maths.Max(0f, Maths.Min(1f, thickness)) : Maths.Max(0f, thickness);
@@ -45,7 +45,7 @@ internal static class InsetOp
         }
 
         var done = new HashSet<GeometryData.Face>();
-        foreach (var face in faces)
+        foreach (GeometryData.Face face in faces)
         {
             if (done.Contains(face)) continue;
             List<GeometryData.Face> group = face.LogicalFace();
@@ -62,25 +62,25 @@ internal static class InsetOp
         var oldEdges = faces.SelectMany(f => f.NeighborEdges()).Distinct().ToList();
         var edgeAttributes = oldEdges.ToDictionary(e => GeometryOperators.GetCanonicalEdge(e.Vert1, e.Vert2), e => AttributeTransfer.Copy(e.Attributes));
         var oldVertices = snapshots.SelectMany(s => s.Vertices).Distinct().ToList();
-        var edgeInfo = BuildEdgeInfo(snapshots);
+        Dictionary<(GeometryData.Vertex, GeometryData.Vertex), EdgeInfo> edgeInfo = BuildEdgeInfo(snapshots);
 
         Dictionary<GeometryData.Vertex, Float3> targets = measure == InsetMeasure.Fraction
             ? FractionTargets(snapshots, centers, edgeInfo, thickness)
             : DistanceTargets(snapshots, normals, edgeInfo, thickness);
 
         var inset = new Dictionary<GeometryData.Vertex, GeometryData.Vertex>();
-        foreach (var v in oldVertices)
+        foreach (GeometryData.Vertex? v in oldVertices)
         {
-            var made = mesh.AddVertex(targets[v]);
+            GeometryData.Vertex made = mesh.AddVertex(targets[v]);
             GeometryOperators.AttributeLerp(mesh, made, v, v, 1f);
             inset[v] = made;
         }
 
-        foreach (var face in faces) mesh.RemoveFace(face);
+        foreach (GeometryData.Face face in faces) mesh.RemoveFace(face);
 
         foreach (FaceSnapshot snapshot in snapshots)
         {
-            var inner = mesh.AddFace(snapshot.Vertices.Select(v => inset[v]).ToArray());
+            GeometryData.Face? inner = mesh.AddFace(snapshot.Vertices.Select(v => inset[v]).ToArray());
             if (inner == null) continue;
 
             snapshot.ApplyFaceAttributes(inner);
@@ -88,22 +88,22 @@ internal static class InsetOp
         }
 
         // The new outline keeps what the old one carried, hidden joins between the pieces included
-        foreach (var pair in edgeAttributes)
+        foreach (KeyValuePair<(GeometryData.Vertex, GeometryData.Vertex), Dictionary<string, GeometryData.AttributeValue>> pair in edgeAttributes)
             if (mesh.FindEdge(inset[pair.Key.Item1], inset[pair.Key.Item2]) is { } moved)
                 AttributeTransfer.Apply(pair.Value, moved.Attributes);
 
         foreach (FaceSnapshot snapshot in snapshots)
         {
-            var verts = snapshot.Vertices;
+            List<GeometryData.Vertex> verts = snapshot.Vertices;
             for (int k = 0; k < verts.Count; k++)
             {
-                var v1 = verts[k];
-                var v2 = verts[(k + 1) % verts.Count];
+                GeometryData.Vertex v1 = verts[k];
+                GeometryData.Vertex v2 = verts[(k + 1) % verts.Count];
                 if (!edgeInfo[GeometryOperators.GetCanonicalEdge(v1, v2)].IsBoundary) continue;
 
-                var i1 = inset[v1];
-                var i2 = inset[v2];
-                var wall = mesh.AddFace(i1, v1, v2, i2);
+                GeometryData.Vertex i1 = inset[v1];
+                GeometryData.Vertex i2 = inset[v2];
+                GeometryData.Face? wall = mesh.AddFace(i1, v1, v2, i2);
                 if (wall == null) continue;
 
                 snapshot.ApplyFaceAttributes(wall);
@@ -111,9 +111,9 @@ internal static class InsetOp
             }
         }
 
-        foreach (var edge in oldEdges)
+        foreach (GeometryData.Edge? edge in oldEdges)
             if (edge.Loop == null && mesh.Contains(edge)) mesh.RemoveEdge(edge);
-        foreach (var vertex in oldVertices)
+        foreach (GeometryData.Vertex? vertex in oldVertices)
             if (vertex.Edge == null && mesh.Contains(vertex)) mesh.RemoveVertex(vertex);
     }
 
@@ -135,25 +135,25 @@ internal static class InsetOp
         var leaving = new Dictionary<GeometryData.Vertex, List<Float3>>();
         for (int i = 0; i < snapshots.Count; i++)
         {
-            var verts = snapshots[i].Vertices;
+            List<GeometryData.Vertex> verts = snapshots[i].Vertices;
             for (int k = 0; k < verts.Count; k++)
             {
-                var a = verts[k];
-                var b = verts[(k + 1) % verts.Count];
+                GeometryData.Vertex a = verts[k];
+                GeometryData.Vertex b = verts[(k + 1) % verts.Count];
                 if (!edgeInfo[GeometryOperators.GetCanonicalEdge(a, b)].IsBoundary) continue;
 
                 Float3 inward = Inward(normals[i], a.Point, b.Point);
-                if (!leaving.TryGetValue(a, out var l)) leaving[a] = l = new List<Float3>();
-                if (!arriving.TryGetValue(b, out var r)) arriving[b] = r = new List<Float3>();
+                if (!leaving.TryGetValue(a, out List<Float3>? l)) leaving[a] = l = [];
+                if (!arriving.TryGetValue(b, out List<Float3>? r)) arriving[b] = r = [];
                 l.Add(inward);
                 r.Add(inward);
             }
         }
 
         var targets = new Dictionary<GeometryData.Vertex, Float3>();
-        foreach (var v in snapshots.SelectMany(s => s.Vertices).Distinct())
+        foreach (GeometryData.Vertex? v in snapshots.SelectMany(s => s.Vertices).Distinct())
         {
-            bool onEdge = arriving.TryGetValue(v, out var inList) && inList.Count == 1 && leaving.TryGetValue(v, out var outList) && outList.Count == 1;
+            bool onEdge = arriving.TryGetValue(v, out List<Float3>? inList) && inList.Count == 1 && leaving.TryGetValue(v, out List<Float3>? outList) && outList.Count == 1;
             targets[v] = onEdge ? v.Point + Miter(arriving[v][0], leaving[v][0], distance) : v.Point;
         }
         return targets;
@@ -162,13 +162,13 @@ internal static class InsetOp
     private static Dictionary<(GeometryData.Vertex, GeometryData.Vertex), EdgeInfo> BuildEdgeInfo(List<FaceSnapshot> snapshots)
     {
         var map = new Dictionary<(GeometryData.Vertex, GeometryData.Vertex), EdgeInfo>();
-        foreach (var snapshot in snapshots)
+        foreach (FaceSnapshot snapshot in snapshots)
         {
-            var verts = snapshot.Vertices;
+            List<GeometryData.Vertex> verts = snapshot.Vertices;
             for (int i = 0; i < verts.Count; i++)
             {
-                var key = GeometryOperators.GetCanonicalEdge(verts[i], verts[(i + 1) % verts.Count]);
-                if (!map.TryGetValue(key, out var info)) map[key] = info = new EdgeInfo();
+                (GeometryData.Vertex, GeometryData.Vertex) key = GeometryOperators.GetCanonicalEdge(verts[i], verts[(i + 1) % verts.Count]);
+                if (!map.TryGetValue(key, out EdgeInfo? info)) map[key] = info = new EdgeInfo();
                 info.UsageCount++;
             }
         }
@@ -181,19 +181,19 @@ internal static class InsetOp
     {
         var infoMap = new Dictionary<GeometryData.Vertex, VertexInfo>();
         for (int i = 0; i < snapshots.Count; i++)
-            foreach (var v in snapshots[i].Vertices)
+            foreach (GeometryData.Vertex v in snapshots[i].Vertices)
             {
-                if (!infoMap.TryGetValue(v, out var info)) infoMap[v] = info = new VertexInfo();
+                if (!infoMap.TryGetValue(v, out VertexInfo? info)) infoMap[v] = info = new VertexInfo();
                 info.Faces.Add(i);
             }
 
-        foreach (var snapshot in snapshots)
+        foreach (FaceSnapshot snapshot in snapshots)
         {
-            var verts = snapshot.Vertices;
+            List<GeometryData.Vertex> verts = snapshot.Vertices;
             for (int i = 0; i < verts.Count; i++)
             {
-                var a = verts[i];
-                var b = verts[(i + 1) % verts.Count];
+                GeometryData.Vertex a = verts[i];
+                GeometryData.Vertex b = verts[(i + 1) % verts.Count];
                 if (edgeInfo[GeometryOperators.GetCanonicalEdge(a, b)].UsageCount > 1 && infoMap[a].IsShared && infoMap[b].IsShared)
                 {
                     infoMap[a].SharedEdgeNeighbors.Add(b);
@@ -203,10 +203,10 @@ internal static class InsetOp
         }
 
         var targets = new Dictionary<GeometryData.Vertex, Float3>();
-        foreach (var pair in infoMap)
+        foreach (KeyValuePair<GeometryData.Vertex, VertexInfo> pair in infoMap)
         {
-            var vert = pair.Key;
-            var info = pair.Value;
+            GeometryData.Vertex vert = pair.Key;
+            VertexInfo info = pair.Value;
             if (!info.IsShared)
             {
                 targets[vert] = Maths.Lerp(vert.Point, centers[info.Faces[0]], amount);

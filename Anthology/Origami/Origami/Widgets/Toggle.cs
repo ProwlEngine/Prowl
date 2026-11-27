@@ -6,6 +6,7 @@ using System;
 using Prowl.PaperUI;
 using Prowl.PaperUI.LayoutEngine;
 using Prowl.Quill;
+using Prowl.Vector;
 
 using Color = System.Drawing.Color;
 
@@ -195,11 +196,11 @@ public sealed class ToggleBuilder
     public void Show()
     {
         if (Origami.IsReadOnly) _disabled = true;
-        var ramp = _theme.Get(_variant);
-        var ink = _theme.Ink;
-        var font = _theme.Font;
-        var icons = _theme.Icons;
-        var metrics = _theme.Metrics;
+        OrigamiRamp ramp = _theme.Get(_variant);
+        OrigamiRamp ink = _theme.Ink;
+        Scribe.FontFile? font = _theme.Font;
+        OrigamiIcons icons = _theme.Icons;
+        OrigamiMetrics metrics = _theme.Metrics;
 
         bool interactive = !_disabled && !_readOnly;
         bool hasError = !string.IsNullOrEmpty(_error);
@@ -226,7 +227,7 @@ public sealed class ToggleBuilder
             .Enter())
         {
             // ── Row (focusable + clickable) ───────────────────────────
-            var row = _paper.Row("row")
+            ElementBuilder row = _paper.Row("row")
                 .Width(_stretch ? UnitValue.Stretch() : UnitValue.Auto)
                 .Height(rowH);
 
@@ -238,7 +239,7 @@ public sealed class ToggleBuilder
 
             using (row.Enter())
             {
-                var rowHandle = _paper.CurrentParent;
+                ElementHandle rowHandle = _paper.CurrentParent;
                 float t = _paper.AnimateBool(_value, 0.18f);
 
                 // Keyboard: Space toggles when focused (Tab reaches via TabIndex above).
@@ -289,9 +290,9 @@ public sealed class ToggleBuilder
 
     private void DrawLabelColumn(float leftPad, float rightPad, bool stretch)
     {
-        var ink = _theme.Ink;
-        var font = _theme.Font;
-        var metrics = _theme.Metrics;
+        OrigamiRamp ink = _theme.Ink;
+        Scribe.FontFile? font = _theme.Font;
+        OrigamiMetrics metrics = _theme.Metrics;
         if (font == null) return;
 
         bool hasDesc = !string.IsNullOrEmpty(_description);
@@ -393,14 +394,14 @@ public sealed class ToggleBuilder
 
     private void DrawSwitch(float t, OrigamiRamp ramp, OrigamiRamp ink, float leftPad, float rightPad)
     {
-        var font = _theme.Font;
-        var metrics = _theme.Metrics;
+        Scribe.FontFile? font = _theme.Font;
+        OrigamiMetrics metrics = _theme.Metrics;
 
         float trackW = _size * 1.9f;
         float trackH = _size * 1.05f;
 
         // Capture every per-frame value the closure needs — the builder doesn't survive past Show().
-        var onRamp = OnRamp();
+        OrigamiRamp onRamp = OnRamp();
         Color offBg = Color.FromArgb(26, 255, 255, 255); // light translucent pill (prototype .tg)
         Color onBg = _variant == OrigamiVariant.Subtle ? _theme.Neutral.C500 : onRamp.C500;
         Color trackBg = OrigamiRamp.LerpColor(offBg, onBg, t);
@@ -450,7 +451,7 @@ public sealed class ToggleBuilder
                 if (font != null && !string.IsNullOrEmpty(onText) && t > 0.05f)
                 {
                     float fs = fontSize - 3;
-                    var ts = canvas.MeasureText(onText!, fs, font);
+                    Float2 ts = canvas.MeasureText(onText!, fs, font);
                     float tx = x + pad + (textBoxW - (float)ts.X) * 0.5f;
                     float ty = y + (h - (float)ts.Y) * 0.5f;
                     canvas.DrawText(onText!, tx, ty, WithAlpha(textOnFg, t), fs, font);
@@ -458,7 +459,7 @@ public sealed class ToggleBuilder
                 if (font != null && !string.IsNullOrEmpty(offText) && t < 0.95f)
                 {
                     float fs = fontSize - 3;
-                    var ts = canvas.MeasureText(offText!, fs, font);
+                    Float2 ts = canvas.MeasureText(offText!, fs, font);
                     float tx = x + knob + pad + (textBoxW - (float)ts.X) * 0.5f;
                     float ty = y + (h - (float)ts.Y) * 0.5f;
                     canvas.DrawText(offText!, tx, ty, WithAlpha(textOffFg, 1f - t), fs, font);
@@ -472,7 +473,7 @@ public sealed class ToggleBuilder
                 {
                     Color gc = t > 0.5f ? onBg : glyphOffFg;
                     float fs = fontSize - 4;
-                    var ts = canvas.MeasureText(glyph!, fs, font);
+                    Float2 ts = canvas.MeasureText(glyph!, fs, font);
                     float gx = knobX + (knob - (float)ts.X) * 0.5f;
                     float gy = knobY + (knob - (float)ts.Y) * 0.5f;
                     canvas.DrawText(glyph!, gx, gy, gc, fs, font);
@@ -485,12 +486,12 @@ public sealed class ToggleBuilder
 
     private void DrawCheckbox(float t, OrigamiRamp ramp, OrigamiRamp ink, float leftPad, float rightPad)
     {
-        var metrics = _theme.Metrics;
+        OrigamiMetrics metrics = _theme.Metrics;
 
         bool isIndet = _indeterminate == true;
         float effT = isIndet ? 1f : t;
 
-        var onRamp = OnRamp();
+        OrigamiRamp onRamp = OnRamp();
         Color onColor = _variant == OrigamiVariant.Subtle ? _theme.Neutral.C500 : onRamp.C500;
         Color offColor = _theme.Neutral.C200;
         Color fill = OrigamiRamp.LerpColor(offColor, onColor, effT);
@@ -557,7 +558,7 @@ public sealed class ToggleBuilder
     private void DrawRadio(float t, OrigamiRamp ramp, OrigamiRamp ink, float leftPad, float rightPad)
     {
         // Prototype .w2rdot: 2px ring (bd-strong, accent when on) + an 8px accent dot with a glow.
-        var onRamp = OnRamp();
+        OrigamiRamp onRamp = OnRamp();
         Color onColor = _variant == OrigamiVariant.Subtle ? _theme.Neutral.C600 : onRamp.C500;
         Color offBorder = _theme.BorderStrong; // bd-strong
         Color ringCol = _disabled ? _theme.Neutral.C400 : OrigamiRamp.LerpColor(offBorder, onColor, t);

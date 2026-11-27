@@ -82,9 +82,9 @@ public sealed partial class OceanFeature
     private TextureHandle _depthHandle;
     private TextureView _depthTop = null!;
     private TextureHandle _stateHandle;
-    private readonly List<SliceDraw> _depthDraws = new();
-    private readonly List<SliceDraw> _levelDraws = new();
-    private readonly List<SliceDraw> _flowDraws = new();
+    private readonly List<SliceDraw> _depthDraws = [];
+    private readonly List<SliceDraw> _levelDraws = [];
+    private readonly List<SliceDraw> _flowDraws = [];
     private TextureHandle _levelHandle, _flowHandle;
     private Float4 _depthSlices;
     private Float2 _viewerWrapped;
@@ -99,10 +99,10 @@ public sealed partial class OceanFeature
     public Texture Flow { get; private set; } = null!;
 
     /// <summary>The currents carrying the water along. Host thread.</summary>
-    public List<OceanFlowInput> FlowInputs { get; } = new();
+    public List<OceanFlowInput> FlowInputs { get; } = [];
 
     /// <summary>The water levels of lakes and rivers. Host thread.</summary>
-    public List<OceanLevelInput> LevelInputs { get; } = new();
+    public List<OceanLevelInput> LevelInputs { get; } = [];
 
     /// <summary>
     /// What draws need of this frame's slices, written on the GPU beside them so they always match: the viewer's xz
@@ -126,7 +126,7 @@ public sealed partial class OceanFeature
     public float DepthSliceSize { get; set; } = 64f;
 
     /// <summary>The height fields the floor is read from. Host thread.</summary>
-    public List<OceanDepthInput> DepthInputs { get; } = new();
+    public List<OceanDepthInput> DepthInputs { get; } = [];
 
     /// <summary>The depth's parameters for shaders as the settings are now: the viewer's xz modulo the largest texel, the first slice's width and the resolution. Host thread.</summary>
     internal Float4 DepthParams

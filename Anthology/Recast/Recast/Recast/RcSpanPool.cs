@@ -17,22 +17,21 @@ freely, subject to the following restrictions:
 3. This notice may not be removed or altered from any source distribution.
 */
 
-namespace Prowl.Recast
-{
-    /// A memory pool used for quick allocation of spans within a heightfield.
-    /// @see rcHeightfield
-    public class RcSpanPool
-    {
-        public RcSpanPool next; //< The next span pool.
-        public readonly RcSpan[] items; //< Array of spans in the pool.
+namespace Prowl.Recast;
 
-        public RcSpanPool()
+/// A memory pool used for quick allocation of spans within a heightfield.
+/// @see rcHeightfield
+public class RcSpanPool
+{
+    public RcSpanPool next; //< The next span pool.
+    public readonly RcSpan[] items; //< Array of spans in the pool.
+
+    public RcSpanPool()
+    {
+        items = new RcSpan[RcRecast.RC_SPANS_PER_POOL];
+        for (int i = 0; i < items.Length; ++i)
         {
-            items = new RcSpan[RcRecast.RC_SPANS_PER_POOL];
-            for (int i = 0; i < items.Length; ++i)
-            {
-                items[i] = new RcSpan();
-            }
+            items[i] = new RcSpan();
         }
     }
 }

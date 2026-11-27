@@ -5,6 +5,7 @@ using Prowl.Clay.Formats.Bvh;
 using Prowl.Clay.Formats.Fbx;
 using Prowl.Clay.Formats.Gltf;
 using Prowl.Clay.Formats.Wavefront;
+using Prowl.Clay.Intermediate;
 using Prowl.Clay.PostProcess;
 
 namespace Prowl.Clay.Importer;
@@ -103,7 +104,7 @@ public static class ModelImporter
             Format = format,
         };
 
-        var scene = Guarded(() => format.Read(stream, context), "read", sourcePath, format);
+        IntermediateScene scene = Guarded(() => format.Read(stream, context), "read", sourcePath, format);
 
         return Guarded(() =>
         {

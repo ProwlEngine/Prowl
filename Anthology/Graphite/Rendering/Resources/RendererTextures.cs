@@ -11,9 +11,9 @@ internal sealed class TableRing : IDisposable
 {
     private readonly GraphicsDevice _device;
     private readonly ResourceLayoutDescription _layout;
-    private readonly Dictionary<(PropertyID Name, uint Index), object> _desired = new();
-    private readonly List<(PropertyID Name, uint Index)> _log = new();
-    private readonly List<(DescriptorTable Table, int Applied)> _tables = new();
+    private readonly Dictionary<(PropertyID Name, uint Index), object> _desired = [];
+    private readonly List<(PropertyID Name, uint Index)> _log = [];
+    private readonly List<(DescriptorTable Table, int Applied)> _tables = [];
 
     /// <summary>The LOD bias its samplers carry. Set only by the render thread, which reads it without the texture lock.</summary>
     internal float SamplerBias;
@@ -122,17 +122,17 @@ public sealed class RendererTextures : IMaterialResources, IDisposable
 
     private readonly GraphicsDevice _device;
     private readonly object _lock = new();
-    private readonly Dictionary<Texture, uint>[] _slots = [new(), new(), new(), new(), new()];
+    private readonly Dictionary<Texture, uint>[] _slots = [[], [], [], [], []];
     private readonly uint[] _nextSlot = new uint[5];
-    private readonly Dictionary<(string Name, MaterialPropertyType Type), Texture> _defaults = new();
-    private readonly Dictionary<string, Texture> _registeredDefaults = new(StringComparer.Ordinal);
-    private readonly List<Texture> _owned = new();
-    private readonly List<(SamplerDescription? Description, Sampler Sampler)> _samplers = new();
-    private readonly List<TableRing> _viewTables = new();
-    private readonly Dictionary<(int Slot, float Bias), Sampler> _biased = new();
+    private readonly Dictionary<(string Name, MaterialPropertyType Type), Texture> _defaults = [];
+    private readonly Dictionary<string, Texture> _registeredDefaults = [with(StringComparer.Ordinal)];
+    private readonly List<Texture> _owned = [];
+    private readonly List<(SamplerDescription? Description, Sampler Sampler)> _samplers = [];
+    private readonly List<TableRing> _viewTables = [];
+    private readonly Dictionary<(int Slot, float Bias), Sampler> _biased = [];
     private readonly Stack<uint>[] _freeSlots = [new(), new(), new(), new(), new()];
-    private readonly List<(ulong Execution, int Table, uint Slot)> _retiringSlots = new();
-    private readonly HashSet<uint> _shadowSlots = new();
+    private readonly List<(ulong Execution, int Table, uint Slot)> _retiringSlots = [];
+    private readonly HashSet<uint> _shadowSlots = [];
     private static readonly MaterialPropertyType[] s_tableTypes = [MaterialPropertyType.Texture2D, MaterialPropertyType.Texture2DArray, MaterialPropertyType.Texture3D, MaterialPropertyType.TextureCube, MaterialPropertyType.TextureCubeArray];
 
     // The default sampler fills slot 0 and stays its owner's
@@ -239,7 +239,7 @@ public sealed class RendererTextures : IMaterialResources, IDisposable
                 foreach (Texture texture in _slots[table].Keys)
                 {
                     if (texture.IsDisposed)
-                        (disposed ??= new()).Add(texture);
+                        (disposed ??= []).Add(texture);
                 }
                 if (disposed == null)
                     continue;

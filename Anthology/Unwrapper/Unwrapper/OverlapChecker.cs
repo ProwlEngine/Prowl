@@ -48,7 +48,7 @@ internal sealed class OverlapChecker
         var subRegions = new List<MeshRegion>();
         var subRegionFaceMap = new List<List<int>>();
         {
-            var mapFaces = new int[overlapping.Count];
+            int[] mapFaces = new int[overlapping.Count];
             for (int i = 0; i < overlapping.Count; ++i)
                 mapFaces[i] = chart.Region.Triangles[overlapping[i]];
 
@@ -111,12 +111,12 @@ internal sealed class OverlapChecker
                     ProjectTriangle(chart, triI, _countBufferExtent, uvMin, uvExt, out Double2 p0, out Double2 p1, out Double2 p2);
                     if (RasterCountTouchedPixels(p0, p1, p2) > 0)
                     {
-                        var info = queue[outer];
+                        RankedOverlap info = queue[outer];
                         info.OverlapCount++;
                         queue[outer] = info;
 
-                        if (!overlapsBetween.TryGetValue(outer, out var set))
-                            overlapsBetween[outer] = set = new HashSet<int>();
+                        if (!overlapsBetween.TryGetValue(outer, out HashSet<int>? set))
+                            overlapsBetween[outer] = set = [];
                         set.Add(inner);
                         break;
                     }
@@ -136,7 +136,7 @@ internal sealed class OverlapChecker
         for (int slot = queue.Count - 1; slot >= 0; --slot)
         {
             int compIndex = queue[slot].SubRegionIndex;
-            if (overlapsBetween.TryGetValue(compIndex, out var targetSet) && targetSet.Count > 0)
+            if (overlapsBetween.TryGetValue(compIndex, out HashSet<int>? targetSet) && targetSet.Count > 0)
             {
                 cutRegions.Add(subRegions[compIndex]);
                 subRegions[compIndex] = null!;
@@ -144,7 +144,7 @@ internal sealed class OverlapChecker
                 subRegionFaceMap[compIndex] = null!;
 
                 foreach (int other in targetSet)
-                    if (overlapsBetween.TryGetValue(other, out var otherSet)) otherSet.Remove(compIndex);
+                    if (overlapsBetween.TryGetValue(other, out HashSet<int>? otherSet)) otherSet.Remove(compIndex);
             }
         }
 

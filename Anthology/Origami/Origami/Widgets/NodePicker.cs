@@ -110,10 +110,10 @@ public static class NodePicker
     {
         if (!_isOpen || _build == null) return;
 
-        var theme = Origami.Current;
-        var font = theme.Font;
+        OrigamiTheme theme = Origami.Current;
+        Scribe.FontFile? font = theme.Font;
         if (font == null) return;
-        var m = theme.Metrics;
+        OrigamiMetrics m = theme.Metrics;
 
         var builder = new NodePickerBuilder();
         _build(builder);
@@ -174,7 +174,7 @@ public static class NodePicker
                     if (reveal && i == _highlight) Origami.ScrollIntoView("npick_list", y, y + m.RowHeight);
                     y += m.RowHeight;
 
-                    var row = paper.Box("npick_item", i).Width(UnitValue.Stretch()).Height(m.RowHeight)
+                    ElementBuilder row = paper.Box("npick_item", i).Width(UnitValue.Stretch()).Height(m.RowHeight)
                         .Padding(m.Padding, m.Padding, 0, 0).Rounded(m.SmallRounding)
                         .BackgroundColor(i == _highlight ? theme.Hover : System.Drawing.Color.Transparent)
                         .Hovered.BackgroundColor(theme.Hover).End()

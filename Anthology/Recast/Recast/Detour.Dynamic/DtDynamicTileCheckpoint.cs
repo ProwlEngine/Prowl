@@ -18,52 +18,54 @@ freely, subject to the following restrictions:
 */
 
 using System.Collections.Generic;
+
 using Prowl.Recast;
 
-namespace Prowl.Recast.Detour.Dynamic
+namespace Prowl.Recast.Detour.Dynamic;
+
+public class DtDynamicTileCheckpoint
 {
-    public class DtDynamicTileCheckpoint
+    public readonly RcHeightfield heightfield;
+    public readonly ISet<long> colliders;
+
+    public DtDynamicTileCheckpoint(RcHeightfield heightfield, ISet<long> colliders)
     {
-        public readonly RcHeightfield heightfield;
-        public readonly ISet<long> colliders;
+        this.colliders = colliders;
+        this.heightfield = Clone(heightfield);
+    }
 
-        public DtDynamicTileCheckpoint(RcHeightfield heightfield, ISet<long> colliders)
+    private RcHeightfield Clone(RcHeightfield source)
+    {
+        RcHeightfield clone = new RcHeightfield(source.width, source.height, source.bmin, source.bmax, source.cs, source.ch, source.borderSize);
+        for (int z = 0, pz = 0; z < source.height; z++, pz += source.width)
         {
-            this.colliders = colliders;
-            this.heightfield = Clone(heightfield);
-        }
-
-        private RcHeightfield Clone(RcHeightfield source)
-        {
-            RcHeightfield clone = new RcHeightfield(source.width, source.height, source.bmin, source.bmax, source.cs, source.ch, source.borderSize);
-            for (int z = 0, pz = 0; z < source.height; z++, pz += source.width)
+            for (int x = 0; x < source.width; x++)
             {
-                for (int x = 0; x < source.width; x++)
+                RcSpan span = source.spans[pz + x];
+                RcSpan prevCopy = null;
+                while (span != null)
                 {
-                    RcSpan span = source.spans[pz + x];
-                    RcSpan prevCopy = null;
-                    while (span != null)
+                    RcSpan copy = new RcSpan
                     {
-                        RcSpan copy = new RcSpan();
-                        copy.smin = span.smin;
-                        copy.smax = span.smax;
-                        copy.area = span.area;
-                        if (prevCopy == null)
-                        {
-                            clone.spans[pz + x] = copy;
-                        }
-                        else
-                        {
-                            prevCopy.next = copy;
-                        }
-
-                        prevCopy = copy;
-                        span = span.next;
+                        smin = span.smin,
+                        smax = span.smax,
+                        area = span.area
+                    };
+                    if (prevCopy == null)
+                    {
+                        clone.spans[pz + x] = copy;
                     }
+                    else
+                    {
+                        prevCopy.next = copy;
+                    }
+
+                    prevCopy = copy;
+                    span = span.next;
                 }
             }
-
-            return clone;
         }
+
+        return clone;
     }
 }

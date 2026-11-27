@@ -26,12 +26,12 @@ public readonly record struct AssemblyResolution(AssemblyResolutionKind Kind, As
 /// </summary>
 public sealed class AssemblyMap
 {
-    private readonly Dictionary<Assembly, Assembly?> _substitutions = new();
-    private readonly HashSet<Assembly> _added = new();
+    private readonly Dictionary<Assembly, Assembly?> _substitutions = [];
+    private readonly HashSet<Assembly> _added = [];
 
     internal AssemblyMap(IReadOnlyList<AssemblyChange> changes, ReportBuilder report)
     {
-        foreach (var change in changes)
+        foreach (AssemblyChange change in changes)
         {
             switch (change.Kind)
             {
@@ -64,7 +64,7 @@ public sealed class AssemblyMap
 
     public AssemblyResolution Resolve(Assembly assembly)
     {
-        if (!_substitutions.TryGetValue(assembly, out var target))
+        if (!_substitutions.TryGetValue(assembly, out Assembly? target))
             return new AssemblyResolution(AssemblyResolutionKind.Unchanged, assembly);
 
         return target == null
@@ -78,14 +78,14 @@ public sealed class AssemblyMap
     // If A becomes B and B becomes C in the same request, A resolves straight to C.
     private void Collapse(ReportBuilder report)
     {
-        foreach (var previous in _substitutions.Keys.ToArray())
+        foreach (Assembly? previous in _substitutions.Keys.ToArray())
         {
-            var target = _substitutions[previous];
+            Assembly? target = _substitutions[previous];
             if (target == null) continue;
 
             var visited = new List<Assembly> { previous };
 
-            while (target != null && _substitutions.TryGetValue(target, out var next))
+            while (target != null && _substitutions.TryGetValue(target, out Assembly? next))
             {
                 if (visited.Contains(target))
                 {
@@ -107,7 +107,7 @@ public sealed class AssemblyMap
     private static string DescribeCycle(List<Assembly> visited, Assembly repeated)
     {
         var text = new StringBuilder();
-        foreach (var assembly in visited)
+        foreach (Assembly assembly in visited)
             text.Append(assembly.GetName().Name).Append(" to ");
         return text.Append(repeated.GetName().Name).ToString();
     }
@@ -118,15 +118,15 @@ public sealed class AssemblyMap
     /// </summary>
     internal bool ReferencesSubstituted(Assembly assembly, out AssemblyName reference)
     {
-        var references = assembly.GetReferencedAssemblies();
+        AssemblyName[] references = assembly.GetReferencedAssemblies();
 
-        foreach (var candidate in references)
+        foreach (AssemblyName candidate in references)
         {
-            var substituted = _substitutions.Keys.FirstOrDefault(x => SameIdentity(x.GetName(), candidate));
+            Assembly? substituted = _substitutions.Keys.FirstOrDefault(x => SameIdentity(x.GetName(), candidate));
             if (substituted == null) continue;
 
             // Referencing both sides is deliberate, not a mistake, so it does not disqualify the assembly.
-            var replacement = _substitutions[substituted];
+            Assembly? replacement = _substitutions[substituted];
             if (replacement != null && references.Any(x => SameIdentity(x, replacement.GetName()))) continue;
 
             reference = candidate;

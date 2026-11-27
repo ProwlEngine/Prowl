@@ -15,14 +15,14 @@ namespace Prowl.Clay.Formats.Wavefront;
 /// </summary>
 internal sealed class MtlReader
 {
-    public Dictionary<string, int> MaterialIndexByName { get; } = new(StringComparer.Ordinal);
+    public Dictionary<string, int> MaterialIndexByName { get; } = [with(StringComparer.Ordinal)];
 
     private readonly IntermediateScene _scene;
     private readonly ImportContext _ctx;
     private readonly string? _mtlPath;
 
     /// <summary>Texture path -&gt; index in <see cref="IntermediateScene.Textures"/> de-dup cache.</summary>
-    private readonly Dictionary<string, int> _textureCache = new(StringComparer.OrdinalIgnoreCase);
+    private readonly Dictionary<string, int> _textureCache = [with(StringComparer.OrdinalIgnoreCase)];
 
     public MtlReader(IntermediateScene scene, ImportContext ctx, string? mtlPath)
     {
@@ -35,16 +35,16 @@ internal sealed class MtlReader
     {
         IntermediateMaterial? current = null;
 
-        foreach (var rawLine in mtlText.Split('\n'))
+        foreach (string rawLine in mtlText.Split('\n'))
         {
-            var line = rawLine.AsSpan().TrimEnd();
+            ReadOnlySpan<char> line = rawLine.AsSpan().TrimEnd();
             if (line.IsEmpty) continue;
             int hash = line.IndexOf('#');
             if (hash >= 0) line = line[..hash].TrimEnd();
             if (line.IsEmpty) continue;
 
             var tok = new ObjTokenizer(line);
-            var keyword = tok.NextToken();
+            ReadOnlySpan<char> keyword = tok.NextToken();
             if (keyword.IsEmpty) continue;
 
             if (keyword.SequenceEqual("newmtl"))
@@ -169,7 +169,7 @@ internal sealed class MtlReader
         string? path = null;
         while (!tok.AtEnd)
         {
-            var t = tok.NextToken();
+            ReadOnlySpan<char> t = tok.NextToken();
             if (t.IsEmpty) break;
             if (t[0] == '-')
             {
@@ -210,7 +210,7 @@ internal sealed class MtlReader
 
         for (int i = 0; i < maxNumeric; i++)
         {
-            var save = tok;
+            ObjTokenizer save = tok;
             if (tok.AtEnd) return;
             if (!IsNumeric(tok.NextToken()))
             {

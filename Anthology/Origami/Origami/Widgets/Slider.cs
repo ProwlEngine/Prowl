@@ -258,10 +258,10 @@ public sealed class SliderBuilder<T> where T : struct, INumber<T>
     public void Show()
     {
         if (Origami.IsReadOnly) _disabled = true;
-        var ramp = _theme.Get(_variant);
-        var ink = _theme.Ink;
-        var font = _theme.Font;
-        var metrics = _theme.Metrics;
+        OrigamiRamp ramp = _theme.Get(_variant);
+        OrigamiRamp ink = _theme.Ink;
+        Scribe.FontFile? font = _theme.Font;
+        OrigamiMetrics metrics = _theme.Metrics;
 
         bool interactive = !_disabled && !_readOnly;
         T clampedValue = SliderInternal.Clamp(_value, _min, _max);
@@ -271,7 +271,7 @@ public sealed class SliderBuilder<T> where T : struct, INumber<T>
         bool hasError = !string.IsNullOrEmpty(_error);
         if (!hasError && _validator != null)
         {
-            var (ok, msg) = _validator(clampedValue);
+            (bool ok, string? msg) = _validator(clampedValue);
             if (!ok) { hasError = true; _error = msg ?? "Invalid"; }
         }
         string? helpLine = hasError ? _error : _helperText;
@@ -288,7 +288,7 @@ public sealed class SliderBuilder<T> where T : struct, INumber<T>
             {
                 // Track box owns all interaction + the canvas-drawn track + thumb.
                 ElementHandle trackHandle = default;
-                var trackBuilder = _paper.Box("track")
+                ElementBuilder trackBuilder = _paper.Box("track")
                     .Width(UnitValue.Stretch())
                     .Height(trackRowH);
 
@@ -352,7 +352,7 @@ public sealed class SliderBuilder<T> where T : struct, INumber<T>
                 // Inline numeric field on the right.
                 if (_showValue)
                 {
-                    var nf = new NumericFieldBuilder<T>(_paper, $"{_id}_nf", clampedValue, v =>
+                    NumericFieldBuilder<T> nf = new NumericFieldBuilder<T>(_paper, $"{_id}_nf", clampedValue, v =>
                         {
                             T snapped = _step.HasValue ? SliderInternal.Snap(v, _min, _step.Value) : v;
                             _setter(SliderInternal.Clamp(snapped, _min, _max));
@@ -442,8 +442,8 @@ public sealed class SliderBuilder<T> where T : struct, INumber<T>
         float trackThicknessLocal = _trackThickness;
         bool showCustomTrack = _customTrack != null;
         bool showCustomThumb = _customThumb != null;
-        var customTrack = _customTrack;
-        var customThumb = _customThumb;
+        Action<Canvas, SliderTrackContext>? customTrack = _customTrack;
+        Action<Canvas, SliderThumbContext>? customThumb = _customThumb;
 
         bool showTooltip = _showTooltip && (isDragging || isHovered) && font != null;
         float fontSize = metrics.FontSize;
@@ -598,7 +598,7 @@ public sealed class SliderBuilder<T> where T : struct, INumber<T>
         // an instant pop. The Draw callback short-circuits when the animation is fully out.
         if (font != null)
         {
-            var thandle = _paper.CurrentParent;
+            ElementHandle thandle = _paper.CurrentParent;
             bool wantTooltip = _showTooltip && (isDragging || isHovered);
             bool vert = vertical;
             double t = valueT;
@@ -622,7 +622,7 @@ public sealed class SliderBuilder<T> where T : struct, INumber<T>
                     string tt = FormatValue(t);
                     _paper.Draw((canvas, _) =>
                     {
-                        var tr = thandle.Data.LayoutRect;
+                        Rect tr = thandle.Data.LayoutRect;
                         float trX = (float)tr.Min.X;
                         float trY = (float)tr.Min.Y;
                         float trW = (float)tr.Size.X;
@@ -641,7 +641,7 @@ public sealed class SliderBuilder<T> where T : struct, INumber<T>
                             thumbCy = trY + trH * (1f - (float)t);
                         }
 
-                        var ts = canvas.MeasureText(tt, fontSize, font);
+                        Float2 ts = canvas.MeasureText(tt, fontSize, font);
                         float padX = 6f, padY = 2f;
                         float bw = (float)ts.X + padX * 2f;
                         float bh = (float)ts.Y + padY * 2f;

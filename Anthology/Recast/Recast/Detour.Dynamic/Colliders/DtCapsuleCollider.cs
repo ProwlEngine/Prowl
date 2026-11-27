@@ -18,39 +18,39 @@ freely, subject to the following restrictions:
 */
 
 using System;
+
+using Prowl.Recast;
 using Prowl.Recast.Core;
 using Prowl.Recast.Core.Numerics;
-using Prowl.Recast;
 
-namespace Prowl.Recast.Detour.Dynamic.Colliders
+namespace Prowl.Recast.Detour.Dynamic.Colliders;
+
+public class DtCapsuleCollider : DtCollider
 {
-    public class DtCapsuleCollider : DtCollider
+    private readonly RcVec3f start;
+    private readonly RcVec3f end;
+    private readonly float radius;
+
+    public DtCapsuleCollider(RcVec3f start, RcVec3f end, float radius, int area, float flagMergeThreshold)
+        : base(area, flagMergeThreshold, Bounds(start, end, radius))
     {
-        private readonly RcVec3f start;
-        private readonly RcVec3f end;
-        private readonly float radius;
+        this.start = start;
+        this.end = end;
+        this.radius = radius;
+    }
 
-        public DtCapsuleCollider(RcVec3f start, RcVec3f end, float radius, int area, float flagMergeThreshold)
-            : base(area, flagMergeThreshold, Bounds(start, end, radius))
-        {
-            this.start = start;
-            this.end = end;
-            this.radius = radius;
-        }
+    public override void Rasterize(RcHeightfield hf, RcContext context)
+    {
+        RcFilledVolumeRasterization.RasterizeCapsule(hf, start, end, radius, area, (int)MathF.Floor(flagMergeThreshold / hf.ch), context);
+    }
 
-        public override void Rasterize(RcHeightfield hf, RcContext context)
+    private static float[] Bounds(RcVec3f start, RcVec3f end, float radius)
+    {
+        return new float[]
         {
-            RcFilledVolumeRasterization.RasterizeCapsule(hf, start, end, radius, area, (int)MathF.Floor(flagMergeThreshold / hf.ch), context);
-        }
-
-        private static float[] Bounds(RcVec3f start, RcVec3f end, float radius)
-        {
-            return new float[]
-            {
-                Math.Min(start.X, end.X) - radius, Math.Min(start.Y, end.Y) - radius,
-                Math.Min(start.Z, end.Z) - radius, Math.Max(start.X, end.X) + radius, Math.Max(start.Y, end.Y) + radius,
-                Math.Max(start.Z, end.Z) + radius
-            };
-        }
+            Math.Min(start.X, end.X) - radius, Math.Min(start.Y, end.Y) - radius,
+            Math.Min(start.Z, end.Z) - radius, Math.Max(start.X, end.X) + radius, Math.Max(start.Y, end.Y) + radius,
+            Math.Max(start.Z, end.Z) + radius
+        };
     }
 }

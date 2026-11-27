@@ -10,10 +10,10 @@ namespace Prowl.Ember;
 /// </summary>
 public sealed class ScopeRules
 {
-    private readonly Dictionary<Assembly, Func<Type, bool>?> _included = new();
-    private readonly HashSet<Assembly> _excluded = new();
-    private readonly HashSet<string> _excludedNames = new(StringComparer.OrdinalIgnoreCase);
-    private readonly List<string> _excludedPrefixes = new();
+    private readonly Dictionary<Assembly, Func<Type, bool>?> _included = [];
+    private readonly HashSet<Assembly> _excluded = [];
+    private readonly HashSet<string> _excludedNames = [with(StringComparer.OrdinalIgnoreCase)];
+    private readonly List<string> _excludedPrefixes = [];
 
     public ScopeRules()
     {
@@ -61,10 +61,10 @@ public sealed class ScopeRules
     {
         if (_excluded.Contains(assembly)) return true;
 
-        var name = assembly.GetName().Name ?? string.Empty;
+        string name = assembly.GetName().Name ?? string.Empty;
         if (_excludedNames.Contains(name)) return true;
 
-        foreach (var prefix in _excludedPrefixes)
+        foreach (string prefix in _excludedPrefixes)
             if (name.StartsWith(prefix, StringComparison.OrdinalIgnoreCase)) return true;
 
         return false;
@@ -78,7 +78,7 @@ public sealed class ScopeRules
     public bool Accepts(Type type)
     {
         if (IsExcluded(type.Assembly)) return false;
-        return !_included.TryGetValue(type.Assembly, out var filter) || filter == null || filter(type);
+        return !_included.TryGetValue(type.Assembly, out Func<Type, bool>? filter) || filter == null || filter(type);
     }
 
     /// <summary>
@@ -87,18 +87,18 @@ public sealed class ScopeRules
     /// </summary>
     internal void ApplyChanges(AssemblyMap map)
     {
-        foreach (var previous in map.Previous)
+        foreach (Assembly previous in map.Previous)
         {
-            if (!_included.TryGetValue(previous, out var filter)) continue;
+            if (!_included.TryGetValue(previous, out Func<Type, bool>? filter)) continue;
 
             _included.Remove(previous);
 
-            var resolution = map.Resolve(previous);
+            AssemblyResolution resolution = map.Resolve(previous);
             if (resolution.Kind == AssemblyResolutionKind.Substituted && resolution.Target != null)
                 _included[resolution.Target] = filter;
         }
 
-        foreach (var added in map.Added)
+        foreach (Assembly added in map.Added)
             if (!_included.ContainsKey(added))
                 _included[added] = null;
     }

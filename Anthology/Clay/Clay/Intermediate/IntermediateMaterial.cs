@@ -33,7 +33,7 @@ public sealed class IntermediateMaterial
     public IntermediateTextureSlot? EmissiveTexture { get; set; }
     public float EmissiveStrength { get; set; } = 1f;
 
-    public Dictionary<string, JsonElement> RawExtensions { get; } = new();
+    public Dictionary<string, JsonElement> RawExtensions { get; } = [];
 
     public ClearcoatExtension? Clearcoat { get; set; }
     public SheenExtension? Sheen { get; set; }

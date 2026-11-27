@@ -30,8 +30,8 @@ internal static class SignatureComparer
         {
             if (!SameShape(a.GetGenericTypeDefinition(), b.GetGenericTypeDefinition())) return false;
 
-            var left = a.GetGenericArguments();
-            var right = b.GetGenericArguments();
+            Type[] left = a.GetGenericArguments();
+            Type[] right = b.GetGenericArguments();
             if (left.Length != right.Length) return false;
 
             for (int i = 0; i < left.Length; i++)
@@ -72,8 +72,8 @@ internal static class SignatureComparer
         {
             if (!Corresponds(previous.GetGenericTypeDefinition(), current.GetGenericTypeDefinition(), map)) return false;
 
-            var left = previous.GetGenericArguments();
-            var right = current.GetGenericArguments();
+            Type[] left = previous.GetGenericArguments();
+            Type[] right = current.GetGenericArguments();
             if (left.Length != right.Length) return false;
 
             for (int i = 0; i < left.Length; i++)
@@ -90,7 +90,7 @@ internal static class SignatureComparer
         if (previous.IsGenericTypeParameter)
             return previous.GenericParameterPosition == current.GenericParameterPosition;
 
-        var resolved = map.Target(previous);
+        Type? resolved = map.Target(previous);
         return !ReferenceEquals(resolved, previous) && SameShape(resolved, current);
     }
 
@@ -106,8 +106,8 @@ internal static class SignatureComparer
         if (previousMethod is MethodInfo { IsConstructedGenericMethod: true } constructed)
             previousMethod = constructed.GetGenericMethodDefinition();
 
-        var left = previousMethod.GetParameters();
-        var right = currentMethod.GetParameters();
+        ParameterInfo[] left = previousMethod.GetParameters();
+        ParameterInfo[] right = currentMethod.GetParameters();
         if (left.Length != right.Length) return false;
 
         for (int i = 0; i < left.Length; i++)

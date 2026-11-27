@@ -26,7 +26,7 @@ public partial struct Float2x2 : System.IEquatable<Float2x2>, IFormattable
     #region Properties
 
     /// <summary>Returns a reference to the Float2 (column) at a specified index.</summary>
-    unsafe public ref Float2 this[int index]
+    public unsafe ref Float2 this[int index]
     {
         get
         {
@@ -53,7 +53,7 @@ public partial struct Float2x2 : System.IEquatable<Float2x2>, IFormattable
         {
             if ((uint)column >= 2)
                 throw new System.ArgumentOutOfRangeException(nameof(column));
-            var temp = this[column];
+            Float2 temp = this[column];
             temp[row] = value;
             this[column] = temp;
         }
@@ -135,8 +135,8 @@ public partial struct Float2x2 : System.IEquatable<Float2x2>, IFormattable
     /// <returns>The 2x2 rotation matrix.</returns>
     public static Float2x2 Rotate(float angle)
     {
-        var s = Maths.Sin(angle);
-        var c = Maths.Cos(angle);
+        float s = Maths.Sin(angle);
+        float c = Maths.Cos(angle);
 
         return new Float2x2(c, -s, s, c);
     }
@@ -185,10 +185,10 @@ public partial struct Float2x2 : System.IEquatable<Float2x2>, IFormattable
     /// <returns>True if the source matrix could be inverted; False otherwise.</returns>
     public static bool Invert(Float2x2 matrix, out Float2x2 result)
     {
-        var a = matrix.c0.X; var b = matrix.c1.X;
-        var c = matrix.c0.Y; var d = matrix.c1.Y;
+        float a = matrix.c0.X; float b = matrix.c1.X;
+        float c = matrix.c0.Y; float d = matrix.c1.Y;
 
-        var det = a * d - b * c;
+        float det = a * d - b * c;
 
         if (MathF.Abs(det) < float.Epsilon)
         {
@@ -199,7 +199,7 @@ public partial struct Float2x2 : System.IEquatable<Float2x2>, IFormattable
             return false;
         }
 
-        var invDet = 1f / det;
+        float invDet = 1f / det;
 
         result = new Float2x2(
             new Float2(d * invDet, -c * invDet),

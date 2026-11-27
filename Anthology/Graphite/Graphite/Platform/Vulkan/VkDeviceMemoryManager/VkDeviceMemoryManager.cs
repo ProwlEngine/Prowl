@@ -62,20 +62,20 @@ internal unsafe partial class VkDeviceMemoryManager : IDisposable
             {
                 MemoryAllocateInfo allocateInfo = new()
                 {
-                    SType = StructureType.MemoryAllocateInfo
+                    SType = StructureType.MemoryAllocateInfo,
+                    AllocationSize = size,
+                    MemoryTypeIndex = memoryTypeIndex
                 };
-                allocateInfo.AllocationSize = size;
-                allocateInfo.MemoryTypeIndex = memoryTypeIndex;
 
                 MemoryDedicatedAllocateInfo dedicatedAI;
                 if (dedicated)
                 {
                     dedicatedAI = new MemoryDedicatedAllocateInfo
                     {
-                        SType = StructureType.MemoryDedicatedAllocateInfo
+                        SType = StructureType.MemoryDedicatedAllocateInfo,
+                        Buffer = dedicatedBuffer,
+                        Image = dedicatedImage
                     };
-                    dedicatedAI.Buffer = dedicatedBuffer;
-                    dedicatedAI.Image = dedicatedImage;
                     allocateInfo.PNext = &dedicatedAI;
                 }
 

@@ -2,6 +2,7 @@
 // Licensed under the MIT License. See the LICENSE file in the project root for details.
 
 using System.Collections;
+using System.Reflection;
 
 namespace Prowl.Echo.Formatters;
 
@@ -12,14 +13,14 @@ internal sealed class LinkedListFormat : ISerializationFormat
 
     public EchoObject Serialize(Type? targetType, object value, SerializationContext context)
     {
-        var reference = CollectionReferences.TryWriteReference(value, context, out int id);
+        EchoObject? reference = CollectionReferences.TryWriteReference(value, context, out int id);
         if (reference != null) return reference;
 
-        var elementType = targetType!.GetGenericArguments()[0];
+        Type elementType = targetType!.GetGenericArguments()[0];
         var linkedList = (IEnumerable)value;
-        List<EchoObject> tags = new();
+        List<EchoObject> tags = [];
 
-        foreach (var item in linkedList)
+        foreach (object? item in linkedList)
         {
             tags.Add(Serializer.Serialize(elementType, item, context));
         }
@@ -29,21 +30,21 @@ internal sealed class LinkedListFormat : ISerializationFormat
 
     public object? Deserialize(EchoObject value, Type targetType, SerializationContext context)
     {
-        if (CollectionReferences.TryReadReference(value, context, out var existing))
+        if (CollectionReferences.TryReadReference(value, context, out object? existing))
             return existing;
 
         Type elementType = targetType.GetGenericArguments()[0];
-        var linkedList = Activator.CreateInstance(targetType)
+        object linkedList = Activator.CreateInstance(targetType)
             ?? throw new InvalidOperationException($"Failed to create instance of type: {targetType}");
         CollectionReferences.Register(value, linkedList, context);
 
         // Use reflection to get the AddLast method to avoid ambiguity with null values
-        var addLastMethod = targetType.GetMethod("AddLast", new[] { elementType })
+        MethodInfo addLastMethod = targetType.GetMethod("AddLast", new[] { elementType })
             ?? throw new InvalidOperationException($"AddLast method not found on type: {targetType}");
 
-        foreach (var tag in CollectionReferences.ListItems(value))
+        foreach (EchoObject tag in CollectionReferences.ListItems(value))
         {
-            var item = Serializer.Deserialize(tag, elementType, context);
+            object? item = Serializer.Deserialize(tag, elementType, context);
             addLastMethod.Invoke(linkedList, new[] { item });
         }
 

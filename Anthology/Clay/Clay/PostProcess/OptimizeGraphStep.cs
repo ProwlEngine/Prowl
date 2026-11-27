@@ -25,7 +25,7 @@ internal sealed class OptimizeGraphStep : IPostProcess
 
     public void Execute(IntermediateScene scene, ImportContext context)
     {
-        var keep = ComputeKeepSet(scene, context.Settings.OptimizeGraphPreserveNodeNames);
+        HashSet<IntermediateNode> keep = ComputeKeepSet(scene, context.Settings.OptimizeGraphPreserveNodeNames);
 
         // Walk root-first. For each node whose parent we are about to collapse, fold the parent's
         // local matrix into ours.
@@ -50,7 +50,7 @@ internal sealed class OptimizeGraphStep : IPostProcess
     {
         var keep = new HashSet<IntermediateNode>();
 
-        foreach (var node in scene.Nodes)
+        foreach (IntermediateNode node in scene.Nodes)
         {
             // A camera or light node carries no geometry, so without this it reads as a pass-through
             // and gets folded away along with the only transform that positioned it.
@@ -70,15 +70,15 @@ internal sealed class OptimizeGraphStep : IPostProcess
         }
 
         // Animation targets must be kept; we'd lose the curve mapping otherwise.
-        foreach (var anim in scene.Animations)
-            foreach (var binding in anim.Bindings)
+        foreach (IntermediateAnimation anim in scene.Animations)
+            foreach (IntermediateAnimationBinding binding in anim.Bindings)
                 if (binding.TargetNode is { } n)
                     keep.Add(n);
 
         // Skin joints + skeleton roots must be kept.
-        foreach (var skin in scene.Skins)
+        foreach (IntermediateSkin skin in scene.Skins)
         {
-            foreach (var bone in skin.BoneNodes)
+            foreach (IntermediateNode bone in skin.BoneNodes)
                 keep.Add(bone);
             if (skin.RootNode is { } sr)
                 keep.Add(sr);
@@ -88,7 +88,7 @@ internal sealed class OptimizeGraphStep : IPostProcess
         if (preserveNames.Count > 0)
         {
             var nameSet = new HashSet<string>(preserveNames, StringComparer.Ordinal);
-            foreach (var node in scene.Nodes)
+            foreach (IntermediateNode node in scene.Nodes)
                 if (nameSet.Contains(node.Name))
                     keep.Add(node);
         }
@@ -111,7 +111,7 @@ internal sealed class OptimizeGraphStep : IPostProcess
         // Replace child list iteratively, walking by index because we mutate.
         for (int i = 0; i < node.Children.Count;)
         {
-            var child = node.Children[i];
+            IntermediateNode child = node.Children[i];
 
             // First recurse so grand-children stabilize before we look at child.
             collapsed += CollapseRecursive(child, keep);
@@ -126,7 +126,7 @@ internal sealed class OptimizeGraphStep : IPostProcess
                 FoldChildIntoGrandchildren(child);
 
                 node.Children.RemoveAt(i);
-                foreach (var gc in child.Children)
+                foreach (IntermediateNode gc in child.Children)
                 {
                     gc.Parent = node;
                     node.Children.Insert(i, gc);
@@ -146,11 +146,11 @@ internal sealed class OptimizeGraphStep : IPostProcess
         // grandchild_new = child_local * grandchild_old
         Float4x4 m = Float4x4.CreateTRS(child.LocalPosition, child.LocalRotation, child.LocalScale);
 
-        foreach (var gc in child.Children)
+        foreach (IntermediateNode gc in child.Children)
         {
             Float4x4 g = Float4x4.CreateTRS(gc.LocalPosition, gc.LocalRotation, gc.LocalScale);
             Float4x4 combined = m * g;
-            SceneBakerHelpers.DecomposeMatrix(combined, out var t, out var r, out var s);
+            SceneBakerHelpers.DecomposeMatrix(combined, out Float3 t, out Quaternion r, out Float3 s);
             gc.LocalPosition = t;
             gc.LocalRotation = r;
             gc.LocalScale = s;

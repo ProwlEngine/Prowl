@@ -11,7 +11,7 @@ internal static class SplitFaceOp
     /// <summary>Splits a face along the line between two of its vertices. Returns the second of the two new faces.</summary>
     internal static GeometryData.Face? SplitFace(GeometryData mesh, GeometryData.Face face, GeometryData.Vertex vert1, GeometryData.Vertex vert2, out GeometryData.Edge? newEdge)
     {
-        var (_, second) = SplitFaceBoth(mesh, face, vert1, vert2, out newEdge);
+        (GeometryData.Face _, GeometryData.Face? second) = SplitFaceBoth(mesh, face, vert1, vert2, out newEdge);
         return second;
     }
 
@@ -27,8 +27,8 @@ internal static class SplitFaceOp
             return (null, null);
         }
 
-        var loop1 = face.GetLoop(vert1);
-        var loop2 = face.GetLoop(vert2);
+        GeometryData.Loop? loop1 = face.GetLoop(vert1);
+        GeometryData.Loop? loop2 = face.GetLoop(vert2);
         if (loop1 == null || loop2 == null)
         {
             Console.Error.WriteLine("SplitFace: one or both vertices not found in face");
@@ -46,7 +46,7 @@ internal static class SplitFaceOp
         var firstVerts = new List<GeometryData.Vertex>();
         var secondVerts = new List<GeometryData.Vertex>();
 
-        var it = loop1;
+        GeometryData.Loop it = loop1;
         while (true)
         {
             firstVerts.Add(it.Vert);
@@ -62,17 +62,17 @@ internal static class SplitFaceOp
         }
 
         mesh.RemoveFace(face);
-        var splitEdge = mesh.AddEdge(vert1, vert2);
+        GeometryData.Edge splitEdge = mesh.AddEdge(vert1, vert2);
 
-        var first = mesh.AddFace(firstVerts.ToArray());
-        var second = mesh.AddFace(secondVerts.ToArray());
+        GeometryData.Face? first = mesh.AddFace(firstVerts.ToArray());
+        GeometryData.Face? second = mesh.AddFace(secondVerts.ToArray());
         if (first == null || second == null)
         {
             Console.Error.WriteLine($"SplitFace: Failed to create faces (first={first != null}, second={second != null})");
             return (first, second);
         }
 
-        foreach (var half in new[] { first, second })
+        foreach (GeometryData.Face? half in new[] { first, second })
         {
             snapshot.ApplyFaceAttributes(half);
             FaceSnapshot.ApplyLoops(half, snapshot.LoopOf);

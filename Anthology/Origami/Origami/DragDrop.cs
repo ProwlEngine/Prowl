@@ -56,7 +56,7 @@ public static class DragDrop
     /// <summary>End the drag and consume the payload. Returns the payload or null.</summary>
     public static DragPayload? EndDrag()
     {
-        var p = Payload;
+        DragPayload? p = Payload;
         Payload = null;
         IsDragging = false;
         return p;
@@ -147,9 +147,9 @@ public static class DragDrop
     {
         if (!IsDragging || Payload == null) return;
 
-        var theme = Origami.Current;
-        var font = theme.Font;
-        var m = theme.Metrics;
+        OrigamiTheme theme = Origami.Current;
+        Scribe.FontFile? font = theme.Font;
+        OrigamiMetrics m = theme.Metrics;
         if (font == null) return;
 
         string text = Payload.DisplayName;

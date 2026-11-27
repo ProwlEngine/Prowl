@@ -147,7 +147,7 @@ public class TransformGizmo
 
     private void RecalcScaleFactor()
     {
-        var mvp = ViewProjection * Model;
+        Float4x4 mvp = ViewProjection * Model;
         float vpWidth = MathF.Max(1, Viewport.Size.X);
         ScaleFactor = mvp[3, 3] / ProjectionMatrix[0, 0] / vpWidth * 2.0f;
         FocusDistance = ScaleFactor * (StrokeWidth / 2.0f + 5.0f);
@@ -211,7 +211,7 @@ public class TransformGizmo
 
     public GizmoResult? Update(Ray ray, Float2 screenPos, bool blockPicking)
     {
-        foreach (var subGizmo in _subGizmos)
+        foreach (ISubGizmo subGizmo in _subGizmos)
             subGizmo.SetFocused(false);
 
         if (_focusedGizmo == null && !blockPicking)
@@ -219,7 +219,7 @@ public class TransformGizmo
             _hoveredGizmo = null;
 
             List<(ISubGizmo, float)> pickResults = [];
-            foreach (var subGizmo in _subGizmos)
+            foreach (ISubGizmo subGizmo in _subGizmos)
             {
                 if (subGizmo.Pick(ray, screenPos, out float t))
                     pickResults.Add((subGizmo, t));
@@ -256,7 +256,7 @@ public class TransformGizmo
     public void Draw(Prowl.Quill.Canvas canvas)
     {
         Draw3D.Begin(canvas, Viewport, ViewProjection);
-        foreach (var g in _subGizmos)
+        foreach (ISubGizmo g in _subGizmos)
             g.Draw(canvas);
     }
 }

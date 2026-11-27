@@ -101,7 +101,7 @@ public sealed class ShaderPass : IDisposable
     internal ShaderPass Copy() => new()
     {
         Name = Name,
-        Tags = Tags is null ? null : new Dictionary<string, string>(Tags),
+        Tags = Tags is null ? null : [with(Tags)],
         State = State.Clone(),
         Source = Source,
         SourceName = SourceName,
@@ -116,7 +116,7 @@ public sealed class ShaderPass : IDisposable
     private GraphicsBackend _backend;
     private PassVariants? _variants;
 
-    private Dictionary<ProgramKey, GraphicsProgram> _programCache = new();
+    private Dictionary<ProgramKey, GraphicsProgram> _programCache = [];
     private bool _created;
 
     private int _lastKey = -1;
@@ -253,7 +253,7 @@ public sealed class ShaderPass : IDisposable
         foreach (GraphicsProgram program in _programCache.Values)
             program.Dispose();
 
-        _programCache = new();
+        _programCache = [];
         _lastKey = -1;
         _lastProgram = null;
     }

@@ -260,7 +260,7 @@ public sealed class RenderView : IDisposable
     public int Order { get; set; }
 
     /// <summary>Views that draw before this one when submitted in the same frame, such as ones whose targets it samples.</summary>
-    public List<RenderView> DependsOn { get; } = new();
+    public List<RenderView> DependsOn { get; } = [];
 
     public bool IsDisposed { get; private set; }
 
@@ -270,7 +270,7 @@ public sealed class RenderView : IDisposable
     /// </summary>
     public List<RenderFeature> SkippedFeatures()
     {
-        List<RenderFeature> skipped = new();
+        List<RenderFeature> skipped = [];
         RenderPaths path = (RenderPaths)(1 << (int)Path);
         ViewKinds kind = (ViewKinds)(1 << (int)Kind);
         foreach (RenderFeature feature in World.Features)

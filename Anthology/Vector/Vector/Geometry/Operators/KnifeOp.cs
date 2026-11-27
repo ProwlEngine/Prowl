@@ -79,7 +79,7 @@ internal static class KnifeOp
             foreach (Face face in vertex.NeighborFaces())
             {
                 if (cuts != null && !cuts(face)) continue;
-                if (!onFace.TryGetValue(face, out List<Vertex>? list)) onFace[face] = list = new List<Vertex>();
+                if (!onFace.TryGetValue(face, out List<Vertex>? list)) onFace[face] = list = [];
                 list.Add(vertex);
             }
         }
@@ -126,7 +126,7 @@ internal static class KnifeOp
     {
         var found = new List<(float T, Vertex Vertex)>();
         float length = Float3.Length(plane.Normal);
-        if (length < 1e-12f) return new List<Vertex>();
+        if (length < 1e-12f) return [];
         Float3 normal = plane.Normal / length;
         float Side(Vertex v) => Float3.Dot(v.Point - plane.Point, normal);
 
@@ -162,7 +162,7 @@ internal static class KnifeOp
     // remembers what an edge was split into, so two points on one edge both find their part.
     private static Vertex OnEdge(GeometryData mesh, Edge edge, Float3 point, Dictionary<Edge, List<Edge>> pieces)
     {
-        if (!pieces.TryGetValue(edge, out List<Edge>? parts)) pieces[edge] = parts = new List<Edge> { edge };
+        if (!pieces.TryGetValue(edge, out List<Edge>? parts)) pieces[edge] = parts = [edge];
         Edge best = parts[0];
         float nearest = float.PositiveInfinity, factor = 0;
         foreach (Edge part in parts)

@@ -24,7 +24,7 @@ internal static class SvgPath
         float s = size / 16f;
         float px(double vx) => x + (float)vx * s;
         float py(double vy) => y + (float)vy * s;
-        var c32 = Color32.FromArgb(color.A, color.R, color.G, color.B);
+        Vector.Color c32 = Color32.FromArgb(color.A, color.R, color.G, color.B);
 
         vg.SaveState();
         vg.SetStrokeColor(c32);
@@ -33,7 +33,7 @@ internal static class SvgPath
         vg.SetStrokeJoint(JointStyle.Round);
         vg.SetStrokeCap(EndCapStyle.Round);
 
-        foreach (var sub in ParseCached(path))
+        foreach (Sub sub in ParseCached(path))
         {
             if (sub.Points.Count == 0) continue;
             vg.BeginPath();
@@ -53,11 +53,11 @@ internal static class SvgPath
 
     // A path string always flattens to the same points, so parse each unique path once and reuse it
     // (the result is only read during Stroke, never mutated). Bounded by the number of distinct icons.
-    private static readonly Dictionary<string, List<Sub>> _parseCache = new();
+    private static readonly Dictionary<string, List<Sub>> _parseCache = [];
 
     private static List<Sub> ParseCached(string d)
     {
-        if (!_parseCache.TryGetValue(d, out var subs))
+        if (!_parseCache.TryGetValue(d, out List<Sub>? subs))
             _parseCache[d] = subs = Parse(d);
         return subs;
     }
@@ -76,7 +76,7 @@ internal static class SvgPath
         void Flush()
         {
             if (cur.Count > 0) subs.Add(new Sub { Points = cur, Closed = closed });
-            cur = new List<(double, double)>();
+            cur = [];
             closed = false;
         }
 
@@ -268,7 +268,7 @@ internal static class SvgPath
         double cx = cosP * cxp - sinP * cyp + (x1 + x2) / 2.0;
         double cy = sinP * cxp + cosP * cyp + (y1 + y2) / 2.0;
 
-        double Angle(double ux, double uy, double vx, double vy)
+        static double Angle(double ux, double uy, double vx, double vy)
         {
             double dot = ux * vx + uy * vy;
             double len = Math.Sqrt(ux * ux + uy * uy) * Math.Sqrt(vx * vx + vy * vy);

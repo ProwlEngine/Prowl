@@ -26,8 +26,8 @@ public class JsonFileProvider : ILocalizationProvider
 
     public IReadOnlyDictionary<string, string> Load(string locale)
     {
-        var path = ResolvePath(locale);
-        var json = File.ReadAllText(path);
+        string path = ResolvePath(locale);
+        string json = File.ReadAllText(path);
         var doc = JsonDocument.Parse(json);
         var result = new Dictionary<string, string>();
         FlattenJson(doc.RootElement, "", result);
@@ -42,9 +42,9 @@ public class JsonFileProvider : ILocalizationProvider
         switch (element.ValueKind)
         {
             case JsonValueKind.Object:
-                foreach (var prop in element.EnumerateObject())
+                foreach (JsonProperty prop in element.EnumerateObject())
                 {
-                    var key = string.IsNullOrEmpty(prefix) ? prop.Name : $"{prefix}.{prop.Name}";
+                    string key = string.IsNullOrEmpty(prefix) ? prop.Name : $"{prefix}.{prop.Name}";
                     FlattenJson(prop.Value, key, result);
                 }
                 break;
@@ -78,9 +78,11 @@ public class JsonFileProvider : ILocalizationProvider
         if (_watcher is null)
         {
             string directoryPath = Path.GetDirectoryName(path) ?? throw new ArgumentException("Invalid file path.", nameof(path));
-            _watcher = new FileSystemWatcher(directoryPath);
-            _watcher.Filter = fileName;
-            _watcher.NotifyFilter = NotifyFilters.LastWrite | NotifyFilters.FileName;
+            _watcher = new FileSystemWatcher(directoryPath)
+            {
+                Filter = fileName,
+                NotifyFilter = NotifyFilters.LastWrite | NotifyFilters.FileName
+            };
             _watcher.Created += OnFileChanged;
             _watcher.Changed += OnFileChanged;
             _watcher.Renamed += OnFileRenamed;

@@ -49,7 +49,7 @@ public readonly struct HistogramBins
 
     public double[] Counts(IReadOnlyList<double> values)
     {
-        var counts = new double[Count];
+        double[] counts = new double[Count];
         if (Count == 0) return counts;
 
         double max = Edge(Count);

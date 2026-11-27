@@ -139,7 +139,7 @@ internal sealed class GltfMesh
 
 internal sealed class GltfPrimitive
 {
-    [JsonPropertyName("attributes")] public Dictionary<string, int> Attributes { get; set; } = new();
+    [JsonPropertyName("attributes")] public Dictionary<string, int> Attributes { get; set; } = [];
     [JsonPropertyName("indices")] public int? Indices { get; set; }
     [JsonPropertyName("material")] public int? Material { get; set; }
     [JsonPropertyName("mode")] public int Mode { get; set; } = 4; // TRIANGLES

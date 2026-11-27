@@ -13,12 +13,12 @@ namespace Prowl.Unwrapper;
 /// </summary>
 internal sealed class HalfEdgeMesh
 {
-    public readonly List<Vertex> Vertices = new();
-    public readonly List<HalfEdge> Edges = new();
-    public readonly List<EdgeAttribute> EdgeAttributes = new();
-    public readonly List<Double2> EdgeUVs = new();
-    public readonly List<MeshFace> Triangles = new();
-    public readonly List<FaceAttribute> FaceAttributes = new();
+    public readonly List<Vertex> Vertices = [];
+    public readonly List<HalfEdge> Edges = [];
+    public readonly List<EdgeAttribute> EdgeAttributes = [];
+    public readonly List<Double2> EdgeUVs = [];
+    public readonly List<MeshFace> Triangles = [];
+    public readonly List<FaceAttribute> FaceAttributes = [];
 
     /// <summary>Crease threshold cached so derived sub-meshes preserve it.</summary>
     public double CreaseThresholdDegrees;
@@ -76,11 +76,11 @@ internal sealed class HalfEdgeMesh
         // (do we already have an edge B→A? then it's the twin of the A→B we're about to make).
         var outgoingPerVertex = new List<List<HalfEdge>>(positionCount);
         for (int i = 0; i < positionCount; ++i)
-            outgoingPerVertex.Add(new List<HalfEdge>());
+            outgoingPerVertex.Add([]);
 
         for (int triI = 0; triI < triangleCount; ++triI)
         {
-            var face = Append(new MeshFace());
+            MeshFace face = Append(new MeshFace());
 
             Vertex a = Vertices[triangles[3 * triI + 0]];
             Vertex b = Vertices[triangles[3 * triI + 1]];
@@ -93,7 +93,7 @@ internal sealed class HalfEdgeMesh
             {
                 Vertex to = apex[side];
 
-                var edge = Append(new HalfEdge { Face = face, Apex = to });
+                HalfEdge edge = Append(new HalfEdge { Face = face, Apex = to });
                 faceEdges[side] = edge;
 
                 to.IncidentEdge = edge;
@@ -128,7 +128,7 @@ internal sealed class HalfEdgeMesh
             HalfEdge interior = Edges[heI];
             if (interior.Twin is null)
             {
-                var border = Append(new HalfEdge());
+                HalfEdge border = Append(new HalfEdge());
                 MeshOps.StitchTwins(border, interior);
                 border.Apex = interior.Previous!.Apex;
                 outgoingPerVertex[interior.Apex!.Index].Add(border);
@@ -189,12 +189,12 @@ internal sealed class HalfEdgeMesh
             int fanGuard = remaining.Count + 16;
             while (remaining.Count > 0 && fanGuard-- > 0)
             {
-                var twin = Append(new Vertex(original.Position, original.SourceIndex));
+                Vertex twin = Append(new Vertex(original.Position, original.SourceIndex));
                 var twinStar = new List<HalfEdge>();
                 outgoingPerVertex.Add(twinStar);
 
                 HalfEdge startEdge = default!;
-                foreach (var first in remaining) { startEdge = first; break; }
+                foreach (HalfEdge first in remaining) { startEdge = first; break; }
                 int before = remaining.Count;
                 PeelFan(twin, startEdge, remaining, twinStar, peelCap);
                 if (remaining.Count == before)
@@ -243,12 +243,12 @@ internal sealed class HalfEdgeMesh
 
             if (fromUv != twinFromUv || toUv != twinToUv)
             {
-                var info = EdgeAttributes[heI];
+                EdgeAttribute info = EdgeAttributes[heI];
                 info.IsUvSeam = true;
                 EdgeAttributes[heI] = info;
 
                 int twinSlot = IndexOf(twin);
-                var twinInfo = EdgeAttributes[twinSlot];
+                EdgeAttribute twinInfo = EdgeAttributes[twinSlot];
                 twinInfo.IsUvSeam = true;
                 EdgeAttributes[twinSlot] = twinInfo;
             }
@@ -259,7 +259,7 @@ internal sealed class HalfEdgeMesh
         for (int heI = 0; heI < Edges.Count; ++heI)
         {
             HalfEdge edge = Edges[heI];
-            var info = EdgeAttributes[heI];
+            EdgeAttribute info = EdgeAttributes[heI];
 
             info.IsCrease = true;
             if (MeshOps.IsBorderEdge(edge) || MeshOps.IsBorderEdge(edge.Twin!))
@@ -280,7 +280,7 @@ internal sealed class HalfEdgeMesh
         // Cache per-edge length.
         for (int heI = 0; heI < Edges.Count; ++heI)
         {
-            var info = EdgeAttributes[heI];
+            EdgeAttribute info = EdgeAttributes[heI];
             info.Length = Double3.Length(MeshOps.EdgeVector(Edges[heI]));
             EdgeAttributes[heI] = info;
         }
@@ -417,7 +417,7 @@ internal sealed class HalfEdgeMesh
         int[] regionId = new int[mesh.Triangles.Count];
         for (int i = 0; i < regionId.Length; ++i) regionId[i] = -1;
         for (int i = 0; i < sourceFacets.Count; ++i) regionId[sourceFacets[i]] = -2;
-        foreach (var region in cutoutRegions)
+        foreach (MeshRegion region in cutoutRegions)
             foreach (int facet in region.Triangles)
                 regionId[facet] = -3;
 

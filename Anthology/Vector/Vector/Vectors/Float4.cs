@@ -97,7 +97,7 @@ public partial struct Float4 : IEquatable<Float4>, IFormattable
 
     public Float4(IEnumerable<float> values)
     {
-        var array = values.ToArray();
+        float[] array = values.ToArray();
         if (array.Length < 4) throw new ArgumentException("Collection must contain at least 4 elements.", nameof(values));
         X = array[0];
         Y = array[1];

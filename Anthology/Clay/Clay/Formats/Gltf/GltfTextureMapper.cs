@@ -26,7 +26,7 @@ internal static class GltfTextureMapper
 
         for (int t = 0; t < dom.Textures.Length; t++)
         {
-            var tex = dom.Textures[t];
+            GltfTexture tex = dom.Textures[t];
             var inter = new IntermediateTexture
             {
                 Name = tex.Name,
@@ -35,10 +35,10 @@ internal static class GltfTextureMapper
 
             if (tex.Source is { } sourceIndex && dom.Images is { } images && (uint)sourceIndex < (uint)images.Length)
             {
-                var image = images[sourceIndex];
+                GltfImage image = images[sourceIndex];
                 inter.Name ??= image.Name;
 
-                if (!imageCache.TryGetValue(sourceIndex, out var resolved))
+                if (!imageCache.TryGetValue(sourceIndex, out ResolvedImage resolved))
                 {
                     resolved = ResolveImage(image, buffers, ctx);
                     imageCache[sourceIndex] = resolved;
@@ -85,7 +85,7 @@ internal static class GltfTextureMapper
 
         if (image.BufferView is { } viewIndex)
         {
-            var view = buffers.GetBufferView(viewIndex);
+            GltfBufferView view = buffers.GetBufferView(viewIndex);
             return new ResolvedImage(buffers.GetBufferView(view).ToArray(), null, image.MimeType);
         }
 
@@ -99,7 +99,7 @@ internal static class GltfTextureMapper
         if (samplerIndex is not { } idx || dom.Samplers is not { } samplers || (uint)idx >= (uint)samplers.Length)
             return s;
 
-        var gs = samplers[idx];
+        GltfSampler gs = samplers[idx];
 
         s.WrapU = MapWrap(gs.WrapS);
         s.WrapV = MapWrap(gs.WrapT);

@@ -25,9 +25,9 @@ namespace Prowl.Courier;
 /// </remarks>
 public abstract class Transport : IDisposable
 {
-    private readonly Dictionary<int, Connection> _connections = new();
+    private readonly Dictionary<int, Connection> _connections = [];
     private readonly Queue<PendingEvent> _events = new();
-    private readonly Dictionary<Connection, (int Count, long Bytes)> _queuedData = new();
+    private readonly Dictionary<Connection, (int Count, long Bytes)> _queuedData = [];
     private bool _disposed;
 
     /// <summary>Maximum pooled data buffer bytes queued by the whole transport.</summary>

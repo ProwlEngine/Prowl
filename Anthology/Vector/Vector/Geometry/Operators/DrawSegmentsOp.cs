@@ -5,11 +5,11 @@ using System;
 using System.Collections.Generic;
 using System.Linq;
 
+using static Prowl.Vector.Geometry.Operators.EditingCommon;
+
 using Edge = Prowl.Vector.Geometry.GeometryData.Edge;
 using Face = Prowl.Vector.Geometry.GeometryData.Face;
 using Vertex = Prowl.Vector.Geometry.GeometryData.Vertex;
-
-using static Prowl.Vector.Geometry.Operators.EditingCommon;
 
 namespace Prowl.Vector.Geometry.Operators;
 
@@ -174,7 +174,7 @@ internal static class DrawSegmentsOp
         foreach (Edge edge in edges)
             foreach (Vertex end in (Vertex[])[edge.Vert1, edge.Vert2])
             {
-                if (!around.TryGetValue(end, out List<Edge>? list)) around[end] = list = new List<Edge>();
+                if (!around.TryGetValue(end, out List<Edge>? list)) around[end] = list = [];
                 list.Add(edge);
             }
         List<Vertex> tips = [.. around.Where(p => p.Value.Count == 1).Select(p => p.Key)];

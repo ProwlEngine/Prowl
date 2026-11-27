@@ -26,8 +26,8 @@ internal sealed class DateTimeOffsetFormat : ISerializationFormat
     {
         if (value.TagType == EchoType.Compound)
         {
-            if (value.TryGet("ticks", out var ticksTag) && ticksTag.TagType == EchoType.Long &&
-                value.TryGet("offset", out var offsetTag) && offsetTag.TagType == EchoType.Long)
+            if (value.TryGet("ticks", out EchoObject? ticksTag) && ticksTag.TagType == EchoType.Long &&
+                value.TryGet("offset", out EchoObject? offsetTag) && offsetTag.TagType == EchoType.Long)
             {
                 long ticks = ticksTag.LongValue;
                 long offsetTicks = offsetTag.LongValue;

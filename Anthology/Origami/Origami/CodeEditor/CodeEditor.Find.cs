@@ -44,7 +44,7 @@ public sealed partial class CodeEditor
         if (query.Length == 0) return null;
         string pattern = regex ? query : Regex.Escape(query);
         if (wholeWord) pattern = $@"(?<![\w]){pattern}(?![\w])";
-        var options = RegexOptions.CultureInvariant | (caseSensitive ? RegexOptions.None : RegexOptions.IgnoreCase);
+        RegexOptions options = RegexOptions.CultureInvariant | (caseSensitive ? RegexOptions.None : RegexOptions.IgnoreCase);
         if (_findRegex != null && _findRegexSource == pattern && _findRegexOptions == options) return _findRegex;
         try
         {
@@ -67,10 +67,10 @@ public sealed partial class CodeEditor
     // Huge files would stall a frame per keystroke, so counting runs on a snapshot off the UI thread.
     private void CountMatchesInBackground(string key)
     {
-        var regex = CurrentRegex();
+        Regex? regex = CurrentRegex();
         if (regex == null) { _findCount = 0; return; }
         if (Document.LineCount < 20000) { _findCount = CountMatches(regex, null); return; }
-        var lines = Document.Snapshot();
+        string[] lines = Document.Snapshot();
         int version = Document.Version;
         System.Threading.Tasks.Task.Run(() => CountMatches(regex, lines)).ContinueWith(t =>
         {
@@ -88,7 +88,7 @@ public sealed partial class CodeEditor
             {
                 string s = lines != null ? lines[line] : Document[line];
                 if (s.Length == 0) continue;
-                for (var m = regex.Match(s); m.Success && count < FindCountLimit; m = m.NextMatch())
+                for (Match m = regex.Match(s); m.Success && count < FindCountLimit; m = m.NextMatch())
                     if (m.Length > 0) count++;
             }
         }
@@ -100,13 +100,13 @@ public sealed partial class CodeEditor
     internal void LineMatches(int line, List<(int Start, int Length)> into)
     {
         into.Clear();
-        var regex = CurrentRegex();
+        Regex? regex = CurrentRegex();
         if (regex == null) return;
         string s = Document[line];
         if (s.Length == 0) return;
         try
         {
-            for (var m = regex.Match(s); m.Success; m = m.NextMatch())
+            for (Match m = regex.Match(s); m.Success; m = m.NextMatch())
                 if (m.Length > 0) into.Add((m.Index, m.Length));
         }
         catch (RegexMatchTimeoutException) { }
@@ -133,7 +133,7 @@ public sealed partial class CodeEditor
                     if (line >= count) { if (!wrap) return null; line -= count; }
                     string s = Document[line];
                     int startCol = n == 0 ? Math.Min(from.Column, s.Length) : 0;
-                    for (var m = regex.Match(s, startCol); m.Success; m = m.NextMatch())
+                    for (Match m = regex.Match(s, startCol); m.Success; m = m.NextMatch())
                     {
                         if (m.Length == 0) continue;
                         if (n == count && m.Index >= from.Column) return null;
@@ -150,7 +150,7 @@ public sealed partial class CodeEditor
                     string s = Document[line];
                     int limit = n == 0 ? from.Column : int.MaxValue;
                     Match? best = null;
-                    for (var m = regex.Match(s); m.Success; m = m.NextMatch())
+                    for (Match m = regex.Match(s); m.Success; m = m.NextMatch())
                     {
                         if (m.Length == 0) continue;
                         if (m.Index + m.Length > limit) break;
@@ -167,11 +167,11 @@ public sealed partial class CodeEditor
     /// <summary>Selects the next match of <see cref="FindQuery"/> after the caret.</summary>
     public bool FindNextMatch(bool forward = true)
     {
-        var regex = CurrentRegex();
+        Regex? regex = CurrentRegex();
         if (regex == null) return false;
-        var s = Selection;
-        var from = forward ? s.End : s.Start;
-        var found = Search(regex, from, forward, true);
+        CodeSelection s = Selection;
+        TextPosition from = forward ? s.End : s.Start;
+        TextRange? found = Search(regex, from, forward, true);
         if (found == null) return false;
         Select(found.Value.Start, found.Value.End);
         CenterOnCaret(onlyIfOffscreen: true);
@@ -192,15 +192,15 @@ public sealed partial class CodeEditor
 
     private int ComputeMatchIndex()
     {
-        var regex = CurrentRegex();
+        Regex? regex = CurrentRegex();
         if (regex == null || Selection.IsEmpty) return 0;
-        var sel = Selection.Range;
+        TextRange sel = Selection.Range;
         int index = 0;
         try
         {
             for (int line = 0; line <= sel.Start.Line && line < Document.LineCount; line++)
             {
-                for (var m = regex.Match(Document[line]); m.Success; m = m.NextMatch())
+                for (Match m = regex.Match(Document[line]); m.Success; m = m.NextMatch())
                 {
                     if (m.Length == 0) continue;
                     index++;
@@ -218,9 +218,9 @@ public sealed partial class CodeEditor
     /// <summary>Replaces the selected match, if it is one, then moves to the next.</summary>
     public void ReplaceNext()
     {
-        var regex = CurrentRegex();
+        Regex? regex = CurrentRegex();
         if (regex == null || IsReadOnly) return;
-        var sel = Selection.Range;
+        TextRange sel = Selection.Range;
         if (!sel.IsEmpty && sel.IsSingleLine)
         {
             string line = Document[sel.Start.Line];
@@ -232,7 +232,7 @@ public sealed partial class CodeEditor
                 string replacement = ExpandReplacement(m);
                 Edit(CodeEditKind.Other, () =>
                 {
-                    var c = Document.Replace(sel, replacement);
+                    TextChange c = Document.Replace(sel, replacement);
                     _selections.Clear();
                     _selections.Add(new CodeSelection(c.NewEnd));
                     _primary = 0;
@@ -244,7 +244,7 @@ public sealed partial class CodeEditor
 
     public int ReplaceAll()
     {
-        var regex = CurrentRegex();
+        Regex? regex = CurrentRegex();
         if (regex == null || IsReadOnly) return 0;
         int replaced = 0;
         Edit(CodeEditKind.Other, () =>
@@ -258,7 +258,7 @@ public sealed partial class CodeEditor
                 catch (RegexMatchTimeoutException) { continue; }
                 for (int i = matches.Count - 1; i >= 0; i--)
                 {
-                    var m = matches[i];
+                    Match m = matches[i];
                     if (m.Length == 0) continue;
                     Document.Replace(new TextRange(line, m.Index, line, m.Index + m.Length), ExpandReplacement(m));
                     replaced++;
@@ -271,13 +271,13 @@ public sealed partial class CodeEditor
     /// <summary>Puts a caret on every match of the current query.</summary>
     public void SelectAllMatches()
     {
-        var regex = CurrentRegex();
+        Regex? regex = CurrentRegex();
         if (regex == null) return;
         var found = new List<CodeSelection>();
         try
         {
             for (int line = 0; line < Document.LineCount && found.Count < 10000; line++)
-                for (var m = regex.Match(Document[line]); m.Success; m = m.NextMatch())
+                for (Match m = regex.Match(Document[line]); m.Success; m = m.NextMatch())
                     if (m.Length > 0) found.Add(new CodeSelection(new TextPosition(line, m.Index), new TextPosition(line, m.Index + m.Length)));
         }
         catch (RegexMatchTimeoutException) { }

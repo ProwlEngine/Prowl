@@ -79,8 +79,8 @@ internal sealed class UniformBindingPlan
         int[][] elementBlock = new int[layouts.Length][];
         int[][] order = new int[layouts.Length][];
         int[][] setBlocks = new int[layouts.Length][];
-        System.Collections.Generic.List<UniformBlockLayout> layoutList = new();
-        System.Collections.Generic.List<(PropertyID Name, UniformFieldTarget Target)> fields = new();
+        System.Collections.Generic.List<UniformBlockLayout> layoutList = [];
+        System.Collections.Generic.List<(PropertyID Name, UniformFieldTarget Target)> fields = [];
 
         for (int s = 0; s < layouts.Length; s++)
         {

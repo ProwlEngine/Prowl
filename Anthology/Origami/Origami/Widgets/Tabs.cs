@@ -7,6 +7,7 @@ using System.Collections.Generic;
 using Prowl.PaperUI;
 using Prowl.PaperUI.LayoutEngine;
 using Prowl.Quill;
+using Prowl.Scribe;
 using Prowl.Vector;
 
 using Color = System.Drawing.Color;
@@ -44,7 +45,7 @@ public sealed class TabsBuilder
     private Action<int>? _onClose;
     private Action<int, Float2>? _onTabPress;
 
-    private readonly List<TabItem> _items = new();
+    private readonly List<TabItem> _items = [];
 
     internal TabsBuilder(Paper paper, string id, int selectedIndex, Action<int> onSelect, OrigamiTheme theme)
     {
@@ -84,11 +85,11 @@ public sealed class TabsBuilder
     public void Show()
     {
         if (_items.Count == 0) return;
-        var metrics = _theme.Metrics;
-        var font = _theme.Font;
+        OrigamiMetrics metrics = _theme.Metrics;
+        FontFile? font = _theme.Font;
         bool isDefault = _variant == OrigamiVariant.Default;
         bool isSubtle = _variant == OrigamiVariant.Subtle;
-        var accent = (isDefault || isSubtle) ? _theme.Primary : _theme.Get(_variant);
+        OrigamiRamp accent = (isDefault || isSubtle) ? _theme.Primary : _theme.Get(_variant);
         float fs = metrics.FontSize;
 
         if (_style == TabsStyle.Pills)
@@ -150,7 +151,7 @@ public sealed class TabsBuilder
 
     private void Tab(int i, float th, float padX, float fs, OrigamiRamp accent, Prowl.Scribe.FontFile? font, bool pills)
     {
-        var item = _items[i];
+        TabItem item = _items[i];
         bool isSelected = i == _selectedIndex;
         bool closeable = _onClose != null;
         float closeSize = closeable ? 15f : 0f;
@@ -165,7 +166,7 @@ public sealed class TabsBuilder
         float tabW = padX * 2f + (hasIcon ? fs + 7f : 0f) + labelW + badgeW + (closeable ? closeSize + 4f : 0f);
 
         int idx = i;
-        var tabBox = _paper.Box($"{_id}_t{i}")
+        ElementBuilder tabBox = _paper.Box($"{_id}_t{i}")
             .Width(tabW).Height(pills ? UnitValue.Stretch() : th)
             .OnClick(_ => _onSelect(idx))
             .Cursor(PaperCursor.Pointer);
@@ -175,7 +176,7 @@ public sealed class TabsBuilder
 
         using (tabBox.Enter())
         {
-            var handle = _paper.CurrentParent;
+            ElementHandle handle = _paper.CurrentParent;
             bool hovered = _paper.IsParentHovered;
             float hoverT = _paper.AnimateBool(hovered, 0.10f);
             float selT = _paper.AnimateBool(isSelected, 0.15f);
@@ -201,7 +202,7 @@ public sealed class TabsBuilder
 
             if (closeable && (isSelected || hovered))
             {
-                var onClose = _onClose!;
+                Action<int> onClose = _onClose!;
                 _paper.Box("x", i)
                     .PositionType(PositionType.SelfDirected)
                     .Position(tabW - closeSize - padX + 4f, (th - closeSize) * 0.5f)
@@ -244,7 +245,7 @@ public sealed class TabsBuilder
     {
         float x = (float)rect.Min.X, y = (float)rect.Min.Y;
         float w = (float)rect.Size.X, h = (float)rect.Size.Y;
-        var ink = s.Theme.Ink;
+        OrigamiRamp ink = s.Theme.Ink;
         Color acc = s.Accent.C500;
 
         Color labelCol;
@@ -300,7 +301,7 @@ public sealed class TabsBuilder
             float bh = bfs + 7f, bw = badgeTextW + 14f;
             float bx = cx + 8f, by = y + (h - bh) * 0.5f;
             canvas.RoundedRectFilled(bx, by, bw, bh, MathF.Min(bh * 0.5f, s.Theme.Metrics.SmallRounding * 3f), Color.FromArgb(45, acc.R, acc.G, acc.B));
-            var bts = canvas.MeasureText(s.Badge!, bfs, s.Font);
+            Float2 bts = canvas.MeasureText(s.Badge!, bfs, s.Font);
             canvas.DrawText(s.Badge!, bx + (bw - (float)bts.X) * 0.5f, by + (bh - (float)bts.Y) * 0.5f, s.Accent.C700, bfs, s.Font);
         }
     }

@@ -54,7 +54,7 @@ public sealed class SpirVModule
     /// <summary>Copies the module to a little-endian byte array (SPIR-V is little-endian on disk).</summary>
     public byte[] ToBytes()
     {
-        var bytes = new byte[_words.Length * sizeof(uint)];
+        byte[] bytes = new byte[_words.Length * sizeof(uint)];
         for (int i = 0; i < _words.Length; i++)
             BinaryPrimitives.WriteUInt32LittleEndian(bytes.AsSpan(i * sizeof(uint)), _words[i]);
         return bytes;
@@ -66,7 +66,7 @@ public sealed class SpirVModule
         if (bytes.Length % sizeof(uint) != 0)
             throw new ArgumentException("SPIR-V byte length must be a multiple of 4.", nameof(bytes));
 
-        var words = new uint[bytes.Length / sizeof(uint)];
+        uint[] words = new uint[bytes.Length / sizeof(uint)];
 
         // A valid module starts with the magic number; its byte order tells us the
         // endianness the buffer was written in so we can decode either way.
@@ -76,7 +76,7 @@ public sealed class SpirVModule
 
         for (int i = 0; i < words.Length; i++)
         {
-            var word = bytes.Slice(i * sizeof(uint), sizeof(uint));
+            ReadOnlySpan<byte> word = bytes.Slice(i * sizeof(uint), sizeof(uint));
             words[i] = bigEndian
                 ? BinaryPrimitives.ReadUInt32BigEndian(word)
                 : BinaryPrimitives.ReadUInt32LittleEndian(word);

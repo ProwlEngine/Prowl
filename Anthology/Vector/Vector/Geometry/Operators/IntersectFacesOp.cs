@@ -5,11 +5,11 @@ using System;
 using System.Collections.Generic;
 using System.Linq;
 
+using static Prowl.Vector.Geometry.Operators.EditingCommon;
+
 using Edge = Prowl.Vector.Geometry.GeometryData.Edge;
 using Face = Prowl.Vector.Geometry.GeometryData.Face;
 using Vertex = Prowl.Vector.Geometry.GeometryData.Vertex;
-
-using static Prowl.Vector.Geometry.Operators.EditingCommon;
 
 namespace Prowl.Vector.Geometry.Operators;
 
@@ -26,7 +26,7 @@ internal static class IntersectFacesOp
         var points = faces.Select(f => f.NeighborVertices().Select(v => v.Point).ToList()).ToList();
         var normals = faces.Select(f => Float3.Normalize(f.Normal())).ToList();
         var boxes = points.Select(p => (Min: p.Aggregate(Maths.Min), Max: p.Aggregate(Maths.Max))).ToList();
-        var chosen = only == null ? null : GeometryData.LogicalFaces(only).ToHashSet();
+        HashSet<Face>? chosen = only == null ? null : GeometryData.LogicalFaces(only).ToHashSet();
 
         var segments = new List<(Float3 A, Float3 B)>();
         for (int i = 0; i < faces.Count; i++)

@@ -19,10 +19,9 @@ freely, subject to the following restrictions:
 
 using Prowl.Recast.Core.Numerics;
 
-namespace Prowl.Recast.Detour
+namespace Prowl.Recast.Detour;
+
+public interface IDtQueryHeuristic
 {
-    public interface IDtQueryHeuristic
-    {
-        float GetCost(RcVec3f neighbourPos, RcVec3f endPos);
-    }
+    float GetCost(RcVec3f neighbourPos, RcVec3f endPos);
 }

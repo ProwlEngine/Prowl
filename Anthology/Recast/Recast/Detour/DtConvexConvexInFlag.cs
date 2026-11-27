@@ -1,9 +1,8 @@
-namespace Prowl.Recast.Detour
+namespace Prowl.Recast.Detour;
+
+public enum DtConvexConvexInFlag
 {
-    public enum DtConvexConvexInFlag
-    {
-        Pin,
-        Qin,
-        Unknown,
-    }
+    Pin,
+    Qin,
+    Unknown,
 }

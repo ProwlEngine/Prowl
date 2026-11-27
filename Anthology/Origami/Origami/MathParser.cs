@@ -43,16 +43,16 @@ internal static partial class MathParser
 
     private static double Evaluate(string expression)
     {
-        var clean = Whitespace().Replace(expression, "");
-        var tokens = Tokenize(clean);
-        var postfix = ShuntingYard(tokens);
+        string clean = Whitespace().Replace(expression, "");
+        List<string> tokens = Tokenize(clean);
+        List<string> postfix = ShuntingYard(tokens);
         return EvaluatePostfix(postfix);
     }
 
     private static List<string> Tokenize(string expression)
     {
         var tokens = new List<string>();
-        var matches = Token().Matches(expression);
+        MatchCollection matches = Token().Matches(expression);
 
         for (int i = 0; i < matches.Count; i++)
         {

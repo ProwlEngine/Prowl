@@ -33,15 +33,15 @@ internal sealed class VersionFormat : ISerializationFormat
     {
         if (value.TagType == EchoType.Compound)
         {
-            if (value.TryGet("major", out var majorTag) && majorTag.TagType == EchoType.Int &&
-                value.TryGet("minor", out var minorTag) && minorTag.TagType == EchoType.Int)
+            if (value.TryGet("major", out EchoObject? majorTag) && majorTag.TagType == EchoType.Int &&
+                value.TryGet("minor", out EchoObject? minorTag) && minorTag.TagType == EchoType.Int)
             {
                 int major = majorTag.IntValue;
                 int minor = minorTag.IntValue;
 
                 // Check for build and revision
-                bool hasBuild = value.TryGet("build", out var buildTag) && buildTag.TagType == EchoType.Int;
-                bool hasRevision = value.TryGet("revision", out var revisionTag) && revisionTag.TagType == EchoType.Int;
+                bool hasBuild = value.TryGet("build", out EchoObject? buildTag) && buildTag.TagType == EchoType.Int;
+                bool hasRevision = value.TryGet("revision", out EchoObject? revisionTag) && revisionTag.TagType == EchoType.Int;
 
                 if (hasRevision && hasBuild)
                 {

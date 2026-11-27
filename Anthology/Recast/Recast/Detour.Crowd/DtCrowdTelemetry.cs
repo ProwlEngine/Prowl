@@ -20,76 +20,76 @@ freely, subject to the following restrictions:
 using System;
 using System.Collections.Generic;
 using System.Linq;
+
 using Prowl.Recast.Core;
 using Prowl.Recast.Core.Buffers;
 
-namespace Prowl.Recast.Detour.Crowd
+namespace Prowl.Recast.Detour.Crowd;
+
+public class DtCrowdTelemetry
 {
-    public class DtCrowdTelemetry
+    public const int TIMING_SAMPLES = 10;
+    private float _maxTimeToEnqueueRequest;
+    private float _maxTimeToFindPath;
+
+    private readonly Dictionary<DtCrowdTimerLabel, long> _executionTimings = [];
+    private readonly Dictionary<DtCrowdTimerLabel, RcCyclicBuffer<long>> _executionTimingSamples = [];
+
+    public float MaxTimeToEnqueueRequest()
     {
-        public const int TIMING_SAMPLES = 10;
-        private float _maxTimeToEnqueueRequest;
-        private float _maxTimeToFindPath;
+        return _maxTimeToEnqueueRequest;
+    }
 
-        private readonly Dictionary<DtCrowdTimerLabel, long> _executionTimings = new Dictionary<DtCrowdTimerLabel, long>();
-        private readonly Dictionary<DtCrowdTimerLabel, RcCyclicBuffer<long>> _executionTimingSamples = new Dictionary<DtCrowdTimerLabel, RcCyclicBuffer<long>>();
+    public float MaxTimeToFindPath()
+    {
+        return _maxTimeToFindPath;
+    }
 
-        public float MaxTimeToEnqueueRequest()
+    public List<RcTelemetryTick> ToExecutionTimings()
+    {
+        return _executionTimings
+            .Select(e => new RcTelemetryTick(e.Key.Label, e.Value))
+            .OrderByDescending(x => x.Ticks)
+            .ToList();
+    }
+
+    public void Start()
+    {
+        _maxTimeToEnqueueRequest = 0;
+        _maxTimeToFindPath = 0;
+        _executionTimings.Clear();
+    }
+
+    public void RecordMaxTimeToEnqueueRequest(float time)
+    {
+        _maxTimeToEnqueueRequest = Math.Max(_maxTimeToEnqueueRequest, time);
+    }
+
+    public void RecordMaxTimeToFindPath(float time)
+    {
+        _maxTimeToFindPath = Math.Max(_maxTimeToFindPath, time);
+    }
+
+    internal DtCrowdScopedTimer ScopedTimer(DtCrowdTimerLabel label)
+    {
+        return new DtCrowdScopedTimer(this, label);
+    }
+
+    internal void Start(DtCrowdTimerLabel name)
+    {
+        _executionTimings.Add(name, RcFrequency.Ticks);
+    }
+
+    internal void Stop(DtCrowdTimerLabel name)
+    {
+        long duration = RcFrequency.Ticks - _executionTimings[name];
+        if (!_executionTimingSamples.TryGetValue(name, out RcCyclicBuffer<long> cb))
         {
-            return _maxTimeToEnqueueRequest;
+            cb = new RcCyclicBuffer<long>(TIMING_SAMPLES);
+            _executionTimingSamples.Add(name, cb);
         }
 
-        public float MaxTimeToFindPath()
-        {
-            return _maxTimeToFindPath;
-        }
-
-        public List<RcTelemetryTick> ToExecutionTimings()
-        {
-            return _executionTimings
-                .Select(e => new RcTelemetryTick(e.Key.Label, e.Value))
-                .OrderByDescending(x => x.Ticks)
-                .ToList();
-        }
-
-        public void Start()
-        {
-            _maxTimeToEnqueueRequest = 0;
-            _maxTimeToFindPath = 0;
-            _executionTimings.Clear();
-        }
-
-        public void RecordMaxTimeToEnqueueRequest(float time)
-        {
-            _maxTimeToEnqueueRequest = Math.Max(_maxTimeToEnqueueRequest, time);
-        }
-
-        public void RecordMaxTimeToFindPath(float time)
-        {
-            _maxTimeToFindPath = Math.Max(_maxTimeToFindPath, time);
-        }
-
-        internal DtCrowdScopedTimer ScopedTimer(DtCrowdTimerLabel label)
-        {
-            return new DtCrowdScopedTimer(this, label);
-        }
-
-        internal void Start(DtCrowdTimerLabel name)
-        {
-            _executionTimings.Add(name, RcFrequency.Ticks);
-        }
-
-        internal void Stop(DtCrowdTimerLabel name)
-        {
-            long duration = RcFrequency.Ticks - _executionTimings[name];
-            if (!_executionTimingSamples.TryGetValue(name, out var cb))
-            {
-                cb = new RcCyclicBuffer<long>(TIMING_SAMPLES);
-                _executionTimingSamples.Add(name, cb);
-            }
-
-            cb.PushBack(duration);
-            _executionTimings[name] = (long)cb.Average();
-        }
+        cb.PushBack(duration);
+        _executionTimings[name] = (long)cb.Average();
     }
 }

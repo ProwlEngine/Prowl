@@ -23,7 +23,7 @@ internal sealed class TriangulateStep : IPostProcess
 
     public void Execute(IntermediateScene scene, ImportContext context)
     {
-        foreach (var mesh in scene.Meshes)
+        foreach (IntermediateMesh mesh in scene.Meshes)
         {
             if (HasPolygons(mesh.Faces))
                 mesh.Faces = Triangulate(mesh, context);
@@ -35,7 +35,7 @@ internal sealed class TriangulateStep : IPostProcess
 
     private static bool HasPolygons(FaceList faces)
     {
-        foreach (var face in faces.AsSpan())
+        foreach (IntermediateFace face in faces.AsSpan())
             if (face.Count > 3)
                 return true;
         return false;
@@ -43,12 +43,12 @@ internal sealed class TriangulateStep : IPostProcess
 
     private static FaceList Triangulate(IntermediateMesh mesh, ImportContext context)
     {
-        var oldFaces = mesh.Faces;
+        FaceList oldFaces = mesh.Faces;
         var newFaces = new FaceList(oldFaces.Count, oldFaces.AllIndices.Length);
 
-        foreach (var face in oldFaces)
+        foreach (IntermediateFace face in oldFaces)
         {
-            var indices = oldFaces.IndicesOf(face);
+            Span<int> indices = oldFaces.IndicesOf(face);
             if (face.Count <= 3)
             {
                 newFaces.Add(indices, face);
@@ -121,8 +121,8 @@ internal sealed class TriangulateStep : IPostProcess
         }
 
         // Build the working linked list (prev/next), respecting the desired winding direction.
-        var prev = new int[n];
-        var next = new int[n];
+        int[] prev = new int[n];
+        int[] next = new int[n];
         if (!reversed)
         {
             for (int i = 0; i < n; i++) { prev[i] = (i + n - 1) % n; next[i] = (i + 1) % n; }

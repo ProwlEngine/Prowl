@@ -134,8 +134,8 @@ public sealed class GraphNode
     public float Width = 172f;
     public IOrigamiIcon? Icon;
     public Color? Accent;
-    public List<GraphPort> Inputs = new();
-    public List<GraphPort> Outputs = new();
+    public List<GraphPort> Inputs = [];
+    public List<GraphPort> Outputs = [];
     public object? UserData;
     /// <summary>Render as a compact rounded capsule with no header (relays, reroutes).</summary>
     public bool Pill;
@@ -155,7 +155,7 @@ public sealed class GraphNode
 
     public GraphBadge? Badge;
     /// <summary>More chips beside <see cref="Badge"/>, in order, such as a warning next to an output marker.</summary>
-    public List<GraphBadge> Badges = new();
+    public List<GraphBadge> Badges = [];
 
     /// <summary>
     /// Draws the node's own content below the port rows. Set <see cref="BodyHeight"/> to the space it
@@ -170,7 +170,7 @@ public sealed class GraphNode
     /// Rows of controls below the port rows, each at its own height. The card sizes itself from them and
     /// every row keeps its drags, so working a control never moves the node. Wins over <see cref="Body"/>.
     /// </summary>
-    public List<GraphNodeRow> Rows = new();
+    public List<GraphNodeRow> Rows = [];
 
     /// <summary>Shows a chevron in the header that raises <c>OnNodeToggleCollapsed</c>.</summary>
     public bool Collapsible;
@@ -253,7 +253,7 @@ public sealed class GraphConnection
     /// <summary>How fast the flow dots travel, in wire lengths per second.</summary>
     public float FlowSpeed = 1f;
     /// <summary>Optional reroute points (graph space) the wire is routed through, in order from output to input.</summary>
-    public List<Float2> ControlPoints = new();
+    public List<Float2> ControlPoints = [];
     public object? UserData;
 
     public GraphConnection() { }
@@ -410,7 +410,7 @@ public sealed class NodeGraphBuilder
 
     private void ReadMetrics()
     {
-        var m = _theme.Metrics;
+        OrigamiMetrics m = _theme.Metrics;
         // Node cards reuse the shared metrics; only graph-specific values come from the Graph* fields.
         _headerH = m.HeaderHeight; _portRowH = m.RowHeight;
         _nodeRounding = m.Rounding; _titleFont = m.FontSize; _portFont = m.FontSizeSmall;
@@ -575,10 +575,10 @@ public sealed class NodeGraphBuilder
         public float PanX, PanY, Zoom = 1f;
         public bool ViewInit;                          // first-frame InitialView applied
         public float ScreenX, ScreenY;                 // container top-left, from OnPostLayout
-        public readonly HashSet<string> SelNodes = new();
-        public readonly HashSet<string> SelEdges = new();  // by EdgeKey
-        public readonly HashSet<string> SelGroups = new(); // by group id
-        public readonly HashSet<string> SelStickies = new(); // by sticky id
+        public readonly HashSet<string> SelNodes = [];
+        public readonly HashSet<string> SelEdges = [];  // by EdgeKey
+        public readonly HashSet<string> SelGroups = []; // by group id
+        public readonly HashSet<string> SelStickies = []; // by sticky id
         public DragMode Mode;
         public Float2 DragOffset;                       // MoveNodes / MoveGroup accumulator (graph space), snapped
         public Float2 RawDrag;                          // the same accumulator before snapping
@@ -598,7 +598,7 @@ public sealed class NodeGraphBuilder
         public string? ActiveWire;                      // EdgeKey of the wire whose control point is dragging
         public int ActivePoint;                         // control point index being dragged
         public Float2 PointOffset;                      // live offset (graph space) of the dragged point
-        public readonly List<(float x, float y, float w, float h, Color32 col)> MinimapBoxes = new();
+        public readonly List<(float x, float y, float w, float h, Color32 col)> MinimapBoxes = [];
     }
 
     // A resolved node box + its port anchors for this frame (effective = includes live drag offset).
@@ -633,7 +633,7 @@ public sealed class NodeGraphBuilder
     public void Show()
     {
         ReadMetrics();
-        var ink = _theme.Ink;
+        OrigamiRamp ink = _theme.Ink;
         Color canvasBg = _theme.Neutral.C100;
         Color nodeBg = _theme.Popover;
         Color borderSoft = _theme.BorderSoft;
@@ -641,14 +641,14 @@ public sealed class NodeGraphBuilder
         FontFile? font = _theme.Font;
         FontFile? semi = _theme.SemiBold ?? _theme.Font;
 
-        var container = _paper.Box(_id)
+        ElementBuilder container = _paper.Box(_id)
             .Width(_width).Height(_height)
             .Rounded(_theme.Metrics.ContainerRounding)
             .BorderColor(borderSoft).BorderWidth(1f)
             .Clip();
-        var handle = container._handle;
+        ElementHandle handle = container._handle;
 
-        var st = _paper.GetElementStorage<GraphState>(handle, "state", null!);
+        GraphState st = _paper.GetElementStorage<GraphState>(handle, "state", null!);
         if (st == null) { st = new GraphState(); _paper.SetElementStorage(handle, "state", st); }
         if (!st.ViewInit)
         {
@@ -659,7 +659,7 @@ public sealed class NodeGraphBuilder
 
         // Index + reconcile selection against the current (host-owned) model.
         var byId = new Dictionary<string, GraphNode>(_nodes.Count);
-        foreach (var n in _nodes)
+        foreach (GraphNode n in _nodes)
         {
             if (!byId.TryAdd(n.Id, n))
                 throw new InvalidOperationException($"Two nodes share the id '{n.Id}'. Node ids have to be unique.");
@@ -671,8 +671,8 @@ public sealed class NodeGraphBuilder
         if (st.SelEdges.Count > 0)
         {
             var live = new HashSet<string>();
-            selectedWires = new HashSet<GraphConnection>();
-            foreach (var c in _connections)
+            selectedWires = [];
+            foreach (GraphConnection c in _connections)
             {
                 string key = EdgeKey(c);
                 live.Add(key);
@@ -681,12 +681,12 @@ public sealed class NodeGraphBuilder
             st.SelEdges.RemoveWhere(k => !live.Contains(k));
         }
         var groupById = new Dictionary<string, GraphGroup>(_groups.Count);
-        foreach (var g in _groups) groupById[g.Id] = g;
+        foreach (GraphGroup g in _groups) groupById[g.Id] = g;
         st.SelGroups.RemoveWhere(gid => !groupById.ContainsKey(gid));
         if (st.ActiveGroup != null && !groupById.ContainsKey(st.ActiveGroup)) { st.ActiveGroup = null; st.Mode = DragMode.None; }
         if (st.RenamingGroup != null && !groupById.ContainsKey(st.RenamingGroup)) st.RenamingGroup = null;
         var stickyById = new Dictionary<string, GraphSticky>(_stickies.Count);
-        foreach (var sk in _stickies) stickyById[sk.Id] = sk;
+        foreach (GraphSticky sk in _stickies) stickyById[sk.Id] = sk;
         st.SelStickies.RemoveWhere(sid => !stickyById.ContainsKey(sid));
         if (st.ActiveSticky != null && !stickyById.ContainsKey(st.ActiveSticky)) { st.ActiveSticky = null; st.Mode = DragMode.None; }
         if (st.EditingSticky != null && !stickyById.ContainsKey(st.EditingSticky)) st.EditingSticky = null;
@@ -723,7 +723,7 @@ public sealed class NodeGraphBuilder
 
         // Resolve node boxes + port anchors once (effective positions include the live drag offset).
         var layouts = new Dictionary<string, NodeLayout>(_nodes.Count);
-        foreach (var n in _nodes)
+        foreach (GraphNode n in _nodes)
             layouts[n.Id] = BuildLayout(n, EffectivePos(n, st));
 
         // Apply host commands (frame/focus/select/view) now that layouts (content bounds) are known.
@@ -768,14 +768,14 @@ public sealed class NodeGraphBuilder
             }
             else if (st.Mode == DragMode.Connect && st.ConnNode != null && st.ConnPort != null)
             {
-                var (tn, tp, to) = HitTestPort(st, _paper.PointerPos, layouts);
+                (string? tn, string? tp, bool to) = HitTestPort(st, _paper.PointerPos, layouts);
                 snap.ConnHitNode = tn;
                 snap.ConnHitValid = tn != null && to != st.ConnFromOutput
                     && (tn != st.ConnNode || _allowSelfConnections) && ValidateHit(st, tn, tp!, to);
             }
 
             // Background: grid only, plus the pan/marquee/select/context surface.
-            var bg = _paper.Box("bg")
+            ElementBuilder bg = _paper.Box("bg")
                 .PositionType(PositionType.SelfDirected).Left(0).Top(0)
                 .Width(UnitValue.Percentage(100)).Height(UnitValue.Percentage(100))
                 .BackgroundColor(canvasBg)
@@ -788,11 +788,11 @@ public sealed class NodeGraphBuilder
                 _paper.Draw((canvas, rect) => PaintGridPass(canvas, rect, in snap));
 
             // Group boxes: behind the wires and nodes (only their title bar is interactive).
-            foreach (var g in _groups)
+            foreach (GraphGroup g in _groups)
                 DrawGroup(g, st, detail, accentDefault, borderSoft, ink.C500, font, semi);
 
             // Wires: above the group fills, below the node cards.
-            var wireLayer = _paper.Box("wires")
+            ElementBuilder wireLayer = _paper.Box("wires")
                 .PositionType(PositionType.SelfDirected).Left(0).Top(0)
                 .Width(UnitValue.Percentage(100)).Height(UnitValue.Percentage(100))
                 .IsNotInteractable();
@@ -800,22 +800,22 @@ public sealed class NodeGraphBuilder
                 _paper.Draw((canvas, rect) => PaintWiresPass(canvas, rect, in snap));
 
             // Sticky notes: over the wires, below the node cards.
-            foreach (var sk in _stickies)
+            foreach (GraphSticky sk in _stickies)
                 DrawSticky(sk, st, detail, font);
 
             // Node cards.
-            foreach (var n in _nodes)
+            foreach (GraphNode n in _nodes)
                 DrawNode(layouts[n.Id], st, detail, nodeBg, borderSoft, ink.C500, ink.C300, accentDefault, font, semi);
 
             // Interactive port sockets (above nodes so they are the drag source/targets). Zoomed out
             // far enough that a socket is not drawn, it is not in the way either.
             if (detail != Detail.Block)
             {
-                foreach (var n in _nodes)
+                foreach (GraphNode n in _nodes)
                     DrawPorts(layouts[n.Id], st, snap);
 
                 // Wire reroute control points (drag to move, right-click to remove).
-                foreach (var c in _connections)
+                foreach (GraphConnection c in _connections)
                     DrawControlPoints(c, st, accentDefault);
             }
 
@@ -823,7 +823,7 @@ public sealed class NodeGraphBuilder
             if (_showMinimap) DrawMinimap(st, layouts, accentDefault, borderSoft, ink.C300);
 
             // Foreground overlay: marquee box + in-progress wire (both follow the live cursor).
-            var overlay = _paper.Box("overlay")
+            ElementBuilder overlay = _paper.Box("overlay")
                 .PositionType(PositionType.SelfDirected).Left(0).Top(0)
                 .Width(UnitValue.Percentage(100)).Height(UnitValue.Percentage(100))
                 .IsNotInteractable();
@@ -855,7 +855,7 @@ public sealed class NodeGraphBuilder
         float offX = left + (mw - size.X * scale) * 0.5f;
         float offY = top + (mh - size.Y * scale) * 0.5f;
 
-        var panel = _paper.Box("minimap")
+        ElementBuilder panel = _paper.Box("minimap")
             .PositionType(PositionType.SelfDirected).Left(left).Top(top).Width(mw).Height(mh)
             .Rounded(_theme.Metrics.Rounding)
             .BackgroundColor(WithA(_theme.Neutral.C100, 225))
@@ -874,19 +874,19 @@ public sealed class NodeGraphBuilder
         panel.OnDragging(st, (state, e) => MoveViewTo(e.PointerPosition));
 
         // The plan is static per frame, so it is painted rather than built from elements.
-        var boxes = st.MinimapBoxes;
+        List<(float x, float y, float w, float h, Color32 col)> boxes = st.MinimapBoxes;
         boxes.Clear();
-        foreach (var g in _groups)
+        foreach (GraphGroup g in _groups)
         {
-            var (gp, gs) = GroupEffective(g, st);
+            (Float2 gp, Float2 gs) = GroupEffective(g, st);
             boxes.Add((gp.X, gp.Y, gs.X, gs.Y, ToC32(g.Color ?? accent, 0.18f)));
         }
-        foreach (var sk in _stickies)
+        foreach (GraphSticky sk in _stickies)
         {
-            var (sp, ss) = StickyEffective(sk, st);
+            (Float2 sp, Float2 ss) = StickyEffective(sk, st);
             boxes.Add((sp.X, sp.Y, ss.X, ss.Y, ToC32(sk.Color ?? _theme.Amber.C400, 0.5f)));
         }
-        foreach (var l in layouts.Values)
+        foreach (NodeLayout l in layouts.Values)
         {
             Color col = l.Node.Accent ?? accent;
             float alpha = st.SelNodes.Contains(l.Node.Id) ? 1f : 0.75f;
@@ -899,7 +899,7 @@ public sealed class NodeGraphBuilder
             _paper.Draw((canvas, rr) =>
             {
                 float bx = (float)rr.Min.X + (offX - left), by = (float)rr.Min.Y + (offY - top);
-                foreach (var b in boxes)
+                foreach ((float x, float y, float w, float h, Color32 col) b in boxes)
                     canvas.RectFilled(bx + (b.x - min.X) * scale, by + (b.y - min.Y) * scale,
                         Math.Max(1.5f, b.w * scale), Math.Max(1.5f, b.h * scale), b.col);
 
@@ -926,9 +926,9 @@ public sealed class NodeGraphBuilder
             maxX = Math.Max(maxX, p.X + s.X); maxY = Math.Max(maxY, p.Y + s.Y); any = true;
         }
 
-        foreach (var l in layouts.Values) Add(l.Pos, new Float2(l.W, l.H));
-        foreach (var g in _groups) Add(g.Position, g.Size);
-        foreach (var sk in _stickies) Add(sk.Position, sk.Size);
+        foreach (NodeLayout l in layouts.Values) Add(l.Pos, new Float2(l.W, l.H));
+        foreach (GraphGroup g in _groups) Add(g.Position, g.Size);
+        foreach (GraphSticky sk in _stickies) Add(sk.Position, sk.Size);
 
         min = new Float2(minX, minY);
         size = any ? new Float2(Math.Max(maxX - minX, 1f), Math.Max(maxY - minY, 1f)) : Float2.Zero;
@@ -941,7 +941,7 @@ public sealed class NodeGraphBuilder
 
     private void ApplyController(GraphState st, Dictionary<string, NodeLayout> layouts, Dictionary<string, GraphNode> byId)
     {
-        var c = _controller!;
+        NodeGraphController c = _controller!;
         if (c._clearSelect) { ClearSelection(st); FireSelection(st); c._clearSelect = false; }
         if (c._selectAll) { SelectAllNodes(st); c._selectAll = false; }
         if (c._deleteSelection)
@@ -952,19 +952,19 @@ public sealed class NodeGraphBuilder
         if (c._selectNodes != null)
         {
             if (!c._selectAdditive) ClearSelection(st);
-            foreach (var id in c._selectNodes) if (byId.ContainsKey(id)) st.SelNodes.Add(id);
+            foreach (string id in c._selectNodes) if (byId.ContainsKey(id)) st.SelNodes.Add(id);
             FireSelection(st); c._selectNodes = null;
         }
         if (c._setZoom.HasValue) { st.Zoom = Math.Clamp(c._setZoom.Value, _minZoom, _maxZoom); c._setZoom = null; }
         if (c._setPan.HasValue) { st.PanX = c._setPan.Value.X; st.PanY = c._setPan.Value.Y; c._setPan = null; }
         if (c._centerOn.HasValue) { CenterGraphPoint(st, c._centerOn.Value); c._centerOn = null; }
-        if (c._focusNode != null) { if (layouts.TryGetValue(c._focusNode, out var l)) FrameRect(st, l.Pos, new Float2(l.W, l.H), capAtOne: true); c._focusNode = null; }
+        if (c._focusNode != null) { if (layouts.TryGetValue(c._focusNode, out NodeLayout l)) FrameRect(st, l.Pos, new Float2(l.W, l.H), capAtOne: true); c._focusNode = null; }
         if (c._frame != 0) { FrameContent(st, layouts, all: c._frame == 1); c._frame = 0; }
     }
 
     private void WriteControllerState(GraphState st)
     {
-        var c = _controller!;
+        NodeGraphController c = _controller!;
         c.Zoom = st.Zoom; c.Pan = new Float2(st.PanX, st.PanY);
         c.ScreenOrigin = new Float2(st.ScreenX, st.ScreenY);
         c.SelectedNodes = Refill(c.SelectedNodes, st.SelNodes);
@@ -973,7 +973,7 @@ public sealed class NodeGraphBuilder
 
         static IReadOnlyList<string> Refill(IReadOnlyList<string> current, HashSet<string> source)
         {
-            if (current is not List<string> list) list = new List<string>(source.Count);
+            if (current is not List<string> list) list = [with(source.Count)];
             else list.Clear();
             foreach (string id in source) list.Add(id);
             return list;
@@ -1002,11 +1002,11 @@ public sealed class NodeGraphBuilder
         bool any = false;
         void Add(Float2 p, Float2 s) { minX = Math.Min(minX, p.X); minY = Math.Min(minY, p.Y); maxX = Math.Max(maxX, p.X + s.X); maxY = Math.Max(maxY, p.Y + s.Y); any = true; }
 
-        foreach (var l in layouts.Values)
+        foreach (NodeLayout l in layouts.Values)
             if (all || st.SelNodes.Contains(l.Node.Id)) Add(l.Pos, new Float2(l.W, l.H));
-        foreach (var g in _groups)
+        foreach (GraphGroup g in _groups)
             if (all || st.SelGroups.Contains(g.Id)) Add(g.Position, g.Size);
-        foreach (var sk in _stickies)
+        foreach (GraphSticky sk in _stickies)
             if (all || st.SelStickies.Contains(sk.Id)) Add(sk.Position, sk.Size);
 
         if (any) FrameRect(st, new Float2(minX, minY), new Float2(maxX - minX, maxY - minY), capAtOne: false);
@@ -1020,7 +1020,7 @@ public sealed class NodeGraphBuilder
             && groupOfId(st.ActiveGroup) is { } g && NodeInGroup(n, g)) return n.Position + st.DragOffset;
         return n.Position;
 
-        GraphGroup? groupOfId(string id) { foreach (var gg in _groups) if (gg.Id == id) return gg; return null; }
+        GraphGroup? groupOfId(string id) { foreach (GraphGroup gg in _groups) if (gg.Id == id) return gg; return null; }
     }
 
     // Spatial membership: a node belongs to a group if its centre lies inside the group's rect.
@@ -1034,7 +1034,7 @@ public sealed class NodeGraphBuilder
     private List<GraphNode> MembersOf(GraphGroup g)
     {
         var list = new List<GraphNode>();
-        foreach (var n in _nodes) if (!n.Pinned && NodeInGroup(n, g)) list.Add(n);
+        foreach (GraphNode n in _nodes) if (!n.Pinned && NodeInGroup(n, g)) list.Add(n);
         return list;
     }
 
@@ -1060,13 +1060,13 @@ public sealed class NodeGraphBuilder
 
     private NodeLayout BuildLayout(GraphNode n, Float2 pos)
     {
-        List<(GraphPort p, bool o)> left = new(), right = new(), top = new(), bottom = new();
-        foreach (var p in n.Inputs) Bucket(p, false).Add((p, false));
-        foreach (var p in n.Outputs) Bucket(p, true).Add((p, true));
+        List<(GraphPort p, bool o)> left = [], right = [], top = [], bottom = [];
+        foreach (GraphPort p in n.Inputs) Bucket(p, false).Add((p, false));
+        foreach (GraphPort p in n.Outputs) Bucket(p, true).Add((p, true));
 
         List<(GraphPort, bool)> Bucket(GraphPort p, bool o)
         {
-            var side = p.Side ?? (o ? PortSide.Right : PortSide.Left);
+            PortSide side = p.Side ?? (o ? PortSide.Right : PortSide.Left);
             return side switch { PortSide.Left => left, PortSide.Right => right, PortSide.Top => top, _ => bottom };
         }
 
@@ -1118,7 +1118,7 @@ public sealed class NodeGraphBuilder
 
     private static bool TryAnchor(NodeLayout l, string portId, bool output, out Float2 anchor)
     {
-        foreach (var s in l.Ports)
+        foreach (PortSlot s in l.Ports)
             if (s.IsOutput == output && s.Port.Id == portId) { anchor = s.Anchor; return true; }
         anchor = default; return false;
     }
@@ -1131,7 +1131,7 @@ public sealed class NodeGraphBuilder
         Color nodeBg, Color borderSoft, Color titleCol, Color portLabelCol, Color accentDefault,
         FontFile? font, FontFile? semi)
     {
-        var node = l.Node;
+        GraphNode node = l.Node;
         Color accent = node.Accent ?? accentDefault;
         bool selected = st.SelNodes.Contains(node.Id);
         float zoom = st.Zoom;
@@ -1148,10 +1148,10 @@ public sealed class NodeGraphBuilder
         // Outlines and glows stay the same on screen at any zoom, so they are divided back out.
         float hairline = 1f / zoom;
 
-        using var scope = Scope(node.Id);
+        using IdScope scope = Scope(node.Id);
         if (node.Pill) { DrawPill(st, node, accent, selected, sx, sy, w, h, zoom); return; }
 
-        var card = _paper.Column("card")
+        ElementBuilder card = _paper.Column("card")
             .PositionType(PositionType.SelfDirected).Left(sx).Top(sy)
             .Width(w).Height(h)
             .TransformOrigin(0, 0).Scale(zoom)
@@ -1170,7 +1170,7 @@ public sealed class NodeGraphBuilder
         {
             // Header strip. At Block LOD the whole card is tinted and text is dropped.
             bool folded = node.Folded || detail == Detail.Block;
-            var header = _paper.Row("header")
+            ElementBuilder header = _paper.Row("header")
                 .Width(UnitValue.Percentage(100)).Height(folded ? h : headerH)
                 .BackgroundColor(WithA(accent, detail == Detail.Block ? 70 : 40))
                 .RoundedTop(rounding).IsNotInteractable();
@@ -1184,7 +1184,7 @@ public sealed class NodeGraphBuilder
             {
                 if (node.Icon != null && detail != Detail.Block)
                 {
-                    var icon = node.Icon; float isz = 14f;
+                    IOrigamiIcon icon = node.Icon; float isz = 14f;
                     using (_paper.Box("icon").Width(isz).Height(rowH).Margin(0, 7f, 0, 0).IsNotInteractable().Enter())
                         _paper.Draw((canvas, rr) =>
                         {
@@ -1295,7 +1295,7 @@ public sealed class NodeGraphBuilder
         if (badge.Icon is { } lone && badge.Text.Length == 0)
         {
             const float size = 20f;
-            var mark = _paper.Box(id).Width(size).Height(size).Margin(6f, 0, UnitValue.Stretch(), UnitValue.Stretch());
+            ElementBuilder mark = _paper.Box(id).Width(size).Height(size).Margin(6f, 0, UnitValue.Stretch(), UnitValue.Stretch());
             if (badge.Content != null) mark.Tooltip(badge.Content);
             else if (!string.IsNullOrEmpty(badge.Tooltip)) mark.Tooltip(badge.Tooltip!);
 
@@ -1305,7 +1305,7 @@ public sealed class NodeGraphBuilder
         }
 
         float h = headerH - 10f;
-        var chip = _paper.Row(id)
+        ElementBuilder chip = _paper.Row(id)
             .Height(h).Margin(6f, 0, UnitValue.Stretch(), UnitValue.Stretch())
             .Rounded(_theme.Metrics.SmallRounding)
             .BackgroundColor(WithA(fill, 55))
@@ -1339,7 +1339,7 @@ public sealed class NodeGraphBuilder
     {
         float size = 14f;
         bool collapsed = node.Collapsed;
-        var toggle = _paper.Box("fold")
+        ElementBuilder toggle = _paper.Box("fold")
             .Width(size).Height(headerH).Margin(5f, 0, 0, 0)
             .Cursor(PaperCursor.Pointer)
             .Tooltip(collapsed ? "Expand" : "Collapse");
@@ -1365,7 +1365,7 @@ public sealed class NodeGraphBuilder
         float sx, float sy, float w, float h, float zoom)
     {
         float hairline = 1f / zoom;
-        var pill = _paper.Box("pill")
+        ElementBuilder pill = _paper.Box("pill")
             .PositionType(PositionType.SelfDirected).Left(sx).Top(sy).Width(w).Height(h)
             .TransformOrigin(0, 0).Scale(zoom)
             .Rounded(h * 0.5f)
@@ -1392,7 +1392,7 @@ public sealed class NodeGraphBuilder
     private void DrawSticky(GraphSticky sk, GraphState st, Detail detail, FontFile? font)
     {
         float zoom = st.Zoom;
-        var (pos, size) = StickyEffective(sk, st);
+        (Float2 pos, Float2 size) = StickyEffective(sk, st);
         Color fill = sk.Color ?? _theme.Amber.C400;
         Color textCol = Color.FromArgb(255, 46, 38, 16);
         bool selected = st.SelStickies.Contains(sk.Id);
@@ -1406,8 +1406,8 @@ public sealed class NodeGraphBuilder
         float rounding = _theme.Metrics.Rounding;
         float hairline = 1f / zoom;
 
-        using var scope = Scope(sid);
-        var note = _paper.Column("note")
+        using IdScope scope = Scope(sid);
+        ElementBuilder note = _paper.Column("note")
             .PositionType(PositionType.SelfDirected).Left(sx).Top(sy).Width(w).Height(h)
             .TransformOrigin(0, 0).Scale(zoom)
             .Rounded(rounding).Clip()
@@ -1460,7 +1460,7 @@ public sealed class NodeGraphBuilder
 
         // Resize grip (bottom-right corner).
         float hs = 15f;
-        var grip = _paper.Box("grip")
+        ElementBuilder grip = _paper.Box("grip")
             .PositionType(PositionType.SelfDirected).Left(sx + (w - hs) * zoom).Top(sy + (h - hs) * zoom).Width(hs).Height(hs)
             .TransformOrigin(0, 0).Scale(zoom)
             .Cursor(PaperCursor.ResizeNWSE);
@@ -1484,7 +1484,7 @@ public sealed class NodeGraphBuilder
     private void DrawGroup(GraphGroup g, GraphState st, Detail detail, Color accentDefault, Color borderSoft, Color titleCol, FontFile? font, FontFile? semi)
     {
         float zoom = st.Zoom;
-        var (gpos, gsize) = GroupEffective(g, st);
+        (Float2 gpos, Float2 gsize) = GroupEffective(g, st);
         Color accent = g.Color ?? accentDefault;
         bool selected = st.SelGroups.Contains(g.Id);
         bool renaming = st.RenamingGroup == g.Id;
@@ -1497,7 +1497,7 @@ public sealed class NodeGraphBuilder
         float rounding = _theme.Metrics.ContainerRounding;
         float hairline = 1f / zoom;
 
-        using var scope = Scope(gid);
+        using IdScope scope = Scope(gid);
 
         // Frame — non-interactive so nodes/wires/bg inside stay usable.
         _paper.Box("frame")
@@ -1509,7 +1509,7 @@ public sealed class NodeGraphBuilder
             .IsNotInteractable();
 
         // Title bar — the group's drag/select/rename/context handle.
-        var title = _paper.Row("title")
+        ElementBuilder title = _paper.Row("title")
             .PositionType(PositionType.SelfDirected).Left(sx).Top(sy).Width(w).Height(titleH)
             .TransformOrigin(0, 0).Scale(zoom)
             .RoundedTop(rounding).Padding(9f, 9f, 0, 0)
@@ -1561,7 +1561,7 @@ public sealed class NodeGraphBuilder
 
         // Resize handle (bottom-right corner).
         float hs = 15f;
-        var grip = _paper.Box("grip")
+        ElementBuilder grip = _paper.Box("grip")
             .PositionType(PositionType.SelfDirected).Left(sx + (w - hs) * zoom).Top(sy + (h - hs) * zoom).Width(hs).Height(hs)
             .TransformOrigin(0, 0).Scale(zoom)
             .Cursor(PaperCursor.ResizeNWSE);
@@ -1598,15 +1598,15 @@ public sealed class NodeGraphBuilder
         // once the graph is small, and swallows the drag and marquee gestures used to rearrange it.
         float hit = Math.Max(4f, PortHitR * zoom);
         float dotR = _portDotR * zoom;
-        using var scope = Scope(l.Node.Id);
-        foreach (var slot in l.Ports)
+        using IdScope scope = Scope(l.Node.Id);
+        foreach (PortSlot slot in l.Ports)
         {
-            var s = slot;
+            PortSlot s = slot;
             // container-local position: anchor is graph space; local = graph*zoom + pan.
             float lx = s.Anchor.X * zoom + st.PanX;
             float ly = s.Anchor.Y * zoom + st.PanY;
 
-            var pb = _paper.Box(s.Port.Id, s.IsOutput ? 1 : 0)
+            ElementBuilder pb = _paper.Box(s.Port.Id, s.IsOutput ? 1 : 0)
                 .PositionType(PositionType.SelfDirected).Left(lx - hit).Top(ly - hit)
                 .Width(hit * 2).Height(hit * 2).Cursor(PaperCursor.Crosshair);
             if (!string.IsNullOrEmpty(s.Port.Tooltip)) pb.Tooltip(s.Port.Tooltip!);
@@ -1639,7 +1639,7 @@ public sealed class NodeGraphBuilder
                 {
                     float cx = (float)(rr.Min.X + rr.Size.X * 0.5f), cy = (float)(rr.Min.Y + rr.Size.Y * 0.5f);
                     float r = dotR;
-                    var fill = ToC32(pc, 1f);
+                    Color32 fill = ToC32(pc, 1f);
                     if (hov) canvas.CircleFilled(cx, cy, r + 3.5f, ToC32(pc, 0.35f));
                     if (placeholder) PaintPlaceholder(canvas, cx, cy, r + 1f, fill, snap.DotRing);
                     else if (shape == PortShape.Arrow) PaintArrow(canvas, cx, cy, r + 0.5f, s.Side, fill, snap.DotRing);
@@ -1651,11 +1651,11 @@ public sealed class NodeGraphBuilder
     // A draggable dot per wire control point; right-click removes it.
     private void DrawControlPoints(GraphConnection c, GraphState st, Color accentDefault)
     {
-        var cps = c.ControlPoints;
+        List<Float2> cps = c.ControlPoints;
         if (cps.Count == 0) return;
         float zoom = st.Zoom, hit = Math.Max(4f, 6.5f * zoom);
         string key = EdgeKey(c);
-        using var scope = Scope(key);
+        using IdScope scope = Scope(key);
         Color32 fill = ToC32(c.Color ?? accentDefault, 1f), ring = ToC32(_theme.Popover, 1f);
 
         for (int i = 0; i < cps.Count; i++)
@@ -1664,7 +1664,7 @@ public sealed class NodeGraphBuilder
             Float2 gp = (st.Mode == DragMode.MovePoint && st.ActiveWire == key && st.ActivePoint == i) ? cps[i] + st.PointOffset : cps[i];
             float lx = gp.X * zoom + st.PanX, ly = gp.Y * zoom + st.PanY;
 
-            var box = _paper.Box("cp", idx)
+            ElementBuilder box = _paper.Box("cp", idx)
                 .PositionType(PositionType.SelfDirected).Left(lx - hit).Top(ly - hit).Width(hit * 2).Height(hit * 2)
                 .Cursor(PaperCursor.Grab).CursorDragging(PaperCursor.Grabbing);
             box.OnDragStart(st, (s, e) => { if (_readOnly) return; s.Mode = DragMode.MovePoint; s.ActiveWire = key; s.ActivePoint = idx; s.PointOffset = Float2.Zero; });
@@ -1733,7 +1733,7 @@ public sealed class NodeGraphBuilder
                 return;
             }
 
-            var pos = ScreenToGraph(state, e.PointerPosition);
+            Float2 pos = ScreenToGraph(state, e.PointerPosition);
             if (state.SelNodes.Count > 1 && _onNodesContext != null)
                 _onNodesContext(_nodes.Where(n => state.SelNodes.Contains(n.Id)).ToList(), pos);
             else
@@ -1763,7 +1763,7 @@ public sealed class NodeGraphBuilder
         {
             Float2 gp = ScreenToGraph(state, e.PointerPosition);
             // Right-click on a wire drops a reroute point there; on empty canvas opens the create menu.
-            if (!_readOnly && _onWireAddPoint != null && HitTestWire(state, layouts, gp, out var wire, out int seg))
+            if (!_readOnly && _onWireAddPoint != null && HitTestWire(state, layouts, gp, out GraphConnection? wire, out int seg))
                 _onWireAddPoint(wire!, seg, gp);
             else if (!_readOnly)
                 _onBackgroundContext?.Invoke(gp);
@@ -1774,18 +1774,18 @@ public sealed class NodeGraphBuilder
     {
         wire = null; seg = 0;
         float best = WireHitDist / Math.Max(st.Zoom, 0.001f);
-        foreach (var c in _connections)
+        foreach (GraphConnection c in _connections)
         {
             if (_arrows)
             {
-                if (!TryArrowLine(c, layouts, out var from, out var to)) continue;
+                if (!TryArrowLine(c, layouts, out Float2 from, out Float2 to)) continue;
                 float ad = DistToSeg(graphPos, from, to);
                 if (ad < best) { best = ad; wire = c; seg = 0; }
                 continue;
             }
 
-            if (!layouts.TryGetValue(c.FromNode, out var lf) || !layouts.TryGetValue(c.ToNode, out var lt)) continue;
-            if (!TryAnchor(lf, c.FromPort, true, out var a) || !TryAnchor(lt, c.ToPort, false, out var b)) continue;
+            if (!layouts.TryGetValue(c.FromNode, out NodeLayout lf) || !layouts.TryGetValue(c.ToNode, out NodeLayout lt)) continue;
+            if (!TryAnchor(lf, c.FromPort, true, out Float2 a) || !TryAnchor(lt, c.ToPort, false, out Float2 b)) continue;
             float d = WireDistGraph(a, EffectiveCPs(c, st), b, SideOf(lf, c.FromPort, true), SideOf(lt, c.ToPort, false), graphPos, out int s);
             if (d < best) { best = d; wire = c; seg = s; }
         }
@@ -1800,13 +1800,13 @@ public sealed class NodeGraphBuilder
         }
 
         GraphConnection? detached = state.DetachWire is { } key ? FindWire(key) : null;
-        var (hitNode, hitPort, hitOut) = HitTestPort(state, _paper.PointerPos, layouts);
+        (string? hitNode, string? hitPort, bool hitOut) = HitTestPort(state, _paper.PointerPos, layouts);
 
         if (hitNode != null && hitOut != state.ConnFromOutput && (hitNode != state.ConnNode || _allowSelfConnections))
         {
             bool sourcePlaceholder = IsPlaceholderPort(state.ConnNode, state.ConnPort, state.ConnFromOutput);
             bool hitPlaceholder = IsPlaceholderPort(hitNode, hitPort!, hitOut);
-            var req = state.ConnFromOutput
+            ConnectionRequest req = state.ConnFromOutput
                 ? new ConnectionRequest(state.ConnNode, state.ConnPort, hitNode, hitPort!, sourcePlaceholder, hitPlaceholder)
                 : new ConnectionRequest(hitNode, hitPort!, state.ConnNode, state.ConnPort, hitPlaceholder, sourcePlaceholder);
             if (_onValidate == null || _onValidate(req))
@@ -1837,10 +1837,10 @@ public sealed class NodeGraphBuilder
 
     private bool IsPlaceholderPort(string nodeId, string portId, bool output)
     {
-        foreach (var n in _nodes)
+        foreach (GraphNode n in _nodes)
         {
             if (n.Id != nodeId) continue;
-            foreach (var p in output ? n.Outputs : n.Inputs)
+            foreach (GraphPort p in output ? n.Outputs : n.Inputs)
                 if (p.Id == portId) return p.IsPlaceholder;
             return false;
         }
@@ -1849,14 +1849,14 @@ public sealed class NodeGraphBuilder
 
     private GraphConnection? FindWireInto(string nodeId, string portId)
     {
-        foreach (var c in _connections)
+        foreach (GraphConnection c in _connections)
             if (c.ToNode == nodeId && c.ToPort == portId) return c;
         return null;
     }
 
     private GraphConnection? FindWire(string key)
     {
-        foreach (var c in _connections)
+        foreach (GraphConnection c in _connections)
             if (EdgeKey(c) == key) return c;
         return null;
     }
@@ -1866,8 +1866,8 @@ public sealed class NodeGraphBuilder
     {
         float zoom = st.Zoom, best = Math.Max(11f, PortHitR * zoom + 3f);
         string? bn = null, bp = null; bool bo = false;
-        foreach (var l in layouts.Values)
-            foreach (var s in l.Ports)
+        foreach (NodeLayout l in layouts.Values)
+            foreach (PortSlot s in l.Ports)
             {
                 float px = st.ScreenX + s.Anchor.X * zoom + st.PanX;
                 float py = st.ScreenY + s.Anchor.Y * zoom + st.PanY;
@@ -1895,7 +1895,7 @@ public sealed class NodeGraphBuilder
     private void SelectAllNodes(GraphState st)
     {
         ClearSelection(st);
-        foreach (var n in _nodes) st.SelNodes.Add(n.Id);
+        foreach (GraphNode n in _nodes) st.SelNodes.Add(n.Id);
         FireSelection(st);
     }
 
@@ -1926,13 +1926,13 @@ public sealed class NodeGraphBuilder
     {
         if (st.RenamingGroup != null)
         {
-            var g = _groups.FirstOrDefault(x => x.Id == st.RenamingGroup);
+            GraphGroup? g = _groups.FirstOrDefault(x => x.Id == st.RenamingGroup);
             string t = st.RenameBuffer.Trim();
             if (g != null && t.Length > 0 && t != g.Title) _onGroupRenamed?.Invoke(g, t);
         }
         else if (st.EditingSticky != null)
         {
-            var sk = _stickies.FirstOrDefault(x => x.Id == st.EditingSticky);
+            GraphSticky? sk = _stickies.FirstOrDefault(x => x.Id == st.EditingSticky);
             if (sk != null && st.RenameBuffer != sk.Text) _onStickyEdited?.Invoke(sk, st.RenameBuffer);
         }
         st.RenamingGroup = null; st.EditingSticky = null;
@@ -1973,7 +1973,7 @@ public sealed class NodeGraphBuilder
     {
         MaybeCommitEdit(st);
         // Wire hit-test: nearest wire (through its control points) within threshold.
-        string? hitKey = HitTestWire(st, layouts, graphPos, out var hit, out _) ? EdgeKey(hit!) : null;
+        string? hitKey = HitTestWire(st, layouts, graphPos, out GraphConnection? hit, out _) ? EdgeKey(hit!) : null;
 
         if (hitKey != null)
         {
@@ -1992,18 +1992,18 @@ public sealed class NodeGraphBuilder
         float minX = Math.Min(a.X, b.X), maxX = Math.Max(a.X, b.X);
         float minY = Math.Min(a.Y, b.Y), maxY = Math.Max(a.Y, b.Y);
         if (!additive) ClearSelection(st);
-        foreach (var kv in layouts)
+        foreach (KeyValuePair<string, NodeLayout> kv in layouts)
         {
-            var l = kv.Value;
+            NodeLayout l = kv.Value;
             bool inside = l.Pos.X < maxX && l.Pos.X + l.W > minX && l.Pos.Y < maxY && l.Pos.Y + l.H > minY;
             if (inside) st.SelNodes.Add(l.Node.Id);
         }
         // Wires: selected when the routed path passes through the marquee rect.
-        foreach (var c in _connections)
+        foreach (GraphConnection c in _connections)
         {
             if (_arrows)
             {
-                if (!TryArrowLine(c, layouts, out var from, out var to)) continue;
+                if (!TryArrowLine(c, layouts, out Float2 from, out Float2 to)) continue;
                 for (int i = 0; i <= 10; i++)
                 {
                     Float2 p = from + (to - from) * (i / 10f);
@@ -2012,9 +2012,9 @@ public sealed class NodeGraphBuilder
                 continue;
             }
 
-            if (!layouts.TryGetValue(c.FromNode, out var lf) || !layouts.TryGetValue(c.ToNode, out var lt)) continue;
-            if (!TryAnchor(lf, c.FromPort, true, out var ga) || !TryAnchor(lt, c.ToPort, false, out var gb)) continue;
-            foreach (var (p, _) in WireRoute(ga, EffectiveCPs(c, st), gb, SideOf(lf, c.FromPort, true), SideOf(lt, c.ToPort, false)))
+            if (!layouts.TryGetValue(c.FromNode, out NodeLayout lf) || !layouts.TryGetValue(c.ToNode, out NodeLayout lt)) continue;
+            if (!TryAnchor(lf, c.FromPort, true, out Float2 ga) || !TryAnchor(lt, c.ToPort, false, out Float2 gb)) continue;
+            foreach ((Float2 p, int _) in WireRoute(ga, EffectiveCPs(c, st), gb, SideOf(lf, c.FromPort, true), SideOf(lt, c.ToPort, false)))
                 if (p.X >= minX && p.X <= maxX && p.Y >= minY && p.Y <= maxY) { st.SelEdges.Add(EdgeKey(c)); break; }
         }
         FireSelection(st);
@@ -2064,19 +2064,19 @@ public sealed class NodeGraphBuilder
         if (_arrows) { PaintArrowsPass(canvas, rect, in s); return; }
 
         float ox = (float)rect.Min.X, oy = (float)rect.Min.Y;
-        foreach (var c in s.Connections)
+        foreach (GraphConnection c in s.Connections)
         {
-            if (!s.Layouts.TryGetValue(c.FromNode, out var lf) || !s.Layouts.TryGetValue(c.ToNode, out var lt)) continue;
-            if (!TryAnchor(lf, c.FromPort, true, out var ga) || !TryAnchor(lt, c.ToPort, false, out var gb)) continue;
+            if (!s.Layouts.TryGetValue(c.FromNode, out NodeLayout lf) || !s.Layouts.TryGetValue(c.ToNode, out NodeLayout lt)) continue;
+            if (!TryAnchor(lf, c.FromPort, true, out Float2 ga) || !TryAnchor(lt, c.ToPort, false, out Float2 gb)) continue;
             bool sel = s.SelectedWires != null && s.SelectedWires.Contains(c);
             Color32 col = sel ? s.WireSelected : (c.Color.HasValue ? ToC32(c.Color.Value, 0.85f) : s.WireDefault);
 
             float scale = float.IsFinite(c.Thickness) ? Math.Clamp(c.Thickness, 0.1f, 8f) : 1f;
             float wt = s.WireThick * scale, wSel = wt * 1.75f, wGlow = wt * 3.5f;
 
-            var route = WireRoute(ga, EffectiveCPs(c, s.St), gb, SideOf(lf, c.FromPort, true), SideOf(lt, c.ToPort, false));
+            List<(Float2 p, int seg)> route = WireRoute(ga, EffectiveCPs(c, s.St), gb, SideOf(lf, c.FromPort, true), SideOf(lt, c.ToPort, false));
             s_wirePts.Clear();
-            foreach (var t in route) s_wirePts.Add(ToScreen(t.p, ox, oy, in s));
+            foreach ((Float2 p, int seg) t in route) s_wirePts.Add(ToScreen(t.p, ox, oy, in s));
 
             if (sel) PaintWirePath(canvas, s_wirePts, ToC32(s.Accent, 0.28f), wGlow);
             PaintWirePath(canvas, s_wirePts, col, sel ? wSel : wt);
@@ -2088,12 +2088,12 @@ public sealed class NodeGraphBuilder
     private const int FlowDots = 3;
 
     // Reused each frame so painting wires costs no allocations.
-    private static readonly List<Float2> s_wirePts = new();
+    private static readonly List<Float2> s_wirePts = [];
 
     // A dot carries its ports' own colours, so a wire shows what is travelling along it.
     private static Color PortColor(NodeLayout l, string portId, bool output, in Snapshot s)
     {
-        foreach (var slot in l.Ports)
+        foreach (PortSlot slot in l.Ports)
             if (slot.IsOutput == output && slot.Port.Id == portId)
                 return slot.Port.Color ?? s.Accent;
         return s.Accent;
@@ -2103,7 +2103,7 @@ public sealed class NodeGraphBuilder
     private static float FlowRadius(float width, float zoom) => Math.Max(1.4f, (width * 0.5f + 2.2f) * zoom);
 
     // Reused each frame so the flow costs no allocations.
-    private static readonly List<Float2> s_flowPts = new(FlowSamples + 1);
+    private static readonly List<Float2> s_flowPts = [with(FlowSamples + 1)];
     private const int FlowSamples = 24;
 
     /// <summary>
@@ -2160,7 +2160,7 @@ public sealed class NodeGraphBuilder
     private void PaintForeground(Canvas canvas, Rect rect, in Snapshot s)
     {
         float ox = (float)rect.Min.X, oy = (float)rect.Min.Y;
-        var st = s.St;
+        GraphState st = s.St;
 
         if (st.Mode == DragMode.Marquee)
         {
@@ -2171,7 +2171,7 @@ public sealed class NodeGraphBuilder
             canvas.SaveState(); canvas.SetStrokeColor(s.Marquee); canvas.SetStrokeWidth(1f);
             canvas.BeginPath(); canvas.Rect(x, y, mw, mh); canvas.Stroke(); canvas.RestoreState();
         }
-        else if (_arrows && st.Mode == DragMode.Connect && st.ConnNode != null && s.Layouts.TryGetValue(st.ConnNode, out var source))
+        else if (_arrows && st.Mode == DragMode.Connect && st.ConnNode != null && s.Layouts.TryGetValue(st.ConnNode, out NodeLayout source))
         {
             Float2 pointer = new((float)_paper.PointerPos.X, (float)_paper.PointerPos.Y);
             Float2 target = ScreenToGraph(st, _paper.PointerPos);
@@ -2188,8 +2188,8 @@ public sealed class NodeGraphBuilder
             }
         }
         else if (st.Mode == DragMode.Connect && st.ConnNode != null && st.ConnPort != null
-                 && s.Layouts.TryGetValue(st.ConnNode, out var ln)
-                 && TryAnchor(ln, st.ConnPort, st.ConnFromOutput, out var ga))
+                 && s.Layouts.TryGetValue(st.ConnNode, out NodeLayout ln)
+                 && TryAnchor(ln, st.ConnPort, st.ConnFromOutput, out Float2 ga))
         {
             Float2 a = ToScreen(ga, ox, oy, in s);
             Float2 b = new((float)_paper.PointerPos.X, (float)_paper.PointerPos.Y);
@@ -2213,7 +2213,7 @@ public sealed class NodeGraphBuilder
         if (_onValidate == null) return true;
         bool sourcePlaceholder = IsPlaceholderPort(st.ConnNode!, st.ConnPort!, st.ConnFromOutput);
         bool hitPlaceholder = IsPlaceholderPort(node, port, output);
-        var req = st.ConnFromOutput
+        ConnectionRequest req = st.ConnFromOutput
             ? new ConnectionRequest(st.ConnNode!, st.ConnPort!, node, port, sourcePlaceholder, hitPlaceholder)
             : new ConnectionRequest(node, port, st.ConnNode!, st.ConnPort!, hitPlaceholder, sourcePlaceholder);
         return _onValidate(req);
@@ -2221,7 +2221,7 @@ public sealed class NodeGraphBuilder
 
     private static PortSide SideOf(NodeLayout l, string portId, bool output)
     {
-        foreach (var s in l.Ports) if (s.IsOutput == output && s.Port.Id == portId) return s.Side;
+        foreach (PortSlot s in l.Ports) if (s.IsOutput == output && s.Port.Id == portId) return s.Side;
         return output ? PortSide.Right : PortSide.Left;
     }
 
@@ -2291,7 +2291,7 @@ public sealed class NodeGraphBuilder
 
     private static List<Float2> EffectiveCPs(GraphConnection c, GraphState st)
     {
-        var cps = c.ControlPoints;
+        List<Float2> cps = c.ControlPoints;
         if (st.Mode == DragMode.MovePoint && st.ActiveWire == EdgeKey(c) && st.ActivePoint >= 0 && st.ActivePoint < cps.Count)
         {
             var list = new List<Float2>(cps);
@@ -2304,7 +2304,7 @@ public sealed class NodeGraphBuilder
     // Nearest distance (graph space) from p to the wire, and the segment index of the closest point.
     private static float WireDistGraph(Float2 a, IReadOnlyList<Float2> cps, Float2 b, PortSide sideA, PortSide sideB, Float2 p, out int seg)
     {
-        var samples = WireRoute(a, cps, b, sideA, sideB);
+        List<(Float2 p, int seg)> samples = WireRoute(a, cps, b, sideA, sideB);
         float best = float.MaxValue; seg = 0;
         for (int i = 1; i < samples.Count; i++)
         {
@@ -2362,7 +2362,7 @@ public sealed class NodeGraphBuilder
     {
         if (st.PendingArrow == null) return;
 
-        if (!layouts.TryGetValue(st.PendingArrow, out var source))
+        if (!layouts.TryGetValue(st.PendingArrow, out NodeLayout source))
         {
             st.PendingArrow = null;
             if (st.Mode == DragMode.Connect) { st.Mode = DragMode.None; st.ConnNode = null; }
@@ -2408,9 +2408,9 @@ public sealed class NodeGraphBuilder
     private string? NodeAt(Dictionary<string, NodeLayout> layouts, Float2 p)
     {
         string? hit = null;
-        foreach (var n in _nodes)
+        foreach (GraphNode n in _nodes)
         {
-            if (!layouts.TryGetValue(n.Id, out var l)) continue;
+            if (!layouts.TryGetValue(n.Id, out NodeLayout l)) continue;
             if (p.X >= l.Pos.X && p.X <= l.Pos.X + l.W && p.Y >= l.Pos.Y && p.Y <= l.Pos.Y + l.H) hit = n.Id;
         }
         return hit;
@@ -2432,7 +2432,7 @@ public sealed class NodeGraphBuilder
 
     private bool HasReverse(GraphConnection c)
     {
-        foreach (var other in _connections)
+        foreach (GraphConnection other in _connections)
             if (other.FromNode == c.ToNode && other.ToNode == c.FromNode) return true;
         return false;
     }
@@ -2444,7 +2444,7 @@ public sealed class NodeGraphBuilder
     private bool TryArrowLine(GraphConnection c, Dictionary<string, NodeLayout> layouts, out Float2 a, out Float2 b)
     {
         a = b = default;
-        if (!layouts.TryGetValue(c.FromNode, out var lf) || !layouts.TryGetValue(c.ToNode, out var lt)) return false;
+        if (!layouts.TryGetValue(c.FromNode, out NodeLayout lf) || !layouts.TryGetValue(c.ToNode, out NodeLayout lt)) return false;
 
         Float2 ca = Centre(lf), cb = Centre(lt);
         Float2 dir = cb - ca;
@@ -2461,9 +2461,9 @@ public sealed class NodeGraphBuilder
     private void PaintArrowsPass(Canvas canvas, Rect rect, in Snapshot s)
     {
         float ox = (float)rect.Min.X, oy = (float)rect.Min.Y;
-        foreach (var c in s.Connections)
+        foreach (GraphConnection c in s.Connections)
         {
-            if (!TryArrowLine(c, s.Layouts, out var ga, out var gb)) continue;
+            if (!TryArrowLine(c, s.Layouts, out Float2 ga, out Float2 gb)) continue;
             Float2 a = ToScreen(ga, ox, oy, in s), b = ToScreen(gb, ox, oy, in s);
 
             bool sel = s.SelectedWires != null && s.SelectedWires.Contains(c);

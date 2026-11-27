@@ -1,9 +1,8 @@
-namespace Prowl.Recast
+namespace Prowl.Recast;
+
+public enum RcPartition
 {
-    public enum RcPartition
-    {
-        WATERSHED = 0,
-        MONOTONE = 1,
-        LAYERS = 2,
-    }
+    WATERSHED = 0,
+    MONOTONE = 1,
+    LAYERS = 2,
 }

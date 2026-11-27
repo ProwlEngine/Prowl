@@ -18,9 +18,9 @@ public sealed partial class RoslynCSharpSession
     public override Task<IReadOnlyList<CodeLocation>> GetImplementationsAsync(int offset, CancellationToken ct)
         => Run<IReadOnlyList<CodeLocation>>(Array.Empty<CodeLocation>(), async (document, ct) =>
         {
-            var symbol = await FindSymbolAsync(document, offset, ct).ConfigureAwait(false);
+            ISymbol? symbol = await FindSymbolAsync(document, offset, ct).ConfigureAwait(false);
             if (symbol == null) return Array.Empty<CodeLocation>();
-            var solution = document.Project.Solution;
+            Solution solution = document.Project.Solution;
 
             var found = new List<ISymbol>();
             if (symbol is INamedTypeSymbol type)
@@ -41,7 +41,7 @@ public sealed partial class RoslynCSharpSession
     public override Task<IReadOnlyList<CodeLocation>> GetBaseDefinitionsAsync(int offset, CancellationToken ct)
         => Run<IReadOnlyList<CodeLocation>>(Array.Empty<CodeLocation>(), async (document, ct) =>
         {
-            var symbol = await FindSymbolAsync(document, offset, ct).ConfigureAwait(false);
+            ISymbol? symbol = await FindSymbolAsync(document, offset, ct).ConfigureAwait(false);
             if (symbol == null) return Array.Empty<CodeLocation>();
 
             var found = new List<ISymbol>();
@@ -63,7 +63,7 @@ public sealed partial class RoslynCSharpSession
 
                 if (symbol.ContainingType is { } owner)
                 {
-                    foreach (var member in owner.AllInterfaces.SelectMany(i => i.GetMembers()))
+                    foreach (ISymbol? member in owner.AllInterfaces.SelectMany(i => i.GetMembers()))
                         if (SymbolEqualityComparer.Default.Equals(owner.FindImplementationForInterfaceMember(member), symbol))
                             found.Add(member);
                 }
@@ -74,7 +74,7 @@ public sealed partial class RoslynCSharpSession
     public override Task<IReadOnlyList<CodeLocation>> GetTypeDefinitionAsync(int offset, CancellationToken ct)
         => Run<IReadOnlyList<CodeLocation>>(Array.Empty<CodeLocation>(), async (document, ct) =>
         {
-            var symbol = await FindSymbolAsync(document, offset, ct).ConfigureAwait(false);
+            ISymbol? symbol = await FindSymbolAsync(document, offset, ct).ConfigureAwait(false);
             ITypeSymbol? type = symbol switch
             {
                 ILocalSymbol l => l.Type,
@@ -97,16 +97,16 @@ public sealed partial class RoslynCSharpSession
     // Source declarations of the symbols, or a name only entry for each one that lives in an assembly.
     private static async Task<IReadOnlyList<CodeLocation>> LocationsOfAsync(Document document, IEnumerable<ISymbol> symbols, CancellationToken ct)
     {
-        var tree = (await document.GetSyntaxTreeAsync(ct).ConfigureAwait(false))!;
+        SyntaxTree tree = (await document.GetSyntaxTreeAsync(ct).ConfigureAwait(false))!;
         var result = new List<CodeLocation>();
         var seen = new HashSet<ISymbol>(SymbolEqualityComparer.Default);
-        foreach (var symbol in symbols)
+        foreach (ISymbol symbol in symbols)
         {
             if (!seen.Add(symbol)) continue;
-            var kind = RoslynMapping.SymbolKind(symbol);
+            CodeSymbolKind kind = RoslynMapping.SymbolKind(symbol);
             string display = symbol.ToDisplayString();
             bool any = false;
-            foreach (var location in symbol.Locations)
+            foreach (Location location in symbol.Locations)
             {
                 if (!location.IsInSource) continue;
                 result.Add(ToLocation(document, tree, location, display, kind));
@@ -122,14 +122,14 @@ public sealed partial class RoslynCSharpSession
     public override Task<IReadOnlyList<CodeLens>> GetCodeLensesAsync(int start, int length, CancellationToken ct)
         => Run<IReadOnlyList<CodeLens>>(Array.Empty<CodeLens>(), async (document, ct) =>
         {
-            var root = await document.GetSyntaxRootAsync(ct).ConfigureAwait(false);
-            var model = await document.GetSemanticModelAsync(ct).ConfigureAwait(false);
+            SyntaxNode? root = await document.GetSyntaxRootAsync(ct).ConfigureAwait(false);
+            SemanticModel? model = await document.GetSemanticModelAsync(ct).ConfigureAwait(false);
             if (root == null || model == null) return Array.Empty<CodeLens>();
 
             var span = new Microsoft.CodeAnalysis.Text.TextSpan(Math.Max(0, start), Math.Max(0, length));
-            var solution = document.Project.Solution;
+            Solution solution = document.Project.Solution;
             var lenses = new List<CodeLens>();
-            foreach (var node in root.DescendantNodes(span))
+            foreach (SyntaxNode node in root.DescendantNodes(span))
             {
                 if (lenses.Count >= MaxCodeLenses) break;
                 SyntaxToken name = node switch
@@ -144,10 +144,10 @@ public sealed partial class RoslynCSharpSession
                 };
                 if (name == default || !span.IntersectsWith(name.Span)) continue;
 
-                var symbol = model.GetDeclaredSymbol(node, ct);
+                ISymbol? symbol = model.GetDeclaredSymbol(node, ct);
                 if (symbol == null) continue;
 
-                var references = await SymbolFinder.FindReferencesAsync(symbol, solution, ct).ConfigureAwait(false);
+                IEnumerable<ReferencedSymbol> references = await SymbolFinder.FindReferencesAsync(symbol, solution, ct).ConfigureAwait(false);
                 int count = references.Sum(r => r.Locations.Count());
                 lenses.Add(new CodeLens { Offset = name.SpanStart, Text = count == 1 ? "1 reference" : $"{count} references" });
             }

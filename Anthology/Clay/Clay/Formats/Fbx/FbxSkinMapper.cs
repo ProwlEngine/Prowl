@@ -29,7 +29,7 @@ internal static class FbxSkinMapper
     public sealed class SkinMapping
     {
         /// <summary>Maps an FBX Model id (the mesh-bearing Model) to the IntermediateSkin index.</summary>
-        public Dictionary<long, int> ModelToSkinIndex { get; } = new();
+        public Dictionary<long, int> ModelToSkinIndex { get; } = [];
     }
 
     public static SkinMapping MapAll(
@@ -59,18 +59,18 @@ internal static class FbxSkinMapper
         var boneBindWorld = new Dictionary<IntermediateNode, Float4x4>();
         IngestBindPoseFromPoseObjects(doc, modelMapping, boneBindWorld);
 
-        foreach (var skin in doc.Objects.Values)
+        foreach (FbxObject skin in doc.Objects.Values)
         {
             if (skin.ObjectType != "Deformer" || skin.Subtype != "Skin") continue;
 
             // The Skin attaches to a Geometry via OO (Skin -> Geometry).
             FbxObject? geometry = null;
-            if (doc.ConnectionsBySource.TryGetValue(skin.Id, out var skinOut))
+            if (doc.ConnectionsBySource.TryGetValue(skin.Id, out List<FbxConnection>? skinOut))
             {
-                foreach (var c in skinOut)
+                foreach (FbxConnection c in skinOut)
                 {
                     if (c.Type != "OO") continue;
-                    if (!doc.Objects.TryGetValue(c.Destination, out var dst)) continue;
+                    if (!doc.Objects.TryGetValue(c.Destination, out FbxObject? dst)) continue;
                     if (dst.ObjectType == "Geometry" && dst.Subtype == "Mesh")
                     {
                         geometry = dst;
@@ -84,7 +84,7 @@ internal static class FbxSkinMapper
                 continue;
             }
 
-            if (!meshMapping.GeometryToMeshes.TryGetValue(geometry.Id, out var geoMapping))
+            if (!meshMapping.GeometryToMeshes.TryGetValue(geometry.Id, out FbxMeshMapper.GeometryMapping? geoMapping))
                 continue;
 
             // Resolve the mesh's bind-pose world matrix. The FBX spec says ibm = inv(TransformLink)
@@ -100,10 +100,10 @@ internal static class FbxSkinMapper
             // world matrix and is updated by the exporter alongside vertex moves, so we prefer it.
             // Falls back to cluster.Transform when there's no Pose::BindPose entry for the mesh.
             Float4x4? meshBindWorldOverride = null;
-            foreach (var meshModelObj in doc.GetDestinationObjects(geometry.Id, "Model"))
+            foreach (FbxObject meshModelObj in doc.GetDestinationObjects(geometry.Id, "Model"))
             {
-                if (!modelMapping.NodesByFbxId.TryGetValue(meshModelObj.Id, out var meshNode)) continue;
-                if (boneBindWorld.TryGetValue(meshNode, out var mbw))
+                if (!modelMapping.NodesByFbxId.TryGetValue(meshModelObj.Id, out IntermediateNode? meshNode)) continue;
+                if (boneBindWorld.TryGetValue(meshNode, out Float4x4 mbw))
                 {
                     meshBindWorldOverride = mbw;
                     break;
@@ -112,12 +112,12 @@ internal static class FbxSkinMapper
 
             // Gather every cluster connected to this skin (Cluster -> Skin OO).
             var clusters = new List<FbxObject>();
-            if (doc.ConnectionsByDestination.TryGetValue(skin.Id, out var clusterIn))
+            if (doc.ConnectionsByDestination.TryGetValue(skin.Id, out List<FbxConnection>? clusterIn))
             {
-                foreach (var c in clusterIn)
+                foreach (FbxConnection c in clusterIn)
                 {
                     if (c.Type != "OO") continue;
-                    if (!doc.Objects.TryGetValue(c.Source, out var src)) continue;
+                    if (!doc.Objects.TryGetValue(c.Source, out FbxObject? src)) continue;
                     if (src.ObjectType == "Deformer" && src.Subtype == "Cluster")
                         clusters.Add(src);
                 }
@@ -135,7 +135,7 @@ internal static class FbxSkinMapper
             int initialInfluences = 8;
             for (int m = geoMapping.FirstMeshIndex; m < geoMapping.FirstMeshIndex + geoMapping.MeshCount; m++)
             {
-                var mesh = scene.Meshes[m];
+                IntermediateMesh mesh = scene.Meshes[m];
                 int vc = mesh.Positions.Count;
                 mesh.VertexJoints = new int[vc * initialInfluences];
                 mesh.VertexWeights = new float[vc * initialInfluences];
@@ -149,16 +149,16 @@ internal static class FbxSkinMapper
             // Walk clusters in order, assigning a bone index per cluster.
             for (int bi = 0; bi < clusters.Count; bi++)
             {
-                var cluster = clusters[bi];
+                FbxObject cluster = clusters[bi];
 
                 // Find the bone Model via OO (Model -> Cluster).
                 IntermediateNode? boneNode = null;
-                if (doc.ConnectionsByDestination.TryGetValue(cluster.Id, out var clusterDestIn))
+                if (doc.ConnectionsByDestination.TryGetValue(cluster.Id, out List<FbxConnection>? clusterDestIn))
                 {
-                    foreach (var c in clusterDestIn)
+                    foreach (FbxConnection c in clusterDestIn)
                     {
                         if (c.Type != "OO") continue;
-                        if (!doc.Objects.TryGetValue(c.Source, out var src)) continue;
+                        if (!doc.Objects.TryGetValue(c.Source, out FbxObject? src)) continue;
                         if (src.ObjectType != "Model") continue;
                         if (modelMapping.NodesByFbxId.TryGetValue(src.Id, out boneNode))
                             break;
@@ -210,7 +210,7 @@ internal static class FbxSkinMapper
                     {
                         int meshIdx = geoMapping.MeshIndices[e];
                         int vIdx = geoMapping.VertexIndices[e];
-                        var mesh = scene.Meshes[meshIdx];
+                        IntermediateMesh mesh = scene.Meshes[meshIdx];
                         int slot = cursorPerMesh[meshIdx][vIdx]++;
 
                         // Grow if necessary: extend per-vertex influence buffers.
@@ -232,7 +232,7 @@ internal static class FbxSkinMapper
             scene.Skins.Add(iSkin);
 
             // Wire SkinIndex onto every Model node that renders this mesh.
-            foreach (var node in scene.Nodes)
+            foreach (IntermediateNode node in scene.Nodes)
             {
                 if (node.MeshIndex < geoMapping.FirstMeshIndex) continue;
                 if (node.MeshIndex >= geoMapping.FirstMeshIndex + geoMapping.MeshCount) continue;
@@ -240,7 +240,7 @@ internal static class FbxSkinMapper
             }
 
             // Record the model -> skin mapping for downstream wiring.
-            foreach (var modelObj in doc.GetSourceObjects(geometry.Id, "Model"))
+            foreach (FbxObject modelObj in doc.GetSourceObjects(geometry.Id, "Model"))
                 result.ModelToSkinIndex[modelObj.Id] = skinIndex;
         }
 
@@ -266,18 +266,18 @@ internal static class FbxSkinMapper
         FbxModelMapper.ModelMapping modelMapping,
         Dictionary<IntermediateNode, Float4x4> boneBindWorld)
     {
-        foreach (var pose in doc.Objects.Values)
+        foreach (FbxObject pose in doc.Objects.Values)
         {
             if (pose.ObjectType != "Pose") continue;
             if (!string.Equals(pose.Subtype, "BindPose", StringComparison.OrdinalIgnoreCase)) continue;
 
-            foreach (var poseNode in pose.Node.FindChildren("PoseNode"))
+            foreach (FbxNode poseNode in pose.Node.FindChildren("PoseNode"))
             {
                 long modelId = poseNode.FindChild("Node")?.LongAt(0) ?? 0;
                 if (modelId == 0) continue;
-                if (!modelMapping.NodesByFbxId.TryGetValue(modelId, out var node)) continue;
+                if (!modelMapping.NodesByFbxId.TryGetValue(modelId, out IntermediateNode? node)) continue;
 
-                var matrixChild = poseNode.FindChild("Matrix");
+                FbxNode? matrixChild = poseNode.FindChild("Matrix");
                 if (matrixChild is null || matrixChild.Properties.Count == 0) continue;
                 double[] flat = matrixChild.Properties[0].AsDoubleArray();
                 if (flat.Length != 16) continue;
@@ -309,7 +309,7 @@ internal static class FbxSkinMapper
         // Resolved world-at-bind per node, accumulated as we walk top-down.
         var resolvedWorld = new Dictionary<IntermediateNode, Float4x4>(boneBindWorld.Count);
 
-        foreach (var node in scene.Nodes)
+        foreach (IntermediateNode node in scene.Nodes)
         {
             // Compute this node's parent's world-at-bind.
             Float4x4 parentWorld = Float4x4.Identity;
@@ -325,10 +325,10 @@ internal static class FbxSkinMapper
             }
 
             // If this node is clustered, override its local TRS from the bind world.
-            if (boneBindWorld.TryGetValue(node, out var bindWorld))
+            if (boneBindWorld.TryGetValue(node, out Float4x4 bindWorld))
             {
                 Float4x4 boneLocal = Inverse4x4(parentWorld) * bindWorld;
-                Prowl.Clay.PostProcess.SceneBakerHelpers.DecomposeMatrix(boneLocal, out var t, out var r, out var s);
+                Prowl.Clay.PostProcess.SceneBakerHelpers.DecomposeMatrix(boneLocal, out Float3 t, out Quaternion r, out Float3 s);
                 node.LocalPosition = t;
                 node.LocalRotation = r;
                 node.LocalScale = s;
@@ -352,7 +352,7 @@ internal static class FbxSkinMapper
 
     private static Float4x4? ReadMatrix(FbxNode node, string childName)
     {
-        var child = node.FindChild(childName);
+        FbxNode? child = node.FindChild(childName);
         if (child is null || child.Properties.Count == 0) return null;
         double[] flat = child.Properties[0].AsDoubleArray();
         if (flat.Length != 16) return null;

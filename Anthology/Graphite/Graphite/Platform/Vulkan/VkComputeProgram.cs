@@ -52,12 +52,18 @@ internal unsafe partial class VkComputeProgram : ComputeProgram, IVkDescriptorPr
         (DescriptorSetLayouts, PerSetCounts, PipelineLayout, ResourceSetCount, _emptyDescriptorSetLayout)
             = VkDescriptorLayoutBuilder.Build(_gd, ResourceLayoutsArray, PushConstants);
 
-        ComputePipelineCreateInfo pipelineCI = new() { SType = StructureType.ComputePipelineCreateInfo };
-        pipelineCI.Layout = PipelineLayout;
+        ComputePipelineCreateInfo pipelineCI = new()
+        {
+            SType = StructureType.ComputePipelineCreateInfo,
+            Layout = PipelineLayout
+        };
 
-        PipelineShaderStageCreateInfo stageCI = new() { SType = StructureType.PipelineShaderStageCreateInfo };
-        stageCI.Module = _module;
-        stageCI.Stage = VkFormats.ToVkShaderStages(ShaderStages.Compute);
+        PipelineShaderStageCreateInfo stageCI = new()
+        {
+            SType = StructureType.PipelineShaderStageCreateInfo,
+            Module = _module,
+            Stage = VkFormats.ToVkShaderStages(ShaderStages.Compute)
+        };
         byte* entryPointPtr = stackalloc byte[Utf8Stack.ByteCount(stage.EntryPoint)];
         Utf8Stack.Write(stage.EntryPoint, entryPointPtr);
         stageCI.PName = entryPointPtr;

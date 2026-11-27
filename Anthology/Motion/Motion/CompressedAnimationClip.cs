@@ -1,5 +1,6 @@
 using System.Collections.Generic;
 using System.IO;
+
 using Prowl.Vector;
 using Prowl.Vector.Spatial;
 
@@ -63,7 +64,7 @@ public sealed class CompressedAnimationClip : AnimationClipBase
             if (reader.ReadBoolean())
                 return new FloatTrack(reader.ReadSingle(), null);
 
-            var values = new float[reader.ReadInt32()];
+            float[] values = new float[reader.ReadInt32()];
             for (int i = 0; i < values.Length; i++)
                 values[i] = reader.ReadSingle();
             return new FloatTrack(0f, values);
@@ -128,7 +129,7 @@ public sealed class CompressedAnimationClip : AnimationClipBase
             int length = reader.ReadInt32();
             if (length < 0)
                 return null;
-            var data = new ushort[length];
+            ushort[] data = new ushort[length];
             for (int i = 0; i < length; i++)
                 data[i] = reader.ReadUInt16();
             return data;
@@ -190,7 +191,7 @@ public sealed class CompressedAnimationClip : AnimationClipBase
         _floatTracks = new FloatTrack[source.Skeleton.FloatChannelCount];
         for (int c = 0; c < _floatTracks.Length; c++)
         {
-            var values = new float[source.FrameCount];
+            float[] values = new float[source.FrameCount];
             for (int f = 0; f < values.Length; f++)
                 values[f] = source.GetKeyFrameFloat(f, c);
             _floatTracks[c] = FloatTrack.From(values);
@@ -283,7 +284,7 @@ public sealed class CompressedAnimationClip : AnimationClipBase
 
     private static FloatTrack CompressFloat(IReadOnlyList<Pose> keyFrames, int channel)
     {
-        var values = new float[keyFrames.Count];
+        float[] values = new float[keyFrames.Count];
         for (int f = 0; f < values.Length; f++)
             values[f] = channel < keyFrames[f].FloatChannelCount ? keyFrames[f].GetFloat(channel) : 0f;
         return FloatTrack.From(values);
@@ -363,7 +364,7 @@ public sealed class CompressedAnimationClip : AnimationClipBase
         }
 
         var range = new Float3(MathF.Max(max.X - min.X, 0f), MathF.Max(max.Y - min.Y, 0f), MathF.Max(max.Z - min.Z, 0f));
-        var data = new ushort[FrameCount * 3];
+        ushort[] data = new ushort[FrameCount * 3];
         for (int f = 0; f < FrameCount; f++)
         {
             Float3 v = Channel(frames[f], bone, isScale);

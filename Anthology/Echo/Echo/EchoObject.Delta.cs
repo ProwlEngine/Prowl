@@ -14,8 +14,8 @@ public sealed partial class EchoObject
     /// <returns>An EchoObject containing the delta operations</returns>
     public static EchoObject CreateDelta(EchoObject from, EchoObject to)
     {
-        var delta = NewCompound();
-        var operations = NewList();
+        EchoObject delta = NewCompound();
+        EchoObject operations = NewList();
         delta.Add("Operations", operations);
 
         CompareRecursive(from, to, "", operations);
@@ -31,12 +31,12 @@ public sealed partial class EchoObject
     /// <returns>A new EchoObject with the delta applied</returns>
     public static EchoObject ApplyDelta(EchoObject baseline, EchoObject delta)
     {
-        var result = baseline.Clone();
+        EchoObject result = baseline.Clone();
 
-        if (!delta.TryGet("Operations", out var operationsList))
+        if (!delta.TryGet("Operations", out EchoObject? operationsList))
             throw new ArgumentException("Delta does not contain Operations list", nameof(delta));
 
-        foreach (var operation in operationsList!.List)
+        foreach (EchoObject operation in operationsList!.List)
         {
             ApplyOperation(result, operation);
         }
@@ -73,11 +73,11 @@ public sealed partial class EchoObject
 
     private static void CompareCompound(EchoObject from, EchoObject to, string path, EchoObject operations)
     {
-        var fromTags = from.Tags;
-        var toTags = to.Tags;
+        CompoundTags fromTags = from.Tags;
+        CompoundTags toTags = to.Tags;
 
         // Find removed keys
-        foreach (var key in fromTags.Keys)
+        foreach (string key in fromTags.Keys)
         {
             if (!toTags.ContainsKey(key))
             {
@@ -86,7 +86,7 @@ public sealed partial class EchoObject
         }
 
         // Find added or changed keys
-        foreach (var (key, toValue) in toTags)
+        foreach ((string? key, EchoObject? toValue) in toTags)
         {
             string escapedKey = EscapePathSegment(key);
             string childPath = string.IsNullOrEmpty(path) ? escapedKey : $"{path}/{escapedKey}";
@@ -106,8 +106,8 @@ public sealed partial class EchoObject
 
     private static void CompareList(EchoObject from, EchoObject to, string path, EchoObject operations)
     {
-        var fromList = from.List;
-        var toList = to.List;
+        List<EchoObject> fromList = from.List;
+        List<EchoObject> toList = to.List;
 
         int minLen = Math.Min(fromList.Count, toList.Count);
 
@@ -138,7 +138,7 @@ public sealed partial class EchoObject
 
     private static void AddSetValueOperation(EchoObject operations, string path, EchoObject value)
     {
-        var op = NewCompound();
+        EchoObject op = NewCompound();
         op.Add("Type", new EchoObject("SetValue"));
         op.Add("Path", new EchoObject(path));
         op.Add("Value", value.Clone());
@@ -147,7 +147,7 @@ public sealed partial class EchoObject
 
     private static void AddAddCompoundTagOperation(EchoObject operations, string path, string key, EchoObject value)
     {
-        var op = NewCompound();
+        EchoObject op = NewCompound();
         op.Add("Type", new EchoObject("AddCompoundTag"));
         op.Add("Path", new EchoObject(path));
         op.Add("Key", new EchoObject(key));
@@ -157,7 +157,7 @@ public sealed partial class EchoObject
 
     private static void AddRemoveCompoundTagOperation(EchoObject operations, string path, string key)
     {
-        var op = NewCompound();
+        EchoObject op = NewCompound();
         op.Add("Type", new EchoObject("RemoveCompoundTag"));
         op.Add("Path", new EchoObject(path));
         op.Add("Key", new EchoObject(key));
@@ -166,7 +166,7 @@ public sealed partial class EchoObject
 
     private static void AddAddListItemOperation(EchoObject operations, string path, int index, EchoObject value)
     {
-        var op = NewCompound();
+        EchoObject op = NewCompound();
         op.Add("Type", new EchoObject("AddListItem"));
         op.Add("Path", new EchoObject(path));
         op.Add("Index", new EchoObject(index));
@@ -176,7 +176,7 @@ public sealed partial class EchoObject
 
     private static void AddRemoveListItemOperation(EchoObject operations, string path, int index)
     {
-        var op = NewCompound();
+        EchoObject op = NewCompound();
         op.Add("Type", new EchoObject("RemoveListItem"));
         op.Add("Path", new EchoObject(path));
         op.Add("Index", new EchoObject(index));
@@ -216,9 +216,9 @@ public sealed partial class EchoObject
         {
             // Replacing the root - need to copy all properties using SetValue
             // Clear parent first to allow setting
-            var oldParent = target.Parent;
-            var oldKey = target.CompoundKey;
-            var oldIndex = target.ListIndex;
+            EchoObject? oldParent = target.Parent;
+            string? oldKey = target.CompoundKey;
+            int? oldIndex = target.ListIndex;
             target.Parent = null;
             target.CompoundKey = null;
             target.ListIndex = null;
@@ -245,8 +245,8 @@ public sealed partial class EchoObject
         }
         else
         {
-            var parentPath = GetParentPath(path);
-            var key = GetLastSegment(path);
+            string parentPath = GetParentPath(path);
+            string key = GetLastSegment(path);
 
             if (string.IsNullOrEmpty(parentPath))
             {
@@ -257,7 +257,7 @@ public sealed partial class EchoObject
                 }
                 else if (target.TagType == EchoType.List && int.TryParse(key, out int index))
                 {
-                    var cloned = value.Clone();
+                    EchoObject cloned = value.Clone();
                     target.List[index] = cloned;
                     cloned.Parent = target;
                     cloned.ListIndex = index;
@@ -265,17 +265,14 @@ public sealed partial class EchoObject
             }
             else
             {
-                var parent = NavigatePath(target, parentPath);
-                if (parent == null)
-                    throw new InvalidOperationException($"Parent path not found: {parentPath}");
-
+                EchoObject? parent = NavigatePath(target, parentPath) ?? throw new InvalidOperationException($"Parent path not found: {parentPath}");
                 if (parent.TagType == EchoType.Compound)
                 {
                     parent[key] = value.Clone();
                 }
                 else if (parent.TagType == EchoType.List && int.TryParse(key, out int index))
                 {
-                    var cloned = value.Clone();
+                    EchoObject cloned = value.Clone();
                     parent.List[index] = cloned;
                     cloned.Parent = parent;
                     cloned.ListIndex = index;
@@ -286,9 +283,7 @@ public sealed partial class EchoObject
 
     private static void ApplyAddCompoundTag(EchoObject target, string path, string key, EchoObject value)
     {
-        var compound = string.IsNullOrEmpty(path) ? target : NavigatePath(target, path);
-        if (compound == null)
-            throw new InvalidOperationException($"Path not found: {path}");
+        EchoObject? compound = (string.IsNullOrEmpty(path) ? target : NavigatePath(target, path)) ?? throw new InvalidOperationException($"Path not found: {path}");
         if (compound.TagType != EchoType.Compound)
             throw new InvalidOperationException($"Target at path '{path}' is not a compound");
 
@@ -297,9 +292,7 @@ public sealed partial class EchoObject
 
     private static void ApplyRemoveCompoundTag(EchoObject target, string path, string key)
     {
-        var compound = string.IsNullOrEmpty(path) ? target : NavigatePath(target, path);
-        if (compound == null)
-            throw new InvalidOperationException($"Path not found: {path}");
+        EchoObject? compound = (string.IsNullOrEmpty(path) ? target : NavigatePath(target, path)) ?? throw new InvalidOperationException($"Path not found: {path}");
         if (compound.TagType != EchoType.Compound)
             throw new InvalidOperationException($"Target at path '{path}' is not a compound");
 
@@ -308,9 +301,7 @@ public sealed partial class EchoObject
 
     private static void ApplyAddListItem(EchoObject target, string path, int index, EchoObject value)
     {
-        var list = string.IsNullOrEmpty(path) ? target : NavigatePath(target, path);
-        if (list == null)
-            throw new InvalidOperationException($"Path not found: {path}");
+        EchoObject? list = (string.IsNullOrEmpty(path) ? target : NavigatePath(target, path)) ?? throw new InvalidOperationException($"Path not found: {path}");
         if (list.TagType != EchoType.List)
             throw new InvalidOperationException($"Target at path '{path}' is not a list");
 
@@ -319,9 +310,7 @@ public sealed partial class EchoObject
 
     private static void ApplyRemoveListItem(EchoObject target, string path, int index)
     {
-        var list = string.IsNullOrEmpty(path) ? target : NavigatePath(target, path);
-        if (list == null)
-            throw new InvalidOperationException($"Path not found: {path}");
+        EchoObject? list = (string.IsNullOrEmpty(path) ? target : NavigatePath(target, path)) ?? throw new InvalidOperationException($"Path not found: {path}");
         if (list.TagType != EchoType.List)
             throw new InvalidOperationException($"Target at path '{path}' is not a list");
 
@@ -364,7 +353,7 @@ public sealed partial class EchoObject
             }
             else if (current.TagType == EchoType.List && int.TryParse(key, out int idx))
             {
-                var list = current.List;
+                List<EchoObject> list = current.List;
                 if (idx < 0 || idx >= list.Count) return null;
                 current = list[idx];
             }

@@ -16,6 +16,7 @@ using Microsoft.CodeAnalysis.CSharp;
 using Microsoft.CodeAnalysis.Diagnostics;
 using Microsoft.CodeAnalysis.FindSymbols;
 using Microsoft.CodeAnalysis.Formatting;
+using Microsoft.CodeAnalysis.Options;
 using Microsoft.CodeAnalysis.QuickInfo;
 using Microsoft.CodeAnalysis.Rename;
 using Microsoft.CodeAnalysis.Text;
@@ -30,7 +31,7 @@ public sealed partial class RoslynCSharpSession : CodeLanguageSession
     private sealed record CompletionState(Document Document, TextSpan Span, int TextLength);
 
     private readonly CSharpWorkspace _workspace;
-    private readonly ConditionalWeakTable<CodeCompletionList, CompletionState> _lists = new();
+    private readonly ConditionalWeakTable<CodeCompletionList, CompletionState> _lists = [];
     private SourceText _text;
     private bool _disposed;
 
@@ -60,7 +61,7 @@ public sealed partial class RoslynCSharpSession : CodeLanguageSession
 
     private Task<T> Run<T>(T fallback, Func<Document, CancellationToken, Task<T>> work, CancellationToken ct)
     {
-        var document = Document;
+        Document? document = Document;
         if (document == null) return Task.FromResult(fallback);
         return Task.Run(() => work(document, ct), ct);
     }
@@ -71,9 +72,9 @@ public sealed partial class RoslynCSharpSession : CodeLanguageSession
             var service = CompletionService.GetService(document);
             if (service == null) return null;
 
-            var text = await document.GetTextAsync(ct).ConfigureAwait(false);
+            SourceText text = await document.GetTextAsync(ct).ConfigureAwait(false);
             offset = Math.Clamp(offset, 0, text.Length);
-            var roslynTrigger = trigger.Kind switch
+            CompletionTrigger roslynTrigger = trigger.Kind switch
             {
                 CodeCompletionTriggerKind.Character => CompletionTrigger.CreateInsertionTrigger(trigger.Character),
                 CodeCompletionTriggerKind.Deletion => CompletionTrigger.CreateDeletionTrigger(trigger.Character),
@@ -82,12 +83,12 @@ public sealed partial class RoslynCSharpSession : CodeLanguageSession
             if (trigger.Kind == CodeCompletionTriggerKind.Character && !service.ShouldTriggerCompletion(text, offset, roslynTrigger))
                 return null;
 
-            var list = await service.GetCompletionsAsync(document, offset, roslynTrigger, cancellationToken: ct).ConfigureAwait(false);
+            CompletionList list = await service.GetCompletionsAsync(document, offset, roslynTrigger, cancellationToken: ct).ConfigureAwait(false);
             if (list.ItemsList.Count == 0) return null;
 
-            var defaultCommit = list.Rules.DefaultCommitCharacters;
+            ImmutableArray<char> defaultCommit = list.Rules.DefaultCommitCharacters;
             var items = new List<CodeCompletionItem>(list.ItemsList.Count);
-            foreach (var item in list.ItemsList)
+            foreach (CompletionItem item in list.ItemsList)
             {
                 ct.ThrowIfCancellationRequested();
                 items.Add(new CodeCompletionItem
@@ -117,13 +118,13 @@ public sealed partial class RoslynCSharpSession : CodeLanguageSession
     {
         if (rules.IsDefaultOrEmpty) return new string(defaults.AsSpan());
         var set = new List<char>(defaults);
-        foreach (var rule in rules)
+        foreach (CharacterSetModificationRule rule in rules)
         {
             switch (rule.Kind)
             {
                 case CharacterSetModificationKind.Add: set.AddRange(rule.Characters); break;
                 case CharacterSetModificationKind.Remove: set.RemoveAll(rule.Characters.Contains); break;
-                case CharacterSetModificationKind.Replace: set = new List<char>(rule.Characters); break;
+                case CharacterSetModificationKind.Replace: set = [with(rule.Characters)]; break;
             }
         }
         return new string(set.Distinct().ToArray());
@@ -136,13 +137,13 @@ public sealed partial class RoslynCSharpSession : CodeLanguageSession
             var service = CompletionService.GetService(document);
             if (service == null) return null;
 
-            var description = await service.GetDescriptionAsync(document, roslynItem, ct).ConfigureAwait(false);
+            CompletionDescription? description = await service.GetDescriptionAsync(document, roslynItem, ct).ConfigureAwait(false);
             if (description == null || description.TaggedParts.IsDefaultOrEmpty) return null;
 
-            var parts = description.TaggedParts;
+            ImmutableArray<TaggedText> parts = description.TaggedParts;
             int lineBreak = parts.IndexOf(parts.FirstOrDefault(p => p.Tag == TextTags.LineBreak));
-            var signature = lineBreak < 0 ? parts : parts.Take(lineBreak);
-            var rest = lineBreak < 0 ? Enumerable.Empty<TaggedText>() : parts.Skip(lineBreak + 1);
+            IEnumerable<TaggedText> signature = lineBreak < 0 ? parts : parts.Take(lineBreak);
+            IEnumerable<TaggedText> rest = lineBreak < 0 ? Enumerable.Empty<TaggedText>() : parts.Skip(lineBreak + 1);
             return new CodeQuickInfo
             {
                 Signature = RoslynMapping.Tagged(signature),
@@ -160,7 +161,7 @@ public sealed partial class RoslynCSharpSession : CodeLanguageSession
             if (s.Length > 0) paragraphs.Add(s);
             current.Clear();
         }
-        foreach (var part in parts)
+        foreach (TaggedText part in parts)
         {
             if (part.Tag == TextTags.LineBreak) Flush();
             else current.Append(part.Text);
@@ -171,7 +172,7 @@ public sealed partial class RoslynCSharpSession : CodeLanguageSession
 
     public override CodeCompletionCommit? ResolveCompletion(CodeCompletionList list, CodeCompletionItem item, int caretOffset, char commitChar)
     {
-        if (item.Data is not CompletionItem roslynItem || !_lists.TryGetValue(list, out var state)) return null;
+        if (item.Data is not CompletionItem roslynItem || !_lists.TryGetValue(list, out CompletionState? state)) return null;
         var service = CompletionService.GetService(state.Document);
         if (service == null) return null;
 
@@ -181,10 +182,10 @@ public sealed partial class RoslynCSharpSession : CodeLanguageSession
         if (spanEnd + delta < spanStart) return null;
 
         char? commit = commitChar == '\0' ? null : commitChar;
-        var change = Task.Run(() => service.GetChangeAsync(state.Document, roslynItem, commit)).GetAwaiter().GetResult();
+        CompletionChange change = Task.Run(() => service.GetChangeAsync(state.Document, roslynItem, commit)).GetAwaiter().GetResult();
 
         var edits = new List<CodeTextEdit>();
-        foreach (var tc in change.TextChanges)
+        foreach (RoslynTextChange tc in change.TextChanges)
         {
             int start = tc.Span.Start, end = tc.Span.End;
             if (start > spanStart && start >= spanEnd) { start += delta; end += delta; }
@@ -199,12 +200,12 @@ public sealed partial class RoslynCSharpSession : CodeLanguageSession
         {
             var service = QuickInfoService.GetService(document);
             if (service == null) return null;
-            var info = await service.GetQuickInfoAsync(document, offset, ct).ConfigureAwait(false);
+            QuickInfoItem? info = await service.GetQuickInfoAsync(document, offset, ct).ConfigureAwait(false);
             if (info == null) return null;
 
             var signature = new List<CodeTaggedText>();
             var documentation = new List<string>();
-            foreach (var section in info.Sections)
+            foreach (QuickInfoSection section in info.Sections)
             {
                 if (section.Kind == QuickInfoSectionKinds.Description)
                     signature.AddRange(RoslynMapping.Tagged(section.TaggedParts));
@@ -224,25 +225,25 @@ public sealed partial class RoslynCSharpSession : CodeLanguageSession
     public override Task<CodeSignatureHelp?> GetSignatureHelpAsync(int offset, CancellationToken ct)
         => Run<CodeSignatureHelp?>(null, async (document, ct) =>
         {
-            var model = await document.GetSemanticModelAsync(ct).ConfigureAwait(false);
+            SemanticModel? model = await document.GetSemanticModelAsync(ct).ConfigureAwait(false);
             return model == null ? null : SignatureHelpBuilder.Compute(model, offset, ct);
         }, ct);
 
     public override Task<IReadOnlyList<CodeDiagnostic>> GetDiagnosticsAsync(CancellationToken ct)
         => Run<IReadOnlyList<CodeDiagnostic>>(Array.Empty<CodeDiagnostic>(), async (document, ct) =>
         {
-            var model = await document.GetSemanticModelAsync(ct).ConfigureAwait(false);
+            SemanticModel? model = await document.GetSemanticModelAsync(ct).ConfigureAwait(false);
             if (model == null) return Array.Empty<CodeDiagnostic>();
 
-            var tree = model.SyntaxTree;
+            SyntaxTree tree = model.SyntaxTree;
             var seen = new HashSet<(string, TextSpan)>();
             var result = new List<CodeDiagnostic>();
-            var all = tree.GetDiagnostics(ct).Concat(model.GetDiagnostics(cancellationToken: ct))
+            IEnumerable<Diagnostic> all = tree.GetDiagnostics(ct).Concat(model.GetDiagnostics(cancellationToken: ct))
                 .Concat(await AnalyzerDiagnosticsAsync(model, ct).ConfigureAwait(false));
-            foreach (var d in all)
+            foreach (Diagnostic? d in all)
             {
                 if (d.Severity == DiagnosticSeverity.Hidden || d.IsSuppressed || d.Location.SourceTree != tree) continue;
-                var span = d.Location.SourceSpan;
+                TextSpan span = d.Location.SourceSpan;
                 if (!seen.Add((d.Id, span))) continue;
                 result.Add(new CodeDiagnostic
                 {
@@ -263,17 +264,17 @@ public sealed partial class RoslynCSharpSession : CodeLanguageSession
 
     private async Task<IEnumerable<Diagnostic>> AnalyzerDiagnosticsAsync(SemanticModel model, CancellationToken ct)
     {
-        var analyzers = _workspace.Analyzers;
+        ImmutableArray<DiagnosticAnalyzer> analyzers = _workspace.Analyzers;
         if (analyzers.IsDefaultOrEmpty) return Array.Empty<Diagnostic>();
 
         // A faulty analyzer must not take the compiler's own diagnostics down with it.
         var options = new CompilationWithAnalyzersOptions(new AnalyzerOptions(ImmutableArray<AdditionalText>.Empty),
             onAnalyzerException: null, concurrentAnalysis: true, logAnalyzerExecutionTime: false, reportSuppressedDiagnostics: false);
-        var withAnalyzers = model.Compilation.WithAnalyzers(analyzers, options);
+        CompilationWithAnalyzers withAnalyzers = model.Compilation.WithAnalyzers(analyzers, options);
         try
         {
-            var syntax = await withAnalyzers.GetAnalyzerSyntaxDiagnosticsAsync(model.SyntaxTree, ct).ConfigureAwait(false);
-            var semantic = await withAnalyzers.GetAnalyzerSemanticDiagnosticsAsync(model, null, ct).ConfigureAwait(false);
+            ImmutableArray<Diagnostic> syntax = await withAnalyzers.GetAnalyzerSyntaxDiagnosticsAsync(model.SyntaxTree, ct).ConfigureAwait(false);
+            ImmutableArray<Diagnostic> semantic = await withAnalyzers.GetAnalyzerSemanticDiagnosticsAsync(model, null, ct).ConfigureAwait(false);
             return syntax.Concat(semantic);
         }
         catch (Exception e) when (e is not OperationCanceledException)
@@ -285,15 +286,15 @@ public sealed partial class RoslynCSharpSession : CodeLanguageSession
     public override Task<IReadOnlyList<CodeClassifiedSpan>> GetClassificationsAsync(int start, int length, CancellationToken ct)
         => Run<IReadOnlyList<CodeClassifiedSpan>>(Array.Empty<CodeClassifiedSpan>(), async (document, ct) =>
         {
-            var text = await document.GetTextAsync(ct).ConfigureAwait(false);
+            SourceText text = await document.GetTextAsync(ct).ConfigureAwait(false);
             start = Math.Clamp(start, 0, text.Length);
             length = Math.Clamp(length, 0, text.Length - start);
 
-            var spans = await Classifier.GetClassifiedSpansAsync(document, new TextSpan(start, length), ct).ConfigureAwait(false);
+            IEnumerable<ClassifiedSpan> spans = await Classifier.GetClassifiedSpansAsync(document, new TextSpan(start, length), ct).ConfigureAwait(false);
             var result = new List<CodeClassifiedSpan>();
-            foreach (var span in spans)
+            foreach (ClassifiedSpan span in spans)
             {
-                if (span.TextSpan.IsEmpty || !RoslynMapping.TryClassification(span.ClassificationType, out var kind)) continue;
+                if (span.TextSpan.IsEmpty || !RoslynMapping.TryClassification(span.ClassificationType, out CodeTokenKind kind)) continue;
                 var mapped = new CodeClassifiedSpan(span.TextSpan.Start, span.TextSpan.Length, kind);
                 if (result.Count > 0 && result[^1].Start == mapped.Start && result[^1].Length == mapped.Length)
                     result[^1] = mapped;
@@ -305,7 +306,7 @@ public sealed partial class RoslynCSharpSession : CodeLanguageSession
 
     private static async Task<ISymbol?> FindSymbolAsync(Document document, int offset, CancellationToken ct)
     {
-        var symbol = await SymbolFinder.FindSymbolAtPositionAsync(document, offset, ct).ConfigureAwait(false);
+        ISymbol? symbol = await SymbolFinder.FindSymbolAtPositionAsync(document, offset, ct).ConfigureAwait(false);
         if (symbol == null && offset > 0)
             symbol = await SymbolFinder.FindSymbolAtPositionAsync(document, offset - 1, ct).ConfigureAwait(false);
         return symbol;
@@ -314,16 +315,16 @@ public sealed partial class RoslynCSharpSession : CodeLanguageSession
     public override Task<IReadOnlyList<CodeLocation>> GetDefinitionAsync(int offset, CancellationToken ct)
         => Run<IReadOnlyList<CodeLocation>>(Array.Empty<CodeLocation>(), async (document, ct) =>
         {
-            var symbol = await FindSymbolAsync(document, offset, ct).ConfigureAwait(false);
+            ISymbol? symbol = await FindSymbolAsync(document, offset, ct).ConfigureAwait(false);
             if (symbol == null) return Array.Empty<CodeLocation>();
 
-            var tree = (await document.GetSyntaxTreeAsync(ct).ConfigureAwait(false))!;
-            var definition = await SymbolFinder.FindSourceDefinitionAsync(symbol, document.Project.Solution, ct).ConfigureAwait(false) ?? symbol;
-            var kind = RoslynMapping.SymbolKind(definition);
+            SyntaxTree tree = (await document.GetSyntaxTreeAsync(ct).ConfigureAwait(false))!;
+            ISymbol definition = await SymbolFinder.FindSourceDefinitionAsync(symbol, document.Project.Solution, ct).ConfigureAwait(false) ?? symbol;
+            CodeSymbolKind kind = RoslynMapping.SymbolKind(definition);
             string display = definition.ToDisplayString();
 
             var result = new List<CodeLocation>();
-            foreach (var location in definition.Locations)
+            foreach (Location location in definition.Locations)
                 if (location.IsInSource)
                     result.Add(ToLocation(document, tree, location, display, kind));
 
@@ -335,7 +336,7 @@ public sealed partial class RoslynCSharpSession : CodeLanguageSession
     // A symbol from a referenced assembly: its source when the assembly's PDB names files on this machine, else its assembly name.
     private static async Task<CodeLocation> AssemblyLocationAsync(Document document, ISymbol symbol, string display, CodeSymbolKind kind, CancellationToken ct)
     {
-        var compilation = await document.Project.GetCompilationAsync(ct).ConfigureAwait(false);
+        Compilation? compilation = await document.Project.GetCompilationAsync(ct).ConfigureAwait(false);
         return (compilation != null ? PdbSourceLocator.Find(compilation, symbol, display, kind) : null)
             ?? new CodeLocation { Display = display, Kind = kind, Assembly = symbol.ContainingAssembly?.Name };
     }
@@ -343,12 +344,12 @@ public sealed partial class RoslynCSharpSession : CodeLanguageSession
     public override Task<IReadOnlyList<CodeLocation>> FindReferencesAsync(int offset, CancellationToken ct)
         => Run<IReadOnlyList<CodeLocation>>(Array.Empty<CodeLocation>(), async (document, ct) =>
         {
-            var symbol = await FindSymbolAsync(document, offset, ct).ConfigureAwait(false);
+            ISymbol? symbol = await FindSymbolAsync(document, offset, ct).ConfigureAwait(false);
             if (symbol == null) return Array.Empty<CodeLocation>();
 
-            var tree = (await document.GetSyntaxTreeAsync(ct).ConfigureAwait(false))!;
-            var solution = document.Project.Solution;
-            var references = await SymbolFinder.FindReferencesAsync(symbol, solution, ct).ConfigureAwait(false);
+            SyntaxTree tree = (await document.GetSyntaxTreeAsync(ct).ConfigureAwait(false))!;
+            Solution solution = document.Project.Solution;
+            IEnumerable<ReferencedSymbol> references = await SymbolFinder.FindReferencesAsync(symbol, solution, ct).ConfigureAwait(false);
             var seen = new HashSet<(SyntaxTree?, TextSpan)>();
             var result = new List<CodeLocation>();
             void Add(Location location, ISymbol owner)
@@ -357,13 +358,13 @@ public sealed partial class RoslynCSharpSession : CodeLanguageSession
                 result.Add(ToLocation(document, tree, location, LineText(location), RoslynMapping.SymbolKind(owner)));
             }
 
-            foreach (var referenced in references)
+            foreach (ReferencedSymbol referenced in references)
             {
                 // A property's accessors come back as symbols of their own, declared at the get and set keywords.
                 bool accessor = referenced.Definition is IMethodSymbol { AssociatedSymbol: not null };
                 if (!accessor)
-                    foreach (var location in referenced.Definition.Locations) Add(location, referenced.Definition);
-                foreach (var reference in referenced.Locations) Add(reference.Location, referenced.Definition);
+                    foreach (Location location in referenced.Definition.Locations) Add(location, referenced.Definition);
+                foreach (ReferenceLocation reference in referenced.Locations) Add(reference.Location, referenced.Definition);
             }
             return result;
         }, ct);
@@ -371,19 +372,19 @@ public sealed partial class RoslynCSharpSession : CodeLanguageSession
     public override Task<IReadOnlyList<CodeClassifiedSpan>> GetHighlightsAsync(int offset, CancellationToken ct)
         => Run<IReadOnlyList<CodeClassifiedSpan>>(Array.Empty<CodeClassifiedSpan>(), async (document, ct) =>
         {
-            var symbol = await FindSymbolAsync(document, offset, ct).ConfigureAwait(false);
+            ISymbol? symbol = await FindSymbolAsync(document, offset, ct).ConfigureAwait(false);
             if (symbol == null) return Array.Empty<CodeClassifiedSpan>();
 
-            var tree = await document.GetSyntaxTreeAsync(ct).ConfigureAwait(false);
-            var references = await SymbolFinder.FindReferencesAsync(symbol, document.Project.Solution,
+            SyntaxTree? tree = await document.GetSyntaxTreeAsync(ct).ConfigureAwait(false);
+            IEnumerable<ReferencedSymbol> references = await SymbolFinder.FindReferencesAsync(symbol, document.Project.Solution,
                 ImmutableHashSet.Create(document), ct).ConfigureAwait(false);
 
             var spans = new SortedSet<TextSpan>();
-            foreach (var referenced in references)
+            foreach (ReferencedSymbol referenced in references)
             {
-                foreach (var location in referenced.Definition.Locations)
+                foreach (Location location in referenced.Definition.Locations)
                     if (location.SourceTree == tree) spans.Add(location.SourceSpan);
-                foreach (var reference in referenced.Locations)
+                foreach (ReferenceLocation reference in referenced.Locations)
                     if (reference.Location.SourceTree == tree) spans.Add(reference.Location.SourceSpan);
             }
             return spans.Select(s => new CodeClassifiedSpan(s.Start, s.Length, CodeTokenKind.Identifier)).ToList();
@@ -392,13 +393,13 @@ public sealed partial class RoslynCSharpSession : CodeLanguageSession
     public override Task<IReadOnlyList<CodeAction>> GetCodeActionsAsync(int start, int length, CancellationToken ct)
         => Run<IReadOnlyList<CodeAction>>(Array.Empty<CodeAction>(), async (document, ct) =>
         {
-            var model = await document.GetSemanticModelAsync(ct).ConfigureAwait(false);
+            SemanticModel? model = await document.GetSemanticModelAsync(ct).ConfigureAwait(false);
             if (model == null) return Array.Empty<CodeAction>();
 
             var span = new TextSpan(start, Math.Max(0, length));
             var actions = new List<CodeAction>(AddImportProvider.GetActions(model, span, ct));
             var titles = new HashSet<string>(actions.Select(a => a.Title), StringComparer.Ordinal);
-            foreach (var action in await RoslynCodeActions.GetAsync(document, span, ct).ConfigureAwait(false))
+            foreach (CodeAction action in await RoslynCodeActions.GetAsync(document, span, ct).ConfigureAwait(false))
                 if (titles.Add(action.Title)) actions.Add(action);
             return actions;
         }, ct);
@@ -406,25 +407,25 @@ public sealed partial class RoslynCSharpSession : CodeLanguageSession
     public override Task<IReadOnlyList<CodeTextEdit>> FormatAsync(int start, int length, CancellationToken ct)
         => Run<IReadOnlyList<CodeTextEdit>>(Array.Empty<CodeTextEdit>(), async (document, ct) =>
         {
-            var root = await document.GetSyntaxRootAsync(ct).ConfigureAwait(false);
+            SyntaxNode? root = await document.GetSyntaxRootAsync(ct).ConfigureAwait(false);
             if (root == null) return Array.Empty<CodeTextEdit>();
 
-            var span = length < 0 ? root.FullSpan : TextSpan.FromBounds(Math.Clamp(start, 0, root.FullSpan.End), Math.Clamp(start + length, 0, root.FullSpan.End));
+            TextSpan span = length < 0 ? root.FullSpan : TextSpan.FromBounds(Math.Clamp(start, 0, root.FullSpan.End), Math.Clamp(start + length, 0, root.FullSpan.End));
             return FormatSpan(document, root, span, ct);
         }, ct);
 
     public override Task<IReadOnlyList<CodeTextEdit>> FormatOnTypeAsync(int offset, char typed, CancellationToken ct)
         => Run<IReadOnlyList<CodeTextEdit>>(Array.Empty<CodeTextEdit>(), async (document, ct) =>
         {
-            var root = await document.GetSyntaxRootAsync(ct).ConfigureAwait(false);
+            SyntaxNode? root = await document.GetSyntaxRootAsync(ct).ConfigureAwait(false);
             if (root == null || offset <= 0 || offset > root.FullSpan.End) return Array.Empty<CodeTextEdit>();
 
-            var token = root.FindToken(offset - 1);
-            var kind = typed == ';' ? SyntaxKind.SemicolonToken : SyntaxKind.CloseBraceToken;
+            SyntaxToken token = root.FindToken(offset - 1);
+            SyntaxKind kind = typed == ';' ? SyntaxKind.SemicolonToken : SyntaxKind.CloseBraceToken;
             if (!token.IsKind(kind) || token.IsMissing || token.Span.End != offset || token.Parent == null) return Array.Empty<CodeTextEdit>();
 
             // A '}' formats the whole statement or member its block belongs to, a ';' the statement it ends.
-            var node = token.Parent;
+            SyntaxNode node = token.Parent;
             if (node is Microsoft.CodeAnalysis.CSharp.Syntax.BlockSyntax { Parent: { } owner and not Microsoft.CodeAnalysis.CSharp.Syntax.BlockSyntax }) node = owner;
             return FormatSpan(document, root, TextSpan.FromBounds(node.FullSpan.Start, token.Span.End), ct);
         }, ct);
@@ -432,8 +433,8 @@ public sealed partial class RoslynCSharpSession : CodeLanguageSession
     public override Task<IReadOnlyList<CodeTextEdit>> OrganizeUsingsAsync(CancellationToken ct)
         => Run<IReadOnlyList<CodeTextEdit>>(Array.Empty<CodeTextEdit>(), async (document, ct) =>
         {
-            var root = await document.GetSyntaxRootAsync(ct).ConfigureAwait(false);
-            var model = await document.GetSemanticModelAsync(ct).ConfigureAwait(false);
+            SyntaxNode? root = await document.GetSyntaxRootAsync(ct).ConfigureAwait(false);
+            SemanticModel? model = await document.GetSemanticModelAsync(ct).ConfigureAwait(false);
             if (root == null || model == null) return Array.Empty<CodeTextEdit>();
 
             // CS8019 is the compiler's own "unnecessary using directive".
@@ -442,18 +443,18 @@ public sealed partial class RoslynCSharpSession : CodeLanguageSession
                 .Select(d => root.FindNode(d.Location.SourceSpan))
                 .OfType<Microsoft.CodeAnalysis.CSharp.Syntax.UsingDirectiveSyntax>()
                 .ToList();
-            var cleaned = unused.Count > 0 ? root.RemoveNodes(unused, SyntaxRemoveOptions.KeepDirectives)! : root;
+            SyntaxNode cleaned = unused.Count > 0 ? root.RemoveNodes(unused, SyntaxRemoveOptions.KeepDirectives)! : root;
 
-            var organized = await Formatter.OrganizeImportsAsync(document.WithSyntaxRoot(cleaned), ct).ConfigureAwait(false);
-            var changes = await organized.GetTextChangesAsync(document, ct).ConfigureAwait(false);
+            Document organized = await Formatter.OrganizeImportsAsync(document.WithSyntaxRoot(cleaned), ct).ConfigureAwait(false);
+            IEnumerable<RoslynTextChange> changes = await organized.GetTextChangesAsync(document, ct).ConfigureAwait(false);
             return changes.Select(c => new CodeTextEdit(c.Span.Start, c.Span.Length, c.NewText ?? "")).ToList();
         }, ct);
 
     private static List<CodeTextEdit> FormatSpan(Document document, SyntaxNode root, TextSpan span, CancellationToken ct)
     {
-        var workspace = document.Project.Solution.Workspace;
-        var options = document.Project.Solution.Options.WithChangedOption(FormattingOptions.NewLine, LanguageNames.CSharp, "\n");
-        var changes = Formatter.GetFormattedTextChanges(root, span, workspace, options, ct);
+        Workspace workspace = document.Project.Solution.Workspace;
+        OptionSet options = document.Project.Solution.Options.WithChangedOption(FormattingOptions.NewLine, LanguageNames.CSharp, "\n");
+        IList<RoslynTextChange> changes = Formatter.GetFormattedTextChanges(root, span, workspace, options, ct);
         return changes.Select(c => new CodeTextEdit(c.Span.Start, c.Span.Length, c.NewText ?? "")).ToList();
     }
 
@@ -461,21 +462,21 @@ public sealed partial class RoslynCSharpSession : CodeLanguageSession
         => Run<CodeRenameResult?>(null, async (document, ct) =>
         {
             if (!IsValidIdentifier(newName)) return null;
-            var symbol = await FindSymbolAsync(document, offset, ct).ConfigureAwait(false);
+            ISymbol? symbol = await FindSymbolAsync(document, offset, ct).ConfigureAwait(false);
             if (symbol == null || !symbol.Locations.Any(l => l.IsInSource)) return null;
 
-            var solution = document.Project.Solution;
-            var renamed = await Renamer.RenameSymbolAsync(solution, symbol, new SymbolRenameOptions(), newName, ct).ConfigureAwait(false);
+            Solution solution = document.Project.Solution;
+            Solution renamed = await Renamer.RenameSymbolAsync(solution, symbol, new SymbolRenameOptions(), newName, ct).ConfigureAwait(false);
 
             var edits = new List<CodeTextEdit>();
             var others = new Dictionary<string, IReadOnlyList<CodeTextEdit>>();
-            foreach (var projectChanges in renamed.GetChanges(solution).GetProjectChanges())
+            foreach (ProjectChanges projectChanges in renamed.GetChanges(solution).GetProjectChanges())
             {
-                foreach (var id in projectChanges.GetChangedDocuments())
+                foreach (DocumentId id in projectChanges.GetChangedDocuments())
                 {
-                    var oldDocument = solution.GetDocument(id)!;
-                    var newDocument = renamed.GetDocument(id)!;
-                    var changes = await newDocument.GetTextChangesAsync(oldDocument, ct).ConfigureAwait(false);
+                    Document oldDocument = solution.GetDocument(id)!;
+                    Document newDocument = renamed.GetDocument(id)!;
+                    IEnumerable<RoslynTextChange> changes = await newDocument.GetTextChangesAsync(oldDocument, ct).ConfigureAwait(false);
                     var mapped = changes.Select(c => new CodeTextEdit(c.Span.Start, c.Span.Length, c.NewText ?? "")).ToList();
                     if (id == document.Id) edits.AddRange(mapped);
                     else others[oldDocument.FilePath ?? oldDocument.Name] = mapped;
@@ -492,13 +493,13 @@ public sealed partial class RoslynCSharpSession : CodeLanguageSession
 
     private static CodeLocation ToLocation(Document current, SyntaxTree currentTree, Location location, string display, CodeSymbolKind kind)
     {
-        var tree = location.SourceTree!;
-        var line = location.GetLineSpan().StartLinePosition;
+        SyntaxTree tree = location.SourceTree!;
+        LinePosition line = location.GetLineSpan().StartLinePosition;
         bool isCurrent = tree == currentTree;
         string? path = null;
         if (!isCurrent)
         {
-            var other = current.Project.Solution.GetDocument(tree);
+            Document? other = current.Project.Solution.GetDocument(tree);
             path = other?.FilePath ?? other?.Name ?? tree.FilePath;
         }
         return new CodeLocation
@@ -516,7 +517,7 @@ public sealed partial class RoslynCSharpSession : CodeLanguageSession
 
     private static string LineText(Location location)
     {
-        var text = location.SourceTree!.GetText();
+        SourceText text = location.SourceTree!.GetText();
         int line = location.GetLineSpan().StartLinePosition.Line;
         return text.Lines[line].ToString();
     }

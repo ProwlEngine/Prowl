@@ -1,514 +1,515 @@
 ﻿using System.Collections.Generic;
+
 using Prowl.Scribe.Internal;
+
 using static Prowl.Scribe.Internal.Common;
 
-namespace Prowl.Scribe
+namespace Prowl.Scribe;
+
+/// <summary>
+/// A glyph in a shaping buffer: a glyph index plus the source character cluster it represents.
+/// A cluster collapses to one entry for ligatures (CharCount &gt; 1) and can fan out for
+/// decompositions (CharCount 0 on the trailing pieces).
+/// </summary>
+internal struct GsubGlyph
 {
+    public int Glyph;
+    public int Cluster;    // source char index where the cluster starts
+    public int CharCount;  // number of source chars in this cluster
+
+    public GsubGlyph(int glyph, int cluster, int charCount)
+    {
+        Glyph = glyph;
+        Cluster = cluster;
+        CharCount = charCount;
+    }
+}
+
+/// <summary>A fully shaped, positioned glyph ready for the layout engine to place.</summary>
+internal struct ShapedGlyph
+{
+    public AtlasGlyph? Glyph;
+    public float Advance;   // scaled pixels, including kerning to the next glyph in the run
+    public int Cluster;     // source char index where the cluster starts
+    public int CharCount;   // number of source chars in this cluster
+    public float PixelSize; // size this glyph was shaped at
+    public float LetterSpacing;
+}
+
+// GSUB glyph substitution (ligatures, ccmp, etc.) plus the shared OpenType layout-table
+// navigation (feature -> lookup resolution, ValueRecords) used by both GSUB shaping here and
+// the GPOS kerning in FontFile.cs.
+public partial class FontFile
+{
+    private Dictionary<string, List<int>>? _gsubLookupCache;
+
+    // Lookup-list indices of a GSUB feature for the default script (latn/DFLT), resolved once.
+    // Returns null when the font has no GSUB table.
+    private List<int>? GetGsubLookups(string feature)
+    {
+        if (this.gsub == 0)
+            return null;
+        _gsubLookupCache ??= [with(4)];
+        if (_gsubLookupCache.TryGetValue(feature, out List<int>? cached))
+            return cached;
+
+        var list = new List<int>();
+        FakePtr<byte> table = this.data + this.gsub;
+        if (!GetFeatureLookups(table, "latn", null, feature, list))
+            GetFeatureLookups(table, "DFLT", null, feature, list);
+        _gsubLookupCache[feature] = list;
+        return list;
+    }
+
     /// <summary>
-    /// A glyph in a shaping buffer: a glyph index plus the source character cluster it represents.
-    /// A cluster collapses to one entry for ligatures (CharCount &gt; 1) and can fan out for
-    /// decompositions (CharCount 0 on the trailing pieces).
+    /// Applies the default GSUB substitution features (ccmp, liga, rlig, then calt) to a shaping
+    /// buffer in place. Glyph indices may be replaced (single), expanded (multiple), or merged
+    /// (ligature), with source clusters tracked so hit-testing can map back to characters.
+    /// <paramref name="noLigatures"/> leaves out liga and calt.
     /// </summary>
-    internal struct GsubGlyph
+    internal void ApplyGsub(List<GsubGlyph> buf, bool noLigatures = false)
     {
-        public int Glyph;
-        public int Cluster;    // source char index where the cluster starts
-        public int CharCount;  // number of source chars in this cluster
+        if (this.gsub == 0 || buf.Count == 0)
+            return;
+        ApplyGsubFeature(buf, "ccmp");
+        if (!noLigatures) ApplyGsubFeature(buf, "liga");
+        ApplyGsubFeature(buf, "rlig");
+        if (noLigatures) return;
 
-        public GsubGlyph(int glyph, int cluster, int charCount)
+        // Contextual alternates are on by default everywhere text is laid out, and script faces
+        // lean on them heavily: without it their letters keep the shapes and widths they have in
+        // isolation instead of the ones that join up.
+        ApplyGsubFeature(buf, "calt");
+    }
+
+    private void ApplyGsubFeature(List<GsubGlyph> buf, string feature)
+    {
+        List<int>? lookups = GetGsubLookups(feature);
+        if (lookups == null || lookups.Count == 0)
+            return;
+        for (int i = 0; i < lookups.Count; i++)
+            ApplyGsubLookup(buf, lookups[i]);
+    }
+
+    private void ApplyGsubLookup(List<GsubGlyph> buf, int lookupIndex)
+    {
+        ulong[] first = GetFirstGlyphs(lookupIndex);
+        int i = 0;
+        while (i < buf.Count)
         {
-            Glyph = glyph;
-            Cluster = cluster;
-            CharCount = charCount;
+            if (!HasGlyph(first, buf[i].Glyph)) { i++; continue; }
+            int advance = ApplyLookupAt(buf, lookupIndex, i);
+            i += advance > 0 ? advance : 1;
         }
     }
 
-    /// <summary>A fully shaped, positioned glyph ready for the layout engine to place.</summary>
-    internal struct ShapedGlyph
+    // Per lookup, the glyphs that can start a match, as a bitset. Fonts with heavy contextual
+    // alternates have hundreds of lookups, and nearly every glyph misses nearly every one of them,
+    // so one bit test replaces walking the subtables and their coverage tables.
+    private ulong[]?[]? _gsubFirstGlyphs;
+
+    private static bool HasGlyph(ulong[] bits, int glyph)
+        => (uint)(glyph >> 6) < (uint)bits.Length && (bits[glyph >> 6] & (1UL << (glyph & 63))) != 0;
+
+    private ulong[] GetFirstGlyphs(int lookupIndex)
     {
-        public AtlasGlyph? Glyph;
-        public float Advance;   // scaled pixels, including kerning to the next glyph in the run
-        public int Cluster;     // source char index where the cluster starts
-        public int CharCount;   // number of source chars in this cluster
-        public float PixelSize; // size this glyph was shaped at
-        public float LetterSpacing;
-    }
-
-    // GSUB glyph substitution (ligatures, ccmp, etc.) plus the shared OpenType layout-table
-    // navigation (feature -> lookup resolution, ValueRecords) used by both GSUB shaping here and
-    // the GPOS kerning in FontFile.cs.
-    public partial class FontFile
-    {
-        private Dictionary<string, List<int>>? _gsubLookupCache;
-
-        // Lookup-list indices of a GSUB feature for the default script (latn/DFLT), resolved once.
-        // Returns null when the font has no GSUB table.
-        private List<int>? GetGsubLookups(string feature)
+        FakePtr<byte> table = this.data + this.gsub;
+        if (_gsubFirstGlyphs == null)
         {
-            if (this.gsub == 0)
-                return null;
-            _gsubLookupCache ??= new Dictionary<string, List<int>>(4);
-            if (_gsubLookupCache.TryGetValue(feature, out var cached))
-                return cached;
-
-            var list = new List<int>();
-            var table = this.data + this.gsub;
-            if (!GetFeatureLookups(table, "latn", null, feature, list))
-                GetFeatureLookups(table, "DFLT", null, feature, list);
-            _gsubLookupCache[feature] = list;
-            return list;
+            FakePtr<byte> lookupList = table + ttUSHORT(table + 8);
+            _gsubFirstGlyphs = new ulong[ttUSHORT(lookupList)][];
         }
+        if ((uint)lookupIndex >= (uint)_gsubFirstGlyphs.Length)
+            return System.Array.Empty<ulong>();
 
-        /// <summary>
-        /// Applies the default GSUB substitution features (ccmp, liga, rlig, then calt) to a shaping
-        /// buffer in place. Glyph indices may be replaced (single), expanded (multiple), or merged
-        /// (ligature), with source clusters tracked so hit-testing can map back to characters.
-        /// <paramref name="noLigatures"/> leaves out liga and calt.
-        /// </summary>
-        internal void ApplyGsub(List<GsubGlyph> buf, bool noLigatures = false)
-        {
-            if (this.gsub == 0 || buf.Count == 0)
-                return;
-            ApplyGsubFeature(buf, "ccmp");
-            if (!noLigatures) ApplyGsubFeature(buf, "liga");
-            ApplyGsubFeature(buf, "rlig");
-            if (noLigatures) return;
-
-            // Contextual alternates are on by default everywhere text is laid out, and script faces
-            // lean on them heavily: without it their letters keep the shapes and widths they have in
-            // isolation instead of the ones that join up.
-            ApplyGsubFeature(buf, "calt");
-        }
-
-        private void ApplyGsubFeature(List<GsubGlyph> buf, string feature)
-        {
-            var lookups = GetGsubLookups(feature);
-            if (lookups == null || lookups.Count == 0)
-                return;
-            for (int i = 0; i < lookups.Count; i++)
-                ApplyGsubLookup(buf, lookups[i]);
-        }
-
-        private void ApplyGsubLookup(List<GsubGlyph> buf, int lookupIndex)
-        {
-            var first = GetFirstGlyphs(lookupIndex);
-            int i = 0;
-            while (i < buf.Count)
-            {
-                if (!HasGlyph(first, buf[i].Glyph)) { i++; continue; }
-                int advance = ApplyLookupAt(buf, lookupIndex, i);
-                i += advance > 0 ? advance : 1;
-            }
-        }
-
-        // Per lookup, the glyphs that can start a match, as a bitset. Fonts with heavy contextual
-        // alternates have hundreds of lookups, and nearly every glyph misses nearly every one of them,
-        // so one bit test replaces walking the subtables and their coverage tables.
-        private ulong[]?[]? _gsubFirstGlyphs;
-
-        private static bool HasGlyph(ulong[] bits, int glyph)
-            => (uint)(glyph >> 6) < (uint)bits.Length && (bits[glyph >> 6] & (1UL << (glyph & 63))) != 0;
-
-        private ulong[] GetFirstGlyphs(int lookupIndex)
-        {
-            var table = this.data + this.gsub;
-            if (_gsubFirstGlyphs == null)
-            {
-                var lookupList = table + ttUSHORT(table + 8);
-                _gsubFirstGlyphs = new ulong[ttUSHORT(lookupList)][];
-            }
-            if ((uint)lookupIndex >= (uint)_gsubFirstGlyphs.Length)
-                return System.Array.Empty<ulong>();
-
-            var bits = _gsubFirstGlyphs[lookupIndex];
-            if (bits != null)
-                return bits;
-
-            bits = new ulong[(System.Math.Min(this.numGlyphs, 0xFFFF) >> 6) + 1];
-            var lookup = GetLookup(table, lookupIndex, out int lookupType, out int subtableCount);
-            for (int sIndex = 0; !lookup.IsNull && sIndex < subtableCount; sIndex++)
-            {
-                var st = GetSubtable(lookup, sIndex);
-                int type = lookupType;
-                if (type == 7)
-                {
-                    type = ttUSHORT(st + 2);
-                    st = st + (int)ttULONG(st + 4);
-                }
-
-                switch (type)
-                {
-                    case 1:
-                    case 2:
-                    case 4:
-                        AddCoverage(st + ttUSHORT(st + 2), bits);
-                        break;
-                    case 6:
-                        if (ttUSHORT(st) != 3) break;
-                        int backtrackCount = ttUSHORT(st + 2);
-                        int inputAt = 4 + 2 * backtrackCount;
-                        if (ttUSHORT(st + inputAt) > 0)
-                            AddCoverage(st + ttUSHORT(st + inputAt + 2), bits);
-                        break;
-                }
-            }
-
-            _gsubFirstGlyphs[lookupIndex] = bits;
+        ulong[]? bits = _gsubFirstGlyphs[lookupIndex];
+        if (bits != null)
             return bits;
-        }
 
-        private static void AddCoverage(FakePtr<byte> coverage, ulong[] bits)
+        bits = new ulong[(System.Math.Min(this.numGlyphs, 0xFFFF) >> 6) + 1];
+        FakePtr<byte> lookup = GetLookup(table, lookupIndex, out int lookupType, out int subtableCount);
+        for (int sIndex = 0; !lookup.IsNull && sIndex < subtableCount; sIndex++)
         {
-            int format = ttUSHORT(coverage);
-            int count = ttUSHORT(coverage + 2);
-            if (format == 1)
+            FakePtr<byte> st = GetSubtable(lookup, sIndex);
+            int type = lookupType;
+            if (type == 7)
             {
-                for (int k = 0; k < count; k++)
-                    SetGlyph(bits, ttUSHORT(coverage + 4 + 2 * k));
-            }
-            else if (format == 2)
-            {
-                for (int k = 0; k < count; k++)
-                {
-                    var range = coverage + 4 + 6 * k;
-                    int start = ttUSHORT(range), end = ttUSHORT(range + 2);
-                    for (int g = start; g <= end; g++) SetGlyph(bits, g);
-                }
-            }
-        }
-
-        private static void SetGlyph(ulong[] bits, int glyph)
-        {
-            if ((uint)(glyph >> 6) < (uint)bits.Length) bits[glyph >> 6] |= 1UL << (glyph & 63);
-        }
-
-        // How deep a chained-context rule may recurse into other lookups. Fonts nest a level or two;
-        // a cycle would otherwise run until the stack gives out.
-        private int _gsubDepth;
-
-        /// <summary>
-        /// Runs one lookup at one position. Returns how many glyphs it consumed, or 0 when nothing
-        /// there matched.
-        /// </summary>
-        private int ApplyLookupAt(List<GsubGlyph> buf, int lookupIndex, int i)
-        {
-            if (i < 0 || i >= buf.Count)
-                return 0;
-
-            var table = this.data + this.gsub;
-            var lookup = GetLookup(table, lookupIndex, out int lookupType, out int subtableCount);
-            if (lookup.IsNull)
-                return 0;
-
-            for (int sIndex = 0; sIndex < subtableCount; sIndex++)
-            {
-                var st = GetSubtable(lookup, sIndex);
-                int type = lookupType;
-                if (type == 7) // Extension substitution - unwrap to the real lookup type/subtable.
-                {
-                    type = ttUSHORT(st + 2);
-                    st = st + (int)ttULONG(st + 4);
-                }
-
-                switch (type)
-                {
-                    case 1:
-                        if (ApplySingle(buf, i, st)) return 1;
-                        break;
-                    case 2:
-                    {
-                        int produced = ApplyMultiple(buf, i, st);
-                        if (produced >= 0) return produced; // 0 = glyph deleted
-                        break;
-                    }
-                    case 4:
-                        if (ApplyLigature(buf, i, st)) return 1;
-                        break;
-                    case 6:
-                    {
-                        int consumed = ApplyChainContext(buf, i, st);
-                        if (consumed > 0) return consumed;
-                        break;
-                    }
-                }
+                type = ttUSHORT(st + 2);
+                st = st + (int)ttULONG(st + 4);
             }
 
+            switch (type)
+            {
+                case 1:
+                case 2:
+                case 4:
+                    AddCoverage(st + ttUSHORT(st + 2), bits);
+                    break;
+                case 6:
+                    if (ttUSHORT(st) != 3) break;
+                    int backtrackCount = ttUSHORT(st + 2);
+                    int inputAt = 4 + 2 * backtrackCount;
+                    if (ttUSHORT(st + inputAt) > 0)
+                        AddCoverage(st + ttUSHORT(st + inputAt + 2), bits);
+                    break;
+            }
+        }
+
+        _gsubFirstGlyphs[lookupIndex] = bits;
+        return bits;
+    }
+
+    private static void AddCoverage(FakePtr<byte> coverage, ulong[] bits)
+    {
+        int format = ttUSHORT(coverage);
+        int count = ttUSHORT(coverage + 2);
+        if (format == 1)
+        {
+            for (int k = 0; k < count; k++)
+                SetGlyph(bits, ttUSHORT(coverage + 4 + 2 * k));
+        }
+        else if (format == 2)
+        {
+            for (int k = 0; k < count; k++)
+            {
+                FakePtr<byte> range = coverage + 4 + 6 * k;
+                int start = ttUSHORT(range), end = ttUSHORT(range + 2);
+                for (int g = start; g <= end; g++) SetGlyph(bits, g);
+            }
+        }
+    }
+
+    private static void SetGlyph(ulong[] bits, int glyph)
+    {
+        if ((uint)(glyph >> 6) < (uint)bits.Length) bits[glyph >> 6] |= 1UL << (glyph & 63);
+    }
+
+    // How deep a chained-context rule may recurse into other lookups. Fonts nest a level or two;
+    // a cycle would otherwise run until the stack gives out.
+    private int _gsubDepth;
+
+    /// <summary>
+    /// Runs one lookup at one position. Returns how many glyphs it consumed, or 0 when nothing
+    /// there matched.
+    /// </summary>
+    private int ApplyLookupAt(List<GsubGlyph> buf, int lookupIndex, int i)
+    {
+        if (i < 0 || i >= buf.Count)
             return 0;
-        }
 
-        private bool ApplySingle(List<GsubGlyph> buf, int i, FakePtr<byte> st)
+        FakePtr<byte> table = this.data + this.gsub;
+        FakePtr<byte> lookup = GetLookup(table, lookupIndex, out int lookupType, out int subtableCount);
+        if (lookup.IsNull)
+            return 0;
+
+        for (int sIndex = 0; sIndex < subtableCount; sIndex++)
         {
-            int format = ttUSHORT(st);
-            int cov = stbtt__GetCoverageIndex(st + ttUSHORT(st + 2), buf[i].Glyph);
-            if (cov == -1)
-                return false;
-
-            int newGlyph;
-            if (format == 1)
-                newGlyph = (buf[i].Glyph + ttSHORT(st + 4)) & 0xFFFF;
-            else // format 2
+            FakePtr<byte> st = GetSubtable(lookup, sIndex);
+            int type = lookupType;
+            if (type == 7) // Extension substitution - unwrap to the real lookup type/subtable.
             {
-                int glyphCount = ttUSHORT(st + 4);
-                if (cov >= glyphCount) return false;
-                newGlyph = ttUSHORT(st + 6 + 2 * cov);
+                type = ttUSHORT(st + 2);
+                st = st + (int)ttULONG(st + 4);
             }
 
-            var g = buf[i];
-            g.Glyph = newGlyph;
-            buf[i] = g;
+            switch (type)
+            {
+                case 1:
+                    if (ApplySingle(buf, i, st)) return 1;
+                    break;
+                case 2:
+                {
+                    int produced = ApplyMultiple(buf, i, st);
+                    if (produced >= 0) return produced; // 0 = glyph deleted
+                    break;
+                }
+                case 4:
+                    if (ApplyLigature(buf, i, st)) return 1;
+                    break;
+                case 6:
+                {
+                    int consumed = ApplyChainContext(buf, i, st);
+                    if (consumed > 0) return consumed;
+                    break;
+                }
+            }
+        }
+
+        return 0;
+    }
+
+    private bool ApplySingle(List<GsubGlyph> buf, int i, FakePtr<byte> st)
+    {
+        int format = ttUSHORT(st);
+        int cov = stbtt__GetCoverageIndex(st + ttUSHORT(st + 2), buf[i].Glyph);
+        if (cov == -1)
+            return false;
+
+        int newGlyph;
+        if (format == 1)
+            newGlyph = (buf[i].Glyph + ttSHORT(st + 4)) & 0xFFFF;
+        else // format 2
+        {
+            int glyphCount = ttUSHORT(st + 4);
+            if (cov >= glyphCount) return false;
+            newGlyph = ttUSHORT(st + 6 + 2 * cov);
+        }
+
+        GsubGlyph g = buf[i];
+        g.Glyph = newGlyph;
+        buf[i] = g;
+        return true;
+    }
+
+    // GSUB LookupType 2 - Multiple substitution (one glyph -> sequence). Returns produced count,
+    // or -1 if not applied.
+    private int ApplyMultiple(List<GsubGlyph> buf, int i, FakePtr<byte> st)
+    {
+        if (ttUSHORT(st) != 1)
+            return -1;
+        int cov = stbtt__GetCoverageIndex(st + ttUSHORT(st + 2), buf[i].Glyph);
+        if (cov == -1)
+            return -1;
+        int seqCount = ttUSHORT(st + 4);
+        if (cov >= seqCount)
+            return -1;
+
+        FakePtr<byte> seq = st + ttUSHORT(st + 6 + 2 * cov);
+        int glyphCount = ttUSHORT(seq);
+        int cluster = buf[i].Cluster;
+        int charCount = buf[i].CharCount;
+
+        buf.RemoveAt(i);
+        for (int k = 0; k < glyphCount; k++)
+        {
+            int g = ttUSHORT(seq + 2 + 2 * k);
+            // The whole source cluster maps to the first produced glyph; the rest carry 0 chars.
+            buf.Insert(i + k, new GsubGlyph(g, cluster, k == 0 ? charCount : 0));
+        }
+        return glyphCount;
+    }
+
+    // GSUB LookupType 4 - Ligature substitution (sequence -> one glyph).
+    private bool ApplyLigature(List<GsubGlyph> buf, int i, FakePtr<byte> st)
+    {
+        if (ttUSHORT(st) != 1)
+            return false;
+        int cov = stbtt__GetCoverageIndex(st + ttUSHORT(st + 2), buf[i].Glyph);
+        if (cov == -1)
+            return false;
+        int ligSetCount = ttUSHORT(st + 4);
+        if (cov >= ligSetCount)
+            return false;
+
+        FakePtr<byte> ligSet = st + ttUSHORT(st + 6 + 2 * cov);
+        int ligCount = ttUSHORT(ligSet);
+        for (int l = 0; l < ligCount; l++)
+        {
+            FakePtr<byte> lig = ligSet + ttUSHORT(ligSet + 2 + 2 * l);
+            int ligGlyph = ttUSHORT(lig);
+            int componentCount = ttUSHORT(lig + 2); // includes the first (covered) glyph
+            if (componentCount < 1 || i + componentCount > buf.Count)
+                continue;
+
+            bool match = true;
+            for (int c = 1; c < componentCount; c++)
+            {
+                int comp = ttUSHORT(lig + 4 + 2 * (c - 1));
+                if (buf[i + c].Glyph != comp) { match = false; break; }
+            }
+            if (!match)
+                continue;
+
+            int clusterStart = buf[i].Cluster;
+            int clusterChars = 0;
+            for (int c = 0; c < componentCount; c++)
+                clusterChars += buf[i + c].CharCount;
+
+            if (componentCount > 1)
+                buf.RemoveRange(i + 1, componentCount - 1);
+            buf[i] = new GsubGlyph(ligGlyph, clusterStart, clusterChars);
             return true;
         }
+        return false;
+    }
 
-        // GSUB LookupType 2 - Multiple substitution (one glyph -> sequence). Returns produced count,
-        // or -1 if not applied.
-        private int ApplyMultiple(List<GsubGlyph> buf, int i, FakePtr<byte> st)
+    /// <summary>
+    /// Chained context substitution, format 3: a run of glyphs matches only when the glyphs
+    /// before and after it match too, and the rules then say which other lookups to apply and
+    /// where. This is how a font builds a flag out of two regional indicators, or joins an emoji
+    /// sequence, so without it those come out as their separate pieces.
+    /// </summary>
+    /// <returns>How far to advance, or 0 when nothing matched.</returns>
+    private int ApplyChainContext(List<GsubGlyph> buf, int i, FakePtr<byte> st)
+    {
+        // Formats 1 and 2 exist but are rare in the fonts this has to handle, and a rule that
+        // does not apply is better than one applied wrongly.
+        if (ttUSHORT(st) != 3 || _gsubDepth >= 4)
+            return 0;
+
+        int p = 2;
+        int backtrackCount = ttUSHORT(st + p); p += 2;
+        FakePtr<byte> backtrack = st + p; p += 2 * backtrackCount;
+        int inputCount = ttUSHORT(st + p); p += 2;
+        FakePtr<byte> input = st + p; p += 2 * inputCount;
+        int lookaheadCount = ttUSHORT(st + p); p += 2;
+        FakePtr<byte> lookahead = st + p; p += 2 * lookaheadCount;
+        int recordCount = ttUSHORT(st + p); p += 2;
+        FakePtr<byte> records = st + p;
+
+        if (inputCount < 1 || i + inputCount > buf.Count)
+            return 0;
+        if (i < backtrackCount || i + inputCount + lookaheadCount > buf.Count)
+            return 0;
+
+        for (int k = 0; k < inputCount; k++)
+            if (stbtt__GetCoverageIndex(st + ttUSHORT(input + 2 * k), buf[i + k].Glyph) == -1)
+                return 0;
+
+        // Backtrack coverages are stored nearest-first, walking away from the input.
+        for (int k = 0; k < backtrackCount; k++)
+            if (stbtt__GetCoverageIndex(st + ttUSHORT(backtrack + 2 * k), buf[i - 1 - k].Glyph) == -1)
+                return 0;
+
+        for (int k = 0; k < lookaheadCount; k++)
+            if (stbtt__GetCoverageIndex(st + ttUSHORT(lookahead + 2 * k), buf[i + inputCount + k].Glyph) == -1)
+                return 0;
+
+        // The nested lookups may merge glyphs, so the input shrinks as they are applied.
+        int before = buf.Count;
+        _gsubDepth++;
+        try
         {
-            if (ttUSHORT(st) != 1)
-                return -1;
-            int cov = stbtt__GetCoverageIndex(st + ttUSHORT(st + 2), buf[i].Glyph);
-            if (cov == -1)
-                return -1;
-            int seqCount = ttUSHORT(st + 4);
-            if (cov >= seqCount)
-                return -1;
-
-            var seq = st + ttUSHORT(st + 6 + 2 * cov);
-            int glyphCount = ttUSHORT(seq);
-            int cluster = buf[i].Cluster;
-            int charCount = buf[i].CharCount;
-
-            buf.RemoveAt(i);
-            for (int k = 0; k < glyphCount; k++)
+            for (int r = 0; r < recordCount; r++)
             {
-                int g = ttUSHORT(seq + 2 + 2 * k);
-                // The whole source cluster maps to the first produced glyph; the rest carry 0 chars.
-                buf.Insert(i + k, new GsubGlyph(g, cluster, k == 0 ? charCount : 0));
+                int at = ttUSHORT(records + 4 * r);
+                int nested = ttUSHORT(records + 4 * r + 2);
+                ApplyLookupAt(buf, nested, i + at);
             }
-            return glyphCount;
         }
+        finally { _gsubDepth--; }
 
-        // GSUB LookupType 4 - Ligature substitution (sequence -> one glyph).
-        private bool ApplyLigature(List<GsubGlyph> buf, int i, FakePtr<byte> st)
-        {
-            if (ttUSHORT(st) != 1)
-                return false;
-            int cov = stbtt__GetCoverageIndex(st + ttUSHORT(st + 2), buf[i].Glyph);
-            if (cov == -1)
-                return false;
-            int ligSetCount = ttUSHORT(st + 4);
-            if (cov >= ligSetCount)
-                return false;
+        int consumed = inputCount - (before - buf.Count);
+        return consumed > 0 ? consumed : 1;
+    }
 
-            var ligSet = st + ttUSHORT(st + 6 + 2 * cov);
-            int ligCount = ttUSHORT(ligSet);
-            for (int l = 0; l < ligCount; l++)
-            {
-                var lig = ligSet + ttUSHORT(ligSet + 2 + 2 * l);
-                int ligGlyph = ttUSHORT(lig);
-                int componentCount = ttUSHORT(lig + 2); // includes the first (covered) glyph
-                if (componentCount < 1 || i + componentCount > buf.Count)
-                    continue;
+    // GSUB and GPOS share the same v1.0 header: ScriptList@4, FeatureList@6, LookupList@8. All
+    // offsets are relative to the table base passed in. Coverage/ClassDef navigation reuses the
+    // existing Common.stbtt__GetCoverageIndex / stbtt__GetGlyphClass. Based on opentype.js.
 
-                bool match = true;
-                for (int c = 1; c < componentCount; c++)
-                {
-                    int comp = ttUSHORT(lig + 4 + 2 * (c - 1));
-                    if (buf[i + c].Glyph != comp) { match = false; break; }
-                }
-                if (!match)
-                    continue;
-
-                int clusterStart = buf[i].Cluster;
-                int clusterChars = 0;
-                for (int c = 0; c < componentCount; c++)
-                    clusterChars += buf[i + c].CharCount;
-
-                if (componentCount > 1)
-                    buf.RemoveRange(i + 1, componentCount - 1);
-                buf[i] = new GsubGlyph(ligGlyph, clusterStart, clusterChars);
-                return true;
-            }
+    // Appends the lookup-list indices of <feature> under (script, lang) into outLookups. Falls
+    // back script -> DFLT and language -> the script's default LangSys. Returns true if found.
+    private static bool GetFeatureLookups(FakePtr<byte> table, string script, string? lang, string feature, List<int> outLookups)
+    {
+        outLookups.Clear();
+        if (table.IsNull)
             return false;
-        }
 
-        /// <summary>
-        /// Chained context substitution, format 3: a run of glyphs matches only when the glyphs
-        /// before and after it match too, and the rules then say which other lookups to apply and
-        /// where. This is how a font builds a flag out of two regional indicators, or joins an emoji
-        /// sequence, so without it those come out as their separate pieces.
-        /// </summary>
-        /// <returns>How far to advance, or 0 when nothing matched.</returns>
-        private int ApplyChainContext(List<GsubGlyph> buf, int i, FakePtr<byte> st)
+        FakePtr<byte> scriptList = table + ttUSHORT(table + 4);
+        FakePtr<byte> featureList = table + ttUSHORT(table + 6);
+
+        FakePtr<byte> scriptTable = FindScript(scriptList, script);
+        if (scriptTable.IsNull && script != "DFLT")
+            scriptTable = FindScript(scriptList, "DFLT");
+        if (scriptTable.IsNull)
+            return false;
+
+        FakePtr<byte> langSys = FindLangSys(scriptTable, lang);
+        if (langSys.IsNull)
+            return false;
+
+        int requiredFeature = ttUSHORT(langSys + 2);
+        int featureCount = ttUSHORT(langSys + 4);
+
+        bool found = false;
+        if (requiredFeature != 0xFFFF)
+            found |= AddFeatureLookups(featureList, requiredFeature, feature, outLookups);
+        for (int i = 0; i < featureCount; i++)
+            found |= AddFeatureLookups(featureList, ttUSHORT(langSys + 6 + 2 * i), feature, outLookups);
+        return found;
+    }
+
+    private static FakePtr<byte> FindScript(FakePtr<byte> scriptList, string tag)
+    {
+        int count = ttUSHORT(scriptList);
+        for (int i = 0; i < count; i++)
         {
-            // Formats 1 and 2 exist but are rare in the fonts this has to handle, and a rule that
-            // does not apply is better than one applied wrongly.
-            if (ttUSHORT(st) != 3 || _gsubDepth >= 4)
-                return 0;
-
-            int p = 2;
-            int backtrackCount = ttUSHORT(st + p); p += 2;
-            var backtrack = st + p; p += 2 * backtrackCount;
-            int inputCount = ttUSHORT(st + p); p += 2;
-            var input = st + p; p += 2 * inputCount;
-            int lookaheadCount = ttUSHORT(st + p); p += 2;
-            var lookahead = st + p; p += 2 * lookaheadCount;
-            int recordCount = ttUSHORT(st + p); p += 2;
-            var records = st + p;
-
-            if (inputCount < 1 || i + inputCount > buf.Count)
-                return 0;
-            if (i < backtrackCount || i + inputCount + lookaheadCount > buf.Count)
-                return 0;
-
-            for (int k = 0; k < inputCount; k++)
-                if (stbtt__GetCoverageIndex(st + ttUSHORT(input + 2 * k), buf[i + k].Glyph) == -1)
-                    return 0;
-
-            // Backtrack coverages are stored nearest-first, walking away from the input.
-            for (int k = 0; k < backtrackCount; k++)
-                if (stbtt__GetCoverageIndex(st + ttUSHORT(backtrack + 2 * k), buf[i - 1 - k].Glyph) == -1)
-                    return 0;
-
-            for (int k = 0; k < lookaheadCount; k++)
-                if (stbtt__GetCoverageIndex(st + ttUSHORT(lookahead + 2 * k), buf[i + inputCount + k].Glyph) == -1)
-                    return 0;
-
-            // The nested lookups may merge glyphs, so the input shrinks as they are applied.
-            int before = buf.Count;
-            _gsubDepth++;
-            try
-            {
-                for (int r = 0; r < recordCount; r++)
-                {
-                    int at = ttUSHORT(records + 4 * r);
-                    int nested = ttUSHORT(records + 4 * r + 2);
-                    ApplyLookupAt(buf, nested, i + at);
-                }
-            }
-            finally { _gsubDepth--; }
-
-            int consumed = inputCount - (before - buf.Count);
-            return consumed > 0 ? consumed : 1;
+            FakePtr<byte> rec = scriptList + 2 + 6 * i; // ScriptRecord: tag(4) + offset(2)
+            if (TagEquals(rec, tag))
+                return scriptList + ttUSHORT(rec + 4);
         }
+        return FakePtr<byte>.Null;
+    }
 
-        // GSUB and GPOS share the same v1.0 header: ScriptList@4, FeatureList@6, LookupList@8. All
-        // offsets are relative to the table base passed in. Coverage/ClassDef navigation reuses the
-        // existing Common.stbtt__GetCoverageIndex / stbtt__GetGlyphClass. Based on opentype.js.
-
-        // Appends the lookup-list indices of <feature> under (script, lang) into outLookups. Falls
-        // back script -> DFLT and language -> the script's default LangSys. Returns true if found.
-        private static bool GetFeatureLookups(FakePtr<byte> table, string script, string? lang, string feature, List<int> outLookups)
+    private static FakePtr<byte> FindLangSys(FakePtr<byte> scriptTable, string? lang)
+    {
+        if (!string.IsNullOrEmpty(lang) && lang != "dflt")
         {
-            outLookups.Clear();
-            if (table.IsNull)
-                return false;
-
-            var scriptList = table + ttUSHORT(table + 4);
-            var featureList = table + ttUSHORT(table + 6);
-
-            var scriptTable = FindScript(scriptList, script);
-            if (scriptTable.IsNull && script != "DFLT")
-                scriptTable = FindScript(scriptList, "DFLT");
-            if (scriptTable.IsNull)
-                return false;
-
-            var langSys = FindLangSys(scriptTable, lang);
-            if (langSys.IsNull)
-                return false;
-
-            int requiredFeature = ttUSHORT(langSys + 2);
-            int featureCount = ttUSHORT(langSys + 4);
-
-            bool found = false;
-            if (requiredFeature != 0xFFFF)
-                found |= AddFeatureLookups(featureList, requiredFeature, feature, outLookups);
-            for (int i = 0; i < featureCount; i++)
-                found |= AddFeatureLookups(featureList, ttUSHORT(langSys + 6 + 2 * i), feature, outLookups);
-            return found;
-        }
-
-        private static FakePtr<byte> FindScript(FakePtr<byte> scriptList, string tag)
-        {
-            int count = ttUSHORT(scriptList);
+            int count = ttUSHORT(scriptTable + 2);
             for (int i = 0; i < count; i++)
             {
-                var rec = scriptList + 2 + 6 * i; // ScriptRecord: tag(4) + offset(2)
-                if (TagEquals(rec, tag))
-                    return scriptList + ttUSHORT(rec + 4);
+                FakePtr<byte> rec = scriptTable + 4 + 6 * i; // LangSysRecord: tag(4) + offset(2)
+                if (TagEquals(rec, lang))
+                    return scriptTable + ttUSHORT(rec + 4);
             }
+        }
+        int defOffset = ttUSHORT(scriptTable); // defaultLangSysOffset
+        return defOffset == 0 ? FakePtr<byte>.Null : scriptTable + defOffset;
+    }
+
+    private static bool AddFeatureLookups(FakePtr<byte> featureList, int featureIndex, string feature, List<int> outLookups)
+    {
+        int featureCount = ttUSHORT(featureList);
+        if (featureIndex < 0 || featureIndex >= featureCount)
+            return false;
+        FakePtr<byte> rec = featureList + 2 + 6 * featureIndex; // FeatureRecord: tag(4) + offset(2)
+        if (!TagEquals(rec, feature))
+            return false;
+        FakePtr<byte> featureTable = featureList + ttUSHORT(rec + 4);
+        int lookupCount = ttUSHORT(featureTable + 2);
+        for (int i = 0; i < lookupCount; i++)
+            outLookups.Add(ttUSHORT(featureTable + 4 + 2 * i));
+        return true;
+    }
+
+    // Resolves a lookup index in the table's LookupList to its table pointer + type + subtable count.
+    private static FakePtr<byte> GetLookup(FakePtr<byte> table, int lookupIndex, out int lookupType, out int subtableCount)
+    {
+        FakePtr<byte> lookupList = table + ttUSHORT(table + 8);
+        int count = ttUSHORT(lookupList);
+        if (lookupIndex < 0 || lookupIndex >= count)
+        {
+            lookupType = 0; subtableCount = 0;
             return FakePtr<byte>.Null;
         }
-
-        private static FakePtr<byte> FindLangSys(FakePtr<byte> scriptTable, string? lang)
-        {
-            if (!string.IsNullOrEmpty(lang) && lang != "dflt")
-            {
-                int count = ttUSHORT(scriptTable + 2);
-                for (int i = 0; i < count; i++)
-                {
-                    var rec = scriptTable + 4 + 6 * i; // LangSysRecord: tag(4) + offset(2)
-                    if (TagEquals(rec, lang))
-                        return scriptTable + ttUSHORT(rec + 4);
-                }
-            }
-            int defOffset = ttUSHORT(scriptTable); // defaultLangSysOffset
-            return defOffset == 0 ? FakePtr<byte>.Null : scriptTable + defOffset;
-        }
-
-        private static bool AddFeatureLookups(FakePtr<byte> featureList, int featureIndex, string feature, List<int> outLookups)
-        {
-            int featureCount = ttUSHORT(featureList);
-            if (featureIndex < 0 || featureIndex >= featureCount)
-                return false;
-            var rec = featureList + 2 + 6 * featureIndex; // FeatureRecord: tag(4) + offset(2)
-            if (!TagEquals(rec, feature))
-                return false;
-            var featureTable = featureList + ttUSHORT(rec + 4);
-            int lookupCount = ttUSHORT(featureTable + 2);
-            for (int i = 0; i < lookupCount; i++)
-                outLookups.Add(ttUSHORT(featureTable + 4 + 2 * i));
-            return true;
-        }
-
-        // Resolves a lookup index in the table's LookupList to its table pointer + type + subtable count.
-        private static FakePtr<byte> GetLookup(FakePtr<byte> table, int lookupIndex, out int lookupType, out int subtableCount)
-        {
-            var lookupList = table + ttUSHORT(table + 8);
-            int count = ttUSHORT(lookupList);
-            if (lookupIndex < 0 || lookupIndex >= count)
-            {
-                lookupType = 0; subtableCount = 0;
-                return FakePtr<byte>.Null;
-            }
-            var lookup = lookupList + ttUSHORT(lookupList + 2 + 2 * lookupIndex);
-            lookupType = ttUSHORT(lookup);
-            subtableCount = ttUSHORT(lookup + 4);
-            return lookup;
-        }
-
-        private static FakePtr<byte> GetSubtable(FakePtr<byte> lookup, int subtableIndex)
-            => lookup + ttUSHORT(lookup + 6 + 2 * subtableIndex);
-
-        // A GPOS ValueRecord stores one 2-byte field per set bit of valueFormat.
-        private static int ValueRecordSize(int valueFormat) => 2 * PopCount(valueFormat & 0xFF);
-
-        // The xAdvance of a ValueRecord (font units), or 0 when the format has no xAdvance field.
-        // xAdvance (0x4) follows xPlacement (0x1) and yPlacement (0x2) when those are present.
-        private static int ValueXAdvance(FakePtr<byte> record, int valueFormat)
-        {
-            if ((valueFormat & 0x0004) == 0)
-                return 0;
-            return ttSHORT(record + 2 * PopCount(valueFormat & 0x0003));
-        }
-
-        private static int PopCount(int v)
-        {
-            int c = 0;
-            while (v != 0) { c += v & 1; v >>= 1; }
-            return c;
-        }
-
-        private static bool TagEquals(FakePtr<byte> p, string tag)
-            => p[0] == (byte)tag[0] && p[1] == (byte)tag[1] && p[2] == (byte)tag[2] && p[3] == (byte)tag[3];
+        FakePtr<byte> lookup = lookupList + ttUSHORT(lookupList + 2 + 2 * lookupIndex);
+        lookupType = ttUSHORT(lookup);
+        subtableCount = ttUSHORT(lookup + 4);
+        return lookup;
     }
+
+    private static FakePtr<byte> GetSubtable(FakePtr<byte> lookup, int subtableIndex)
+        => lookup + ttUSHORT(lookup + 6 + 2 * subtableIndex);
+
+    // A GPOS ValueRecord stores one 2-byte field per set bit of valueFormat.
+    private static int ValueRecordSize(int valueFormat) => 2 * PopCount(valueFormat & 0xFF);
+
+    // The xAdvance of a ValueRecord (font units), or 0 when the format has no xAdvance field.
+    // xAdvance (0x4) follows xPlacement (0x1) and yPlacement (0x2) when those are present.
+    private static int ValueXAdvance(FakePtr<byte> record, int valueFormat)
+    {
+        if ((valueFormat & 0x0004) == 0)
+            return 0;
+        return ttSHORT(record + 2 * PopCount(valueFormat & 0x0003));
+    }
+
+    private static int PopCount(int v)
+    {
+        int c = 0;
+        while (v != 0) { c += v & 1; v >>= 1; }
+        return c;
+    }
+
+    private static bool TagEquals(FakePtr<byte> p, string tag)
+        => p[0] == (byte)tag[0] && p[1] == (byte)tag[1] && p[2] == (byte)tag[2] && p[3] == (byte)tag[3];
 }

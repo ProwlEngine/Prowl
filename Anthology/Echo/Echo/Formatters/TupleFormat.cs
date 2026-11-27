@@ -1,5 +1,7 @@
 // This file is part of the Prowl Game Engine
 // Licensed under the MIT License. See the LICENSE file in the project root for details.
+using System.Reflection;
+
 namespace Prowl.Echo.Formatters;
 
 internal sealed class TupleFormat : ISerializationFormat
@@ -9,7 +11,7 @@ internal sealed class TupleFormat : ISerializationFormat
         if (!type.IsGenericType)
             return false;
 
-        var genericDef = type.GetGenericTypeDefinition();
+        Type genericDef = type.GetGenericTypeDefinition();
 
         // Check for ValueTuple (1-8 generic arguments)
         if (genericDef == typeof(ValueTuple<>) ||
@@ -38,7 +40,7 @@ internal sealed class TupleFormat : ISerializationFormat
 
     public EchoObject Serialize(Type? targetType, object value, SerializationContext context)
     {
-        var type = value.GetType();
+        Type type = value.GetType();
         var compound = EchoObject.NewCompound();
 
         // Store tuple type (ValueTuple or Tuple)
@@ -46,7 +48,7 @@ internal sealed class TupleFormat : ISerializationFormat
         compound["isValueTuple"] = new EchoObject(isValueTuple);
 
         // Get generic arguments
-        var genericArgs = type.GetGenericArguments();
+        Type[] genericArgs = type.GetGenericArguments();
         compound["count"] = new EchoObject(EchoType.Int, genericArgs.Length);
 
         // Serialize each item (ValueTuple uses fields, Tuple uses properties)
@@ -60,7 +62,7 @@ internal sealed class TupleFormat : ISerializationFormat
             string memberName = i == 7 ? "Rest" : $"Item{i + 1}";
 
             // Try field first (ValueTuple)
-            var field = type.GetField(memberName);
+            FieldInfo? field = type.GetField(memberName);
             if (field != null)
             {
                 itemValue = field.GetValue(value);
@@ -68,7 +70,7 @@ internal sealed class TupleFormat : ISerializationFormat
             else
             {
                 // Try property (classic Tuple)
-                var property = type.GetProperty(memberName);
+                PropertyInfo? property = type.GetProperty(memberName);
                 if (property != null)
                 {
                     itemValue = property.GetValue(value);
@@ -89,24 +91,24 @@ internal sealed class TupleFormat : ISerializationFormat
     {
         if (value.TagType == EchoType.Compound)
         {
-            if (value.TryGet("isValueTuple", out var isValueTupleTag) &&
-                value.TryGet("count", out var countTag) && countTag.TagType == EchoType.Int &&
-                value.TryGet("items", out var itemsTag) && itemsTag.TagType == EchoType.Compound)
+            if (value.TryGet("isValueTuple", out EchoObject? isValueTupleTag) &&
+                value.TryGet("count", out EchoObject? countTag) && countTag.TagType == EchoType.Int &&
+                value.TryGet("items", out EchoObject? itemsTag) && itemsTag.TagType == EchoType.Compound)
             {
                 bool isValueTuple = isValueTupleTag.BoolValue;
                 int count = countTag.IntValue;
 
                 // Get generic arguments from target type
-                var genericArgs = targetType.GetGenericArguments();
+                Type[] genericArgs = targetType.GetGenericArguments();
 
                 if (genericArgs.Length != count)
                     throw new InvalidOperationException($"Tuple generic argument count mismatch. Expected {count}, got {genericArgs.Length}");
 
                 // Deserialize each item
-                var itemValues = new object?[count];
+                object?[] itemValues = new object?[count];
                 for (int i = 0; i < count; i++)
                 {
-                    if (itemsTag.TryGet($"Item{i + 1}", out var itemTag))
+                    if (itemsTag.TryGet($"Item{i + 1}", out EchoObject? itemTag))
                     {
                         itemValues[i] = Serializer.Deserialize(itemTag, genericArgs[i], context);
                     }

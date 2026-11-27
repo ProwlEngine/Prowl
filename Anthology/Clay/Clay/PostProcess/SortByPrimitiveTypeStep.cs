@@ -26,14 +26,14 @@ internal sealed class SortByPrimitiveTypeStep : IPostProcess
         int originalCount = scene.Meshes.Count;
         for (int i = 0; i < originalCount; i++)
         {
-            var mesh = scene.Meshes[i];
+            IntermediateMesh mesh = scene.Meshes[i];
             SplitOne(mesh, scene, i, context);
         }
     }
 
     private static void SplitOne(IntermediateMesh mesh, IntermediateScene scene, int meshIndex, ImportContext ctx)
     {
-        var kinds = mesh.PrimitiveKinds;
+        PrimitiveKind kinds = mesh.PrimitiveKinds;
         int kindCount = CountFlags(kinds);
         if (kindCount <= 1) return;
 
@@ -41,7 +41,7 @@ internal sealed class SortByPrimitiveTypeStep : IPostProcess
         var pointFaces = new FaceList();
         var lineFaces = new FaceList();
         var triFaces = new FaceList();
-        foreach (var face in mesh.Faces)
+        foreach (IntermediateFace face in mesh.Faces)
         {
             (face.Count switch
             {
@@ -101,21 +101,21 @@ internal sealed class SortByPrimitiveTypeStep : IPostProcess
         };
 
         dst.Positions.AddRange(src.Positions);
-        if (src.Normals is not null) dst.Normals = new List<Prowl.Vector.Float3>(src.Normals);
-        if (src.Tangents is not null) dst.Tangents = new List<Prowl.Vector.Float4>(src.Tangents);
-        if (src.Colors0 is not null) dst.Colors0 = new List<Prowl.Vector.Color>(src.Colors0);
+        if (src.Normals is not null) dst.Normals = [with(src.Normals)];
+        if (src.Tangents is not null) dst.Tangents = [with(src.Tangents)];
+        if (src.Colors0 is not null) dst.Colors0 = [with(src.Colors0)];
         for (int uv = 0; uv < Mesh.MaxUVChannels; uv++)
             if (src.UVs[uv] is { } u)
-                dst.UVs[uv] = new List<Prowl.Vector.Float2>(u);
+                dst.UVs[uv] = [with(u)];
 
         if (src.VertexJoints is { } vj) dst.VertexJoints = (int[])vj.Clone();
         if (src.VertexWeights is { } vw) dst.VertexWeights = (float[])vw.Clone();
 
         // Later steps edit blend shape deltas in place, so each mesh gets its own copy.
-        foreach (var bs in src.BlendShapes)
+        foreach (IntermediateBlendShape bs in src.BlendShapes)
         {
             var copy = new IntermediateBlendShape { Name = bs.Name };
-            foreach (var frame in bs.Frames)
+            foreach (IntermediateBlendShapeFrame frame in bs.Frames)
             {
                 copy.Frames.Add(new IntermediateBlendShapeFrame
                 {

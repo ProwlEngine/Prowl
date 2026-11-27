@@ -34,7 +34,7 @@ internal static class TextFormatting
     public static ReadOnlySpan<char> WriteNumber(TextWriter writer, double value, Span<char> buffer, string? format, IFormatProvider? provider)
     {
         value.TryFormat(buffer, out int length, format, provider);
-        var text = buffer.Slice(0, length);
+        Span<char> text = buffer.Slice(0, length);
         writer.Write(text);
         return text;
     }
@@ -42,7 +42,7 @@ internal static class TextFormatting
     public static ReadOnlySpan<char> WriteNumber(TextWriter writer, float value, Span<char> buffer, string? format, IFormatProvider? provider)
     {
         value.TryFormat(buffer, out int length, format, provider);
-        var text = buffer.Slice(0, length);
+        Span<char> text = buffer.Slice(0, length);
         writer.Write(text);
         return text;
     }

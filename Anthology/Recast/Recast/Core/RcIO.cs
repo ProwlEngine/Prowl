@@ -20,146 +20,145 @@ freely, subject to the following restrictions:
 using System;
 using System.IO;
 
-namespace Prowl.Recast.Core
+namespace Prowl.Recast.Core;
+
+public static class RcIO
 {
-    public static class RcIO
+    public static RcByteBuffer ToByteBuffer(BinaryReader br, bool direct)
     {
-        public static RcByteBuffer ToByteBuffer(BinaryReader br, bool direct)
+        byte[] data = ToByteArray(br);
+        if (direct)
         {
-            byte[] data = ToByteArray(br);
-            if (direct)
+            Array.Reverse(data);
+        }
+
+        return new RcByteBuffer(data);
+    }
+
+    public static byte[] ToByteArray(BinaryReader br)
+    {
+        using var ms = new MemoryStream();
+        Span<byte> buffer = stackalloc byte[4096];
+        int l;
+        while ((l = br.Read(buffer)) > 0)
+        {
+            ms.Write(buffer.Slice(0, l));
+        }
+
+        return ms.ToArray();
+    }
+
+
+    public static RcByteBuffer ToByteBuffer(BinaryReader br)
+    {
+        byte[] bytes = ToByteArray(br);
+        return new RcByteBuffer(bytes);
+    }
+
+    public static int SwapEndianness(int i)
+    {
+        long s = (((uint)i >> 24) & 0xFF) | (((uint)i >> 8) & 0xFF00) | (((uint)i << 8) & 0xFF0000) | ((i << 24) & 0xFF000000);
+        return (int)s;
+    }
+
+    public static byte[] ReadFileIfFound(string filename)
+    {
+        if (string.IsNullOrEmpty(filename))
+            return null;
+
+        string filePath = filename;
+
+        if (!File.Exists(filePath))
+        {
+            string searchFilePath = RcDirectory.SearchFile($"{filename}");
+            if (!File.Exists(searchFilePath))
             {
-                Array.Reverse(data);
+                searchFilePath = RcDirectory.SearchFile($"resources/{filename}");
             }
 
-            return new RcByteBuffer(data);
-        }
-
-        public static byte[] ToByteArray(BinaryReader br)
-        {
-            using var ms = new MemoryStream();
-            Span<byte> buffer = stackalloc byte[4096];
-            int l;
-            while ((l = br.Read(buffer)) > 0)
+            if (File.Exists(searchFilePath))
             {
-                ms.Write(buffer.Slice(0, l));
-            }
-
-            return ms.ToArray();
-        }
-
-
-        public static RcByteBuffer ToByteBuffer(BinaryReader br)
-        {
-            var bytes = ToByteArray(br);
-            return new RcByteBuffer(bytes);
-        }
-
-        public static int SwapEndianness(int i)
-        {
-            var s = (((uint)i >> 24) & 0xFF) | (((uint)i >> 8) & 0xFF00) | (((uint)i << 8) & 0xFF0000) | ((i << 24) & 0xFF000000);
-            return (int)s;
-        }
-
-        public static byte[] ReadFileIfFound(string filename)
-        {
-            if (string.IsNullOrEmpty(filename))
-                return null;
-
-            string filePath = filename;
-
-            if (!File.Exists(filePath))
-            {
-                var searchFilePath = RcDirectory.SearchFile($"{filename}");
-                if (!File.Exists(searchFilePath))
-                {
-                    searchFilePath = RcDirectory.SearchFile($"resources/{filename}");
-                }
-
-                if (File.Exists(searchFilePath))
-                {
-                    filePath = searchFilePath;
-                }
-            }
-
-            using var fs = new FileStream(filePath, FileMode.Open, FileAccess.Read, FileShare.Read);
-            byte[] buffer = new byte[fs.Length];
-            var read = fs.Read(buffer, 0, buffer.Length);
-            if (read != buffer.Length)
-                return null;
-
-            return buffer;
-        }
-
-        public static void Write(BinaryWriter ws, float value, RcByteOrder order)
-        {
-            byte[] bytes = BitConverter.GetBytes(value);
-            int i = BitConverter.ToInt32(bytes, 0);
-            Write(ws, i, order);
-        }
-
-        public static void Write(BinaryWriter ws, short value, RcByteOrder order)
-        {
-            if (order == RcByteOrder.BIG_ENDIAN)
-            {
-                ws.Write((byte)((value >> 8) & 0xFF));
-                ws.Write((byte)(value & 0xFF));
-            }
-            else
-            {
-                ws.Write((byte)(value & 0xFF));
-                ws.Write((byte)((value >> 8) & 0xFF));
+                filePath = searchFilePath;
             }
         }
 
-        public static void Write(BinaryWriter ws, long value, RcByteOrder order)
-        {
-            if (order == RcByteOrder.BIG_ENDIAN)
-            {
-                Write(ws, (int)((ulong)value >> 32), order);
-                Write(ws, (int)(value & 0xFFFFFFFF), order);
-            }
-            else
-            {
-                Write(ws, (int)(value & 0xFFFFFFFF), order);
-                Write(ws, (int)((ulong)value >> 32), order);
-            }
-        }
+        using var fs = new FileStream(filePath, FileMode.Open, FileAccess.Read, FileShare.Read);
+        byte[] buffer = new byte[fs.Length];
+        int read = fs.Read(buffer, 0, buffer.Length);
+        if (read != buffer.Length)
+            return null;
 
-        public static void Write(BinaryWriter ws, int value, RcByteOrder order)
-        {
-            if (order == RcByteOrder.BIG_ENDIAN)
-            {
-                ws.Write((byte)((value >> 24) & 0xFF));
-                ws.Write((byte)((value >> 16) & 0xFF));
-                ws.Write((byte)((value >> 8) & 0xFF));
-                ws.Write((byte)(value & 0xFF));
-            }
-            else
-            {
-                ws.Write((byte)(value & 0xFF));
-                ws.Write((byte)((value >> 8) & 0xFF));
-                ws.Write((byte)((value >> 16) & 0xFF));
-                ws.Write((byte)((value >> 24) & 0xFF));
-            }
-        }
+        return buffer;
+    }
 
-        public static void Write(BinaryWriter ws, bool value)
-        {
-            Write(ws, (byte)(value ? 1 : 0));
-        }
+    public static void Write(BinaryWriter ws, float value, RcByteOrder order)
+    {
+        byte[] bytes = BitConverter.GetBytes(value);
+        int i = BitConverter.ToInt32(bytes, 0);
+        Write(ws, i, order);
+    }
 
-        public static void Write(BinaryWriter ws, byte value)
+    public static void Write(BinaryWriter ws, short value, RcByteOrder order)
+    {
+        if (order == RcByteOrder.BIG_ENDIAN)
         {
-            ws.Write(value);
+            ws.Write((byte)((value >> 8) & 0xFF));
+            ws.Write((byte)(value & 0xFF));
         }
+        else
+        {
+            ws.Write((byte)(value & 0xFF));
+            ws.Write((byte)((value >> 8) & 0xFF));
+        }
+    }
 
-        public static void Write(BinaryWriter ws, MemoryStream ms)
+    public static void Write(BinaryWriter ws, long value, RcByteOrder order)
+    {
+        if (order == RcByteOrder.BIG_ENDIAN)
         {
-            ms.Position = 0;
-            byte[] buffer = new byte[ms.Length];
-            ms.Read(buffer, 0, buffer.Length);
-            ws.Write(buffer);
+            Write(ws, (int)((ulong)value >> 32), order);
+            Write(ws, (int)(value & 0xFFFFFFFF), order);
         }
+        else
+        {
+            Write(ws, (int)(value & 0xFFFFFFFF), order);
+            Write(ws, (int)((ulong)value >> 32), order);
+        }
+    }
+
+    public static void Write(BinaryWriter ws, int value, RcByteOrder order)
+    {
+        if (order == RcByteOrder.BIG_ENDIAN)
+        {
+            ws.Write((byte)((value >> 24) & 0xFF));
+            ws.Write((byte)((value >> 16) & 0xFF));
+            ws.Write((byte)((value >> 8) & 0xFF));
+            ws.Write((byte)(value & 0xFF));
+        }
+        else
+        {
+            ws.Write((byte)(value & 0xFF));
+            ws.Write((byte)((value >> 8) & 0xFF));
+            ws.Write((byte)((value >> 16) & 0xFF));
+            ws.Write((byte)((value >> 24) & 0xFF));
+        }
+    }
+
+    public static void Write(BinaryWriter ws, bool value)
+    {
+        Write(ws, (byte)(value ? 1 : 0));
+    }
+
+    public static void Write(BinaryWriter ws, byte value)
+    {
+        ws.Write(value);
+    }
+
+    public static void Write(BinaryWriter ws, MemoryStream ms)
+    {
+        ms.Position = 0;
+        byte[] buffer = new byte[ms.Length];
+        ms.Read(buffer, 0, buffer.Length);
+        ws.Write(buffer);
     }
 }

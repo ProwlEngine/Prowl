@@ -112,7 +112,7 @@ internal static class BrokenDelegate
         if (!RuntimeFeature.IsDynamicCodeSupported) return null;
         if (delegateType.GetMethod("Invoke") is not { } invoke) return null;
 
-        var parameterTypes = invoke.GetParameters().Select(x => x.ParameterType).ToArray();
+        Type[] parameterTypes = invoke.GetParameters().Select(x => x.ParameterType).ToArray();
         var thunk = new Thunk { Reason = reason, PreviousMethod = previousMethod };
 
         // The thunk is passed as the delegate's target, so it arrives as the hidden first argument.
@@ -123,7 +123,7 @@ internal static class BrokenDelegate
             typeof(Thunk),
             skipVisibility: true);
 
-        var il = method.GetILGenerator();
+        ILGenerator il = method.GetILGenerator();
         il.Emit(OpCodes.Ldarg_0);
         il.Emit(OpCodes.Call, s_build);
         il.Emit(OpCodes.Throw);

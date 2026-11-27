@@ -20,49 +20,48 @@ freely, subject to the following restrictions:
 
 using Prowl.Recast.Core.Numerics;
 
-namespace Prowl.Recast.Detour.TileCache
+namespace Prowl.Recast.Detour.TileCache;
+
+public struct DtTileCacheParams
 {
-    public struct DtTileCacheParams
-    {
-        public RcVec3f orig;
-        public float cs, ch;
-        public int width, height;
-        public float walkableHeight;
-        public float walkableRadius;
-        public float walkableClimb;
-        public float maxSimplificationError;
+    public RcVec3f orig;
+    public float cs, ch;
+    public int width, height;
+    public float walkableHeight;
+    public float walkableRadius;
+    public float walkableClimb;
+    public float maxSimplificationError;
 
-        /// Spacing of the height samples used to give each tile's polygons height detail, in world
-        /// units, and how far the detail may sit from the sampled surface before it is subdivided.
-        /// Leave detailSampleDist at 0 to build tiles without detail, in which case Detour treats
-        /// every polygon as flat between its own corners.
-        public float detailSampleDist;
-        public float detailSampleMaxError;
+    /// Spacing of the height samples used to give each tile's polygons height detail, in world
+    /// units, and how far the detail may sit from the sampled surface before it is subdivided.
+    /// Leave detailSampleDist at 0 to build tiles without detail, in which case Detour treats
+    /// every polygon as flat between its own corners.
+    public float detailSampleDist;
+    public float detailSampleMaxError;
 
-        /// Partition tiles with a watershed over a distance field and contour them with the
-        /// standard builder — hole-aware, connectivity-based corner heights, long edges split —
-        /// instead of the cache's classic monotone sweep, whose row-band regions come out a
-        /// fraction of a voxel wide on sloped ground and whose unsplit contours polygonize open
-        /// ground into fans that reach across the tile. Tiles stacking several vertical layers
-        /// keep the classic path either way: the standard contourer cannot see the other layers.
-        public bool watershedPartition;
+    /// Partition tiles with a watershed over a distance field and contour them with the
+    /// standard builder — hole-aware, connectivity-based corner heights, long edges split —
+    /// instead of the cache's classic monotone sweep, whose row-band regions come out a
+    /// fraction of a voxel wide on sloped ground and whose unsplit contours polygonize open
+    /// ground into fans that reach across the tile. Tiles stacking several vertical layers
+    /// keep the classic path either way: the standard contourer cannot see the other layers.
+    public bool watershedPartition;
 
-        /// Watershed tuning, used only when @p watershedPartition is set: regions smaller than
-        /// minRegionArea cells are culled, regions smaller than mergeRegionArea cells are merged
-        /// into their neighbours, and contour edges longer than maxEdgeLen voxels are split.
-        public int minRegionArea;
-        public int mergeRegionArea;
-        public int maxEdgeLen;
+    /// Watershed tuning, used only when @p watershedPartition is set: regions smaller than
+    /// minRegionArea cells are culled, regions smaller than mergeRegionArea cells are merged
+    /// into their neighbours, and contour edges longer than maxEdgeLen voxels are split.
+    public int minRegionArea;
+    public int mergeRegionArea;
+    public int maxEdgeLen;
 
-        /// Compressed layer slots the cache holds. A navmesh tile slot holds ONE vertical layer, so
-        /// size the navmesh this cache feeds to match: anything the cache accepts past the navmesh's
-        /// own capacity is refused on commit.
-        public int maxTiles;
+    /// Compressed layer slots the cache holds. A navmesh tile slot holds ONE vertical layer, so
+    /// size the navmesh this cache feeds to match: anything the cache accepts past the navmesh's
+    /// own capacity is refused on commit.
+    public int maxTiles;
 
-        /// Obstacles the cache may carry at once. Enforced: Add*Obstacle returns a zero ref once the
-        /// pool is full rather than growing past it, so leaving this at 0 admits no obstacles at all.
-        /// Removed obstacles return to a free list and can be reused, so this bounds live obstacles
-        /// rather than total additions.
-        public int maxObstacles;
-    }
+    /// Obstacles the cache may carry at once. Enforced: Add*Obstacle returns a zero ref once the
+    /// pool is full rather than growing past it, so leaving this at 0 admits no obstacles at all.
+    /// Removed obstacles return to a free list and can be reused, so this bounds live obstacles
+    /// rather than total additions.
+    public int maxObstacles;
 }

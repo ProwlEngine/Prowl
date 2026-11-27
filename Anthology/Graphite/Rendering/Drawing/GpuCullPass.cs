@@ -19,10 +19,10 @@ internal sealed class GpuCullPass(LazyCompute program, GeometryPool geometry) : 
     private const uint MaxGroups = 65535;
 
     private readonly PropertySet _properties = new();
-    private readonly HashSet<DeviceBuffer> _declared = new();
+    private readonly HashSet<DeviceBuffer> _declared = [];
 
     /// <summary>The views whose lists the GPU cull fills this frame.</summary>
-    public readonly List<CameraFrame> Cameras = new();
+    public readonly List<CameraFrame> Cameras = [];
 
     public void Add(FrameGraph graph)
     {

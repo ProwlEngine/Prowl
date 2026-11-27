@@ -25,7 +25,7 @@ internal sealed class DateTimeFormat : ISerializationFormat
     {
         if (value.TagType == EchoType.Compound)
         {
-            if (value.TryGet("date", out var dateTag) && dateTag.TagType == EchoType.Long)
+            if (value.TryGet("date", out EchoObject? dateTag) && dateTag.TagType == EchoType.Long)
             {
                 long binary = dateTag.LongValue;
                 return DateTime.FromBinary(binary);

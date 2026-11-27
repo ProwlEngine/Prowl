@@ -49,7 +49,7 @@ public partial class GeometryData
         public void SetAttribute(string name, AttributeValue value)
         {
             if (Owner != null) Owner._stores[Kind].Set(name, Slot, value);
-            else (Loose ??= new Dictionary<string, AttributeValue>())[name] = value;
+            else (Loose ??= [])[name] = value;
         }
 
         /// <summary>Takes the value of one attribute away. A declared attribute then reads its default again. True when there was a value.</summary>
@@ -123,7 +123,7 @@ public partial class GeometryData
             get
             {
                 int count = 0;
-                foreach (var _ in this) count++;
+                foreach (KeyValuePair<string, AttributeValue> _ in this) count++;
                 return count;
             }
         }
@@ -132,7 +132,7 @@ public partial class GeometryData
         public Dictionary<string, AttributeValue> ToDictionary()
         {
             var copy = new Dictionary<string, AttributeValue>();
-            foreach (var pair in this) copy[pair.Key] = pair.Value;
+            foreach (KeyValuePair<string, AttributeValue> pair in this) copy[pair.Key] = pair.Value;
             return copy;
         }
 
@@ -143,14 +143,14 @@ public partial class GeometryData
             Dictionary<string, AttributeValue> source = _map ?? ToDictionary();
             AttributeView view = new(target);
             view.Clear();
-            foreach (var pair in source) view[pair.Key] = pair.Value;
+            foreach (KeyValuePair<string, AttributeValue> pair in source) view[pair.Key] = pair.Value;
         }
 
         public IEnumerator<KeyValuePair<string, AttributeValue>> GetEnumerator()
         {
             if (_map != null)
             {
-                foreach (var pair in _map) yield return pair;
+                foreach (KeyValuePair<string, AttributeValue> pair in _map) yield return pair;
             }
             else if (_element?.Owner is { } mesh)
             {
@@ -164,7 +164,7 @@ public partial class GeometryData
             }
             else if (_element?.Loose != null)
             {
-                foreach (var pair in _element.Loose) yield return pair;
+                foreach (KeyValuePair<string, AttributeValue> pair in _element.Loose) yield return pair;
             }
         }
 
@@ -184,8 +184,8 @@ public partial class GeometryData
     /// <summary>The attribute columns of one kind of element.</summary>
     internal sealed class AttributeStore
     {
-        public readonly List<AttributeColumn> Columns = new();
-        private readonly Dictionary<string, AttributeColumn> _byName = new();
+        public readonly List<AttributeColumn> Columns = [];
+        private readonly Dictionary<string, AttributeColumn> _byName = [];
 
         public AttributeColumn? Find(string name) => _byName.TryGetValue(name, out AttributeColumn? column) ? column : null;
 
@@ -264,7 +264,7 @@ public partial class GeometryData
             foreach (AttributeColumn column in Columns)
             {
                 if (slot >= column.Values.Length || column.Values[slot] is not { } value) continue;
-                (taken ??= new Dictionary<string, AttributeValue>())[column.Name] = value;
+                (taken ??= [])[column.Name] = value;
                 column.Values[slot] = null;
             }
             return taken;
@@ -378,7 +378,7 @@ public partial class GeometryData
         if (element.Loose is not { } loose) return;
         element.Loose = null;
         AttributeStore store = _stores[element.Kind];
-        foreach (var pair in loose) store.Set(pair.Key, element.Slot, pair.Value);
+        foreach (KeyValuePair<string, AttributeValue> pair in loose) store.Set(pair.Key, element.Slot, pair.Value);
     }
 
     // Takes an element out of its list by moving the last one into its place, and hands it the attributes it had.

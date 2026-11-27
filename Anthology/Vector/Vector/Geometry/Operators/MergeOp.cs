@@ -14,29 +14,29 @@ internal static class MergeOp
     /// </summary>
     internal static void Merge(GeometryData mesh, GeometryData other)
     {
-        foreach (var a in other.VertexAttributes) mesh.AddVertexAttribute(a.Name, a.Type.BaseType, a.Type.Dimensions);
-        foreach (var a in other.EdgeAttributes) mesh.AddEdgeAttribute(a.Name, a.Type.BaseType, a.Type.Dimensions);
-        foreach (var a in other.LoopAttributes) mesh.AddLoopAttribute(a.Name, a.Type.BaseType, a.Type.Dimensions);
-        foreach (var a in other.FaceAttributes) mesh.AddFaceAttribute(a.Name, a.Type.BaseType, a.Type.Dimensions);
+        foreach (GeometryData.AttributeDefinition a in other.VertexAttributes) mesh.AddVertexAttribute(a.Name, a.Type.BaseType, a.Type.Dimensions);
+        foreach (GeometryData.AttributeDefinition a in other.EdgeAttributes) mesh.AddEdgeAttribute(a.Name, a.Type.BaseType, a.Type.Dimensions);
+        foreach (GeometryData.AttributeDefinition a in other.LoopAttributes) mesh.AddLoopAttribute(a.Name, a.Type.BaseType, a.Type.Dimensions);
+        foreach (GeometryData.AttributeDefinition a in other.FaceAttributes) mesh.AddFaceAttribute(a.Name, a.Type.BaseType, a.Type.Dimensions);
 
         var map = new Dictionary<GeometryData.Vertex, GeometryData.Vertex>(other.Vertices.Count);
-        foreach (var v in other.Vertices)
+        foreach (GeometryData.Vertex v in other.Vertices)
         {
-            var copy = mesh.AddVertex(v.Point);
+            GeometryData.Vertex copy = mesh.AddVertex(v.Point);
             AttributeTransfer.Apply(v.Attributes, copy.Attributes);
             map[v] = copy;
         }
 
-        foreach (var e in other.Edges)
+        foreach (GeometryData.Edge e in other.Edges)
         {
-            var copy = mesh.AddEdge(map[e.Vert1], map[e.Vert2]);
+            GeometryData.Edge copy = mesh.AddEdge(map[e.Vert1], map[e.Vert2]);
             AttributeTransfer.Apply(e.Attributes, copy.Attributes);
         }
 
-        foreach (var f in other.Faces)
+        foreach (GeometryData.Face f in other.Faces)
         {
             FaceSnapshot snapshot = FaceSnapshot.Capture(other, f);
-            var copy = mesh.AddFace(snapshot.Vertices.ConvertAll(v => map[v]).ToArray());
+            GeometryData.Face? copy = mesh.AddFace(snapshot.Vertices.ConvertAll(v => map[v]).ToArray());
             if (copy == null) continue;
 
             snapshot.ApplyFaceAttributes(copy);

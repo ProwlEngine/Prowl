@@ -36,7 +36,7 @@ public partial struct Double3x3 : System.IEquatable<Double3x3>, IFormattable
 
 
     /// <summary>Returns a reference to the Double3 (column) at a specified index.</summary>
-    unsafe public ref Double3 this[int index]
+    public unsafe ref Double3 this[int index]
     {
         get
         {
@@ -63,7 +63,7 @@ public partial struct Double3x3 : System.IEquatable<Double3x3>, IFormattable
         {
             if ((uint)column >= 3)
                 throw new System.ArgumentOutOfRangeException(nameof(column));
-            var temp = this[column];
+            Double3 temp = this[column];
             temp[row] = value;
             this[column] = temp;
         }
@@ -366,12 +366,12 @@ public partial struct Double3x3 : System.IEquatable<Double3x3>, IFormattable
     /// <returns>True if the source matrix could be inverted; False otherwise.</returns>
     public static bool Invert(Double3x3 matrix, out Double3x3 result)
     {
-        var m00 = matrix.c0.X; var m01 = matrix.c1.X; var m02 = matrix.c2.X;
-        var m10 = matrix.c0.Y; var m11 = matrix.c1.Y; var m12 = matrix.c2.Y;
-        var m20 = matrix.c0.Z; var m21 = matrix.c1.Z; var m22 = matrix.c2.Z;
+        double m00 = matrix.c0.X; double m01 = matrix.c1.X; double m02 = matrix.c2.X;
+        double m10 = matrix.c0.Y; double m11 = matrix.c1.Y; double m12 = matrix.c2.Y;
+        double m20 = matrix.c0.Z; double m21 = matrix.c1.Z; double m22 = matrix.c2.Z;
 
         // Calculate determinant
-        var det = m00 * (m11 * m22 - m12 * m21) -
+        double det = m00 * (m11 * m22 - m12 * m21) -
                   m01 * (m10 * m22 - m12 * m20) +
                   m02 * (m10 * m21 - m11 * m20);
 
@@ -385,7 +385,7 @@ public partial struct Double3x3 : System.IEquatable<Double3x3>, IFormattable
             return false;
         }
 
-        var invDet = 1.0 / det;
+        double invDet = 1.0 / det;
 
         // Calculate cofactors and transpose (adjugate matrix)
         result = new Double3x3(

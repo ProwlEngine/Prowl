@@ -33,10 +33,10 @@ internal static class FbxAnimationMapper
         Dictionary<long, FbxBlendShapeMapper.ChannelTarget> blendShapeChannels)
     {
         // Walk every AnimationStack. Each becomes one IntermediateAnimation.
-        foreach (var stack in doc.Objects.Values)
+        foreach (FbxObject stack in doc.Objects.Values)
         {
             if (stack.ObjectType != "AnimationStack") continue;
-            var anim = BuildClip(stack, doc, modelMapping, blendShapeChannels, ctx);
+            IntermediateAnimation? anim = BuildClip(stack, doc, modelMapping, blendShapeChannels, ctx);
             if (anim is null || anim.Bindings.Count == 0) continue;
             scene.Animations.Add(anim);
         }
@@ -49,12 +49,12 @@ internal static class FbxAnimationMapper
 
         // Stack -> Layers (Layer is a destination of an OO connection from the Stack).
         var layers = new List<FbxObject>();
-        if (doc.ConnectionsByDestination.TryGetValue(stack.Id, out var stackIn))
+        if (doc.ConnectionsByDestination.TryGetValue(stack.Id, out List<FbxConnection>? stackIn))
         {
-            foreach (var c in stackIn)
+            foreach (FbxConnection c in stackIn)
             {
                 if (c.Type != "OO") continue;
-                if (!doc.Objects.TryGetValue(c.Source, out var src)) continue;
+                if (!doc.Objects.TryGetValue(c.Source, out FbxObject? src)) continue;
                 if (src.ObjectType == "AnimationLayer")
                     layers.Add(src);
             }
@@ -62,13 +62,13 @@ internal static class FbxAnimationMapper
         if (layers.Count == 0) return null;
 
         // For each layer, walk every AnimationCurveNode connected.
-        foreach (var layer in layers)
+        foreach (FbxObject layer in layers)
         {
-            if (!doc.ConnectionsByDestination.TryGetValue(layer.Id, out var layerIn)) continue;
-            foreach (var c in layerIn)
+            if (!doc.ConnectionsByDestination.TryGetValue(layer.Id, out List<FbxConnection>? layerIn)) continue;
+            foreach (FbxConnection c in layerIn)
             {
                 if (c.Type != "OO") continue;
-                if (!doc.Objects.TryGetValue(c.Source, out var src)) continue;
+                if (!doc.Objects.TryGetValue(c.Source, out FbxObject? src)) continue;
                 if (src.ObjectType != "AnimationCurveNode") continue;
                 BuildBindingsFromCurveNode(src, doc, modelMapping, blendShapeChannels, clip, ctx);
             }
@@ -89,12 +89,12 @@ internal static class FbxAnimationMapper
         IntermediateNode? targetNode = null;
         long targetFbxId = 0;
         FbxObject? targetObj = null;
-        if (doc.ConnectionsBySource.TryGetValue(curveNode.Id, out var curveOut))
+        if (doc.ConnectionsBySource.TryGetValue(curveNode.Id, out List<FbxConnection>? curveOut))
         {
-            foreach (var c in curveOut)
+            foreach (FbxConnection c in curveOut)
             {
                 if (c.Type != "OP") continue;
-                if (!doc.Objects.TryGetValue(c.Destination, out var dst)) continue;
+                if (!doc.Objects.TryGetValue(c.Destination, out FbxObject? dst)) continue;
 
                 if (dst.ObjectType == "Model" && modelMapping.NodesByFbxId.TryGetValue(dst.Id, out targetNode))
                 {
@@ -133,9 +133,9 @@ internal static class FbxAnimationMapper
             return; // unsupported Model property
 
         // Collect the (X/Y/Z) child curves via OP (Curve -> CurveNode with property "d|X" etc.).
-        var curveX = ResolveScalarCurve(curveNode, doc, "d|X");
-        var curveY = ResolveScalarCurve(curveNode, doc, "d|Y");
-        var curveZ = ResolveScalarCurve(curveNode, doc, "d|Z");
+        ScalarCurve? curveX = ResolveScalarCurve(curveNode, doc, "d|X");
+        ScalarCurve? curveY = ResolveScalarCurve(curveNode, doc, "d|Y");
+        ScalarCurve? curveZ = ResolveScalarCurve(curveNode, doc, "d|Z");
         if (curveX is null && curveY is null && curveZ is null) return;
 
         // For rotation we sample Euler -> quaternion at the union of key times. For position
@@ -147,7 +147,7 @@ internal static class FbxAnimationMapper
             // LocalRotation. Animation curves only carry the middle "R" of the FBX rotation
             // chain, so each sample must be wrapped as (Pre * sampled * inverse(Post)) for the
             // runtime LocalRotation to evaluate the same composed transform.
-            modelMapping.RotationOffsets.TryGetValue(targetFbxId, out var pp);
+            modelMapping.RotationOffsets.TryGetValue(targetFbxId, out (Quaternion Pre, Quaternion Post) pp);
             EmitRotationBinding(targetNode, curveX, curveY, curveZ, pp.Pre, pp.Post, clip, ctx);
         }
         else
@@ -159,11 +159,11 @@ internal static class FbxAnimationMapper
     /// <summary>Resolves the AnimationCurve attached to a CurveNode under a given property name.</summary>
     private static ScalarCurve? ResolveScalarCurve(FbxObject curveNode, FbxDocument doc, string propertyName)
     {
-        if (!doc.ConnectionsByDestination.TryGetValue(curveNode.Id, out var inConns)) return null;
-        foreach (var c in inConns)
+        if (!doc.ConnectionsByDestination.TryGetValue(curveNode.Id, out List<FbxConnection>? inConns)) return null;
+        foreach (FbxConnection c in inConns)
         {
             if (c.Type != "OP" || c.Property != propertyName) continue;
-            if (!doc.Objects.TryGetValue(c.Source, out var src)) continue;
+            if (!doc.Objects.TryGetValue(c.Source, out FbxObject? src)) continue;
             if (src.ObjectType != "AnimationCurve") continue;
             return ReadScalarCurve(src);
         }
@@ -173,13 +173,13 @@ internal static class FbxAnimationMapper
     /// <summary>Resolves the first AnimationCurve attached to a CurveNode, regardless of property name.</summary>
     private static ScalarCurve? ResolveFirstScalarCurve(FbxObject curveNode, FbxDocument doc)
     {
-        if (!doc.ConnectionsByDestination.TryGetValue(curveNode.Id, out var inConns)) return null;
-        foreach (var c in inConns)
+        if (!doc.ConnectionsByDestination.TryGetValue(curveNode.Id, out List<FbxConnection>? inConns)) return null;
+        foreach (FbxConnection c in inConns)
         {
             if (c.Type != "OP") continue;
-            if (!doc.Objects.TryGetValue(c.Source, out var src)) continue;
+            if (!doc.Objects.TryGetValue(c.Source, out FbxObject? src)) continue;
             if (src.ObjectType != "AnimationCurve") continue;
-            var curve = ReadScalarCurve(src);
+            ScalarCurve? curve = ReadScalarCurve(src);
             if (curve is not null) return curve;
         }
         return null;
@@ -187,8 +187,8 @@ internal static class FbxAnimationMapper
 
     private static ScalarCurve? ReadScalarCurve(FbxObject animCurve)
     {
-        var keyTimeNode = animCurve.Node.FindChild("KeyTime");
-        var keyValueNode = animCurve.Node.FindChild("KeyValueFloat");
+        FbxNode? keyTimeNode = animCurve.Node.FindChild("KeyTime");
+        FbxNode? keyValueNode = animCurve.Node.FindChild("KeyValueFloat");
         if (keyTimeNode is null || keyValueNode is null) return null;
         if (keyTimeNode.Properties.Count == 0 || keyValueNode.Properties.Count == 0) return null;
 
@@ -212,7 +212,7 @@ internal static class FbxAnimationMapper
         FbxObject channel, FbxObject curveNode, FbxDocument doc, FbxModelMapper.ModelMapping modelMapping,
         Dictionary<long, FbxBlendShapeMapper.ChannelTarget> blendShapeChannels, IntermediateAnimation clip)
     {
-        if (!blendShapeChannels.TryGetValue(channel.Id, out var target)) return;
+        if (!blendShapeChannels.TryGetValue(channel.Id, out FbxBlendShapeMapper.ChannelTarget target)) return;
 
         IntermediateNode? node = ResolveNodeForGeometry(target.GeometryId, doc, modelMapping);
         if (node is null) return;
@@ -236,13 +236,13 @@ internal static class FbxAnimationMapper
     /// <summary>Finds the model node that references a geometry (Geometry --OO--&gt; Model).</summary>
     private static IntermediateNode? ResolveNodeForGeometry(long geometryId, FbxDocument doc, FbxModelMapper.ModelMapping modelMapping)
     {
-        if (!doc.ConnectionsBySource.TryGetValue(geometryId, out var outConns)) return null;
-        foreach (var c in outConns)
+        if (!doc.ConnectionsBySource.TryGetValue(geometryId, out List<FbxConnection>? outConns)) return null;
+        foreach (FbxConnection c in outConns)
         {
             if (c.Type != "OO") continue;
-            if (!doc.Objects.TryGetValue(c.Destination, out var dst)) continue;
+            if (!doc.Objects.TryGetValue(c.Destination, out FbxObject? dst)) continue;
             if (dst.ObjectType != "Model") continue;
-            if (modelMapping.NodesByFbxId.TryGetValue(dst.Id, out var node)) return node;
+            if (modelMapping.NodesByFbxId.TryGetValue(dst.Id, out IntermediateNode? node)) return node;
         }
         return null;
     }
@@ -310,7 +310,7 @@ internal static class FbxAnimationMapper
             float rx = (curveX?.Sample(t) ?? 0f) * MathF.PI / 180f;
             float ry = (curveY?.Sample(t) ?? 0f) * MathF.PI / 180f;
             float rz = (curveZ?.Sample(t) ?? 0f) * MathF.PI / 180f;
-            var q = EulerToQuat(rx, ry, rz);
+            Quaternion q = EulerToQuat(rx, ry, rz);
             if (needPre) q = preRotation * q;
             if (needPost) q = q * postInverse;
             binding.Values.Add(q.X); binding.Values.Add(q.Y); binding.Values.Add(q.Z); binding.Values.Add(q.W);
@@ -339,9 +339,9 @@ internal static class FbxAnimationMapper
     private static float[] MergeTimes(ScalarCurve? a, ScalarCurve? b, ScalarCurve? c)
     {
         var set = new SortedSet<float>();
-        if (a is not null) foreach (var t in a.Times) set.Add(t);
-        if (b is not null) foreach (var t in b.Times) set.Add(t);
-        if (c is not null) foreach (var t in c.Times) set.Add(t);
+        if (a is not null) foreach (float t in a.Times) set.Add(t);
+        if (b is not null) foreach (float t in b.Times) set.Add(t);
+        if (c is not null) foreach (float t in c.Times) set.Add(t);
         float[] result = new float[set.Count];
         set.CopyTo(result);
         return result;

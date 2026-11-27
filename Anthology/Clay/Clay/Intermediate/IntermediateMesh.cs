@@ -13,7 +13,7 @@ public sealed class IntermediateMesh
 {
     public string Name { get; set; } = string.Empty;
 
-    public List<Float3> Positions { get; set; } = new();
+    public List<Float3> Positions { get; set; } = [];
     public List<Float3>? Normals { get; set; }
     public List<Float4>? Tangents { get; set; }
     public List<Color>? Colors0 { get; set; }
@@ -37,7 +37,7 @@ public sealed class IntermediateMesh
     public int MaxInfluencesPerVertex { get; set; } = 4;
 
     /// <summary>Morph targets. Empty when none were authored.</summary>
-    public List<IntermediateBlendShape> BlendShapes { get; } = new();
+    public List<IntermediateBlendShape> BlendShapes { get; } = [];
 
     /// <summary>
     /// Index into the parent scene's material list, -1 for no material. Applies to every face that
@@ -113,7 +113,7 @@ public enum PrimitiveKind
 public sealed class IntermediateBlendShape
 {
     public required string Name { get; init; }
-    public List<IntermediateBlendShapeFrame> Frames { get; } = new();
+    public List<IntermediateBlendShapeFrame> Frames { get; } = [];
     public float DefaultWeight { get; set; }
 }
 

@@ -66,7 +66,7 @@ public sealed class OceanQueries : IDisposable
     private readonly OceanFeature _ocean;
     private readonly DeviceBuffer _points, _results;
     private readonly Float4[] _packed;
-    private readonly List<(OceanQuery Query, int First)> _batch = new();
+    private readonly List<(OceanQuery Query, int First)> _batch = [];
     private readonly UploadFeature _upload;
     private readonly DispatchFeature _dispatch;
 
@@ -90,7 +90,7 @@ public sealed class OceanQueries : IDisposable
     public int Capacity { get; }
 
     /// <summary>The queries answered each frame, the first ones first when they hold more points than the capacity.</summary>
-    public List<OceanQuery> Queries { get; } = new();
+    public List<OceanQuery> Queries { get; } = [];
 
     /// <summary>The upload of the points and the queries' pass, for the ocean's world's frame features.</summary>
     public IReadOnlyList<FrameFeature> Features { get; }

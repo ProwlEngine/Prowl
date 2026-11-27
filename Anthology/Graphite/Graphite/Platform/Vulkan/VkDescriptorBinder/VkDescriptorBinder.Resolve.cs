@@ -6,7 +6,7 @@ using Silk.NET.Vulkan;
 namespace Prowl.Graphite.Vk;
 
 
-internal unsafe sealed partial class VkDescriptorBinder
+internal sealed unsafe partial class VkDescriptorBinder
 {
     internal struct ResolvedBinding
     {

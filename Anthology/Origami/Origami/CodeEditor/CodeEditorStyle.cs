@@ -40,7 +40,7 @@ public readonly record struct CodeKeyBinding(PaperKey Key, bool Ctrl = false, bo
 /// <summary>Which keys run which <see cref="CodeEditorCommand"/>. A command can have several bindings.</summary>
 public sealed class CodeEditorKeymap
 {
-    private readonly Dictionary<CodeKeyBinding, CodeEditorCommand> _map = new();
+    private readonly Dictionary<CodeKeyBinding, CodeEditorCommand> _map = [];
 
     /// <summary>The keymap editors use unless given their own.</summary>
     public static CodeEditorKeymap Default { get; } = CreateDefault();
@@ -56,21 +56,21 @@ public sealed class CodeEditorKeymap
     public void Unbind(CodeEditorCommand command)
     {
         var keys = new List<CodeKeyBinding>();
-        foreach (var (key, cmd) in _map) if (cmd == command) keys.Add(key);
-        foreach (var key in keys) _map.Remove(key);
+        foreach ((CodeKeyBinding key, CodeEditorCommand cmd) in _map) if (cmd == command) keys.Add(key);
+        foreach (CodeKeyBinding key in keys) _map.Remove(key);
     }
 
     /// <summary>The first key bound to a command, if any.</summary>
     public CodeKeyBinding? PrimaryBinding(CodeEditorCommand command)
     {
-        foreach (var (key, cmd) in _map) if (cmd == command) return key;
+        foreach ((CodeKeyBinding key, CodeEditorCommand cmd) in _map) if (cmd == command) return key;
         return null;
     }
 
     public CodeEditorKeymap Clone()
     {
         var copy = new CodeEditorKeymap();
-        foreach (var (key, cmd) in _map) copy._map[key] = cmd;
+        foreach ((CodeKeyBinding key, CodeEditorCommand cmd) in _map) copy._map[key] = cmd;
         return copy;
     }
 
@@ -317,7 +317,7 @@ public sealed class CodeEditorColors
     /// <summary>A dark palette that takes its surfaces and accents from an Origami theme.</summary>
     public static CodeEditorColors FromTheme(OrigamiTheme theme)
     {
-        var c = CreateDark();
+        CodeEditorColors c = CreateDark();
         c.Background = FromTheme(theme.Neutral.C100, 255);
         c.GutterBackground = c.Background;
         c.Caret = FromTheme(theme.Primary.C700);

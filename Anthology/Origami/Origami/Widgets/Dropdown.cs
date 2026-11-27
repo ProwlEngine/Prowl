@@ -152,11 +152,11 @@ public sealed class DropdownBuilder<T>
     public void Show()
     {
         if (Origami.IsReadOnly) _disabled = true;
-        var ramp = _theme.Get(_variant);
-        var ink = _theme.Ink;
-        var font = _theme.Font;
-        var icons = _theme.Icons;
-        var disp = _display ?? (t => t?.ToString() ?? string.Empty);
+        OrigamiRamp ramp = _theme.Get(_variant);
+        OrigamiRamp ink = _theme.Ink;
+        Scribe.FontFile? font = _theme.Font;
+        OrigamiIcons icons = _theme.Icons;
+        Func<T, string> disp = _display ?? (t => t?.ToString() ?? string.Empty);
 
         // Resolve current selection presentation.
         int selectedIdx = -1;
@@ -178,7 +178,7 @@ public sealed class DropdownBuilder<T>
 
         // Use Row so children flow left-to-right; per-child Margin (not container padding)
         // gives reliable label-stretches-chevron-on-right layout.
-        var trigger = _paper.Row(_id)
+        ElementBuilder trigger = _paper.Row(_id)
             .Width(_width).Height(_height)
             .BackgroundColor(trigBg)
             .BorderColor(trigBorder).BorderWidth(1)
@@ -210,7 +210,7 @@ public sealed class DropdownBuilder<T>
             {
                 if (font != null)
                 {
-                    var m = _theme.Metrics;
+                    OrigamiMetrics m = _theme.Metrics;
 
                     // Inline (.sel) prefix label on the left.
                     if (_prefixLabel != null)
@@ -226,7 +226,7 @@ public sealed class DropdownBuilder<T>
                     }
 
                     // Value. With a prefix it is pushed to the right; otherwise it stretches.
-                    var lbl = _paper.Box("lbl")
+                    ElementBuilder lbl = _paper.Box("lbl")
                         .Width(UnitValue.Stretch())
                         .Margin(_prefixLabel != null ? 0 : m.SpacingLarge, _prefixLabel != null ? m.Padding : m.PaddingSmall, 0, 0)
                         .Alignment(_prefixLabel != null ? TextAlignment.MiddleRight : TextAlignment.MiddleLeft)
@@ -238,7 +238,7 @@ public sealed class DropdownBuilder<T>
                     if (!_hideChevron)
                     {
                         bool up = isOpen;
-                        var chevCol = chevColor;
+                        Color chevCol = chevColor;
                         _paper.Box("chev")
                             .Width(m.IconWidth)
                             .Margin(0, m.Padding, 0, 0)

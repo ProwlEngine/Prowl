@@ -57,7 +57,7 @@ public sealed class ReloadReport
 
     public bool TryGetReplacement<T>(T previous, out T current) where T : class
     {
-        if (previous != null && Replaced.TryGetValue(previous, out var found) && found is T typed)
+        if (previous != null && Replaced.TryGetValue(previous, out object? found) && found is T typed)
         {
             current = typed;
             return true;

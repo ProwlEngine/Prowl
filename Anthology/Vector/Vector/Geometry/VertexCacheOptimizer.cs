@@ -56,7 +56,7 @@ public static class VertexCacheOptimizer
         for (int v = 0; v < vertexCount; v++)
             vertexScore[v] = Score(-1, live[v]);
         bool[] drawn = new bool[triangles];
-        List<uint> cache = new(CacheSize + 3), next = new(CacheSize + 3);
+        List<uint> cache = [with(CacheSize + 3)], next = [with(CacheSize + 3)];
         int best = -1, cursor = 0;
         for (int written = 0; written < triangles; written++)
         {
@@ -135,7 +135,7 @@ public static class VertexCacheOptimizer
     public static double MissRatio(ReadOnlySpan<uint> indices)
     {
         Queue<uint> fifo = new();
-        HashSet<uint> cached = new();
+        HashSet<uint> cached = [];
         int misses = 0;
         foreach (uint index in indices)
         {

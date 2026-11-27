@@ -18,41 +18,41 @@ freely, subject to the following restrictions:
 */
 
 using System;
+
+using Prowl.Recast;
 using Prowl.Recast.Core;
 using Prowl.Recast.Core.Numerics;
-using Prowl.Recast;
 
-namespace Prowl.Recast.Detour.Dynamic.Colliders
+namespace Prowl.Recast.Detour.Dynamic.Colliders;
+
+public class DtSphereCollider : DtCollider
 {
-    public class DtSphereCollider : DtCollider
+    private readonly RcVec3f center;
+    private readonly float radius;
+
+    public DtSphereCollider(RcVec3f center, float radius, int area, float flagMergeThreshold)
+        : base(area, flagMergeThreshold, Bounds(center, radius))
     {
-        private readonly RcVec3f center;
-        private readonly float radius;
+        this.center = center;
+        this.radius = radius;
+    }
 
-        public DtSphereCollider(RcVec3f center, float radius, int area, float flagMergeThreshold)
-            : base(area, flagMergeThreshold, Bounds(center, radius))
-        {
-            this.center = center;
-            this.radius = radius;
-        }
+    public override void Rasterize(RcHeightfield hf, RcContext context)
+    {
+        RcFilledVolumeRasterization.RasterizeSphere(hf, center, radius, area, (int)MathF.Floor(flagMergeThreshold / hf.ch),
+            context);
+    }
 
-        public override void Rasterize(RcHeightfield hf, RcContext context)
+    private static float[] Bounds(RcVec3f center, float radius)
+    {
+        return new float[]
         {
-            RcFilledVolumeRasterization.RasterizeSphere(hf, center, radius, area, (int)MathF.Floor(flagMergeThreshold / hf.ch),
-                context);
-        }
-
-        private static float[] Bounds(RcVec3f center, float radius)
-        {
-            return new float[]
-            {
-                center.X - radius,
-                center.Y - radius,
-                center.Z - radius,
-                center.X + radius,
-                center.Y + radius,
-                center.Z + radius
-            };
-        }
+            center.X - radius,
+            center.Y - radius,
+            center.Z - radius,
+            center.X + radius,
+            center.Y + radius,
+            center.Z + radius
+        };
     }
 }

@@ -78,7 +78,7 @@ public partial struct Float2 : IEquatable<Float2>, IFormattable
 
     public Float2(IEnumerable<float> values)
     {
-        var array = values.ToArray();
+        float[] array = values.ToArray();
         if (array.Length < 2) throw new ArgumentException("Collection must contain at least 2 elements.", nameof(values));
         X = array[0];
         Y = array[1];

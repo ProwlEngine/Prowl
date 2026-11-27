@@ -77,7 +77,7 @@ public sealed class Mesh
     /// </summary>
     public uint[] GetIndices32(int subMeshIndex)
     {
-        var sub = SubMeshes[subMeshIndex];
+        SubMesh sub = SubMeshes[subMeshIndex];
         uint[] result = new uint[sub.IndexCount];
         Array.Copy(Indices, sub.IndexStart, result, 0, sub.IndexCount);
         return result;
@@ -89,7 +89,7 @@ public sealed class Mesh
     /// </summary>
     public ushort[] GetIndices16(int subMeshIndex)
     {
-        var sub = SubMeshes[subMeshIndex];
+        SubMesh sub = SubMeshes[subMeshIndex];
         ushort[] result = new ushort[sub.IndexCount];
         for (int i = 0; i < sub.IndexCount; i++)
         {

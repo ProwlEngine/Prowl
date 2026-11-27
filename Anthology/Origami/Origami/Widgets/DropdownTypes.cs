@@ -116,8 +116,8 @@ internal static class DropdownInternal
     /// </summary>
     internal static void RenderBackdrop(Paper paper, string id, ElementHandle trigHandle, bool dim)
     {
-        var capturedTrig = trigHandle;
-        var box = paper.Box(id)
+        ElementHandle capturedTrig = trigHandle;
+        ElementBuilder box = paper.Box(id)
             .PositionType(PositionType.SelfDirected)
             .Position(-9999, -9999)
             .Size(99999, 99999)
@@ -169,7 +169,7 @@ internal static class DropdownInternal
     internal static bool DefaultMatch<T>(T item, string search, Func<T, string> display)
     {
         if (string.IsNullOrEmpty(search)) return true;
-        var s = display(item) ?? string.Empty;
+        string s = display(item) ?? string.Empty;
         return s.Contains(search, StringComparison.OrdinalIgnoreCase);
     }
 
@@ -180,11 +180,11 @@ internal static class DropdownInternal
     /// </summary>
     internal static void RenderPopover<T>(PopoverParams<T> p)
     {
-        var paper = p.Paper;
-        var ramp = p.Theme.Get(p.Variant);
-        var ink = p.Theme.Ink;
-        var font = p.Theme.Font;
-        var icons = p.Theme.Icons;
+        Paper paper = p.Paper;
+        OrigamiRamp ramp = p.Theme.Get(p.Variant);
+        OrigamiRamp ink = p.Theme.Ink;
+        Scribe.FontFile? font = p.Theme.Font;
+        OrigamiIcons icons = p.Theme.Icons;
 
         // Resolve filtered list once per frame.
         string searchText = p.Searchable ? paper.GetElementStorage(p.TriggerHandle, KeySearch, string.Empty) : string.Empty;
@@ -288,7 +288,7 @@ internal static class DropdownInternal
         // StopEventPropagation: the popover is logically a child of the trigger element, so
         // without this any click inside (search bar, page button, item row) bubbles up to the
         // trigger and re-toggles the open state — closing the dropdown unintentionally.
-        var popBuilder = paper.Column($"{p.Id}_pop")
+        ElementBuilder popBuilder = paper.Column($"{p.Id}_pop")
             .PositionType(PositionType.SelfDirected)
             .Position(0, popY)
             .Width(popoverWidth)
@@ -403,7 +403,7 @@ internal static class DropdownInternal
 
                             int capturedReal = realIdx;
                             T capturedItem = item;
-                            var row = paper.Row($"{p.Id}_r_{realIdx}")
+                            ElementBuilder row = paper.Row($"{p.Id}_r_{realIdx}")
                                 .Height(p.ItemHeight)
                                 .BackgroundColor(rowBg)
                                 .Hovered.BackgroundColor(enabled ? hoverTint : rowBg).End()
@@ -430,7 +430,7 @@ internal static class DropdownInternal
                                 if (p.ShowCheckboxes)
                                 {
                                     bool chk = selected;
-                                    var th = p.Theme;
+                                    OrigamiTheme th = p.Theme;
                                     paper.Box($"{p.Id}_r_{realIdx}_chk")
                                         .Width(16).Height(p.ItemHeight)
                                         .IsNotInteractable()
@@ -462,7 +462,7 @@ internal static class DropdownInternal
                                 // Single-select tick on the right when selected (no checkbox column).
                                 if (!p.ShowCheckboxes && selected)
                                 {
-                                    var th = p.Theme;
+                                    OrigamiTheme th = p.Theme;
                                     paper.Box($"{p.Id}_r_{realIdx}_ck")
                                         .Width(16).Height(p.ItemHeight)
                                         .IsNotInteractable()

@@ -332,12 +332,12 @@ public sealed class TreeBuilder
 
     public void Show()
     {
-        var nodes = _nodes;
+        List<TreeNode>? nodes = _nodes;
         if (nodes == null) return;
 
-        var font = _theme.Font;
-        var ink = _theme.Ink;
-        var metrics = _theme.Metrics;
+        Scribe.FontFile? font = _theme.Font;
+        OrigamiRamp ink = _theme.Ink;
+        OrigamiMetrics metrics = _theme.Metrics;
 
         // Resolve row height from the theme so it follows RowHeight changes (caller can still override).
         if (_rowHeight <= 0)
@@ -345,8 +345,8 @@ public sealed class TreeBuilder
 
         // Capture a stable handle for expand state storage. We use a hidden box
         // that lives outside the scroll so its handle doesn't shift with scroll content.
-        var stateBox = _paper.Box($"{_id}_state").Height(0).Width(0);
-        var stateHandle = stateBox._handle;
+        ElementBuilder stateBox = _paper.Box($"{_id}_state").Height(0).Width(0);
+        ElementHandle stateHandle = stateBox._handle;
 
         // Full-width rows (no side inset) with a small top gap so the first row's selection doesn't
         // butt up against the tab bar / container edge above it.
@@ -421,7 +421,7 @@ public sealed class TreeBuilder
     /// <summary>Arrow key navigation, live while the tree's content holds the keyboard focus.</summary>
     private void HandleKeys(ElementHandle content)
     {
-        var nodes = _nodes!;
+        List<TreeNode> nodes = _nodes!;
 
         _content = content;
         if (!KeyNav.TakeFocus(_paper, content)) return;
@@ -443,7 +443,7 @@ public sealed class TreeBuilder
         else if (move != 0) target = current < 0 ? (move > 0 ? 0 : visible.Count - 1) : Math.Clamp(current + move, 0, visible.Count - 1);
         else if (current >= 0)
         {
-            var node = nodes[visible[current]];
+            TreeNode node = nodes[visible[current]];
             NodeState st = _states[visible[current]];
             if (right)
             {
@@ -480,7 +480,7 @@ public sealed class TreeBuilder
         int cursorRow = -1, selectedRow = -1;
         for (int v = 0; v < visible.Count; v++)
         {
-            var node = _nodes![visible[v]];
+            TreeNode node = _nodes![visible[v]];
             bool selected = _isSelected?.Invoke(node) ?? false;
             if (node.Id == cursor)
             {
@@ -505,13 +505,13 @@ public sealed class TreeBuilder
     /// </summary>
     private void ResolveAll()
     {
-        var nodes = _nodes!;
+        List<TreeNode> nodes = _nodes!;
         var parents = new Stack<int>();
 
         int i = 0;
         while (i < nodes.Count)
         {
-            var node = nodes[i];
+            TreeNode node = nodes[i];
 
             // Close the parents this node isn't beneath.
             while (parents.Count > 0 && node.Depth <= nodes[parents.Peek()].Depth)
@@ -595,7 +595,7 @@ public sealed class TreeBuilder
     /// </summary>
     private void DrawVisible(float viewTop, float viewBottom)
     {
-        var nodes = _nodes!;
+        List<TreeNode> nodes = _nodes!;
         float y = 0f, gap = 0f;
         int spacerCount = 0;
 
@@ -653,7 +653,7 @@ public sealed class TreeBuilder
 
     private void DrawRow(int i)
     {
-        var node = _nodes![i];
+        TreeNode node = _nodes![i];
         ref NodeState st = ref _states[i];
         bool isSelected = _isSelected?.Invoke(node) ?? false;
         bool isPinged = _isPinged?.Invoke(node) ?? false;
@@ -672,7 +672,7 @@ public sealed class TreeBuilder
 
         for (int i = start; i < end; i++)
         {
-            var node = _nodes![i];
+            TreeNode node = _nodes![i];
 
             while (wrappers.Count > 0 && node.Depth <= wrappers.Peek().depth)
                 wrappers.Pop().scope.Dispose();
@@ -688,7 +688,7 @@ public sealed class TreeBuilder
                 continue;
             }
 
-            var wrapper = _paper.Column(node.Id, 1)
+            ElementBuilder wrapper = _paper.Column(node.Id, 1)
                 .Width(UnitValue.Stretch())
                 .Height(UnitValue.Lerp(0, UnitValue.Auto, st.Anim));
 
@@ -711,11 +711,11 @@ public sealed class TreeBuilder
         // Indentation: 6px base left padding + 14px per depth level (prototype .w2trow).
         float indent = _baseIndent + node.Depth * _indentSize;
         int capturedIndex = index;
-        var capturedNode = node;
+        TreeNode capturedNode = node;
         bool disabled = node.Disabled;
 
         // Accent (#A855F7) for drop tints / indicators.
-        var accentColor = _theme.Primary.C500;
+        Color accentColor = _theme.Primary.C500;
         // Full-width, square rows (matches the Nebula tree: solid selection edge-to-edge, no inset).
         const float rowRounding = 0f;
 
@@ -731,7 +731,7 @@ public sealed class TreeBuilder
         // Build the row element
         // Node ids are unique within the tree, and everything below is scoped to the row, so none
         // of these element ids need building per node.
-        var row = _paper.Row(node.Id)
+        ElementBuilder row = _paper.Row(node.Id)
             .Height(_rowHeight)
             .BackgroundColor(rowBg)
             .Hovered.BackgroundColor(hoverBg).End()
@@ -742,7 +742,7 @@ public sealed class TreeBuilder
         // Click handling
         if (!disabled)
         {
-            var content = _content;
+            ElementHandle content = _content;
             row.OnPress(_ =>
             {
                 KeyNav.MarkPressed(_paper, content);
@@ -842,7 +842,7 @@ public sealed class TreeBuilder
         // which moves it out from under the cursor and causes hover/indicator flicker.
         if (node.DropIndicator is TreeDropPosition.Above or TreeDropPosition.Below or TreeDropPosition.IntoFirst)
         {
-            var indPos = node.DropIndicator.Value;
+            TreeDropPosition indPos = node.DropIndicator.Value;
             row.OnPostLayout((handle, rect) =>
             {
                 _paper.Draw(ref handle, (canvas, r) =>
@@ -883,7 +883,7 @@ public sealed class TreeBuilder
                 float caretT = _paper.AnimateBool(isExpanded, 0.15f);
                 Color caretCol = isSelected ? ink.C600 : ink.C200;
 
-                var caret = _paper.Box("arr")
+                ElementBuilder caret = _paper.Box("arr")
                     .Width(_arrowWidth).Height(_rowHeight)
                     .OnClick(e =>
                     {
@@ -903,7 +903,7 @@ public sealed class TreeBuilder
                             int parentDepth = capturedNode.Depth;
                             for (int di = capturedIndex + 1; di < allNodes.Count; di++)
                             {
-                                var desc = allNodes[di];
+                                TreeNode desc = allNodes[di];
                                 if (desc.Depth <= parentDepth) break;
                                 if (desc.HasChildren && !desc.IsLeaf)
                                 {
@@ -980,7 +980,7 @@ public sealed class TreeBuilder
         // ---- Node type icon (~13px). Vector hook preferred; glyph is a legacy fallback. ----
         if (node.IconDraw != null)
         {
-            var icon = node.IconDraw;
+            IOrigamiIcon icon = node.IconDraw;
             Color iconCol = node.IconColor ?? (isSelected ? ink.C600 : (disabled ? ink.C200 : ink.C400));
             using (_paper.Box("ico")
                 .Width(13).Height(_rowHeight)
@@ -1063,7 +1063,7 @@ public sealed class TreeBuilder
         if (!string.IsNullOrEmpty(node.TrailingIcon))
         {
             Color trailColor = node.TrailingIconColor ?? (isSelected ? ink.C600 : ink.C400);
-            var trailBox = _paper.Box("trail")
+            ElementBuilder trailBox = _paper.Box("trail")
                 .Width(18).Height(_rowHeight)
                 .Margin(6, 0, 0, 0)
                 .Text(node.TrailingIcon, font)

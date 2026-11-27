@@ -9,8 +9,8 @@ namespace Prowl.Motion;
 /// </summary>
 public sealed class HumanDescription
 {
-    private readonly Dictionary<HumanBodyBone, int> _boneMap = new();
-    private readonly Dictionary<int, (float Min, float Max)> _muscleRanges = new();
+    private readonly Dictionary<HumanBodyBone, int> _boneMap = [];
+    private readonly Dictionary<int, (float Min, float Max)> _muscleRanges = [];
 
     /// <summary>Creates an empty mapping with default tuning values.</summary>
     public HumanDescription() { }
@@ -43,7 +43,7 @@ public sealed class HumanDescription
     /// </summary>
     public (float Min, float Max) GetMuscleRange(int muscle)
     {
-        if (_muscleRanges.TryGetValue(muscle, out var range))
+        if (_muscleRanges.TryGetValue(muscle, out (float Min, float Max) range))
             return range;
         return (HumanTrait.GetMuscleDefaultMin(muscle), HumanTrait.GetMuscleDefaultMax(muscle));
     }
@@ -74,9 +74,9 @@ public sealed class HumanDescription
             LowerLegTwist = LowerLegTwist,
             FeetSpacing = FeetSpacing,
         };
-        foreach (var pair in _boneMap)
+        foreach (KeyValuePair<HumanBodyBone, int> pair in _boneMap)
             copy._boneMap[pair.Key] = pair.Value;
-        foreach (var pair in _muscleRanges)
+        foreach (KeyValuePair<int, (float Min, float Max)> pair in _muscleRanges)
             copy._muscleRanges[pair.Key] = pair.Value;
         return copy;
     }

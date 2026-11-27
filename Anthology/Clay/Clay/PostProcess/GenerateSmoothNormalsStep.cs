@@ -27,7 +27,7 @@ internal static class NormalGenerationStepRunner
         int generated = 0;
         int split = 0;
 
-        foreach (var mesh in scene.Meshes)
+        foreach (IntermediateMesh mesh in scene.Meshes)
         {
             // Authored normals win. A source that shipped them knows its own smoothing groups, and
             // reconstructing them from geometry alone would throw that away.

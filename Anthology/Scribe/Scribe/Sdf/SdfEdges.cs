@@ -110,7 +110,7 @@ internal sealed class QuadraticSegment : EdgeSegment
             Double2 br = p[2] - p[1] - ab;
             double[] t = new double[2];
             int solutions = SolveQuadratic(t, br.Y, 2 * ab.Y, p[0].Y - y);
-            if (solutions >= 2 && t[0] > t[1]) { var tmp = t[0]; t[0] = t[1]; t[1] = tmp; }
+            if (solutions >= 2 && t[0] > t[1]) { double tmp = t[0]; t[0] = t[1]; t[1] = tmp; }
             for (int i = 0; i < solutions && total < 2; ++i)
             {
                 if (t[i] >= 0 && t[i] <= 1)
@@ -209,10 +209,10 @@ internal sealed class CubicSegment : EdgeSegment
             int solutions = SolveCubic(t, @as.Y, 3 * br.Y, 3 * ab.Y, p[0].Y - y);
             if (solutions >= 2)
             {
-                if (t[0] > t[1]) { var tmp = t[0]; t[0] = t[1]; t[1] = tmp; }
+                if (t[0] > t[1]) { double tmp = t[0]; t[0] = t[1]; t[1] = tmp; }
                 if (solutions >= 3 && t[1] > t[2])
                 {
-                    var tmp = t[1]; t[1] = t[2]; t[2] = tmp;
+                    double tmp = t[1]; t[1] = t[2]; t[2] = tmp;
                     if (t[0] > t[1]) { tmp = t[0]; t[0] = t[1]; t[1] = tmp; }
                 }
             }

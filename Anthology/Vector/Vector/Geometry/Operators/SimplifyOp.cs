@@ -68,7 +68,7 @@ internal static class SimplifyOp
         public readonly Quadric Shifted(double x, double y, double z)
         {
             // q(p + s) = p'Ap + 2(b + As).p + q(s)
-            var shifted = this;
+            Quadric shifted = this;
             shifted.B0 = B0 + A00 * x + A01 * y + A02 * z;
             shifted.B1 = B1 + A01 * x + A11 * y + A12 * z;
             shifted.B2 = B2 + A02 * x + A12 * y + A22 * z;
@@ -107,7 +107,7 @@ internal static class SimplifyOp
     /// </summary>
     private sealed class CandidateHeap
     {
-        private readonly List<(double Cost, float Length, int Vertex, int Version)> _items = new();
+        private readonly List<(double Cost, float Length, int Vertex, int Version)> _items = [];
 
         public int Count => _items.Count;
 
@@ -135,7 +135,7 @@ internal static class SimplifyOp
 
         public (double Cost, float Length, int Vertex, int Version) Pop()
         {
-            var top = _items[0];
+            (double Cost, float Length, int Vertex, int Version) top = _items[0];
             int last = _items.Count - 1;
             _items[0] = _items[last];
             _items.RemoveAt(last);
@@ -221,34 +221,34 @@ internal static class SimplifyOp
         // Wedges are the seam classes at each vertex. Each carries an attribute quadric over the costed
         // channels, kept around its own origin so steep attribute gradients do not cancel out in the sums.
         private readonly Channel[] _channels;
-        private readonly List<(string Name, bool IsInt)> _seamAttributes = new();
-        private readonly List<string> _intAttributes = new();
-        private readonly List<bool> _intOnLoop = new();
-        private readonly List<double> _intWeights = new();
-        private readonly List<GeometryData.Loop> _wedgeLoops = new();
-        private readonly List<Float3> _wedgeOrigins = new();
+        private readonly List<(string Name, bool IsInt)> _seamAttributes = [];
+        private readonly List<string> _intAttributes = [];
+        private readonly List<bool> _intOnLoop = [];
+        private readonly List<double> _intWeights = [];
+        private readonly List<GeometryData.Loop> _wedgeLoops = [];
+        private readonly List<Float3> _wedgeOrigins = [];
         private Quadric[] _wedgeQuadrics = Array.Empty<Quadric>();
         private double[] _wedgeGradients = Array.Empty<double>(); // four per channel per wedge: gradient and offset
 
-        private readonly List<int> _neighbours = new();
+        private readonly List<int> _neighbours = [];
         private readonly List<int>[] _wedgesOf;    // each vertex's seam classes, kept by classification
-        private List<int> _uWedges = new();
+        private List<int> _uWedges = [];
         private readonly Candidate[] _best;        // each vertex's cheapest collapse when it was last costed
         private readonly bool[] _hasBest;
         private readonly int[] _stuckValence;      // triangle count when a vertex last had no valid collapse, 0 when not stuck
-        private readonly List<Candidate> _candidates = new();
+        private readonly List<Candidate> _candidates = [];
         private readonly int[] _mark;
         private readonly int[] _slot;
         private int _markStamp;
 
         // Classification scratch
-        private readonly List<int> _edgeNeighbour = new();
-        private readonly List<int> _edgeCount = new();
-        private readonly List<int> _edgeFirst = new();
-        private readonly List<int> _edgeSecond = new();
-        private readonly List<int> _fan = new();
-        private readonly List<int> _fanParent = new();
-        private readonly HashSet<int> _wedgeSet = new();
+        private readonly List<int> _edgeNeighbour = [];
+        private readonly List<int> _edgeCount = [];
+        private readonly List<int> _edgeFirst = [];
+        private readonly List<int> _edgeSecond = [];
+        private readonly List<int> _fan = [];
+        private readonly List<int> _fanParent = [];
+        private readonly HashSet<int> _wedgeSet = [];
 
         public Simplifier(GeometryData mesh, SimplifyOptions options)
         {
@@ -278,7 +278,7 @@ internal static class SimplifyOp
             _pinned = new bool[vertexCount];
             _quadrics = new Quadric[vertexCount];
             _adjacency = new List<int>[vertexCount];
-            for (int i = 0; i < vertexCount; i++) _adjacency[i] = new List<int>();
+            for (int i = 0; i < vertexCount; i++) _adjacency[i] = [];
             _valence = new int[vertexCount];
             _deadEntries = new int[vertexCount];
             _dead = new bool[vertexCount];
@@ -286,14 +286,14 @@ internal static class SimplifyOp
             _mark = new int[vertexCount];
             _slot = new int[vertexCount];
             _wedgesOf = new List<int>[vertexCount];
-            for (int i = 0; i < vertexCount; i++) _wedgesOf[i] = new List<int>(2);
+            for (int i = 0; i < vertexCount; i++) _wedgesOf[i] = [with(2)];
             _best = new Candidate[vertexCount];
             _hasBest = new bool[vertexCount];
             _stuckValence = new int[vertexCount];
 
             // Faces with more corners are fanned into triangles here, the mesh itself is only rebuilt at the end
             int triangleCount = 0;
-            foreach (var face in mesh.Faces)
+            foreach (GeometryData.Face face in mesh.Faces)
                 if (Fannable(face)) triangleCount += face.VertCount - 2;
 
             _triangles = new int[triangleCount * 3];
@@ -308,12 +308,12 @@ internal static class SimplifyOp
             int t = 0;
             for (int f = 0; f < _faces.Length; f++)
             {
-                var face = _faces[f];
+                GeometryData.Face face = _faces[f];
                 if (!Fannable(face)) continue;
 
                 int region = RegionOf(face, regionIds);
-                var first = face.Loop!;
-                for (var loop = first.Next!; loop.Next != first; loop = loop.Next!, t++)
+                GeometryData.Loop first = face.Loop!;
+                for (GeometryData.Loop loop = first.Next!; loop.Next != first; loop = loop.Next!, t++)
                 {
                     SetCorner(t * 3, first, vertexIndex);
                     SetCorner(t * 3 + 1, loop, vertexIndex);
@@ -352,11 +352,11 @@ internal static class SimplifyOp
         private int RegionOf(GeometryData.Face face, Dictionary<int[], int> regionIds)
         {
             var key = new List<int>();
-            foreach (var def in _mesh.FaceAttributes)
+            foreach (GeometryData.AttributeDefinition def in _mesh.FaceAttributes)
             {
                 if (_options.RegionAttributes != null && !_options.RegionAttributes.Contains(def.Name)) continue;
                 key.Add(-1);
-                if (!face.Attributes.TryGetValue(def.Name, out var value)) continue;
+                if (!face.Attributes.TryGetValue(def.Name, out GeometryData.AttributeValue? value)) continue;
                 if (value is GeometryData.IntAttributeValue n) key.AddRange(n.Data);
                 else if (value is GeometryData.FloatAttributeValue f) foreach (float x in f.Data) key.Add(FloatBits(x));
             }
@@ -371,7 +371,7 @@ internal static class SimplifyOp
 
         private bool IsLockedByAttribute(GeometryData.Vertex vertex)
         {
-            if (_options.LockAttribute == null || !vertex.Attributes.TryGetValue(_options.LockAttribute, out var value))
+            if (_options.LockAttribute == null || !vertex.Attributes.TryGetValue(_options.LockAttribute, out GeometryData.AttributeValue? value))
                 return false;
             if (value is GeometryData.IntAttributeValue n) foreach (int x in n.Data) if (x != 0) return true;
             if (value is GeometryData.FloatAttributeValue f) foreach (float x in f.Data) if (x != 0) return true;
@@ -380,9 +380,9 @@ internal static class SimplifyOp
 
         private static bool HasWireEdge(GeometryData.Vertex vertex)
         {
-            var start = vertex.Edge;
+            GeometryData.Edge? start = vertex.Edge;
             if (start == null) return false;
-            var e = start;
+            GeometryData.Edge? e = start;
             do
             {
                 if (e!.Loop == null) return true;
@@ -396,7 +396,7 @@ internal static class SimplifyOp
             var channels = new List<Channel>();
             void Gather(List<GeometryData.AttributeDefinition> definitions, bool onLoop)
             {
-                foreach (var def in definitions)
+                foreach (GeometryData.AttributeDefinition def in definitions)
                 {
                     if (!_options.AttributeWeights.TryGetValue(def.Name, out float weight) || weight <= 0) continue;
                     if (def.Type.BaseType == GeometryData.AttributeBaseType.Int)
@@ -417,8 +417,8 @@ internal static class SimplifyOp
 
         private static float ChannelValue(GeometryData.Loop loop, in Channel channel)
         {
-            var attributes = channel.OnLoop ? loop.Attributes : loop.Vert.Attributes;
-            return attributes.TryGetValue(channel.Name, out var value) && value is GeometryData.FloatAttributeValue f && channel.Component < f.Data.Length
+            GeometryData.AttributeView attributes = channel.OnLoop ? loop.Attributes : loop.Vert.Attributes;
+            return attributes.TryGetValue(channel.Name, out GeometryData.AttributeValue? value) && value is GeometryData.FloatAttributeValue f && channel.Component < f.Data.Length
                 ? f.Data[channel.Component]
                 : 0f;
         }
@@ -426,7 +426,7 @@ internal static class SimplifyOp
         /// <summary>Groups each vertex's corners into seam classes: corners whose seam attributes match.</summary>
         private void BuildWedges()
         {
-            foreach (var def in _mesh.LoopAttributes)
+            foreach (GeometryData.AttributeDefinition def in _mesh.LoopAttributes)
             {
                 if (_options.SeamAttributes == null || _options.SeamAttributes.Contains(def.Name))
                     _seamAttributes.Add((def.Name, def.Type.BaseType == GeometryData.AttributeBaseType.Int));
@@ -466,20 +466,20 @@ internal static class SimplifyOp
 
         private bool SameSeamValues(GeometryData.Loop a, GeometryData.Loop b)
         {
-            foreach (var (name, isInt) in _seamAttributes)
+            foreach ((string? name, bool isInt) in _seamAttributes)
             {
-                a.Attributes.TryGetValue(name, out var va);
-                b.Attributes.TryGetValue(name, out var vb);
+                a.Attributes.TryGetValue(name, out GeometryData.AttributeValue? va);
+                b.Attributes.TryGetValue(name, out GeometryData.AttributeValue? vb);
                 if (isInt)
                 {
-                    var ia = (va as GeometryData.IntAttributeValue)?.Data;
-                    var ib = (vb as GeometryData.IntAttributeValue)?.Data;
+                    int[]? ia = (va as GeometryData.IntAttributeValue)?.Data;
+                    int[]? ib = (vb as GeometryData.IntAttributeValue)?.Data;
                     if (ia == null || ib == null ? ia != ib : !ia.AsSpan().SequenceEqual(ib)) return false;
                     continue;
                 }
 
-                var fa = (va as GeometryData.FloatAttributeValue)?.Data;
-                var fb = (vb as GeometryData.FloatAttributeValue)?.Data;
+                float[]? fa = (va as GeometryData.FloatAttributeValue)?.Data;
+                float[]? fb = (vb as GeometryData.FloatAttributeValue)?.Data;
                 if (fa == null || fb == null)
                 {
                     if (fa != fb) return false;
@@ -537,16 +537,16 @@ internal static class SimplifyOp
                 for (int k = 0; k < 3; k++)
                 {
                     long key = PairKey(_triangles[t * 3 + k], _triangles[t * 3 + (k + 1) % 3]);
-                    edges[key] = edges.TryGetValue(key, out var info)
+                    edges[key] = edges.TryGetValue(key, out (int First, int Second, int Count) info)
                         ? (info.First, info.Count == 1 ? t : info.Second, info.Count + 1)
                         : (t, -1, 1);
                 }
             }
 
-            foreach (var pair in edges)
+            foreach (KeyValuePair<long, (int First, int Second, int Count)> pair in edges)
             {
                 int a = (int)(pair.Key >> 32), b = (int)(pair.Key & 0xFFFFFFFF);
-                var (first, second, count) = pair.Value;
+                (int first, int second, int count) = pair.Value;
                 bool boundary = count == 1 || (count == 2 && IsSeamBetween(first, second, a, b));
                 if (!boundary) continue;
 
@@ -658,8 +658,8 @@ internal static class SimplifyOp
 
         private bool IntsDiffer(GeometryData.Element a, GeometryData.Element b, string name)
         {
-            a.TryGetAttribute(name, out var va);
-            b.TryGetAttribute(name, out var vb);
+            a.TryGetAttribute(name, out GeometryData.AttributeValue? va);
+            b.TryGetAttribute(name, out GeometryData.AttributeValue? vb);
             return !(va is GeometryData.IntAttributeValue ia && vb is GeometryData.IntAttributeValue ib && ia.Data.AsSpan().SequenceEqual(ib.Data));
         }
 
@@ -810,7 +810,7 @@ internal static class SimplifyOp
             var heap = new CandidateHeap();
             for (int v = 0; v < _vertices.Length; v++)
             {
-                if (TryFindCandidate(v, out var candidate))
+                if (TryFindCandidate(v, out Candidate candidate))
                     heap.Push(candidate, v, _versions[v]);
             }
 
@@ -818,12 +818,12 @@ internal static class SimplifyOp
             var touched = new List<int>();
             while (aliveCount > target && heap.Count > 0)
             {
-                var (cost, _, u, version) = heap.Pop();
+                (double cost, float _, int u, int version) = heap.Pop();
                 if (_dead[u] || version != _versions[u]) continue;
 
                 // Costs were taken optimistically, so the topology and flip checks run only now, on the
                 // collapse about to happen, falling back to the next cheapest when one fails
-                if (!TryPickValid(u, cost, out var candidate, out var requeue))
+                if (!TryPickValid(u, cost, out Candidate candidate, out Candidate? requeue))
                 {
                     if (requeue.HasValue) heap.Push(requeue.Value, u, _versions[u]);
                     else if (_valence[u] >= BusyValence) _stuckValence[u] = _valence[u];
@@ -854,7 +854,7 @@ internal static class SimplifyOp
                     _stuckValence[n] = 0;
 
                     bool kindChanged = Classify(n);
-                    if (Recost(n, u, v, kindChanged, out var next))
+                    if (Recost(n, u, v, kindChanged, out Candidate next))
                         heap.Push(next, n, _versions[n]);
                 }
             }
@@ -898,7 +898,7 @@ internal static class SimplifyOp
             if (_kinds[n] == Kind.Locked) return _hasBest[n] = false;
 
             GatherWedgesOf(n);
-            if (TryEvaluate(n, v, out var onto) && onto.IsBetterThan(best)) best = onto;
+            if (TryEvaluate(n, v, out Candidate onto) && onto.IsBetterThan(best)) best = onto;
             _best[n] = best;
             return true;
         }
@@ -917,7 +917,7 @@ internal static class SimplifyOp
             bool found = false;
             foreach (int v in _neighbours)
             {
-                if (TryEvaluate(u, v, out var candidate) && (!found || candidate.IsBetterThan(best)))
+                if (TryEvaluate(u, v, out Candidate candidate) && (!found || candidate.IsBetterThan(best)))
                 {
                     best = candidate;
                     found = true;
@@ -945,12 +945,12 @@ internal static class SimplifyOp
             _candidates.Clear();
             foreach (int v in _neighbours)
             {
-                if (TryEvaluate(u, v, out var candidate)) _candidates.Add(candidate);
+                if (TryEvaluate(u, v, out Candidate candidate)) _candidates.Add(candidate);
             }
             _candidates.Sort((a, b) => a.IsBetterThan(b) ? -1 : b.IsBetterThan(a) ? 1 : 0);
 
             int checks = 0;
-            foreach (var candidate in _candidates)
+            foreach (Candidate candidate in _candidates)
             {
                 // Costs are deterministic, so anything dearer than the queued cost means the neighbourhood changed
                 if (candidate.Cost > queuedCost)
@@ -1209,14 +1209,14 @@ internal static class SimplifyOp
 
             var edgeData = new Dictionary<long, (int Id, Dictionary<string, GeometryData.AttributeValue> Attributes)>(_mesh.Edges.Count, PairComparer.Instance);
             var wireEdges = new List<GeometryData.Edge>();
-            foreach (var e in _mesh.Edges)
+            foreach (GeometryData.Edge e in _mesh.Edges)
             {
                 if (e.Loop == null) wireEdges.Add(e);
                 else edgeData[PairKey(vertexIndex[e.Vert1], vertexIndex[e.Vert2])] = (e.Id, e.Attributes.ToDictionary());
             }
 
             // Pinned vertices never collapse, so faceless and wire vertices are all still here
-            var keep = new bool[_vertices.Length];
+            bool[] keep = new bool[_vertices.Length];
             for (int v = 0; v < _vertices.Length; v++) keep[v] = _pinned[v];
             for (int t = 0; t < _alive.Length; t++)
             {
@@ -1234,40 +1234,40 @@ internal static class SimplifyOp
 
             // The first corner to use a source loop takes its dictionary, the rest take copies
             var takenLoops = new HashSet<GeometryData.Loop>();
-            var takenFaces = new bool[_faces.Length];
+            bool[] takenFaces = new bool[_faces.Length];
             var corners = new GeometryData.Vertex[3];
             for (int t = 0; t < _alive.Length; t++)
             {
                 if (!_alive[t]) continue;
 
                 for (int k = 0; k < 3; k++) corners[k] = _vertices[_triangles[t * 3 + k]];
-                var face = _mesh.AddFace(corners, fillAttributes: false);
+                GeometryData.Face? face = _mesh.AddFace(corners, fillAttributes: false);
                 if (face == null) continue;
 
                 int f = _triangleFace[t];
-                var oldFace = _faces[f];
+                GeometryData.Face oldFace = _faces[f];
                 face.Id = oldFace.Id;
                 face.Attributes = takenFaces[f] ? CopyAttributes(oldFace.Attributes) : oldFace.Attributes;
                 takenFaces[f] = true;
 
                 for (int k = 0; k < 3; k++)
                 {
-                    var loop = face.GetLoop(corners[k])!;
-                    var source = _cornerLoops[t * 3 + k];
+                    GeometryData.Loop loop = face.GetLoop(corners[k])!;
+                    GeometryData.Loop source = _cornerLoops[t * 3 + k];
                     loop.Attributes = takenLoops.Add(source) ? source.Attributes : CopyAttributes(source.Attributes);
                 }
             }
 
-            foreach (var e in wireEdges)
+            foreach (GeometryData.Edge e in wireEdges)
             {
-                var edge = _mesh.AddEdge(e.Vert1, e.Vert2);
+                GeometryData.Edge edge = _mesh.AddEdge(e.Vert1, e.Vert2);
                 edge.Id = e.Id;
                 edge.Attributes = e.Attributes;
             }
 
-            foreach (var e in _mesh.Edges)
+            foreach (GeometryData.Edge e in _mesh.Edges)
             {
-                if (e.Loop == null || !edgeData.TryGetValue(PairKey(vertexIndex[e.Vert1], vertexIndex[e.Vert2]), out var data)) continue;
+                if (e.Loop == null || !edgeData.TryGetValue(PairKey(vertexIndex[e.Vert1], vertexIndex[e.Vert2]), out (int Id, Dictionary<string, GeometryData.AttributeValue> Attributes) data)) continue;
                 e.Id = data.Id;
                 if (_mesh.EdgeAttributes.Count > 0) e.Attributes = CopyAttributes(data.Attributes);
             }
@@ -1278,7 +1278,7 @@ internal static class SimplifyOp
         private static Dictionary<string, GeometryData.AttributeValue> CopyAttributes(Dictionary<string, GeometryData.AttributeValue> source)
         {
             var copy = new Dictionary<string, GeometryData.AttributeValue>(source.Count);
-            foreach (var pair in source) copy[pair.Key] = GeometryData.AttributeValue.Copy(pair.Value);
+            foreach (KeyValuePair<string, GeometryData.AttributeValue> pair in source) copy[pair.Key] = GeometryData.AttributeValue.Copy(pair.Value);
             return copy;
         }
     }

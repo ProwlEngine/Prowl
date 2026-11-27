@@ -21,37 +21,37 @@ internal static class SceneBaker
         AssignNodeIndices(scene.Nodes);
 
         // Skin bake produces (Skin[], inverseBindPose array per mesh).
-        var bakedSkins = BakeSkins(scene);
+        List<BakedSkin> bakedSkins = BakeSkins(scene);
 
         // Bake meshes (need to know skin assignment per mesh to populate BindPoses + BoneWeights).
-        var meshSkinIndex = BuildMeshToSkinMap(scene, bakedSkins, context);
+        int[] meshSkinIndex = BuildMeshToSkinMap(scene, bakedSkins, context);
         var bakedMeshes = new List<Mesh>(scene.Meshes.Count);
         for (int i = 0; i < scene.Meshes.Count; i++)
             bakedMeshes.Add(BakeMesh(scene.Meshes[i], meshSkinIndex[i], bakedSkins, context));
 
         var bakedMaterials = new List<Material>(scene.Materials.Count);
-        foreach (var im in scene.Materials)
+        foreach (IntermediateMaterial im in scene.Materials)
             bakedMaterials.Add(BakeMaterial(im));
 
         var bakedTextures = new List<Texture>(scene.Textures.Count);
-        foreach (var it in scene.Textures)
+        foreach (IntermediateTexture it in scene.Textures)
             bakedTextures.Add(BakeTexture(it));
 
         var bakedCameras = new List<Camera>(scene.Cameras.Count);
-        foreach (var c in scene.Cameras)
+        foreach (IntermediateCamera c in scene.Cameras)
             bakedCameras.Add(BakeCamera(c));
 
         var bakedLights = new List<Light>(scene.Lights.Count);
-        foreach (var l in scene.Lights)
+        foreach (IntermediateLight l in scene.Lights)
             bakedLights.Add(BakeLight(l));
 
         var bakedNodes = new ModelNode[scene.Nodes.Count];
         ModelNode? bakedRoot = null;
         for (int i = 0; i < scene.Nodes.Count; i++)
         {
-            var src = scene.Nodes[i];
+            IntermediateNode src = scene.Nodes[i];
             var local = Float4x4.CreateTRS(src.LocalPosition, src.LocalRotation, src.LocalScale);
-            var world = src.Parent is { } parent && parent.BakeIndex >= 0
+            Float4x4 world = src.Parent is { } parent && parent.BakeIndex >= 0
                 ? bakedNodes[parent.BakeIndex].WorldMatrix * local
                 : local;
 
@@ -83,8 +83,8 @@ internal static class SceneBaker
 
         for (int i = 0; i < scene.Nodes.Count; i++)
         {
-            var src = scene.Nodes[i];
-            var dst = bakedNodes[i];
+            IntermediateNode src = scene.Nodes[i];
+            ModelNode dst = bakedNodes[i];
             if (src.Parent is { BakeIndex: var pi } && pi >= 0)
                 dst.Parent = bakedNodes[pi];
 
@@ -103,7 +103,7 @@ internal static class SceneBaker
 
         // Skins reference baked node indices; finalize them after the node bake.
         var publicSkins = new List<Skin>(bakedSkins.Count);
-        foreach (var s in bakedSkins)
+        foreach (BakedSkin s in bakedSkins)
         {
             int[] boneIndices = new int[s.IntermediateSkin.BoneNodes.Count];
             for (int b = 0; b < boneIndices.Length; b++)
@@ -128,7 +128,7 @@ internal static class SceneBaker
         }
 
         var bakedAnimations = new List<AnimationClip>(scene.Animations.Count);
-        foreach (var src in scene.Animations)
+        foreach (IntermediateAnimation src in scene.Animations)
             bakedAnimations.Add(BakeAnimation(src, bakedNodes, context));
 
         var metadata = new ModelMetadata
@@ -182,11 +182,11 @@ internal static class SceneBaker
     /// </summary>
     private static int[] BuildMeshToSkinMap(IntermediateScene scene, List<BakedSkin> skins, ImportContext context)
     {
-        var result = new int[scene.Meshes.Count];
+        int[] result = new int[scene.Meshes.Count];
         Array.Fill(result, -1);
         if (skins.Count == 0) return result;
 
-        foreach (var node in scene.Nodes)
+        foreach (IntermediateNode node in scene.Nodes)
         {
             if (node.MeshIndex < 0 || node.SkinIndex < 0) continue;
             if (node.MeshIndex >= result.Length) continue;
@@ -225,7 +225,7 @@ internal static class SceneBaker
         bool hasPolys = (src.PrimitiveKinds & PrimitiveKind.Polygon) != 0;
         if (hasPolys) hasTris = true;
 
-        var indices = new uint[src.Faces.AllIndices.Length];
+        uint[] indices = new uint[src.Faces.AllIndices.Length];
         int indexCount = 0;
         var submeshes = new List<SubMesh>(3);
         AppendSubMeshes(src, indices, ref indexCount, submeshes, PrimitiveTopology.Triangles, hasTris, vertexCount);
@@ -261,10 +261,10 @@ internal static class SceneBaker
             BlendShapes = blendShapes,
         };
 
-        var vertices = mesh.Vertices;
+        Float3[] vertices = mesh.Vertices;
         for (int s = 0; s < mesh.SubMeshes.Length; s++)
         {
-            var sm = mesh.SubMeshes[s];
+            SubMesh sm = mesh.SubMeshes[s];
             Bounds sb = Bounds.Empty;
             foreach (uint index in indices.AsSpan(sm.IndexStart, sm.IndexCount))
                 sb.Encapsulate(vertices[(int)index + sm.BaseVertex]);
@@ -386,11 +386,11 @@ internal static class SceneBaker
         var result = new BlendShape[src.BlendShapes.Count];
         for (int i = 0; i < src.BlendShapes.Count; i++)
         {
-            var sib = src.BlendShapes[i];
+            IntermediateBlendShape sib = src.BlendShapes[i];
             var frames = new BlendShapeFrame[sib.Frames.Count];
             for (int f = 0; f < sib.Frames.Count; f++)
             {
-                var srcFrame = sib.Frames[f];
+                IntermediateBlendShapeFrame srcFrame = sib.Frames[f];
                 frames[f] = new BlendShapeFrame
                 {
                     Weight = srcFrame.Weight,
@@ -414,7 +414,7 @@ internal static class SceneBaker
         var bindings = new List<AnimationBinding>(src.Bindings.Count);
         for (int i = 0; i < src.Bindings.Count; i++)
         {
-            var b = src.Bindings[i];
+            IntermediateAnimationBinding b = src.Bindings[i];
             int nodeIdx = b.TargetNode?.BakeIndex ?? -1;
             if (nodeIdx < 0)
                 ctx.Log.Warning(
@@ -435,7 +435,7 @@ internal static class SceneBaker
         // start of every late-starting clip back to zero.
         float start = float.PositiveInfinity;
         float end = float.NegativeInfinity;
-        foreach (var binding in bindings)
+        foreach (AnimationBinding binding in bindings)
         {
             if (binding.Curve.Count == 0) continue;
             start = MathF.Min(start, binding.Curve.StartTime);
@@ -492,7 +492,7 @@ internal static class SceneBaker
         // Bit flags per node: 1=has Position, 2=has Rotation, 4=has Scale. Limited to SubIndex==0
         // (TRS only has one slot; SubIndex is used by blend-shape-weight bindings).
         var present = new Dictionary<int, int>();
-        foreach (var b in bindings)
+        foreach (AnimationBinding b in bindings)
         {
             if (b.SubIndex != 0) continue;
             if (b.NodeIndex < 0) continue;
@@ -508,13 +508,13 @@ internal static class SceneBaker
             present[b.NodeIndex] = mask | bit;
         }
 
-        foreach (var kv in present)
+        foreach (KeyValuePair<int, int> kv in present)
         {
             int nodeIdx = kv.Key;
             int mask = kv.Value;
             if (mask == 0b111) continue; // all three already present
             if ((uint)nodeIdx >= (uint)bakedNodes.Length) continue;
-            var n = bakedNodes[nodeIdx];
+            ModelNode n = bakedNodes[nodeIdx];
 
             if ((mask & 1) == 0)
                 bindings.Add(MakeConstantBinding(atTime, nodeIdx, AnimatedProperty.Position, 3, n.LocalPosition.X, n.LocalPosition.Y, n.LocalPosition.Z));
@@ -562,10 +562,10 @@ internal static class SceneBaker
             _ => 3,
         };
 
-        var faces = src.Faces.AsSpan();
-        var allIndices = src.Faces.AllIndices;
+        ReadOnlySpan<IntermediateFace> faces = src.Faces.AsSpan();
+        Span<int> allIndices = src.Faces.AllIndices;
         var materialOrder = new List<int>();
-        foreach (var face in faces)
+        foreach (IntermediateFace face in faces)
         {
             if (face.Count != indicesPerFace) continue;
             int material = src.MaterialForFace(face);
@@ -575,7 +575,7 @@ internal static class SceneBaker
         foreach (int material in materialOrder)
         {
             int start = indexCount;
-            foreach (var face in faces)
+            foreach (IntermediateFace face in faces)
             {
                 if (face.Count != indicesPerFace) continue;
                 if (src.MaterialForFace(face) != material) continue;
@@ -608,7 +608,7 @@ internal static class SceneBaker
     private static Bounds ComputeBounds(List<Float3> positions)
     {
         Bounds b = Bounds.Empty;
-        foreach (var position in CollectionsMarshal.AsSpan(positions))
+        foreach (Float3 position in CollectionsMarshal.AsSpan(positions))
             b.Encapsulate(position);
         return b;
     }

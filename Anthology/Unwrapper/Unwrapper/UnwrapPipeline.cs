@@ -73,7 +73,7 @@ internal static class UnwrapPipeline
                 progress?.Invoke($"    merge: budget exceeded after {attempts} attempts; skipping remaining {boundaries.Count - bi}");
                 break;
             }
-            var boundary = boundaries[bi];
+            ChartBuilder.ChartBoundary boundary = boundaries[bi];
             if (boundary.FitError < mergeAcceptanceThreshold && boundary.First != boundary.Second)
             {
                 ++attempts;
@@ -136,8 +136,8 @@ internal static class UnwrapPipeline
             newChart.Region = null;
         }
 
-        foreach (var rs in toResegment) ResegmentInto(rs, queue, options, progress);
-        foreach (var rf in toFlatten) queue.Add(rf);
+        foreach (MeshRegion rs in toResegment) ResegmentInto(rs, queue, options, progress);
+        foreach (MeshRegion rf in toFlatten) queue.Add(rf);
     }
 
     private static void ResegmentInto(MeshRegion region, List<MeshRegion> queue, UnwrapOptions options, System.Action<string>? progress)
@@ -156,7 +156,7 @@ internal static class UnwrapPipeline
         flattener.BuildAngleSystem();
         flattener.SolveAngleSystem(tolerance, iterBudget);
 
-        flattener.EvaluateAngularDistortion(out var stats);
+        flattener.EvaluateAngularDistortion(out DistortionStats stats);
         if (stats.MeanAngularDistortion >= options.Conformal.AngleDistortionThreshold) return false;
 
         flattener.SolveConformalLayout(tolerance, iterBudget);
@@ -170,7 +170,7 @@ internal static class UnwrapPipeline
 
     private static bool MeetsDistortionLimits(UvChart chart, UnwrapOptions options)
     {
-        DistortionMetrics.EvaluateFull(chart, out var stats);
+        DistortionMetrics.EvaluateFull(chart, out DistortionStats stats);
         return stats.MeanAngularDistortion < options.Conformal.AngleDistortionThreshold
             && stats.MeanAreaDistortion < options.Conformal.AreaDistortionThreshold;
     }
@@ -239,7 +239,7 @@ internal static class UnwrapPipeline
 
         // Each chart's faces map back to cleaned triangle indices; route UVs into per-corner slots.
         for (int i = 0; i < outputUV.Length; ++i) outputUV[i] = default;
-        foreach (var chart in charts)
+        foreach (UvChart chart in charts)
         {
             for (int f = 0; f < chart.Region!.Triangles.Length; ++f)
             {

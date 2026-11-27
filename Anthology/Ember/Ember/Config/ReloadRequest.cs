@@ -40,8 +40,8 @@ public sealed class ReloadRequest
 
     public sealed class Builder
     {
-        private readonly List<AssemblyChange> _changes = new();
-        private readonly List<object> _roots = new();
+        private readonly List<AssemblyChange> _changes = [];
+        private readonly List<object> _roots = [];
 
         public Builder Replace(Assembly previous, Assembly current)
         {
@@ -78,7 +78,7 @@ public sealed class ReloadRequest
         public Builder Roots(IEnumerable<object> instances)
         {
             ArgumentNullException.ThrowIfNull(instances);
-            foreach (var instance in instances) Root(instance);
+            foreach (object instance in instances) Root(instance);
             return this;
         }
 
@@ -93,7 +93,7 @@ public sealed class ReloadRequest
             var seenPrevious = new HashSet<Assembly>();
             var seenCurrent = new HashSet<Assembly>();
 
-            foreach (var change in _changes)
+            foreach (AssemblyChange change in _changes)
             {
                 if (change.Previous != null && !seenPrevious.Add(change.Previous))
                     throw new ArgumentException($"Assembly {change.Previous.GetName().Name} is named as previous more than once.");
@@ -102,7 +102,7 @@ public sealed class ReloadRequest
                     throw new ArgumentException($"Assembly {change.Current.GetName().Name} is named as current more than once.");
             }
 
-            foreach (var change in _changes)
+            foreach (AssemblyChange change in _changes)
                 if (change.Kind == AssemblyChangeKind.Removed && seenCurrent.Contains(change.Previous!))
                     throw new ArgumentException($"Assembly {change.Previous!.GetName().Name} is both removed and introduced.");
         }

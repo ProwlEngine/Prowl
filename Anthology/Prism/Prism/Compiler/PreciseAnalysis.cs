@@ -1,4 +1,5 @@
 using Prowl.Prism.Glsl;
+
 using Index = Prowl.Prism.Glsl.Index;
 
 namespace Prowl.Prism.Compiler;
@@ -19,7 +20,7 @@ sealed class PreciseAnalysis
 
     /// <summary>Marked operations. The value is true when the mark came from the propagator's binary visit,
     /// which glslang applies only when the result is not a 32-bit signed int.</summary>
-    public readonly Dictionary<object, bool> Marked = new(ReferenceEqualityComparer.Instance);
+    public readonly Dictionary<object, bool> Marked = [with(ReferenceEqualityComparer.Instance)];
 
     // A typed object reference: a type name (struct, block, or anything else) and its remaining array depth.
     readonly record struct TypeName(string Name, int ArrayDepth);
@@ -41,18 +42,18 @@ sealed class PreciseAnalysis
         public bool ArithAssign;      // compound arithmetic assignment or ++/--
     }
 
-    readonly Dictionary<string, (string Field, TypeName Type)[]> _structs = new(StringComparer.Ordinal);
-    readonly Dictionary<string, TypeName> _functionReturns = new(StringComparer.Ordinal);
-    readonly HashSet<string> _preciseReturns = new(StringComparer.Ordinal);
-    readonly Dictionary<string, Symbol> _globals = new(StringComparer.Ordinal);
-    readonly Dictionary<object, string> _chain = new(ReferenceEqualityComparer.Instance);       // object node -> access chain
-    readonly Dictionary<object, Symbol> _root = new(ReferenceEqualityComparer.Instance);        // object node -> root symbol
-    readonly Dictionary<object, TypeName> _types = new(ReferenceEqualityComparer.Instance);     // object node -> type
-    readonly Dictionary<string, List<Definition>> _definitions = new(StringComparer.Ordinal);   // symbol id -> its assignments
+    readonly Dictionary<string, (string Field, TypeName Type)[]> _structs = [with(StringComparer.Ordinal)];
+    readonly Dictionary<string, TypeName> _functionReturns = [with(StringComparer.Ordinal)];
+    readonly HashSet<string> _preciseReturns = [with(StringComparer.Ordinal)];
+    readonly Dictionary<string, Symbol> _globals = [with(StringComparer.Ordinal)];
+    readonly Dictionary<object, string> _chain = [with(ReferenceEqualityComparer.Instance)];       // object node -> access chain
+    readonly Dictionary<object, Symbol> _root = [with(ReferenceEqualityComparer.Instance)];        // object node -> root symbol
+    readonly Dictionary<object, TypeName> _types = [with(ReferenceEqualityComparer.Instance)];     // object node -> type
+    readonly Dictionary<string, List<Definition>> _definitions = [with(StringComparer.Ordinal)];   // symbol id -> its assignments
     readonly List<string> _work = [];
-    readonly HashSet<string> _inWork = new(StringComparer.Ordinal);
-    readonly HashSet<string> _added = new(StringComparer.Ordinal);                             // propagator's added set
-    readonly HashSet<object> _preciseNodes = new(ReferenceEqualityComparer.Instance);           // checker/propagator marks
+    readonly HashSet<string> _inWork = [with(StringComparer.Ordinal)];
+    readonly HashSet<string> _added = [with(StringComparer.Ordinal)];                             // propagator's added set
+    readonly HashSet<object> _preciseNodes = [with(ReferenceEqualityComparer.Instance)];           // checker/propagator marks
     readonly List<Dictionary<string, Symbol>> _scopes = [];
     int _nextId = 1;
 
@@ -71,7 +72,7 @@ sealed class PreciseAnalysis
         if (!Mentions(unit)) return;
 
         // Types first: structs, blocks and function return types, so member chains resolve anywhere.
-        foreach (var d in unit.Declarations)
+        foreach (Decl d in unit.Declarations)
         {
             switch (d)
             {
@@ -93,12 +94,12 @@ sealed class PreciseAnalysis
         }
 
         // Collect: globals, their initializers, every function body (glslang's TSymbolDefinitionCollectingTraverser).
-        foreach (var d in unit.Declarations)
+        foreach (Decl d in unit.Declarations)
         {
             switch (d)
             {
                 case GlobalVar g:
-                    foreach (var dc in g.Declarators)
+                    foreach (Declarator dc in g.Declarators)
                     {
                         if (dc.Init is not null) CollectExpr(dc.Init);
                         var sym = new Symbol(NewId(dc.Name), new TypeName(g.Type.Name, Depth(g.Type.Array) + dc.Array.Count), IsPreciseWord(g.Qualifiers));
@@ -113,8 +114,8 @@ sealed class PreciseAnalysis
                     {
                         // Anonymous block members read as bare names but are members of the block object.
                         var block = new Symbol(NewId(b.BlockName), new TypeName("block:" + b.BlockName, 0), false);
-                        foreach (var f in b.Members)
-                            foreach (var dc in f.Declarators)
+                        foreach (Field f in b.Members)
+                            foreach (Declarator dc in f.Declarators)
                                 _globals[dc.Name] = new Symbol(block.Id + Delim + dc.Name, new TypeName(f.Type.Name, Depth(f.Type.Array) + dc.Array.Count),
                                                                IsPreciseWord(f.Qualifiers) || IsPreciseWord(b.Qualifiers));
                     }
@@ -124,11 +125,11 @@ sealed class PreciseAnalysis
                     break;
             }
         }
-        foreach (var f in unit.Declarations.OfType<FunctionDef>())
+        foreach (FunctionDef f in unit.Declarations.OfType<FunctionDef>())
         {
             _scopes.Clear();
             var scope = new Dictionary<string, Symbol>(StringComparer.Ordinal);
-            foreach (var p in f.Parameters)
+            foreach (Param p in f.Parameters)
                 if (p.Name is { } pn)
                     // `precise` on an out parameter makes it a precise object (ParseHelper paramCheckFixStorage).
                     scope[pn] = new Symbol(NewId(pn), new TypeName(p.Type.Name, Depth(p.Type.Array) + p.Array.Count),
@@ -144,10 +145,10 @@ sealed class PreciseAnalysis
         for (int i = 0; i < _work.Count; i++)
         {
             string precise = _work[i];
-            if (!_definitions.TryGetValue(Front(precise), out var defs)) continue;
-            foreach (var def in defs)
+            if (!_definitions.TryGetValue(Front(precise), out List<Definition>? defs)) continue;
+            foreach (Definition def in defs)
             {
-                var (contains, remained) = CheckAssignee(def, precise);
+                (bool contains, string? remained) = CheckAssignee(def, precise);
                 if (contains) PropagateInDefinition(def, remained);
             }
         }
@@ -156,7 +157,7 @@ sealed class PreciseAnalysis
     // Cheap gate: nothing to do unless something is declared precise.
     static bool Mentions(TranslationUnit unit)
     {
-        foreach (var d in unit.Declarations)
+        foreach (Decl d in unit.Declarations)
         {
             switch (d)
             {
@@ -187,14 +188,14 @@ sealed class PreciseAnalysis
 
     Symbol Global(string name)
     {
-        if (!_globals.TryGetValue(name, out var s)) _globals[name] = s = new Symbol(name + "(builtin)", new TypeName("", 0), false);
+        if (!_globals.TryGetValue(name, out Symbol? s)) _globals[name] = s = new Symbol(name + "(builtin)", new TypeName("", 0), false);
         return s;
     }
 
     Symbol Resolve(string name)
     {
         for (int i = _scopes.Count - 1; i >= 0; i--)
-            if (_scopes[i].TryGetValue(name, out var s)) return s;
+            if (_scopes[i].TryGetValue(name, out Symbol? s)) return s;
         return Global(name);
     }
 
@@ -204,7 +205,7 @@ sealed class PreciseAnalysis
     void AddDefinition(string symbolId, Definition def)
     {
         if (_inIndex > 0) return;
-        if (!_definitions.TryGetValue(symbolId, out var list)) _definitions[symbolId] = list = [];
+        if (!_definitions.TryGetValue(symbolId, out List<Definition>? list)) _definitions[symbolId] = list = [];
         list.Add(def);
     }
 
@@ -222,9 +223,9 @@ sealed class PreciseAnalysis
 
     // ---- collection: scopes, chains, definitions ----
 
-    void CollectBlockBody(Block b) { foreach (var s in b.Statements) CollectStmt(s); }
+    void CollectBlockBody(Block b) { foreach (Stmt s in b.Statements) CollectStmt(s); }
 
-    void Push() => _scopes.Add(new Dictionary<string, Symbol>(StringComparer.Ordinal));
+    void Push() => _scopes.Add([with(StringComparer.Ordinal)]);
     void Pop() => _scopes.RemoveAt(_scopes.Count - 1);
 
     void CollectStmt(Stmt? s)
@@ -234,7 +235,7 @@ sealed class PreciseAnalysis
             case null: break;
             case Block b: Push(); CollectBlockBody(b); Pop(); break;
             case VarDeclStmt v:
-                foreach (var dc in v.Declarators)
+                foreach (Declarator dc in v.Declarators)
                 {
                     // The initializer sees the outer meaning of the name; the declaration takes effect after it.
                     if (dc.Init is not null) CollectExpr(dc.Init);
@@ -258,7 +259,7 @@ sealed class PreciseAnalysis
             case SwitchStmt sw:
                 CollectExpr(sw.Value);
                 Push();
-                foreach (var c in sw.Cases) foreach (var st in c.Body) CollectStmt(st);
+                foreach (SwitchCase c in sw.Cases) foreach (Stmt st in c.Body) CollectStmt(st);
                 Pop();
                 break;
             case ReturnStmt r:
@@ -287,7 +288,7 @@ sealed class PreciseAnalysis
         {
             case Ident id:
             {
-                var sym = Resolve(id.Name);
+                    Symbol sym = Resolve(id.Name);
                 _chain[id] = sym.Id; _root[id] = sym; _types[id] = sym.Type;
                 break;
             }
@@ -295,8 +296,8 @@ sealed class PreciseAnalysis
             {
                 CollectExpr(m.Target);
                 string baseChain = _chain.GetValueOrDefault(m.Target, "");
-                var t = _types.GetValueOrDefault(m.Target);
-                if (t.ArrayDepth == 0 && t.Name is not null && _structs.TryGetValue(t.Name, out var fields) && Array.FindIndex(fields, f => f.Field == m.Name) is >= 0 and var fi)
+                    TypeName t = _types.GetValueOrDefault(m.Target);
+                if (t.ArrayDepth == 0 && t.Name is not null && _structs.TryGetValue(t.Name, out (string Field, TypeName Type)[]? fields) && Array.FindIndex(fields, f => f.Field == m.Name) is >= 0 and var fi)
                 {
                     _chain[m] = baseChain + Delim + m.Name;
                     _types[m] = fields[fi].Type;
@@ -306,7 +307,7 @@ sealed class PreciseAnalysis
                     _chain[m] = baseChain;   // a swizzle names the whole vector
                     _types[m] = new TypeName("", 0);
                 }
-                if (_root.TryGetValue(m.Target, out var r)) _root[m] = r;
+                if (_root.TryGetValue(m.Target, out Symbol? r)) _root[m] = r;
                 break;
             }
             case Index ix:
@@ -315,9 +316,9 @@ sealed class PreciseAnalysis
                 // glslang never visits an index expression here, so assignments inside one define nothing.
                 _inIndex++; CollectExpr(ix.Idx); _inIndex--;
                 _chain[ix] = _chain.GetValueOrDefault(ix.Target, "");
-                var t = _types.GetValueOrDefault(ix.Target);
+                    TypeName t = _types.GetValueOrDefault(ix.Target);
                 _types[ix] = t.ArrayDepth > 0 ? t with { ArrayDepth = t.ArrayDepth - 1 } : new TypeName("", 0);
-                if (_root.TryGetValue(ix.Target, out var r)) _root[ix] = r;
+                if (_root.TryGetValue(ix.Target, out Symbol? r)) _root[ix] = r;
                 break;
             }
             case Binary b when b.Op == ",":
@@ -327,7 +328,7 @@ sealed class PreciseAnalysis
             {
                 CollectExpr(b.Left);
                 CollectExpr(b.Right);
-                if (_chain.TryGetValue(b.Left, out var lc))
+                if (_chain.TryGetValue(b.Left, out string? lc))
                 {
                     AddDefinition(Front(lc), new Definition { Node = b, Left = b.Left, Right = b.Right, ArithAssign = IsArithAssign(b.Op) });
                     if (IsPreciseNode(b.Left)) Enqueue(lc);
@@ -338,7 +339,7 @@ sealed class PreciseAnalysis
             case Unary u:
             {
                 CollectExpr(u.Operand);
-                if (u.Op is "++" or "--" && _chain.TryGetValue(u.Operand, out var oc))
+                if (u.Op is "++" or "--" && _chain.TryGetValue(u.Operand, out string? oc))
                 {
                     AddDefinition(Front(oc), new Definition { Node = u, Left = u.Operand, Right = u.Operand, ArithAssign = true });
                     if (IsPreciseNode(u.Operand)) Enqueue(oc);
@@ -347,13 +348,13 @@ sealed class PreciseAnalysis
             }
             case Conditional c: CollectExpr(c.Cond); CollectExpr(c.Then); CollectExpr(c.Else); break;
             case Call call:
-                foreach (var a in call.Args) CollectExpr(a);
+                foreach (Expr a in call.Args) CollectExpr(a);
                 if (_structs.ContainsKey(call.Name) && !call.IsArray) _types[call] = new TypeName(call.Name, 0);
-                else if (_functionReturns.TryGetValue(call.Name, out var rt)) _types[call] = rt;
+                else if (_functionReturns.TryGetValue(call.Name, out TypeName rt)) _types[call] = rt;
                 break;
             case Method meth:
                 CollectExpr(meth.Target);
-                foreach (var a in meth.Args) CollectExpr(a);
+                foreach (Expr a in meth.Args) CollectExpr(a);
                 break;
         }
     }
@@ -368,7 +369,7 @@ sealed class PreciseAnalysis
     // A node's type carries `precise` when its root symbol is precise (it propagates up member and index
     // dereferences), or when the checker or propagator marked it.
     bool IsPreciseNode(Expr e) =>
-        _preciseNodes.Contains(e) || (e is Ident or Member or Index && _root.TryGetValue(e, out var r) && r.Precise);
+        _preciseNodes.Contains(e) || (e is Ident or Member or Index && _root.TryGetValue(e, out Symbol? r) && r.Precise);
 
     // ---- TNoContractionAssigneeCheckingTraverser ----
 
@@ -457,7 +458,7 @@ sealed class PreciseAnalysis
                 break;
             case Conditional c: Propagate(c.Cond); Propagate(c.Then); Propagate(c.Else); break;
             case Call call:
-                if (_remained.Length > 0 && !call.IsArray && _structs.TryGetValue(call.Name, out var fields))
+                if (_remained.Length > 0 && !call.IsArray && _structs.TryGetValue(call.Name, out (string Field, TypeName Type)[]? fields))
                 {
                     // A struct constructor: follow the remaining chain into the one argument it names.
                     string front = Front(_remained);
@@ -471,11 +472,11 @@ sealed class PreciseAnalysis
                     }
                     break;
                 }
-                foreach (var a in call.Args) Propagate(a);
+                foreach (Expr a in call.Args) Propagate(a);
                 break;
             case Method meth:
                 Propagate(meth.Target);
-                foreach (var a in meth.Args) Propagate(a);
+                foreach (Expr a in meth.Args) Propagate(a);
                 break;
         }
     }

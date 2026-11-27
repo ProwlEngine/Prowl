@@ -23,10 +23,10 @@ public sealed class Material : IDisposable
     private readonly MaterialSystem _system;
     private Shader _shader;
     private Material? _parent;
-    private readonly List<Material> _children = new();
+    private readonly List<Material> _children = [];
     private MaterialValue[] _locals;
     private Dictionary<PropertyID, MaterialValue>? _unknown;
-    private readonly Dictionary<string, string> _keywords = new(StringComparer.Ordinal);
+    private readonly Dictionary<string, string> _keywords = [with(StringComparer.Ordinal)];
     private int _renderQueue = -1;
     private PassState? _stateOverride;
     private bool _castShadows = true;
@@ -493,7 +493,7 @@ public sealed class Material : IDisposable
         if (index >= 0)
             _locals[index] = value;
         else
-            (_unknown ??= new())[name] = value;
+            (_unknown ??= [])[name] = value;
     }
 
     private void Changed(Dirt dirt)
@@ -552,16 +552,16 @@ internal sealed class MaterialSystem(GraphicsDevice device, RenderStore store, I
     private readonly object _lock = new();
     private readonly Stack<int> _freeIds = new();
     private int _nextId;
-    private readonly List<Material> _dirty = new();
-    private readonly List<Material> _freed = new();
-    private readonly Dictionary<Shader, MaterialTable> _tables = new();
-    private readonly List<(MaterialTable Table, uint Slot)> _pendingSlots = new();
-    private readonly List<(ulong Execution, MaterialTable Table, uint Slot)> _retiringSlots = new();
-    private readonly List<(ulong Execution, int Id)> _retiringIds = new();
-    private readonly List<int> _pendingIds = new();
+    private readonly List<Material> _dirty = [];
+    private readonly List<Material> _freed = [];
+    private readonly Dictionary<Shader, MaterialTable> _tables = [];
+    private readonly List<(MaterialTable Table, uint Slot)> _pendingSlots = [];
+    private readonly List<(ulong Execution, MaterialTable Table, uint Slot)> _retiringSlots = [];
+    private readonly List<(ulong Execution, int Id)> _retiringIds = [];
+    private readonly List<int> _pendingIds = [];
     private int _tableCount;
-    private readonly HashSet<string> _reported = new(StringComparer.Ordinal);
-    private readonly HashSet<Material> _live = new();
+    private readonly HashSet<string> _reported = [with(StringComparer.Ordinal)];
+    private readonly HashSet<Material> _live = [];
     private MaterialValue[] _resolved = new MaterialValue[64];
     private bool _tablesChanged;
 
@@ -575,8 +575,10 @@ internal sealed class MaterialSystem(GraphicsDevice device, RenderStore store, I
     {
         lock (_lock)
         {
-            Material material = new(this, _freeIds.Count > 0 ? _freeIds.Pop() : _nextId++, shader);
-            material.Dirty = Material.Dirt.Record | Material.Dirt.Draw;
+            Material material = new(this, _freeIds.Count > 0 ? _freeIds.Pop() : _nextId++, shader)
+            {
+                Dirty = Material.Dirt.Record | Material.Dirt.Draw
+            };
             _dirty.Add(material);
             _live.Add(material);
             return material;
@@ -718,7 +720,7 @@ internal sealed class MaterialSystem(GraphicsDevice device, RenderStore store, I
         foreach ((Shader shader, MaterialTable table) in _tables)
         {
             if (table.Used == 0)
-                (empty ??= new()).Add(shader);
+                (empty ??= []).Add(shader);
         }
         if (empty != null)
         {

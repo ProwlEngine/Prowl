@@ -18,17 +18,16 @@ freely, subject to the following restrictions:
 3. This notice may not be removed or altered from any source distribution.
 */
 
-namespace Prowl.Recast.Detour.TileCache
-{
-    public readonly struct DtObstacleRequest
-    {
-        public readonly DtObstacleRequestAction action;
-        public readonly long refs;
+namespace Prowl.Recast.Detour.TileCache;
 
-        public DtObstacleRequest(DtObstacleRequestAction action, long refs)
-        {
-            this.action = action;
-            this.refs = refs;
-        }
+public readonly struct DtObstacleRequest
+{
+    public readonly DtObstacleRequestAction action;
+    public readonly long refs;
+
+    public DtObstacleRequest(DtObstacleRequestAction action, long refs)
+    {
+        this.action = action;
+        this.refs = refs;
     }
 }

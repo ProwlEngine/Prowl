@@ -32,10 +32,10 @@ internal sealed class RemoveDegeneratesStep : IPostProcess
     public void Execute(IntermediateScene scene, ImportContext context)
     {
         int removedTotal = 0;
-        foreach (var mesh in scene.Meshes)
+        foreach (IntermediateMesh mesh in scene.Meshes)
         {
-            var faces = mesh.Faces;
-            var degenerate = new bool[faces.Count];
+            FaceList faces = mesh.Faces;
+            bool[] degenerate = new bool[faces.Count];
             for (int f = 0; f < degenerate.Length; f++)
                 degenerate[f] = IsDegenerate(mesh, faces.IndicesOf(f));
             removedTotal += faces.RemoveAll(degenerate);

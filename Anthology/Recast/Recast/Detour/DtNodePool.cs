@@ -21,122 +21,121 @@ freely, subject to the following restrictions:
 using System.Collections.Generic;
 using System.Linq;
 
-namespace Prowl.Recast.Detour
+namespace Prowl.Recast.Detour;
+
+public class DtNodePool
 {
-    public class DtNodePool
+    private readonly Dictionary<long, DtNode> m_map;
+
+    private int m_nodeCount;
+    private readonly List<DtNode> m_nodes;
+
+    public DtNodePool()
     {
-        private readonly Dictionary<long, DtNode> m_map;
+        m_map = [];
+        m_nodes = [];
+    }
 
-        private int m_nodeCount;
-        private readonly List<DtNode> m_nodes;
+    public void Clear()
+    {
+        m_map.Clear();
+        m_nodeCount = 0;
+    }
 
-        public DtNodePool()
+    public int GetNodeCount()
+    {
+        return m_nodeCount;
+    }
+
+    public int FindNodes(long id, out DtNode nodes)
+    {
+        m_map.TryGetValue(id, out nodes);
+        int count = 0;
+        for (DtNode node = nodes; node != null; node = node.next)
         {
-            m_map = new Dictionary<long, DtNode>();
-            m_nodes = new List<DtNode>();
+            count++;
         }
 
-        public void Clear()
-        {
-            m_map.Clear();
-            m_nodeCount = 0;
-        }
+        return count;
+    }
 
-        public int GetNodeCount()
-        {
-            return m_nodeCount;
-        }
+    public DtNode FindNode(long id)
+    {
+        m_map.TryGetValue(id, out DtNode node);
+        return node;
+    }
 
-        public int FindNodes(long id, out DtNode nodes)
+    public DtNode GetNode(long id, int state)
+    {
+        DtNode tail = null;
+        if (m_map.TryGetValue(id, out DtNode node))
         {
-            m_map.TryGetValue(id, out nodes);
-            int count = 0;
-            for (DtNode node = nodes; node != null; node = node.next)
+            for (; node != null; node = node.next)
             {
-                count++;
-            }
-
-            return count;
-        }
-
-        public DtNode FindNode(long id)
-        {
-            m_map.TryGetValue(id, out var node);
-            return node;
-        }
-
-        public DtNode GetNode(long id, int state)
-        {
-            DtNode tail = null;
-            if (m_map.TryGetValue(id, out var node))
-            {
-                for (; node != null; node = node.next)
+                if (node.state == state)
                 {
-                    if (node.state == state)
-                    {
-                        return node;
-                    }
-
-                    tail = node;
+                    return node;
                 }
+
+                tail = node;
             }
-
-            return Create(id, state, tail);
         }
 
-        private DtNode Create(long id, int state, DtNode tail)
+        return Create(id, state, tail);
+    }
+
+    private DtNode Create(long id, int state, DtNode tail)
+    {
+        if (m_nodes.Count <= m_nodeCount)
         {
-            if (m_nodes.Count <= m_nodeCount)
-            {
-                var newNode = new DtNode(m_nodeCount);
-                m_nodes.Add(newNode);
-            }
-
-            int i = m_nodeCount;
-            m_nodeCount++;
-            var node = m_nodes[i];
-            node.pidx = 0;
-            node.cost = 0;
-            node.total = 0;
-            node.id = id;
-            node.state = state;
-            node.flags = 0;
-            node.next = null;   // pooled instance may carry a stale chain from the previous query
-
-            if (tail != null)
-            {
-                tail.next = node;
-            }
-            else
-            {
-                m_map[id] = node;
-            }
-
-            return node;
+            var newNode = new DtNode(m_nodeCount);
+            m_nodes.Add(newNode);
         }
 
-        public int GetNodeIdx(DtNode node)
+        int i = m_nodeCount;
+        m_nodeCount++;
+        DtNode node = m_nodes[i];
+        node.pidx = 0;
+        node.cost = 0;
+        node.total = 0;
+        node.id = id;
+        node.state = state;
+        node.flags = 0;
+        node.next = null;   // pooled instance may carry a stale chain from the previous query
+
+        if (tail != null)
         {
-            return node != null
-                ? node.ptr + 1
-                : 0;
+            tail.next = node;
+        }
+        else
+        {
+            m_map[id] = node;
         }
 
-        public DtNode GetNodeAtIdx(int idx)
-        {
-            return idx != 0
-                ? m_nodes[idx - 1]
-                : null;
-        }
+        return node;
+    }
 
-        public DtNode GetNode(long refs)
-        {
-            return GetNode(refs, 0);
-        }
+    public int GetNodeIdx(DtNode node)
+    {
+        return node != null
+            ? node.ptr + 1
+            : 0;
+    }
 
-        public IEnumerable<DtNode> AsEnumerable()
-        {
-            return m_nodes.Take(m_nodeCount);
-        }
+    public DtNode GetNodeAtIdx(int idx)
+    {
+        return idx != 0
+            ? m_nodes[idx - 1]
+            : null;
+    }
+
+    public DtNode GetNode(long refs)
+    {
+        return GetNode(refs, 0);
+    }
+
+    public IEnumerable<DtNode> AsEnumerable()
+    {
+        return m_nodes.Take(m_nodeCount);
     }
 }

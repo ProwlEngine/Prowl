@@ -20,27 +20,26 @@ freely, subject to the following restrictions:
 
 using System.Collections.Generic;
 
-namespace Prowl.Recast.Detour.TileCache
+namespace Prowl.Recast.Detour.TileCache;
+
+public class DtTileCacheObstacle
 {
-    public class DtTileCacheObstacle
+    public readonly int index;
+
+    public DtObstacleCylinder cylinder = new DtObstacleCylinder();
+    public DtObstacleBox box = new DtObstacleBox();
+    public DtObstacleOrientedBox orientedBox = new DtObstacleOrientedBox();
+
+    public readonly List<long> touched = [];
+    public readonly List<long> pending = [];
+    public int salt;
+    public DtTileCacheObstacleType type;
+    public DtObstacleState state = DtObstacleState.DT_OBSTACLE_EMPTY;
+    public DtTileCacheObstacle next;
+
+    public DtTileCacheObstacle(int index)
     {
-        public readonly int index;
-
-        public DtObstacleCylinder cylinder = new DtObstacleCylinder();
-        public DtObstacleBox box = new DtObstacleBox();
-        public DtObstacleOrientedBox orientedBox = new DtObstacleOrientedBox();
-
-        public readonly List<long> touched = new List<long>();
-        public readonly List<long> pending = new List<long>();
-        public int salt;
-        public DtTileCacheObstacleType type;
-        public DtObstacleState state = DtObstacleState.DT_OBSTACLE_EMPTY;
-        public DtTileCacheObstacle next;
-
-        public DtTileCacheObstacle(int index)
-        {
-            this.index = index;
-            salt = 1;
-        }
+        this.index = index;
+        salt = 1;
     }
 }

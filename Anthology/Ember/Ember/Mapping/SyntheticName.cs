@@ -47,7 +47,7 @@ public readonly record struct SyntheticName(
         int close = name.IndexOf('>');
         if (close < 0) return false;
 
-        var scope = close == 1 ? null : new string(name[1..close]);
+        string? scope = close == 1 ? null : new string(name[1..close]);
 
         int at = close + 1;
         if (at >= name.Length) return false;
@@ -114,7 +114,7 @@ public readonly record struct SyntheticName(
 
         if (end < name.Length && name[end] == '|' && end - at >= 2 && IsWordStart(name[at]))
         {
-            var piped = new string(name[at..end]);
+            string piped = new string(name[at..end]);
             at = end + 1;
             return piped;
         }
@@ -123,7 +123,7 @@ public readonly record struct SyntheticName(
         while (end < name.Length && IsWordStart(name[end])) end++;
         if (end == at) return null;
 
-        var bare = new string(name[at..end]);
+        string bare = new string(name[at..end]);
         at = end;
         return bare;
     }

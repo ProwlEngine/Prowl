@@ -12,14 +12,14 @@ internal sealed class QueueFormat : ISerializationFormat
 
     public EchoObject Serialize(Type? targetType, object value, SerializationContext context)
     {
-        var reference = CollectionReferences.TryWriteReference(value, context, out int id);
+        EchoObject? reference = CollectionReferences.TryWriteReference(value, context, out int id);
         if (reference != null) return reference;
 
-        var elementType = targetType!.GetGenericArguments()[0];
-        var queue = value as IEnumerable ?? throw new InvalidOperationException("Expected Queue type");
+        Type elementType = targetType!.GetGenericArguments()[0];
+        IEnumerable queue = value as IEnumerable ?? throw new InvalidOperationException("Expected Queue type");
 
-        List<EchoObject> tags = new();
-        foreach (var item in queue)
+        List<EchoObject> tags = [];
+        foreach (object? item in queue)
             tags.Add(Serializer.Serialize(elementType, item, context));
 
         return CollectionReferences.WrapListBody(new EchoObject(tags), id);
@@ -27,7 +27,7 @@ internal sealed class QueueFormat : ISerializationFormat
 
     public object? Deserialize(EchoObject value, Type targetType, SerializationContext context)
     {
-        if (CollectionReferences.TryReadReference(value, context, out var existing))
+        if (CollectionReferences.TryReadReference(value, context, out object? existing))
             return existing;
 
         Type elementType = targetType.GetGenericArguments()[0];
@@ -36,9 +36,9 @@ internal sealed class QueueFormat : ISerializationFormat
             ?? throw new InvalidOperationException($"Failed to create instance of type: {targetType}");
         CollectionReferences.Register(value, queue, context);
 
-        foreach (var tag in CollectionReferences.ListItems(value))
+        foreach (EchoObject tag in CollectionReferences.ListItems(value))
         {
-            var item = Serializer.Deserialize(tag, elementType, context);
+            object? item = Serializer.Deserialize(tag, elementType, context);
             queue.Enqueue((dynamic?)item);
         }
 

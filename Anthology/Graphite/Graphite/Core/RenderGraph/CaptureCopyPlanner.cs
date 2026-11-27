@@ -20,7 +20,7 @@ internal static class CaptureCopyPlanner
     {
         uint layers = description.Type == TextureType.TextureCube ? 6 * description.ArrayLayers : description.ArrayLayers;
         bool depthStencil = (description.Usage & TextureUsage.DepthStencil) != 0;
-        List<CopyRegion> regions = new();
+        List<CopyRegion> regions = [];
         ulong offset = 0;
 
         for (uint mip = 0; mip < description.MipLevels; mip++)

@@ -26,7 +26,7 @@ internal sealed class JoinIdenticalVerticesStep : IPostProcess
 
     public void Execute(IntermediateScene scene, ImportContext context)
     {
-        foreach (var mesh in scene.Meshes)
+        foreach (IntermediateMesh mesh in scene.Meshes)
             JoinOne(mesh);
         _ = context;
     }
@@ -47,18 +47,18 @@ internal sealed class JoinIdenticalVerticesStep : IPostProcess
         bool hasMorph = mesh.BlendShapes.Count > 0;
 
         // Old-index -> new-index map, and the old index each new vertex is copied from.
-        var oldToNew = new int[oldCount];
-        var kept = new int[oldCount];
+        int[] oldToNew = new int[oldCount];
+        int[] kept = new int[oldCount];
         int newCount = 0;
 
         // Hash chains over the kept vertices, stored in flat arrays.
         int tableSize = 1;
         while (tableSize < oldCount * 2) tableSize <<= 1;
         int mask = tableSize - 1;
-        var heads = new int[tableSize];
+        int[] heads = new int[tableSize];
         Array.Fill(heads, -1);
-        var next = new int[oldCount];
-        var hashes = HashVertices(mesh);
+        int[] next = new int[oldCount];
+        uint[] hashes = HashVertices(mesh);
 
         for (int i = 0; i < oldCount; i++)
         {
@@ -92,8 +92,8 @@ internal sealed class JoinIdenticalVerticesStep : IPostProcess
         // Drop faces the weld collapsed. A thin triangle whose two ends merge becomes a face naming
         // one vertex twice, which is not a face at all, and the degenerate pass runs before this step
         // rather than after, so nothing else would catch it.
-        var faces = mesh.Faces;
-        var collapsed = new bool[faces.Count];
+        FaceList faces = mesh.Faces;
+        bool[] collapsed = new bool[faces.Count];
         bool anyCollapsed = false;
         for (int f = 0; f < collapsed.Length; f++)
             anyCollapsed |= collapsed[f] = HasRepeatedIndex(faces.IndicesOf(f));
@@ -105,7 +105,7 @@ internal sealed class JoinIdenticalVerticesStep : IPostProcess
     internal static void Compact(IntermediateMesh mesh, int[] oldToNew, int[] kept, int newCount)
     {
         int oldCount = oldToNew.Length;
-        var newKept = kept.AsSpan(0, newCount);
+        Span<int> newKept = kept.AsSpan(0, newCount);
         mesh.Positions = Gather(mesh.Positions, newKept);
         if (mesh.Normals is { } normals) mesh.Normals = Gather(normals, newKept);
         if (mesh.Tangents is { } tangents) mesh.Tangents = Gather(tangents, newKept);
@@ -134,11 +134,11 @@ internal sealed class JoinIdenticalVerticesStep : IPostProcess
         }
 
         // Remap morph-target deltas into the new vertex order.
-        foreach (var bs in mesh.BlendShapes)
+        foreach (IntermediateBlendShape bs in mesh.BlendShapes)
         {
             for (int fi = 0; fi < bs.Frames.Count; fi++)
             {
-                var frame = bs.Frames[fi];
+                IntermediateBlendShapeFrame frame = bs.Frames[fi];
                 var newDelta = new Float3[newCount];
                 Float3[]? newNorm = frame.DeltaNormals is null ? null : new Float3[newCount];
                 Float3[]? newTan = frame.DeltaTangents is null ? null : new Float3[newCount];
@@ -165,10 +165,10 @@ internal sealed class JoinIdenticalVerticesStep : IPostProcess
 
     private static List<T> Gather<T>(List<T> source, ReadOnlySpan<int> kept)
     {
-        var src = CollectionsMarshal.AsSpan(source);
+        Span<T> src = CollectionsMarshal.AsSpan(source);
         var result = new List<T>(kept.Length);
         CollectionsMarshal.SetCount(result, kept.Length);
-        var dst = CollectionsMarshal.AsSpan(result);
+        Span<T> dst = CollectionsMarshal.AsSpan(result);
         for (int i = 0; i < kept.Length; i++)
             dst[i] = src[kept[i]];
         return result;
@@ -188,7 +188,7 @@ internal sealed class JoinIdenticalVerticesStep : IPostProcess
     [MethodImpl(MethodImplOptions.AggressiveOptimization)]
     private static uint[] HashVertices(IntermediateMesh m)
     {
-        var hashes = new uint[m.Positions.Count];
+        uint[] hashes = new uint[m.Positions.Count];
         Mix(hashes, MemoryMarshal.Cast<Float3, float>(CollectionsMarshal.AsSpan(m.Positions)), 3);
         if (m.Normals is { } n) Mix(hashes, MemoryMarshal.Cast<Float3, float>(CollectionsMarshal.AsSpan(n)), 3);
         if (m.Tangents is { } t) Mix(hashes, MemoryMarshal.Cast<Float4, float>(CollectionsMarshal.AsSpan(t)), 4);
@@ -254,10 +254,10 @@ internal sealed class JoinIdenticalVerticesStep : IPostProcess
         {
             for (int bs = 0; bs < m.BlendShapes.Count; bs++)
             {
-                var shape = m.BlendShapes[bs];
+                IntermediateBlendShape shape = m.BlendShapes[bs];
                 for (int f = 0; f < shape.Frames.Count; f++)
                 {
-                    var frame = shape.Frames[f];
+                    IntermediateBlendShapeFrame frame = shape.Frames[f];
                     if (!frame.DeltaPositions[a].Equals(frame.DeltaPositions[b])) return false;
                     if (frame.DeltaNormals is { } dn && !dn[a].Equals(dn[b])) return false;
                     if (frame.DeltaTangents is { } dt && !dt[a].Equals(dt[b])) return false;

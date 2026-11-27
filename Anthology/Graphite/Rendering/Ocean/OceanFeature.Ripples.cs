@@ -35,7 +35,7 @@ public sealed partial class OceanFeature
 
     private LazyCompute _rippleProgram = null!;
     private readonly Texture[] _ripples = new Texture[2];
-    private readonly List<Interaction> _interactions = new();
+    private readonly List<Interaction> _interactions = [];
     private Float2 _rippleSource;
     private Double3 _rippleViewer, _rippleSourceViewer;
     private double _rippleTime;
@@ -50,7 +50,7 @@ public sealed partial class OceanFeature
     public Texture Ripples => _ripples[0];
 
     /// <summary>Spheres pushing the water this frame. Host thread.</summary>
-    public List<OceanInteractor> Interactors { get; } = new();
+    public List<OceanInteractor> Interactors { get; } = [];
 
     /// <summary>The share of ripple motion lost each second.</summary>
     public float RippleDamping { get; set; } = 0.05f;

@@ -8,16 +8,16 @@ namespace Prowl.Rosetta;
 /// </summary>
 public class InMemoryProvider : ILocalizationProvider
 {
-    private readonly Dictionary<string, Dictionary<string, string>> _data = new();
+    private readonly Dictionary<string, Dictionary<string, string>> _data = [];
 
     public InMemoryProvider(string locale, Dictionary<string, string> translations)
     {
-        _data[locale] = new Dictionary<string, string>(translations);
+        _data[locale] = [with(translations)];
     }
 
     public InMemoryProvider AddLocale(string locale, Dictionary<string, string> translations)
     {
-        _data[locale] = new Dictionary<string, string>(translations);
+        _data[locale] = [with(translations)];
         return this;
     }
 

@@ -19,12 +19,11 @@ freely, subject to the following restrictions:
 
 using System.Collections.Generic;
 
-namespace Prowl.Recast.Detour.Dynamic
-{
-    public interface IDtDaynmicTileJob
-    {
-        ICollection<DtDynamicTile> AffectedTiles();
+namespace Prowl.Recast.Detour.Dynamic;
 
-        void Process(DtDynamicTile tile);
-    }
+public interface IDtDaynmicTileJob
+{
+    ICollection<DtDynamicTile> AffectedTiles();
+
+    void Process(DtDynamicTile tile);
 }

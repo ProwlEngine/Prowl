@@ -61,13 +61,13 @@ public sealed class CodeLineMarker
 /// </remarks>
 public sealed partial class CodeEditor : IDisposable
 {
-    private readonly List<CodeSelection> _selections = new() { new CodeSelection(TextPosition.Zero) };
+    private readonly List<CodeSelection> _selections = [new CodeSelection(TextPosition.Zero)];
     private int _primary;
 
     private CodeLanguage _language = new();
     private readonly ConcurrentQueue<Action> _uiQueue = new();
-    private readonly List<CodeEditorDiagnostic> _diagnostics = new();
-    private readonly List<CodeLineMarker> _markers = new();
+    private readonly List<CodeEditorDiagnostic> _diagnostics = [];
+    private readonly List<CodeLineMarker> _markers = [];
 
     private bool _replaying;
     private double _time;
@@ -190,7 +190,7 @@ public sealed partial class CodeEditor : IDisposable
     private void PumpUiQueue()
     {
         int budget = 256;
-        while (budget-- > 0 && _uiQueue.TryDequeue(out var action))
+        while (budget-- > 0 && _uiQueue.TryDequeue(out Action? action))
         {
             try { action(); }
             catch (Exception e) { Console.WriteLine($"CodeEditor: {e}"); }
@@ -208,7 +208,7 @@ public sealed partial class CodeEditor : IDisposable
                 Console.WriteLine($"CodeEditor language request failed: {t.Exception?.GetBaseException().Message}");
                 return;
             }
-            var result = t.Result;
+            T? result = t.Result;
             Post(() =>
             {
                 if (requireVersion && version != Document.Version) return;
@@ -246,7 +246,7 @@ public sealed partial class CodeEditor : IDisposable
     {
         for (int i = 0; i < _selections.Count; i++)
         {
-            var s = _selections[i];
+            CodeSelection s = _selections[i];
             _selections[i] = new CodeSelection(change.Map(s.Anchor), change.Map(s.Caret));
         }
 
@@ -280,9 +280,9 @@ public sealed partial class CodeEditor : IDisposable
     {
         for (int i = _diagnostics.Count - 1; i >= 0; i--)
         {
-            var d = _diagnostics[i];
-            var start = change.Map(d.Range.Start, false);
-            var end = change.Map(d.Range.End);
+            CodeEditorDiagnostic d = _diagnostics[i];
+            TextPosition start = change.Map(d.Range.Start, false);
+            TextPosition end = change.Map(d.Range.End);
             d.Range = new TextRange(start, end);
         }
     }
@@ -293,7 +293,7 @@ public sealed partial class CodeEditor : IDisposable
         int from = change.Range.Start.Line;
         for (int i = _markers.Count - 1; i >= 0; i--)
         {
-            var m = _markers[i];
+            CodeLineMarker m = _markers[i];
             if (m.Line <= from) continue;
             if (m.Line <= change.Range.End.Line)
             {
@@ -310,7 +310,7 @@ public sealed partial class CodeEditor : IDisposable
     #region Lexer state cache
 
     // Start state of every line, valid for lines below _statesValid.
-    private readonly List<int> _lineStates = new();
+    private readonly List<int> _lineStates = [];
     private int _statesValid;
     private const int EagerRelexLimit = 4000;
 
@@ -323,7 +323,7 @@ public sealed partial class CodeEditor : IDisposable
 
     private int LexEndState(int line)
     {
-        var lexer = _language.Lexer;
+        ICodeLexer? lexer = _language.Lexer;
         return lexer == null ? 0 : lexer.Tokenize(Document[line], _lineStates[line], null);
     }
 
@@ -381,7 +381,7 @@ public sealed partial class CodeEditor : IDisposable
     internal void RestoreSelections(CodeSelection[] selections)
     {
         _selections.Clear();
-        foreach (var s in selections)
+        foreach (CodeSelection s in selections)
             _selections.Add(new CodeSelection(Document.Clamp(s.Anchor), Document.Clamp(s.Caret)));
         if (_selections.Count == 0) _selections.Add(new CodeSelection(TextPosition.Zero));
         _primary = Math.Clamp(_primary, 0, _selections.Count - 1);
@@ -415,7 +415,7 @@ public sealed partial class CodeEditor : IDisposable
     public string GetSelectedText()
     {
         var parts = new List<string>();
-        foreach (var s in OrderedSelections())
+        foreach (CodeSelection s in OrderedSelections())
             if (!s.IsEmpty) parts.Add(Document.GetText(s.Range));
         return string.Join("\n", parts);
     }
@@ -431,15 +431,15 @@ public sealed partial class CodeEditor : IDisposable
     internal void NormalizeSelections()
     {
         if (_selections.Count <= 1) return;
-        var primary = _selections[_primary];
+        CodeSelection primary = _selections[_primary];
         _selections.Sort((a, b) => a.Start.CompareTo(b.Start));
 
         var merged = new List<CodeSelection>(_selections.Count);
-        foreach (var s in _selections)
+        foreach (CodeSelection s in _selections)
         {
             if (merged.Count > 0)
             {
-                var last = merged[^1];
+                CodeSelection last = merged[^1];
                 bool overlap = s.Start < last.End || s.Start == last.Start || (s.IsEmpty && s.Start == last.End && last.IsEmpty);
                 if (overlap)
                 {
@@ -463,7 +463,7 @@ public sealed partial class CodeEditor : IDisposable
 
     private void CollapseToPrimary()
     {
-        var p = _selections[_primary];
+        CodeSelection p = _selections[_primary];
         _selections.Clear();
         _selections.Add(p);
         _primary = 0;
@@ -500,7 +500,7 @@ public sealed partial class CodeEditor : IDisposable
 
         _analysisCts?.Cancel();
         _analysisCts = new CancellationTokenSource();
-        var ct = _analysisCts.Token;
+        CancellationToken ct = _analysisCts.Token;
         int version = Document.Version;
 
         if (!Options.ShowDiagnostics) return;
@@ -514,7 +514,7 @@ public sealed partial class CodeEditor : IDisposable
         _diagnostics.Clear();
         _errorCount = _warningCount = 0;
         int length = Document.Length;
-        foreach (var d in diagnostics)
+        foreach (CodeDiagnostic d in diagnostics)
         {
             if (d.Severity == CodeDiagnosticSeverity.Hidden) continue;
             int start = Math.Clamp(d.Start, 0, length);
@@ -549,7 +549,7 @@ public sealed partial class CodeEditor : IDisposable
 
     // Semantic colours keyed by the line's string instance. An edited line gets a new string, so stale
     // colours can never land on changed text, while lines that merely moved keep theirs.
-    private readonly Dictionary<string, CodeToken[]> _semantic = new(ReferenceEqualityComparer.Instance);
+    private readonly Dictionary<string, CodeToken[]> _semantic = [with(ReferenceEqualityComparer.Instance)];
     private int _semanticRequestedVersion = -1;
     private int _semanticFrom, _semanticTo;
     private CancellationTokenSource? _semanticCts;
@@ -581,16 +581,16 @@ public sealed partial class CodeEditor : IDisposable
     private void ApplySemantic(IReadOnlyList<CodeClassifiedSpan> spans, int from, int to)
     {
         var perLine = new Dictionary<int, List<CodeToken>>();
-        foreach (var s in spans)
+        foreach (CodeClassifiedSpan s in spans)
         {
-            var a = Document.OffsetToPosition(s.Start);
-            var b = Document.OffsetToPosition(s.Start + s.Length);
+            TextPosition a = Document.OffsetToPosition(s.Start);
+            TextPosition b = Document.OffsetToPosition(s.Start + s.Length);
             for (int line = a.Line; line <= b.Line; line++)
             {
                 int c0 = line == a.Line ? a.Column : 0;
                 int c1 = line == b.Line ? b.Column : Document.GetLineLength(line);
                 if (c1 <= c0) continue;
-                if (!perLine.TryGetValue(line, out var list)) perLine[line] = list = new List<CodeToken>();
+                if (!perLine.TryGetValue(line, out List<CodeToken>? list)) perLine[line] = list = [];
                 list.Add(new CodeToken(c0, c1 - c0, s.Kind));
             }
         }
@@ -599,7 +599,7 @@ public sealed partial class CodeEditor : IDisposable
         for (int line = from; line <= to && line < Document.LineCount; line++)
         {
             string text = Document[line];
-            if (perLine.TryGetValue(line, out var list))
+            if (perLine.TryGetValue(line, out List<CodeToken>? list))
             {
                 list.Sort((x, y) => x.Start.CompareTo(y.Start));
                 _semantic[text] = list.ToArray();
@@ -613,10 +613,10 @@ public sealed partial class CodeEditor : IDisposable
     #region Folding
 
     // Every foldable range, sorted by start line, and the ones currently collapsed.
-    private List<CodeFoldRange> _folds = new();
-    private readonly List<CodeFoldRange> _collapsed = new();
-    private readonly Dictionary<int, int> _foldStartIndex = new();
-    private readonly Dictionary<int, CodeFoldRange> _collapsedByStart = new();
+    private List<CodeFoldRange> _folds = [];
+    private readonly List<CodeFoldRange> _collapsed = [];
+    private readonly Dictionary<int, int> _foldStartIndex = [];
+    private readonly Dictionary<int, CodeFoldRange> _collapsedByStart = [];
 
     // Hidden line intervals (inclusive), sorted and disjoint, with the count of hidden lines before each.
     private int[] _hidStart = Array.Empty<int>();
@@ -634,9 +634,9 @@ public sealed partial class CodeEditor : IDisposable
         _foldsPending = false;
         _foldCts?.Cancel();
         _foldCts = new CancellationTokenSource();
-        var ct = _foldCts.Token;
-        var snapshot = Document.Snapshot();
-        var language = _language;
+        CancellationToken ct = _foldCts.Token;
+        string[] snapshot = Document.Snapshot();
+        CodeLanguage language = _language;
         int version = Document.Version;
         Continue(Task.Run(() => language.ComputeFolds(snapshot, ct), ct), version, SetFolds);
     }
@@ -677,7 +677,7 @@ public sealed partial class CodeEditor : IDisposable
 
     public void Fold(int startLine)
     {
-        if (!TryGetFoldAt(startLine, out var fold) || IsCollapsed(startLine)) return;
+        if (!TryGetFoldAt(startLine, out CodeFoldRange fold) || IsCollapsed(startLine)) return;
         _collapsed.Add(fold);
         _collapsed.Sort((a, b) => a.StartLine.CompareTo(b.StartLine));
         RebuildHiddenLines();
@@ -695,7 +695,7 @@ public sealed partial class CodeEditor : IDisposable
     {
         int line = Caret.Line;
         CodeFoldRange? best = null;
-        foreach (var f in _folds)
+        foreach (CodeFoldRange f in _folds)
         {
             if (f.StartLine > line) break;
             if (f.EndLine >= line && !IsCollapsed(f.StartLine) && (best == null || f.StartLine >= best.Value.StartLine))
@@ -728,12 +728,12 @@ public sealed partial class CodeEditor : IDisposable
     private void RebuildHiddenLines()
     {
         _collapsedByStart.Clear();
-        foreach (var c in _collapsed) _collapsedByStart.TryAdd(c.StartLine, c);
+        foreach (CodeFoldRange c in _collapsed) _collapsedByStart.TryAdd(c.StartLine, c);
 
         var starts = new List<int>();
         var ends = new List<int>();
         int lastLine = Document.LineCount - 1;
-        foreach (var c in _collapsed)
+        foreach (CodeFoldRange c in _collapsed)
         {
             int s = c.StartLine + 1, e = Math.Min(c.EndLine, lastLine);
             if (e < s) continue;
@@ -815,7 +815,7 @@ public sealed partial class CodeEditor : IDisposable
         bool changed = false;
         for (int i = _collapsed.Count - 1; i >= 0; i--)
         {
-            var c = _collapsed[i];
+            CodeFoldRange c = _collapsed[i];
             // Editing the hidden lines, or splitting the header line, opens the fold.
             bool touchesHidden = e > c.StartLine && s <= c.EndLine;
             bool splitsHeader = delta != 0 && s <= c.StartLine && e >= c.StartLine;
@@ -843,7 +843,7 @@ public sealed partial class CodeEditor : IDisposable
     {
         for (int i = 0; i < _selections.Count; i++)
         {
-            var c = _selections[i].Caret;
+            TextPosition c = _selections[i].Caret;
             if (!IsLineHidden(c.Line)) continue;
             int header = RowToLine(LineToRow(c.Line));
             var p = new TextPosition(header, Document.GetLineLength(header));
@@ -857,7 +857,7 @@ public sealed partial class CodeEditor : IDisposable
     {
         if (_collapsed.Count == 0) return;
         bool changed = false;
-        foreach (var s in _selections)
+        foreach (CodeSelection s in _selections)
         {
             int line = s.Caret.Line;
             if (!IsLineHidden(line)) continue;

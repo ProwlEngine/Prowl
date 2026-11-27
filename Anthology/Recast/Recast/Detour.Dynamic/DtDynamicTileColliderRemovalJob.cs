@@ -19,27 +19,26 @@ freely, subject to the following restrictions:
 
 using System.Collections.Generic;
 
-namespace Prowl.Recast.Detour.Dynamic
+namespace Prowl.Recast.Detour.Dynamic;
+
+public class DtDynamicTileColliderRemovalJob : IDtDaynmicTileJob
 {
-    public class DtDynamicTileColliderRemovalJob : IDtDaynmicTileJob
+    private readonly long colliderId;
+    private readonly ICollection<DtDynamicTile> _affectedTiles;
+
+    public DtDynamicTileColliderRemovalJob(long colliderId, ICollection<DtDynamicTile> affectedTiles)
     {
-        private readonly long colliderId;
-        private readonly ICollection<DtDynamicTile> _affectedTiles;
+        this.colliderId = colliderId;
+        this._affectedTiles = affectedTiles;
+    }
 
-        public DtDynamicTileColliderRemovalJob(long colliderId, ICollection<DtDynamicTile> affectedTiles)
-        {
-            this.colliderId = colliderId;
-            this._affectedTiles = affectedTiles;
-        }
+    public ICollection<DtDynamicTile> AffectedTiles()
+    {
+        return _affectedTiles;
+    }
 
-        public ICollection<DtDynamicTile> AffectedTiles()
-        {
-            return _affectedTiles;
-        }
-
-        public void Process(DtDynamicTile tile)
-        {
-            tile.RemoveCollider(colliderId);
-        }
+    public void Process(DtDynamicTile tile)
+    {
+        tile.RemoveCollider(colliderId);
     }
 }

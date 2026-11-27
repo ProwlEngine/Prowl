@@ -17,14 +17,13 @@ freely, subject to the following restrictions:
 3. This notice may not be removed or altered from any source distribution.
 */
 
-using Prowl.Recast.Core;
 using Prowl.Recast;
+using Prowl.Recast.Core;
 
-namespace Prowl.Recast.Detour.Dynamic.Colliders
+namespace Prowl.Recast.Detour.Dynamic.Colliders;
+
+public interface IDtCollider
 {
-    public interface IDtCollider
-    {
-        float[] Bounds();
-        void Rasterize(RcHeightfield hf, RcContext context);
-    }
+    float[] Bounds();
+    void Rasterize(RcHeightfield hf, RcContext context);
 }

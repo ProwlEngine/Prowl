@@ -173,9 +173,11 @@ internal unsafe partial class VkGraphicsDevice
     {
         System.Diagnostics.Debug.Assert(DebugUtils != null);
 
-        DebugUtilsObjectNameInfoEXT nameInfo = new(sType: StructureType.DebugUtilsObjectNameInfoExt);
-        nameInfo.ObjectType = type;
-        nameInfo.ObjectHandle = target;
+        DebugUtilsObjectNameInfoEXT nameInfo = new(sType: StructureType.DebugUtilsObjectNameInfoExt)
+        {
+            ObjectType = type,
+            ObjectHandle = target
+        };
 
         byte* utf8Ptr = stackalloc byte[Utf8Stack.ByteCount(name)];
         Utf8Stack.Write(name, utf8Ptr);

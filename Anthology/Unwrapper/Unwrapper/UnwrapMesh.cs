@@ -88,7 +88,7 @@ public sealed class UnwrapMesh
         options ??= new UnwrapOptions();
         ValidateOptions(options);
 
-        if (!GeometryPrep.TryPrepare(_positions, _normals, _triangles, _perCornerUVs, out var cleaned, out string? error, _progressSink))
+        if (!GeometryPrep.TryPrepare(_positions, _normals, _triangles, _perCornerUVs, out CleanedGeometry? cleaned, out string? error, _progressSink))
             throw new UnwrapException(error ?? "Geometry preparation failed.");
 
         int triangleCount = _triangles.Length / 3;
@@ -137,7 +137,7 @@ public sealed class UnwrapMesh
             throw new System.ArgumentOutOfRangeException(nameof(o), o.Projection.MinChartTriangles,
                 "MinChartTriangles must be non-negative.");
 
-        var c = o.Conformal;
+        ConformalOptions c = o.Conformal;
         Positive(c.AngleDistortionThreshold, nameof(c.AngleDistortionThreshold));
         Positive(c.AreaDistortionThreshold, nameof(c.AreaDistortionThreshold));
         NonNegative(c.ChartAreaThreshold, nameof(c.ChartAreaThreshold));

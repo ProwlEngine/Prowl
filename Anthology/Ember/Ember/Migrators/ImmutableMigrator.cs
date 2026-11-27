@@ -25,27 +25,27 @@ public sealed class ImmutableMigrator : IValueMigrator
     {
         if (!type.IsConstructedGenericType) return false;
 
-        var definition = type.GetGenericTypeDefinition();
+        Type definition = type.GetGenericTypeDefinition();
         return definition == typeof(ImmutableDictionary<,>) || definition == typeof(ImmutableHashSet<>);
     }
 
     public MigrationPlan Plan(Type type, PlanContext context)
     {
-        var resolution = context.Types.Resolve(type);
+        TypeResolution resolution = context.Types.Resolve(type);
         if (resolution.IsRemoved) return MigrationPlan.Dropped;
 
-        var arguments = type.GetGenericArguments();
+        Type[] arguments = type.GetGenericArguments();
         bool keysMove = false;
 
-        foreach (var argument in arguments)
+        foreach (Type argument in arguments)
             keysMove |= context.Types.Resolve(argument).IsSubstituted || !context.IsInertSlot(argument);
 
         if (resolution.IsUnchanged && !keysMove) return MigrationPlan.Preserved;
 
-        var target = resolution.Target!;
-        var targetArguments = target.GetGenericArguments();
+        Type target = resolution.Target!;
+        Type[] targetArguments = target.GetGenericArguments();
 
-        var rebuild = typeof(ImmutableMigrator)
+        MethodInfo rebuild = typeof(ImmutableMigrator)
             .GetMethod(targetArguments.Length == 2 ? nameof(RebuildDictionary) : nameof(RebuildSet),
                 BindingFlags.Static | BindingFlags.NonPublic)!
             .MakeGenericMethod(targetArguments);
@@ -55,7 +55,7 @@ public sealed class ImmutableMigrator : IValueMigrator
 
     private static ImmutableDictionary<TKey, TValue> RebuildDictionary<TKey, TValue>(object source, MigrationContext context) where TKey : notnull
     {
-        var builder = ImmutableDictionary.CreateBuilder<TKey, TValue>();
+        ImmutableDictionary<TKey, TValue>.Builder builder = ImmutableDictionary.CreateBuilder<TKey, TValue>();
 
         foreach (DictionaryEntry entry in (IDictionary)source)
             if (context.Map(entry.Key) is TKey key)
@@ -66,9 +66,9 @@ public sealed class ImmutableMigrator : IValueMigrator
 
     private static ImmutableHashSet<T> RebuildSet<T>(object source, MigrationContext context)
     {
-        var builder = ImmutableHashSet.CreateBuilder<T>();
+        ImmutableHashSet<T>.Builder builder = ImmutableHashSet.CreateBuilder<T>();
 
-        foreach (var item in (IEnumerable)source)
+        foreach (object? item in (IEnumerable)source)
             if (context.Map(item) is T migrated)
                 builder.Add(migrated);
 
@@ -99,7 +99,7 @@ public sealed class ImmutableMigrator : IValueMigrator
         /// </summary>
         public override void Fill(object source, object target, MigrationContext context)
         {
-            foreach (var entry in Entries(source))
+            foreach (object? entry in Entries(source))
             {
                 try
                 {
@@ -115,12 +115,12 @@ public sealed class ImmutableMigrator : IValueMigrator
 
         public override void Rebuild(object source, object target, MigrationContext context)
         {
-            var built = _rebuild.Invoke(null, new object[] { source, context });
+            object? built = _rebuild.Invoke(null, new object[] { source, context });
             if (built == null) return;
 
             // An immutable collection cannot be filled after the fact, so the finished one is copied onto the
             // shell every reference already points at.
-            foreach (var field in _fields)
+            foreach (FieldInfo field in _fields)
                 field.SetValue(target, field.GetValue(built));
         }
 
@@ -136,7 +136,7 @@ public sealed class ImmutableMigrator : IValueMigrator
                 yield break;
             }
 
-            foreach (var item in (IEnumerable)source)
+            foreach (object? item in (IEnumerable)source)
                 yield return item;
         }
 
@@ -144,7 +144,7 @@ public sealed class ImmutableMigrator : IValueMigrator
         {
             var fields = new List<FieldInfo>();
 
-            for (var level = type; level != null && level != typeof(object); level = level.BaseType)
+            for (Type? level = type; level != null && level != typeof(object); level = level.BaseType)
                 fields.AddRange(level.GetFields(
                     BindingFlags.Instance | BindingFlags.Public | BindingFlags.NonPublic | BindingFlags.DeclaredOnly));
 

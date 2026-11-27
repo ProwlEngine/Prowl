@@ -36,7 +36,7 @@ public sealed class AppBarBuilder
     private readonly Paper _paper;
     private readonly string _id;
     private readonly OrigamiTheme _theme;
-    private readonly List<Item> _items = new();
+    private readonly List<Item> _items = [];
     private float _height = 44f;
 
     internal AppBarBuilder(Paper paper, string id, OrigamiTheme theme)
@@ -87,14 +87,14 @@ public sealed class AppBarBuilder
     /// <summary>Render the app bar.</summary>
     public void Show()
     {
-        var ink = _theme.Ink;
-        var font = _theme.Font;
-        var titleFont = _theme.SemiBold ?? font;
-        var monoFont = _theme.Mono ?? font;
+        OrigamiRamp ink = _theme.Ink;
+        Scribe.FontFile? font = _theme.Font;
+        Scribe.FontFile? titleFont = _theme.SemiBold ?? font;
+        Scribe.FontFile? monoFont = _theme.Mono ?? font;
         if (font == null) return;
 
         const float gap = 10f;
-        var acc = _theme.Primary.C500;
+        Color acc = _theme.Primary.C500;
 
         using (_paper.Row(_id).Width(UnitValue.Percentage(100)).Height(_height).Rounded(_theme.Metrics.ContainerRounding).Padding(12, 12, 0, 0)
             .BackgroundColor(_theme.Glass).BorderColor(_theme.BorderSoft).BorderWidth(1)
@@ -105,13 +105,13 @@ public sealed class AppBarBuilder
             bool first = true;
             for (int i = 0; i < _items.Count; i++)
             {
-                var it = _items[i];
+                Item it = _items[i];
                 float lm = first ? 0f : gap;
 
                 switch (it.Kind)
                 {
                     case Kind.Brand:
-                        var brandIcon = it.Icon;
+                        IOrigamiIcon? brandIcon = it.Icon;
                         using (_paper.Box("logo").Size(28).Rounded(_theme.Metrics.Rounding).Margin(lm, 0, UnitValue.Stretch(), UnitValue.Stretch())
                             .BackgroundColor(acc).Enter())
                             _paper.Draw((canvas, r) => brandIcon?.Draw(canvas, Center(r, 15f), ink.C700));
@@ -135,8 +135,8 @@ public sealed class AppBarBuilder
                         continue;
 
                     case Kind.Action:
-                        var icon = it.Icon;
-                        var onClick = it.OnClick;
+                        IOrigamiIcon? icon = it.Icon;
+                        Action? onClick = it.OnClick;
                         using (_paper.Box($"{_id}_a_{it.Id}").Size(27).Rounded(_theme.Metrics.Rounding)
                             .Margin(lm, 0, UnitValue.Stretch(), UnitValue.Stretch())
                             .Hovered.BackgroundColor(_theme.Hover).End()

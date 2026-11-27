@@ -5,61 +5,60 @@ using System;
 using System.Collections.Generic;
 using System.Runtime.CompilerServices;
 
-namespace Prowl.Quill
+namespace Prowl.Quill;
+
+/// <summary>
+/// A growable array that hands out its backing store directly, so renderer backends can upload
+/// canvas geometry without copying it out first. <see cref="System.Collections.Generic.List{T}"/> cannot do this on netstandard2.1,
+/// which has no CollectionsMarshal.
+/// </summary>
+internal sealed class GeometryBuffer<T>
 {
-    /// <summary>
-    /// A growable array that hands out its backing store directly, so renderer backends can upload
-    /// canvas geometry without copying it out first. <see cref="System.Collections.Generic.List{T}"/> cannot do this on netstandard2.1,
-    /// which has no CollectionsMarshal.
-    /// </summary>
-    internal sealed class GeometryBuffer<T>
+    private const int MinimumCapacity = 256;
+
+    internal T[] Array;
+    internal int Count;
+
+    internal GeometryBuffer(int capacity = MinimumCapacity)
     {
-        private const int MinimumCapacity = 256;
+        Array = new T[capacity < MinimumCapacity ? MinimumCapacity : capacity];
+    }
 
-        internal T[] Array;
-        internal int Count;
+    internal ReadOnlySpan<T> AsSpan() => new ReadOnlySpan<T>(Array, 0, Count);
 
-        internal GeometryBuffer(int capacity = MinimumCapacity)
-        {
-            Array = new T[capacity < MinimumCapacity ? MinimumCapacity : capacity];
-        }
+    [MethodImpl(MethodImplOptions.AggressiveInlining)]
+    internal void Add(in T item)
+    {
+        if (Count == Array.Length)
+            Grow(Count + 1);
 
-        internal ReadOnlySpan<T> AsSpan() => new ReadOnlySpan<T>(Array, 0, Count);
+        Array[Count++] = item;
+    }
 
-        [MethodImpl(MethodImplOptions.AggressiveInlining)]
-        internal void Add(in T item)
-        {
-            if (Count == Array.Length)
-                Grow(Count + 1);
+    internal void AddRange(List<T> items)
+    {
+        int count = items.Count;
+        Reserve(count);
+        items.CopyTo(Array, Count);
+        Count += count;
+    }
 
-            Array[Count++] = item;
-        }
+    /// <summary>Ensures room for <paramref name="additional"/> more items without reallocating.</summary>
+    internal void Reserve(int additional)
+    {
+        int needed = Count + additional;
+        if (needed > Array.Length)
+            Grow(needed);
+    }
 
-        internal void AddRange(List<T> items)
-        {
-            int count = items.Count;
-            Reserve(count);
-            items.CopyTo(Array, Count);
-            Count += count;
-        }
+    internal void Clear() => Count = 0;
 
-        /// <summary>Ensures room for <paramref name="additional"/> more items without reallocating.</summary>
-        internal void Reserve(int additional)
-        {
-            int needed = Count + additional;
-            if (needed > Array.Length)
-                Grow(needed);
-        }
+    private void Grow(int needed)
+    {
+        int capacity = Array.Length;
+        while (capacity < needed)
+            capacity *= 2;
 
-        internal void Clear() => Count = 0;
-
-        private void Grow(int needed)
-        {
-            int capacity = Array.Length;
-            while (capacity < needed)
-                capacity *= 2;
-
-            System.Array.Resize(ref Array, capacity);
-        }
+        System.Array.Resize(ref Array, capacity);
     }
 }

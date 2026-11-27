@@ -166,19 +166,19 @@ public static class TooltipSystem
             return;
         }
 
-        var theme = Origami.Current;
-        var font = theme.Font;
+        OrigamiTheme theme = Origami.Current;
+        Scribe.FontFile? font = theme.Font;
         if (font == null)
         {
             _pending = null;
             return;
         }
 
-        var content = _pending;
+        TooltipContent content = _pending;
         _pending = null;
 
-        var ink = theme.Ink;
-        var m = theme.Metrics;
+        OrigamiRamp ink = theme.Ink;
+        OrigamiMetrics m = theme.Metrics;
         float fontSize = m.FontSize - 1;        // ~11.5px
         float titleFontSize = m.FontSize;
 
@@ -207,10 +207,10 @@ public static class TooltipSystem
 
         bool needsWrap = naturalW > content.MaxWidth;
 
-        var options = content.Options;
+        TooltipOptions? options = content.Options;
         bool useElementAnchor = options?.Anchor == TooltipAnchor.Element && _anchorOwner == paper;
         int anchorId = _activeElementId;
-        var pos = paper.PointerPos;
+        Float2 pos = paper.PointerPos;
         Rect cursorAnchor = new Rect(pos.X, pos.Y, pos.X, pos.Y);
         TooltipPlacement placement = options?.Placement ?? TooltipPlacement.Bottom;
         // Limit width to the window too, including tooltips whose minimum width is very large.
@@ -270,7 +270,7 @@ public static class TooltipSystem
 
             if (hasText)
             {
-                var textBox = paper.Box("tt_text").Width(UnitValue.Stretch()).Height(UnitValue.Auto)
+                ElementBuilder textBox = paper.Box("tt_text").Width(UnitValue.Stretch()).Height(UnitValue.Auto)
                     .Text(content.Text, font)
                     .TextColor(hasTitle ? ink.C300 : ink.C500)
                     .FontSize(fontSize).Alignment(TextAlignment.Left);

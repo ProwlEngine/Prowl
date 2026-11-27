@@ -1,4 +1,5 @@
 using System.Collections.Generic;
+
 using Prowl.Vector.Spatial;
 
 namespace Prowl.Motion;

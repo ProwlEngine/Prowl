@@ -20,10 +20,10 @@ internal static class GltfMeshMapper
     {
         /// <summary>For each glTF mesh, the index of the single IntermediateScene mesh it produced,
         /// or -1 when it had no primitives.</summary>
-        public List<int> MeshIndex { get; } = new();
+        public List<int> MeshIndex { get; } = [];
 
         /// <summary>Morph target names, populated from <c>mesh.extras.targetNames</c> when present.</summary>
-        public List<string[]?> MorphTargetNames { get; } = new();
+        public List<string[]?> MorphTargetNames { get; } = [];
     }
 
     /// <summary>
@@ -46,7 +46,7 @@ internal static class GltfMeshMapper
 
         for (int mi = 0; mi < dom.Meshes.Length; mi++)
         {
-            var srcMesh = dom.Meshes[mi];
+            GltfMesh srcMesh = dom.Meshes[mi];
             string name = srcMesh.Name ?? $"Mesh_{mi}";
 
             string[]? targetNames = ResolveTargetNames(srcMesh);
@@ -87,25 +87,25 @@ internal static class GltfMeshMapper
     private static IntermediateMesh MergePrimitives(List<IntermediateMesh> parts, string name, ImportContext ctx)
     {
         int totalVertices = 0;
-        foreach (var p in parts) totalVertices += p.Positions.Count;
+        foreach (IntermediateMesh p in parts) totalVertices += p.Positions.Count;
 
         bool anyNormals = parts.Exists(p => p.Normals is not null);
         bool anyTangents = parts.Exists(p => p.Tangents is not null);
         bool anyColors = parts.Exists(p => p.Colors0 is not null);
         bool anySkin = parts.Exists(p => p.VertexJoints is not null);
 
-        var uvUsed = new bool[Mesh.MaxUVChannels];
+        bool[] uvUsed = new bool[Mesh.MaxUVChannels];
         for (int uv = 0; uv < Mesh.MaxUVChannels; uv++)
             uvUsed[uv] = parts.Exists(p => p.UVs[uv] is not null);
 
         int influences = 4;
-        foreach (var p in parts)
+        foreach (IntermediateMesh p in parts)
             if (p.VertexJoints is not null) influences = Math.Max(influences, p.MaxInfluencesPerVertex);
 
         // Every primitive of a mesh must expose the same morph targets, so the count is the max and
         // a primitive short of one contributes zero deltas for it.
         int targetCount = 0;
-        foreach (var p in parts) targetCount = Math.Max(targetCount, p.BlendShapes.Count);
+        foreach (IntermediateMesh p in parts) targetCount = Math.Max(targetCount, p.BlendShapes.Count);
 
         var merged = new IntermediateMesh
         {
@@ -114,11 +114,11 @@ internal static class GltfMeshMapper
             MaxInfluencesPerVertex = influences,
         };
 
-        if (anyNormals) merged.Normals = new List<Float3>(totalVertices);
-        if (anyTangents) merged.Tangents = new List<Float4>(totalVertices);
-        if (anyColors) merged.Colors0 = new List<Color>(totalVertices);
+        if (anyNormals) merged.Normals = [with(totalVertices)];
+        if (anyTangents) merged.Tangents = [with(totalVertices)];
+        if (anyColors) merged.Colors0 = [with(totalVertices)];
         for (int uv = 0; uv < Mesh.MaxUVChannels; uv++)
-            if (uvUsed[uv]) merged.UVs[uv] = new List<Float2>(totalVertices);
+            if (uvUsed[uv]) merged.UVs[uv] = [with(totalVertices)];
 
         int[]? joints = anySkin ? new int[totalVertices * influences] : null;
         float[]? weights = anySkin ? new float[totalVertices * influences] : null;
@@ -126,18 +126,18 @@ internal static class GltfMeshMapper
         var shapeDeltas = new Float3[targetCount][];
         var shapeNormals = new Float3[targetCount][];
         var shapeTangents = new Float3[targetCount][];
-        var shapeNames = new string[targetCount];
-        var shapeHasNormals = new bool[targetCount];
-        var shapeHasTangents = new bool[targetCount];
+        string[] shapeNames = new string[targetCount];
+        bool[] shapeHasNormals = new bool[targetCount];
+        bool[] shapeHasTangents = new bool[targetCount];
 
         for (int t = 0; t < targetCount; t++)
         {
             shapeDeltas[t] = new Float3[totalVertices];
-            foreach (var p in parts)
+            foreach (IntermediateMesh p in parts)
             {
                 if (t >= p.BlendShapes.Count || p.BlendShapes[t].Frames.Count == 0) continue;
                 shapeNames[t] ??= p.BlendShapes[t].Name;
-                var frame = p.BlendShapes[t].Frames[0];
+                IntermediateBlendShapeFrame frame = p.BlendShapes[t].Frames[0];
                 shapeHasNormals[t] |= frame.DeltaNormals is not null;
                 shapeHasTangents[t] |= frame.DeltaTangents is not null;
             }
@@ -146,7 +146,7 @@ internal static class GltfMeshMapper
         }
 
         int totalFaces = 0, totalIndices = 0;
-        foreach (var p in parts)
+        foreach (IntermediateMesh p in parts)
         {
             totalFaces += p.Faces.Count;
             totalIndices += p.Faces.AllIndices.Length;
@@ -154,7 +154,7 @@ internal static class GltfMeshMapper
         merged.Faces.EnsureCapacity(totalFaces, totalIndices);
 
         int offset = 0;
-        foreach (var part in parts)
+        foreach (IntermediateMesh part in parts)
         {
             int count = part.Positions.Count;
             merged.Positions.AddRange(part.Positions);
@@ -183,7 +183,7 @@ internal static class GltfMeshMapper
             for (int t = 0; t < targetCount && t < part.BlendShapes.Count; t++)
             {
                 if (part.BlendShapes[t].Frames.Count == 0) continue;
-                var frame = part.BlendShapes[t].Frames[0];
+                IntermediateBlendShapeFrame frame = part.BlendShapes[t].Frames[0];
                 Array.Copy(frame.DeltaPositions, 0, shapeDeltas[t], offset, Math.Min(frame.DeltaPositions.Length, count));
                 if (shapeNormals[t] is not null && frame.DeltaNormals is { } dn)
                     Array.Copy(dn, 0, shapeNormals[t], offset, Math.Min(dn.Length, count));
@@ -196,7 +196,7 @@ internal static class GltfMeshMapper
 
             // The primitive's material becomes this face's, which is what makes the merged mesh
             // resolve back into one sub-mesh per material at bake.
-            foreach (var face in part.Faces)
+            foreach (IntermediateFace face in part.Faces)
                 merged.Faces.Add(part.Faces.IndicesOf(face), part.MaterialIndex);
 
             merged.PrimitiveKinds |= part.PrimitiveKinds;
@@ -239,7 +239,7 @@ internal static class GltfMeshMapper
             return null;
         if (!extras.TryGetProperty("targetNames", out JsonElement names) || names.ValueKind != JsonValueKind.Array)
             return null;
-        var arr = new string[names.GetArrayLength()];
+        string[] arr = new string[names.GetArrayLength()];
         for (int i = 0; i < arr.Length; i++)
             arr[i] = names[i].GetString() ?? $"Target{i}";
         return arr;
@@ -265,7 +265,7 @@ internal static class GltfMeshMapper
         // An accessor with neither a bufferView nor a sparse overlay is legal and reads as all
         // zeros, but for POSITION that means every vertex on the origin, which is never what was
         // meant. It is what an undecoded compression extension leaves behind.
-        var posAccessor = reader.Get(posIdx);
+        GltfAccessorJson posAccessor = reader.Get(posIdx);
         if (posAccessor.BufferView is null && posAccessor.Sparse is null)
         {
             ctx.Log.Warning(
@@ -289,7 +289,7 @@ internal static class GltfMeshMapper
         }
 
         if (prim.Attributes.TryGetValue("COLOR_0", out int colIdx))
-            mesh.Colors0 = new List<Color>(reader.ReadColor(colIdx));
+            mesh.Colors0 = [with(reader.ReadColor(colIdx))];
 
         for (int uv = 0; uv < Mesh.MaxUVChannels; uv++)
         {
@@ -351,17 +351,17 @@ internal static class GltfMeshMapper
             int weightAcc = prim.Attributes[$"WEIGHTS_{s}"];
 
             // Joints are unsigned-byte or unsigned-short scalar-of-VEC4 (so 4 components).
-            var jointAccessor = reader.Get(jointAcc);
+            GltfAccessorJson jointAccessor = reader.Get(jointAcc);
             if (jointAccessor.Type != "VEC4")
             {
                 ctx.Log.Warning($"{parentName}: JOINTS_{s} is type {jointAccessor.Type}, expected VEC4.", "GltfMeshMapper");
                 return;
             }
-            var weightsRaw = reader.ReadVec4(weightAcc);
+            Float4[] weightsRaw = reader.ReadVec4(weightAcc);
 
             // We need joint indices as ints; ReadVec4 returns floats which carry the integer
             // value correctly for both unsigned-byte and unsigned-short (and float) joints.
-            var jointsAsFloat = reader.ReadVec4(jointAcc);
+            Float4[] jointsAsFloat = reader.ReadVec4(jointAcc);
             for (int v = 0; v < vertexCount; v++)
             {
                 int baseDst = v * influencesPerVertex + s * 4;
@@ -395,7 +395,7 @@ internal static class GltfMeshMapper
 
         for (int ti = 0; ti < prim.Targets.Length; ti++)
         {
-            var target = prim.Targets[ti];
+            Dictionary<string, int> target = prim.Targets[ti];
             Float3[]? deltaPos = null;
             Float3[]? deltaNormals = null;
             Float3[]? deltaTangents = null;
@@ -447,7 +447,7 @@ internal static class GltfMeshMapper
 
     private static void BuildFaces(int mode, uint[] indices, IntermediateMesh mesh, ImportContext ctx, string parentName)
     {
-        var faces = mesh.Faces;
+        FaceList faces = mesh.Faces;
         Span<int> pair = stackalloc int[2];
         switch (mode)
         {

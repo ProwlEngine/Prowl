@@ -89,13 +89,13 @@ internal static class BevelOp
         var corners = new Dictionary<Edge, List<(Face Face, Edge Other)>>();
         foreach (Face face in v.NeighborFaces())
         {
-            var loop = face.GetLoop(v);
+            GeometryData.Loop? loop = face.GetLoop(v);
             if (loop == null) continue;
             if (face.NeighborVertices().Count(x => x == v) != 1) throw new InvalidOperationException("A face touches the same corner twice, bevel cannot continue there");
             Edge en = loop.Edge, ep = loop.Prev!.Edge;
-            if (!corners.TryGetValue(en, out var listN)) corners[en] = listN = [];
+            if (!corners.TryGetValue(en, out List<(Face Face, Edge Other)>? listN)) corners[en] = listN = [];
             listN.Add((face, ep));
-            if (!corners.TryGetValue(ep, out var listP)) corners[ep] = listP = [];
+            if (!corners.TryGetValue(ep, out List<(Face Face, Edge Other)>? listP)) corners[ep] = listP = [];
             listP.Add((face, en));
         }
 
@@ -112,7 +112,7 @@ internal static class BevelOp
         while (visited.Add(current))
         {
             fan.Order.Add(current);
-            var next = corners[current].FirstOrDefault(o => o.Face != previous);
+            (Face Face, Edge Other) next = corners[current].FirstOrDefault(o => o.Face != previous);
             if (next.Face == null) break;
 
             fan.Between.Add(next.Face);
@@ -130,7 +130,7 @@ internal static class BevelOp
     // Unit vector in the face's plane, perpendicular to the edge, pointing into the face
     private static Float3 Inward(Vertex v, Face face, Edge e)
     {
-        var loop = face.GetLoop(v)!;
+        GeometryData.Loop loop = face.GetLoop(v)!;
         Float3 along = DirAlong(v, e);
         Float3 travel = loop.Edge == e ? along : -along;
         return Float3.Normalize(Float3.Cross(Float3.Normalize(face.Normal()), travel));
@@ -169,7 +169,7 @@ internal static class BevelOp
         public void Verify()
         {
             const string message = "The bevel could not build clean faces here, try a smaller width";
-            var faces = _mesh.Vertices.Where(v => !_old.Contains(v)).SelectMany(v => v.NeighborFaces()).Distinct();
+            IEnumerable<Face> faces = _mesh.Vertices.Where(v => !_old.Contains(v)).SelectMany(v => v.NeighborFaces()).Distinct();
             foreach (Face face in faces)
             {
                 List<Vertex> verts = face.NeighborVertices();
@@ -370,7 +370,7 @@ internal static class BevelOp
         foreach (Sector s in datas.Values.SelectMany(d => d.Sectors))
         {
             if (!s.Split || s.U == null) continue;
-            var original = originalFlags.FirstOrDefault(o => o.Edge == s.U);
+            (Vertex A, Vertex B, bool Hidden, bool Soft, Edge Edge, Dictionary<string, GeometryData.AttributeValue> Attributes) original = originalFlags.FirstOrDefault(o => o.Edge == s.U);
             if (!original.Hidden && !original.Soft) continue;
             if (mesh.FindEdge(s.VA, s.VB) is Edge middle)
             {
@@ -380,7 +380,7 @@ internal static class BevelOp
         }
 
         bool customEdgeAttributes = mesh.EdgeAttributes.Count > 2;
-        foreach ((Vertex a, Vertex b, bool hidden, bool soft, Edge _, var attributes) in originalFlags)
+        foreach ((Vertex a, Vertex b, bool hidden, bool soft, Edge _, Dictionary<string, GeometryData.AttributeValue>? attributes) in originalFlags)
         {
             if (!hidden && !soft && !customEdgeAttributes) continue;
             foreach (Vertex ta in Terminals(datas, a))
@@ -499,7 +499,7 @@ internal static class BevelOp
         foreach (int p in sector.Faces.Skip(1).SkipLast(1))
         {
             Face face = fan.After(p)!;
-            var loop = face.GetLoop(v)!;
+            GeometryData.Loop loop = face.GetLoop(v)!;
             Float3 toNext = Float3.Normalize(loop.Next!.Vert.Point - v.Point), toPrev = Float3.Normalize(loop.Prev!.Vert.Point - v.Point);
             Float3 normal = Float3.Normalize(face.Normal());
             float angle = MathF.Atan2(Float3.Dot(Float3.Cross(toNext, toPrev), normal), Float3.Dot(toNext, toPrev));
@@ -667,8 +667,8 @@ internal static class BevelOp
 
             // Spread the points evenly along the curve rather than evenly in its parameter
             const int samples = 48;
-            var ts = new float[samples + 1];
-            var lengths = new float[samples + 1];
+            float[] ts = new float[samples + 1];
+            float[] lengths = new float[samples + 1];
             Float3 previous = p0;
             for (int i = 1; i <= samples; i++)
             {
@@ -740,7 +740,7 @@ internal static class BevelOp
         }
 
         // The sequence runs from the earlier edge to the later one, the face may go the other way round
-        var loop = face.GetLoop(v)!;
+        GeometryData.Loop loop = face.GetLoop(v)!;
         bool forward = loop.Prev!.Edge == fan.Order[i];
         if (!forward) sequence.Reverse();
         return sequence;
@@ -905,7 +905,7 @@ internal static class BevelOp
             foreach (Vertex c in face.NeighborVertices())
             {
                 if (!fans.TryGetValue(c, out Fan? fan)) { loop.Add(c); continue; }
-                var l = face.GetLoop(c)!;
+                GeometryData.Loop l = face.GetLoop(c)!;
                 Edge incoming = l.Prev!.Edge, outgoing = l.Edge;
                 loop.Add(cuts[(c, incoming)]);
                 loop.Add(cuts[(c, outgoing)]);
@@ -950,7 +950,7 @@ internal static class BevelOp
         }
 
         bool customEdgeAttributes = mesh.EdgeAttributes.Count > 2;
-        foreach ((Vertex a, Vertex b, bool hidden, bool soft, var attributes) in flags)
+        foreach ((Vertex a, Vertex b, bool hidden, bool soft, Dictionary<string, GeometryData.AttributeValue>? attributes) in flags)
         {
             if (!hidden && !soft && !customEdgeAttributes) continue;
             Vertex ta = fans.ContainsKey(a) ? cuts.First(c => c.Key.Item1 == a && c.Key.Item2.ContainsVertex(b)).Value : a;

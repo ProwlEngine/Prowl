@@ -23,17 +23,17 @@ public static partial class SpirVOptimizer
     static void VectorDce(SpvModule m)
     {
         const uint All = 0xFFFF;
-        var def = m.DefMap();
+        DefTable def = m.DefMap();
         uint glslSet = 0;
-        foreach (var ins in m.Instrs) if (ins.Opcode == 11 && ins.Operands.Length >= 2 && DecodeSpvString(ins.Operands, 1) == "GLSL.std.450") { glslSet = ins.Operands[0]; break; }
+        foreach (SpvInstr ins in m.Instrs) if (ins.Opcode == 11 && ins.Operands.Length >= 2 && DecodeSpvString(ins.Operands, 1) == "GLSL.std.450") { glslSet = ins.Operands[0]; break; }
         uint nextId = m.Header[3];
         var newGlobals = new List<SpvInstr>();
         var replace = new Dictionary<uint, uint>();
         var kill = new HashSet<SpvInstr>();
 
         uint ResultType(SpvInstr i) { i.Classify(out int ri, out _); return ri >= 1 ? i.Operands[ri - 1] : 0; }
-        bool IsVector(SpvInstr i) => def.TryGetValue(ResultType(i), out var t) && t.Opcode == 23;
-        bool IsScalar(SpvInstr i) => def.TryGetValue(ResultType(i), out var t) && t.Opcode is 20 or 21 or 22;
+        bool IsVector(SpvInstr i) => def.TryGetValue(ResultType(i), out SpvInstr? t) && t.Opcode == 23;
+        bool IsScalar(SpvInstr i) => def.TryGetValue(ResultType(i), out SpvInstr? t) && t.Opcode is 20 or 21 or 22;
         uint Count(uint type) => def[type].Operands[2];
         bool Combinator(SpvInstr i) => AdceCombinators.Contains(i.Opcode)
             || i.Opcode == OpExtInst && glslSet != 0 && i.Operands.Length >= 4 && i.Operands[2] == glslSet && AdceGlslCombinators.Contains(i.Operands[3]);
@@ -43,7 +43,7 @@ public static partial class SpirVOptimizer
         // module already has one.
         uint Undef(uint type)
         {
-            foreach (var g in newGlobals) if (g.Operands[0] == type) return g.Operands[1];
+            foreach (SpvInstr g in newGlobals) if (g.Operands[0] == type) return g.Operands[1];
             var u = new SpvInstr(1, [type, nextId++]); newGlobals.Add(u); def[u.Operands[1]] = u; return u.Operands[1];
         }
 
@@ -51,7 +51,7 @@ public static partial class SpirVOptimizer
         {
             if (m.Instrs[f].Opcode != OpFunction) continue;
             int fe = f; while (m.Instrs[fe].Opcode != OpFunctionEnd) fe++;
-            var fn = m.Instrs.GetRange(f, fe - f + 1);
+            List<SpvInstr> fn = m.Instrs.GetRange(f, fe - f + 1);
             var live = new Dictionary<uint, uint>();
             var work = new List<(SpvInstr Inst, uint Mask)>();
             void Add(SpvInstr inst, uint mask)
@@ -65,21 +65,21 @@ public static partial class SpirVOptimizer
                 inst.Classify(out int ri, out bool[] isId);
                 for (int i = 0; i < inst.Operands.Length; i++)
                 {
-                    if (!isId[i] || i == ri || i == ri - 1 || !def.TryGetValue(inst.Operands[i], out var d)) continue;
+                    if (!isId[i] || i == ri || i == ri - 1 || !def.TryGetValue(inst.Operands[i], out SpvInstr? d)) continue;
                     if (IsVector(d)) Add(d, mask);
                     else if (IsScalar(d)) Add(d, 1);
                 }
             }
-            foreach (var inst in fn)
+            foreach (SpvInstr inst in fn)
                 if (!((IsVector(inst) || IsScalar(inst)) && Combinator(inst))) MarkUses(inst, All);
             for (int w = 0; w < work.Count; w++)
             {
-                var (inst, mask) = work[w];
+                (SpvInstr? inst, uint mask) = work[w];
                 switch (inst.Opcode)
                 {
                     case OpCompositeExtract:
                     {
-                        if (!def.TryGetValue(inst.Operands[2], out var c) || !(IsVector(c) || IsScalar(c))) break;
+                        if (!def.TryGetValue(inst.Operands[2], out SpvInstr? c) || !(IsVector(c) || IsScalar(c))) break;
                         if (inst.Operands.Length < 4) Add(c, mask);
                         else { uint idx = inst.Operands[3]; Add(c, idx < Count(ResultType(c)) ? 1u << (int)idx : 0); }
                         break;
@@ -97,7 +97,7 @@ public static partial class SpirVOptimizer
                     }
                     case 79:   // OpVectorShuffle
                     {
-                        var a = def[inst.Operands[2]]; var b = def[inst.Operands[3]];
+                            SpvInstr a = def[inst.Operands[2]]; SpvInstr b = def[inst.Operands[3]];
                         uint na = Count(ResultType(a)), nb = Count(ResultType(b)), ma = 0, mb = 0;
                         for (int k = 4; k < inst.Operands.Length; k++)
                         {
@@ -114,7 +114,7 @@ public static partial class SpirVOptimizer
                         int comp = 0;
                         for (int k = 2; k < inst.Operands.Length; k++)
                         {
-                            var o = def[inst.Operands[k]];
+                                SpvInstr o = def[inst.Operands[k]];
                             if (IsScalar(o)) { Add(o, (mask & (1u << comp)) != 0 ? 1u : 0); comp++; }
                             else
                             {
@@ -132,7 +132,7 @@ public static partial class SpirVOptimizer
             }
 
             uint Final(uint id) { for (int g = 0; g < 64 && replace.TryGetValue(id, out uint r); g++) id = r; return id; }
-            foreach (var inst in fn)
+            foreach (SpvInstr inst in fn)
             {
                 if (!Combinator(inst) || !live.TryGetValue(inst.ResultId, out uint mask)) continue;
                 if (mask == 0) { replace[inst.ResultId] = Undef(ResultType(inst)); kill.Add(inst); continue; }
@@ -146,7 +146,7 @@ public static partial class SpirVOptimizer
         }
         if (replace.Count == 0 && kill.Count == 0 && newGlobals.Count == 0) return;
         if (kill.Count > 0) m.Instrs.RemoveAll(kill.Contains);
-        foreach (var ins in m.Instrs)
+        foreach (SpvInstr ins in m.Instrs)
         {
             ins.Classify(out int ri, out bool[] isId);
             for (int i = 0; i < ins.Operands.Length; i++)

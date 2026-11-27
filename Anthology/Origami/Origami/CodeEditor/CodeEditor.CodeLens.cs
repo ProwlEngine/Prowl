@@ -14,8 +14,8 @@ namespace Prowl.OrigamiUI;
 public sealed partial class CodeEditor
 {
     // Code lenses by the position of the declared name, kept sorted by line and moved through edits like markers.
-    private readonly List<(TextPosition Position, string Text)> _lenses = new();
-    private readonly List<(Rect Rect, TextPosition Position)> _lensHits = new();
+    private readonly List<(TextPosition Position, string Text)> _lenses = [];
+    private readonly List<(Rect Rect, TextPosition Position)> _lensHits = [];
     private int _lensRequestedVersion = -1;
     private int _lensFrom, _lensTo;
     private CancellationTokenSource? _lensCts;
@@ -71,7 +71,7 @@ public sealed partial class CodeEditor
         if (Options.ShowCodeLens)
         {
             int last = -1;
-            foreach (var (position, _) in _lenses)
+            foreach ((TextPosition position, string _) in _lenses)
             {
                 int line = position.Line;
                 if (line == last || line >= Document.LineCount || IsLineHidden(line)) continue;
@@ -127,7 +127,7 @@ public sealed partial class CodeEditor
         double topOffset = _scrollY - LineToDisplayRow(topLine) * lh;
 
         _lenses.RemoveAll(l => l.Position.Line >= from && l.Position.Line <= to);
-        foreach (var lens in lenses) _lenses.Add((Document.OffsetToPosition(lens.Offset), lens.Text));
+        foreach (CodeLens lens in lenses) _lenses.Add((Document.OffsetToPosition(lens.Offset), lens.Text));
         _lenses.Sort((a, b) => a.Position.CompareTo(b.Position));
         RebuildDisplayRows();
 
@@ -141,7 +141,7 @@ public sealed partial class CodeEditor
         if (_lenses.Count == 0) return;
         for (int i = _lenses.Count - 1; i >= 0; i--)
         {
-            var (position, text) = _lenses[i];
+            (TextPosition position, string? text) = _lenses[i];
             // A declaration name inside the replaced text is gone until the next refresh.
             if (position > change.Range.Start && position < change.Range.End)
             {
@@ -162,8 +162,8 @@ public sealed partial class CodeEditor
 
     private void DrawLensRow(Canvas canvas, CodeEditorColors pal, FontFile font, int line, float rowY)
     {
-        if (!TryGetLens(line, out var lens)) return;
-        var v = _view;
+        if (!TryGetLens(line, out (TextPosition Position, string Text) lens)) return;
+        ViewLayout v = _view;
         float size = MathF.Max(8, FontSize * 0.8f);
         float x = ColX(VisualColumn(line, FirstNonBlank(Document[line])));
         float w = lens.Text.Length * _charW * (size / FontSize);
@@ -179,7 +179,7 @@ public sealed partial class CodeEditor
     /// <summary>The declaration a code lens under the point belongs to, or null.</summary>
     private TextPosition? CodeLensAt(Float2 point)
     {
-        foreach (var (rect, position) in _lensHits)
+        foreach ((Rect rect, TextPosition position) in _lensHits)
             if (rect.Contains(point)) return position;
         return null;
     }

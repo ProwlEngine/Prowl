@@ -43,17 +43,17 @@ public class RotationSubGizmo : ISubGizmo
 
     public bool Pick(Ray ray, Float2 screenPos, out float t)
     {
-        var radius = ArcRadius();
-        var origin = _gizmo.Translation;
-        var normal = GizmoUtils.GizmoNormal(_gizmo, _params.Direction);
-        var tangent = Tangent();
+        float radius = ArcRadius();
+        Float3 origin = _gizmo.Translation;
+        Float3 normal = GizmoUtils.GizmoNormal(_gizmo, _params.Direction);
+        Float3 tangent = Tangent();
 
-        var (planeT, distFromGizmoOrigin) = GizmoUtils.RayToPlaneOrigin(normal, origin, ray.Origin, ray.Direction);
-        var distFromGizmoEdge = MathF.Abs(distFromGizmoOrigin - radius);
+        (float planeT, float distFromGizmoOrigin) = GizmoUtils.RayToPlaneOrigin(normal, origin, ray.Origin, ray.Direction);
+        float distFromGizmoEdge = MathF.Abs(distFromGizmoOrigin - radius);
 
-        var hitPos = ray.Origin + ray.Direction * planeT;
+        Float3 hitPos = ray.Origin + ray.Direction * planeT;
         var dirToOrigin = Float3.Normalize(origin - hitPos);
-        var nearestCirclePos = hitPos + dirToOrigin * (distFromGizmoOrigin - radius);
+        Float3 nearestCirclePos = hitPos + dirToOrigin * (distFromGizmoOrigin - radius);
 
         var offset = Float3.Normalize(nearestCirclePos - origin);
 
@@ -65,11 +65,11 @@ public class RotationSubGizmo : ISubGizmo
         }
         else
         {
-            var forward = _gizmo.ViewForward * -1;
+            Float3 forward = _gizmo.ViewForward * -1;
             angle = Atan2(Float3.Dot(Cross(offset, forward), normal), Float3.Dot(offset, forward));
         }
 
-        var rotationAngle = RotationAngle(screenPos) ?? 0.0f;
+        float rotationAngle = RotationAngle(screenPos) ?? 0.0f;
         _state.StartAxisAngle = angle;
         _state.StartRotationAngle = rotationAngle;
         _state.LastRotationAngle = rotationAngle;
@@ -81,7 +81,7 @@ public class RotationSubGizmo : ISubGizmo
 
     public GizmoResult? Update(Ray ray, Float2 screenPos)
     {
-        var rotationAngle = RotationAngle(screenPos);
+        float? rotationAngle = RotationAngle(screenPos);
         if (!rotationAngle.HasValue)
             return null;
 
@@ -91,7 +91,7 @@ public class RotationSubGizmo : ISubGizmo
                             + _state.StartRotationAngle;
         }
 
-        var angleDelta = rotationAngle.Value - _state.LastRotationAngle;
+        float angleDelta = rotationAngle.Value - _state.LastRotationAngle;
 
         if (angleDelta > MathF.PI)
             angleDelta -= MathF.Tau;
@@ -101,7 +101,7 @@ public class RotationSubGizmo : ISubGizmo
         _state.LastRotationAngle = rotationAngle.Value;
         _state.CurrentDelta += angleDelta;
 
-        var normal = GizmoUtils.GizmoNormal(_gizmo, _params.Direction);
+        Float3 normal = GizmoUtils.GizmoNormal(_gizmo, _params.Direction);
 
         return new GizmoResult
         {
@@ -114,24 +114,24 @@ public class RotationSubGizmo : ISubGizmo
 
     public void Draw(Prowl.Quill.Canvas canvas)
     {
-        var transform = RotationMatrix();
+        Float4x4 transform = RotationMatrix();
 
         using (_gizmo.Draw3D.Matrix(_gizmo.ViewProjection * transform))
         {
-            var color = GizmoUtils.GizmoColor(_gizmo, focused, _params.Direction);
+            Color32 color = GizmoUtils.GizmoColor(_gizmo, focused, _params.Direction);
             var stroke = new Stroke3D() { Thickness = _gizmo.StrokeWidth, Color = color };
 
-            var radius = ArcRadius();
+            float radius = ArcRadius();
 
             if (!focused)
             {
-                var angle = ArcAngle();
+                float angle = ArcAngle();
                 _gizmo.Draw3D.Arc(radius, (MathF.PI / 2 - angle) * GizmoUtils.Rad2Deg, (MathF.PI / 2 + angle) * GizmoUtils.Rad2Deg, stroke);
             }
             else
             {
-                var startAngle = _state.StartAxisAngle + MathF.PI / 2;
-                var endAngle = startAngle + _state.CurrentDelta;
+                float startAngle = _state.StartAxisAngle + MathF.PI / 2;
+                float endAngle = startAngle + _state.CurrentDelta;
 
                 if (startAngle > endAngle)
                 {
@@ -140,13 +140,13 @@ public class RotationSubGizmo : ISubGizmo
 
                 endAngle += 1e-5f;
 
-                var totalAngle = endAngle - startAngle;
-                var fullCircles = (int)MathF.Abs(totalAngle / MathF.Tau);
+                float totalAngle = endAngle - startAngle;
+                int fullCircles = (int)MathF.Abs(totalAngle / MathF.Tau);
 
                 endAngle -= MathF.Tau * fullCircles;
 
-                var startAngle2 = endAngle;
-                var endAngle2 = startAngle + MathF.Tau;
+                float startAngle2 = endAngle;
+                float endAngle2 = startAngle + MathF.Tau;
 
                 if (Float3.Dot(_gizmo.ViewForward, GizmoUtils.GizmoNormal(_gizmo, _params.Direction)) < 0)
                 {
@@ -160,7 +160,7 @@ public class RotationSubGizmo : ISubGizmo
                     new Float3(MathF.Cos(endAngle) * radius, 0, MathF.Sin(endAngle) * radius)
                 ], stroke);
 
-                var w = stroke;
+                Stroke3D w = stroke;
                 if (fullCircles > 0)
                 {
                     w.Color.A = (byte)(stroke.Color.A * MathF.Min(0.25f * fullCircles, 1f));
@@ -174,10 +174,10 @@ public class RotationSubGizmo : ISubGizmo
 
                 if (_gizmo.Snapping)
                 {
-                    var strokeWidth = stroke.Thickness / 2;
+                    float strokeWidth = stroke.Thickness / 2;
                     for (int i = 0; i <= MathF.Tau / (_gizmo.SnapAngle * GizmoUtils.Deg2Rad); i++)
                     {
-                        var angle = i * (_gizmo.SnapAngle * GizmoUtils.Deg2Rad) + endAngle;
+                        float angle = i * (_gizmo.SnapAngle * GizmoUtils.Deg2Rad) + endAngle;
                         var pos = new Float3(MathF.Cos(angle), 0, MathF.Sin(angle));
                         _gizmo.Draw3D.LineSegment(pos * radius * 1.1f, pos * radius * 1.2f, new Stroke3D() { Thickness = strokeWidth, Color = stroke.Color });
                     }
@@ -188,11 +188,11 @@ public class RotationSubGizmo : ISubGizmo
 
     private float ArcAngle()
     {
-        var dot = MathF.Abs(Float3.Dot(GizmoUtils.GizmoNormal(_gizmo, _params.Direction), _gizmo.ViewForward));
+        float dot = MathF.Abs(Float3.Dot(GizmoUtils.GizmoNormal(_gizmo, _params.Direction), _gizmo.ViewForward));
         const float minDot = 0.990f;
         const float maxDot = 0.995f;
 
-        var angle = MathF.Min(1, MathF.Max(0, dot - minDot) / (maxDot - minDot)) * (MathF.PI / 2) + (MathF.PI / 2);
+        float angle = MathF.Min(1, MathF.Max(0, dot - minDot) / (maxDot - minDot)) * (MathF.PI / 2) + (MathF.PI / 2);
         return MathF.Abs(angle - MathF.PI) < 1e-2f ? MathF.PI : angle;
     }
 
@@ -245,9 +245,9 @@ public class RotationSubGizmo : ISubGizmo
             return Float4x4.CreateTranslation(_gizmo.Translation) * r;
         }
 
-        var localNormal = GizmoUtils.GizmoLocalNormal(_gizmo, _params.Direction);
+        Float3 localNormal = GizmoUtils.GizmoLocalNormal(_gizmo, _params.Direction);
         //var rotation = GizmoUtils.RotationAlign(Float3.up, localNormal);
-        var rotation = RotationFromTo(Float3.UnitY, localNormal);
+        Float4x4 rotation = RotationFromTo(Float3.UnitY, localNormal);
 
         if (_gizmo.Orientation == GizmoOrientation.Local)
         {
@@ -255,10 +255,10 @@ public class RotationSubGizmo : ISubGizmo
             rotation = Float4x4.CreateFromQuaternion(_gizmo.Rotation) * rotation;
         }
 
-        var tangent = Tangent();
-        var normal = GizmoUtils.GizmoNormal(_gizmo, _params.Direction);
-        var forward = _gizmo.ViewForward * -1; // (_gizmo.LeftHanded ? -1 : 1);
-        var angle = Atan2(Float3.Dot(Float3.Cross(tangent, forward), normal), Float3.Dot(tangent, forward));
+        Float3 tangent = Tangent();
+        Float3 normal = GizmoUtils.GizmoNormal(_gizmo, _params.Direction);
+        Float3 forward = _gizmo.ViewForward * -1; // (_gizmo.LeftHanded ? -1 : 1);
+        float angle = Atan2(Float3.Dot(Float3.Cross(tangent, forward), normal), Float3.Dot(tangent, forward));
 
         //rotation = Float4x4.CreateFromQuaternion(Quaternion.AngleAxis(angle, normal)) * rotation;
         rotation = Float4x4.FromAxisAngle(normal, angle) * rotation;
@@ -268,7 +268,7 @@ public class RotationSubGizmo : ISubGizmo
 
     private float? RotationAngle(Float2 cursorPos)
     {
-        var gizmoPos = GizmoUtils.WorldToScreen(_gizmo.Viewport, (_gizmo.ViewProjection * _gizmo.Model), Float3.Zero);
+        Float2? gizmoPos = GizmoUtils.WorldToScreen(_gizmo.Viewport, (_gizmo.ViewProjection * _gizmo.Model), Float3.Zero);
         if (!gizmoPos.HasValue)
             return null;
 
@@ -277,7 +277,7 @@ public class RotationSubGizmo : ISubGizmo
         if (float.IsNaN(delta.X) || float.IsNaN(delta.Y))
             return null;
 
-        var angle = Atan2(delta.Y, delta.X);
+        float angle = Atan2(delta.Y, delta.X);
         if (Float3.Dot(_gizmo.ViewForward, GizmoUtils.GizmoNormal(_gizmo, _params.Direction)) < 0)
             angle *= -1;
 
@@ -286,7 +286,7 @@ public class RotationSubGizmo : ISubGizmo
 
     private Float3 Tangent()
     {
-        var tangent = _params.Direction switch
+        Float3 tangent = _params.Direction switch
         {
             GizmoDirection.X or GizmoDirection.Y => Float3.UnitZ,
             GizmoDirection.Z => -Float3.UnitY,
@@ -391,7 +391,7 @@ public class ScaleSubGizmo : ISubGizmo
             }
         }
 
-        var pickResult = PickResult.None;
+        PickResult pickResult = PickResult.None;
         switch (_params.TransformKind)
         {
             case TransformKind.Plane when _params.Direction == GizmoDirection.View:
@@ -405,8 +405,8 @@ public class ScaleSubGizmo : ISubGizmo
                 break;
         }
 
-        var startDelta = DistanceFromOrigin2D(_gizmo, screenPos);
-        _state.StartDelta = startDelta.HasValue ? startDelta.Value : 0;
+        float? startDelta = DistanceFromOrigin2D(_gizmo, screenPos);
+        _state.StartDelta = startDelta ?? 0;
         _state.StartPos = screenPos;
         _state.StartScale = _gizmo.Scale;
         _state.Scale = Float3.One;
@@ -421,7 +421,7 @@ public class ScaleSubGizmo : ISubGizmo
         if (_params.TransformKind == TransformKind.Plane && _params.Direction == GizmoDirection.View)
             return UpdateUniform(screenPos);
 
-        var delta = DistanceFromOrigin2D(_gizmo, screenPos);
+        float? delta = DistanceFromOrigin2D(_gizmo, screenPos);
         if (!delta.HasValue)
             return null;
 
@@ -431,25 +431,14 @@ public class ScaleSubGizmo : ISubGizmo
             delta = GizmoUtils.RoundToInterval(delta.Value, _gizmo.SnapScale);
 
         delta = MathF.Max(delta.Value, 1e-4f) - 1.0f;
-
-        Float3 direction;
-        switch (_params.TransformKind)
+        Float3 direction = _params.TransformKind switch
         {
-            case TransformKind.Axis:
-                direction = GizmoUtils.GizmoLocalNormal(_gizmo, _params.Direction);
-                break;
-            case TransformKind.Plane when _params.Direction == GizmoDirection.View:
-                direction = Float3.One * 0.01f;
-                break;
-            case TransformKind.Plane:
-                direction = Float3.Normalize(GizmoUtils.PlaneBitangent(_params.Direction) + GizmoUtils.PlaneTangent(_params.Direction));
-                break;
-            default:
-                direction = Float3.Zero;
-                break;
-        }
-
-        var scale = Float3.One + (direction * delta.Value);
+            TransformKind.Axis => GizmoUtils.GizmoLocalNormal(_gizmo, _params.Direction),
+            TransformKind.Plane when _params.Direction == GizmoDirection.View => Float3.One * 0.01f,
+            TransformKind.Plane => Float3.Normalize(GizmoUtils.PlaneBitangent(_params.Direction) + GizmoUtils.PlaneTangent(_params.Direction)),
+            _ => Float3.Zero,
+        };
+        Float3 scale = Float3.One + (direction * delta.Value);
         _state.ScaleDelta = Float3.One + (scale - _state.Scale);
         _state.Scale = scale;
 
@@ -466,7 +455,7 @@ public class ScaleSubGizmo : ISubGizmo
         if (_gizmo.Snapping)
             factor = MathF.Max(GizmoUtils.RoundToInterval(factor, _gizmo.SnapScale), _gizmo.SnapScale);
 
-        var scale = Float3.One * factor;
+        Float3 scale = Float3.One * factor;
         _state.ScaleDelta = scale / _state.Scale;
         _state.Scale = scale;
         return new GizmoResult { Scale = scale, StartScale = _state.StartScale, ScaleDelta = _state.ScaleDelta };
@@ -510,7 +499,7 @@ public class ScaleSubGizmo : ISubGizmo
 
     private float? DistanceFromOrigin2D(TransformGizmo _gizmo, Float2 cursorPos)
     {
-        var gizmoPos = GizmoUtils.WorldToScreen(_gizmo.Viewport, (_gizmo.ViewProjection * _gizmo.Model), Float3.Zero);
+        Float2? gizmoPos = GizmoUtils.WorldToScreen(_gizmo.Viewport, (_gizmo.ViewProjection * _gizmo.Model), Float3.Zero);
         if (!gizmoPos.HasValue)
             return null;
 
@@ -566,7 +555,7 @@ public class TranslationSubGizmo : ISubGizmo
             }
         }
 
-        var pickResult = PickResult.None;
+        PickResult pickResult = PickResult.None;
         switch (_params.TransformKind)
         {
             case TransformKind.Plane when _params.Direction == GizmoDirection.View:
@@ -598,7 +587,7 @@ public class TranslationSubGizmo : ISubGizmo
         Float3 newPoint;
         if (_params.TransformKind == TransformKind.Axis)
         {
-            var (_, t) = GizmoUtils.RayToRay(ray.Origin, ray.Direction, _state.Origin, _state.Normal);
+            (float _, float t) = GizmoUtils.RayToRay(ray.Origin, ray.Direction, _state.Origin, _state.Normal);
             newPoint = _state.Origin + _state.Normal * t;
         }
         else
@@ -606,7 +595,7 @@ public class TranslationSubGizmo : ISubGizmo
             newPoint = GizmoUtils.PointOnPlane(_state.Normal, _state.Origin, ray);
         }
 
-        var newDelta = newPoint - _state.StartPoint;
+        Float3 newDelta = newPoint - _state.StartPoint;
 
         if (_gizmo.Snapping)
         {
@@ -616,8 +605,8 @@ public class TranslationSubGizmo : ISubGizmo
             newPoint = _state.StartPoint + newDelta;
         }
 
-        var translationDelta = newPoint - _state.LastPoint;
-        var totalTranslation = newPoint - _state.StartPoint;
+        Float3 translationDelta = newPoint - _state.LastPoint;
+        Float3 totalTranslation = newPoint - _state.StartPoint;
 
         if (_gizmo.Orientation == GizmoOrientation.Local)
         {

@@ -53,7 +53,7 @@ internal static class DissolveOp
         if (verts.Count != outline) return null;
 
         GeometryData.Face like = region.First();
-        var faceAttributes = AttributeTransfer.Copy(like.Attributes);
+        Dictionary<string, GeometryData.AttributeValue> faceAttributes = AttributeTransfer.Copy(like.Attributes);
         var inner = region.SelectMany(f => f.NeighborEdges()).Distinct().ToList();
         var innerVerts = region.SelectMany(f => f.NeighborVertices()).Distinct().ToList();
 
@@ -67,7 +67,7 @@ internal static class DissolveOp
         if (merged == null) return null;
         merged.Attributes = faceAttributes;
         GeometryData.Loop corner = merged.Loop!;
-        foreach (var attributes in corners)
+        foreach (Dictionary<string, GeometryData.AttributeValue> attributes in corners)
         {
             corner.Attributes = attributes;
             corner = corner.Next!;
@@ -228,7 +228,7 @@ internal static class DissolveOp
         List<GeometryData.Face> faces = vertex.NeighborFaces();
         if (faces.Any(f => f.VertCount <= 3)) return false;
 
-        var edgeAttributes = AttributeTransfer.Copy(edges[0].Attributes);
+        Dictionary<string, GeometryData.AttributeValue> edgeAttributes = AttributeTransfer.Copy(edges[0].Attributes);
         foreach (GeometryData.Face face in faces)
         {
             var corners = new List<Dictionary<string, GeometryData.AttributeValue>>();
@@ -244,13 +244,13 @@ internal static class DissolveOp
                 loop = loop.Next!;
             } while (loop != face.Loop);
 
-            var faceAttributes = AttributeTransfer.Copy(face.Attributes);
+            Dictionary<string, GeometryData.AttributeValue> faceAttributes = AttributeTransfer.Copy(face.Attributes);
             mesh.RemoveFace(face);
             GeometryData.Face? rebuilt = mesh.AddFace(verts.ToArray());
             if (rebuilt == null) continue;
             rebuilt.Attributes = faceAttributes;
             GeometryData.Loop corner = rebuilt.Loop!;
-            foreach (var attributes in corners)
+            foreach (Dictionary<string, GeometryData.AttributeValue> attributes in corners)
             {
                 corner.Attributes = attributes;
                 corner = corner.Next!;

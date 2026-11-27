@@ -228,7 +228,7 @@ public static class Types
     {
         string rest = name;
         Scalar sampled = Scalar.Float;
-        foreach (var (prefix, kind) in new[] { ("i64", Scalar.Int64), ("u64", Scalar.UInt64), ("f16", Scalar.Half), ("i", Scalar.Int), ("u", Scalar.UInt) })
+        foreach ((string? prefix, Scalar kind) in new[] { ("i64", Scalar.Int64), ("u64", Scalar.UInt64), ("f16", Scalar.Half), ("i", Scalar.Int), ("u", Scalar.UInt) })
             if (rest.StartsWith(prefix, StringComparison.Ordinal) && !rest.StartsWith("image", StringComparison.Ordinal))
             {
                 sampled = kind; rest = rest[prefix.Length..]; break;

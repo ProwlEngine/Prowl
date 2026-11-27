@@ -10,8 +10,8 @@ namespace Prowl.Ember;
 /// </summary>
 public sealed class ReloadState
 {
-    private readonly List<KeyValuePair<string, object?>> _entries = new();
-    private readonly Dictionary<string, int> _index = new(StringComparer.Ordinal);
+    private readonly List<KeyValuePair<string, object?>> _entries = [];
+    private readonly Dictionary<string, int> _index = [with(StringComparer.Ordinal)];
 
     public int Count => _entries.Count;
 
@@ -20,7 +20,7 @@ public sealed class ReloadState
     {
         get
         {
-            foreach (var entry in _entries)
+            foreach (KeyValuePair<string, object?> entry in _entries)
                 yield return entry.Key;
         }
     }
@@ -29,7 +29,7 @@ public sealed class ReloadState
     {
         ArgumentNullException.ThrowIfNull(key);
 
-        if (_index.TryGetValue(key, out var at))
+        if (_index.TryGetValue(key, out int at))
             _entries[at] = new KeyValuePair<string, object?>(key, value);
         else
         {
@@ -44,7 +44,7 @@ public sealed class ReloadState
     /// </summary>
     public bool TryGet<T>(string key, out T value)
     {
-        if (key != null && _index.TryGetValue(key, out var at) && _entries[at].Value is T stored)
+        if (key != null && _index.TryGetValue(key, out int at) && _entries[at].Value is T stored)
         {
             value = stored;
             return true;
@@ -53,13 +53,13 @@ public sealed class ReloadState
         return false;
     }
 
-    public T? GetOrDefault<T>(string key) => TryGet<T>(key, out var value) ? value : default;
+    public T? GetOrDefault<T>(string key) => TryGet<T>(key, out T? value) ? value : default;
 
     public bool Contains(string key) => key != null && _index.ContainsKey(key);
 
     public bool Remove(string key)
     {
-        if (key == null || !_index.TryGetValue(key, out var at)) return false;
+        if (key == null || !_index.TryGetValue(key, out int at)) return false;
 
         _entries.RemoveAt(at);
         _index.Remove(key);
@@ -82,11 +82,11 @@ public sealed class ReloadState
     {
         for (int i = 0; i < _entries.Count; i++)
         {
-            var entry = _entries[i];
+            KeyValuePair<string, object?> entry = _entries[i];
             if (entry.Value == null) continue;
             if (entry.Value.GetType().IsPrimitive) continue;
 
-            var migrated = migrate(entry.Value);
+            object? migrated = migrate(entry.Value);
             if (!ReferenceEquals(migrated, entry.Value))
                 _entries[i] = new KeyValuePair<string, object?>(entry.Key, migrated);
         }

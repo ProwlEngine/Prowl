@@ -21,8 +21,8 @@ public sealed class FaceList
 
     public FaceList(int faceCapacity, int indexCapacity)
     {
-        _faces = new List<IntermediateFace>(faceCapacity);
-        _indices = new List<int>(indexCapacity);
+        _faces = [with(faceCapacity)];
+        _indices = [with(indexCapacity)];
     }
 
     public int Count => _faces.Count;
@@ -67,8 +67,8 @@ public sealed class FaceList
         int firstFace = _faces.Count, firstIndex = _indices.Count;
         CollectionsMarshal.SetCount(_faces, firstFace + triCount);
         CollectionsMarshal.SetCount(_indices, firstIndex + triCount * 3);
-        var faces = CollectionsMarshal.AsSpan(_faces).Slice(firstFace);
-        var dst = CollectionsMarshal.AsSpan(_indices).Slice(firstIndex);
+        Span<IntermediateFace> faces = CollectionsMarshal.AsSpan(_faces).Slice(firstFace);
+        Span<int> dst = CollectionsMarshal.AsSpan(_indices).Slice(firstIndex);
         for (int t = 0; t < triCount; t++)
         {
             faces[t] = new IntermediateFace { Start = firstIndex + t * 3, Count = 3, Material = IntermediateFace.InheritMaterial, SmoothingGroup = IntermediateFace.NoSmoothingGroup };
@@ -90,13 +90,13 @@ public sealed class FaceList
     /// <summary>Removes every face flagged in <paramref name="remove"/> and packs the survivors' indices together.</summary>
     public int RemoveAll(ReadOnlySpan<bool> remove)
     {
-        var faces = CollectionsMarshal.AsSpan(_faces);
-        var indices = CollectionsMarshal.AsSpan(_indices);
+        Span<IntermediateFace> faces = CollectionsMarshal.AsSpan(_faces);
+        Span<int> indices = CollectionsMarshal.AsSpan(_indices);
         int keptFaces = 0, keptIndices = 0;
         for (int f = 0; f < faces.Length; f++)
         {
             if (remove[f]) continue;
-            var face = faces[f];
+            IntermediateFace face = faces[f];
             if (face.Start != keptIndices)
             {
                 indices.Slice(face.Start, face.Count).CopyTo(indices.Slice(keptIndices));

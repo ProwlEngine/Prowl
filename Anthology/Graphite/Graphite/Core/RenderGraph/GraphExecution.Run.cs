@@ -8,8 +8,8 @@ namespace Prowl.Graphite;
 
 internal sealed partial class GraphExecution
 {
-    private readonly List<int> _openGroups = new();
-    private readonly List<int> _chain = new();
+    private readonly List<int> _openGroups = [];
+    private readonly List<int> _chain = [];
     private Dictionary<int, GraphCapture>? _captures;
 
     public void Run(GraphLayout layout, PassContext context)
@@ -198,11 +198,11 @@ internal sealed partial class GraphExecution
         if (hook == null)
             return null;
 
-        _captures ??= new Dictionary<int, GraphCapture>();
+        _captures ??= [];
         if (_captures.TryGetValue(group, out GraphCapture? capture))
             return capture;
 
-        List<int> members = new();
+        List<int> members = [];
         for (int i = 0; i < Graph.PassCount; i++)
         {
             if (Graph.PassAt(i).Group == group)

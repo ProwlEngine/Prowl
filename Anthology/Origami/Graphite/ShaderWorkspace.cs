@@ -41,7 +41,7 @@ public sealed class ShaderWorkspace
     public Func<ShaderDefinition, IEnumerable<ShaderPass>>? ExpandSurface { get; set; }
 
     /// <summary>Defines set for every compile, such as the engine's own.</summary>
-    public Dictionary<string, string> Defines { get; } = new(StringComparer.Ordinal);
+    public Dictionary<string, string> Defines { get; } = [with(StringComparer.Ordinal)];
 
     public ShaderSource? Resolve(string name, string? fromPath)
     {
@@ -55,15 +55,15 @@ public sealed class ShaderWorkspace
     {
         var names = new SortedSet<string>(ShaderLibrary.Names.Where(n => n.EndsWith(".glsl", StringComparison.OrdinalIgnoreCase)), StringComparer.Ordinal);
         if (_includeNames != null)
-            foreach (var n in _includeNames(fromPath)) names.Add(n);
+            foreach (string n in _includeNames(fromPath)) names.Add(n);
         return names;
     }
 
     internal ShaderIndex? IncludeIndex(string name, string? fromPath)
     {
-        var source = Resolve(name, fromPath);
+        ShaderSource? source = Resolve(name, fromPath);
         if (source == null) return null;
-        if (_indexes.TryGetValue(source.Path, out var cached) && (ReferenceEquals(cached.Text, source.Text) || cached.Text == source.Text))
+        if (_indexes.TryGetValue(source.Path, out (string Text, ShaderIndex Index) cached) && (ReferenceEquals(cached.Text, source.Text) || cached.Text == source.Text))
             return cached.Index;
         var index = new ShaderIndex(source.Text, source.Path, isShaderFile: false);
         _indexes[source.Path] = (source.Text, index);
@@ -77,7 +77,7 @@ public sealed class ShaderWorkspace
     /// </summary>
     internal SurfaceModel? Surface(string model) => _surfaceModels.GetOrAdd(model, m =>
     {
-        var source = Resolve($"{ShaderLibrary.Prefix}Standard/{m}.shader", null);
+        ShaderSource? source = Resolve($"{ShaderLibrary.Prefix}Standard/{m}.shader", null);
         if (source == null) return null;
         var index = new ShaderIndex(source.Text, source.Path, isShaderFile: true);
         int Splice(string pragma) => index.Directives.Find(d => d.Name == "pragma" && d.Args.Trim() == pragma)?.Offset ?? -1;
@@ -107,11 +107,11 @@ public sealed class ShaderWorkspace
         stack.Push(root);
         while (stack.Count > 0)
         {
-            var index = stack.Pop();
+            ShaderIndex index = stack.Pop();
             yield return index;
-            foreach (var include in index.Includes)
+            foreach (IncludeRef include in index.Includes)
             {
-                var child = IncludeIndex(include.Name, index.Path);
+                ShaderIndex? child = IncludeIndex(include.Name, index.Path);
                 if (child?.Path != null && seen.Add(child.Path)) stack.Push(child);
             }
         }
@@ -172,7 +172,7 @@ public sealed class ShaderLanguage : CodeLanguage
 
     public override List<CodeFoldRange> ComputeFolds(string[] lines, System.Threading.CancellationToken ct)
     {
-        var folds = CodeFolding.FromBraces(lines, Lexer, ct);
+        List<CodeFoldRange> folds = CodeFolding.FromBraces(lines, Lexer, ct);
         int open = -1;
         for (int i = 0; i < lines.Length; i++)
         {

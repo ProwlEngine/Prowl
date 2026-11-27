@@ -88,7 +88,7 @@ internal sealed class TerrainGrass : IDisposable
 
     public sealed class Frame
     {
-        public readonly List<Push> Fills = new();
+        public readonly List<Push> Fills = [];
         public readonly float[] Views;
         public readonly Double3[] Origins;
         public bool Any;

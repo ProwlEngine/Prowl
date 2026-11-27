@@ -15,8 +15,8 @@ public sealed class ArrayMigrator : IValueMigrator
 
     public MigrationPlan Plan(Type type, PlanContext context)
     {
-        var element = type.GetElementType()!;
-        var resolution = context.Types.Resolve(element);
+        Type element = type.GetElementType()!;
+        TypeResolution resolution = context.Types.Resolve(element);
 
         if (resolution.IsRemoved) return MigrationPlan.Dropped;
 
@@ -46,7 +46,7 @@ public sealed class ArrayMigrator : IValueMigrator
 
             if (array.Rank == 1) return Allocation.Replace(Array.CreateInstance(_element, array.Length));
 
-            var lengths = new int[array.Rank];
+            int[] lengths = new int[array.Rank];
             for (int i = 0; i < lengths.Length; i++)
                 lengths[i] = array.GetLength(i);
 
@@ -68,7 +68,7 @@ public sealed class ArrayMigrator : IValueMigrator
 
             if (from.Length == 0) return;
 
-            var indices = new int[from.Rank];
+            int[] indices = new int[from.Rank];
             do
             {
                 try

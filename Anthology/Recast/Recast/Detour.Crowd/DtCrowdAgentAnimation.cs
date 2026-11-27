@@ -20,15 +20,14 @@ freely, subject to the following restrictions:
 
 using Prowl.Recast.Core.Numerics;
 
-namespace Prowl.Recast.Detour.Crowd
+namespace Prowl.Recast.Detour.Crowd;
+
+public class DtCrowdAgentAnimation
 {
-    public class DtCrowdAgentAnimation
-    {
-        public bool active;
-        public RcVec3f initPos = new RcVec3f();
-        public RcVec3f startPos = new RcVec3f();
-        public RcVec3f endPos = new RcVec3f();
-        public long polyRef;
-        public float t, tmax;
-    }
+    public bool active;
+    public RcVec3f initPos = new RcVec3f();
+    public RcVec3f startPos = new RcVec3f();
+    public RcVec3f endPos = new RcVec3f();
+    public long polyRef;
+    public float t, tmax;
 }

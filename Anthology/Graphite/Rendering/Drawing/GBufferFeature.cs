@@ -38,7 +38,7 @@ public sealed class TargetSets : IDisposable
 {
     private const int Frames = 8;
 
-    private readonly List<(Texture?[] Targets, Framebuffer Framebuffer, int Age)> _sets = new();
+    private readonly List<(Texture?[] Targets, Framebuffer Framebuffer, int Age)> _sets = [];
 
     /// <summary>The framebuffer over a depth target, or none, and colour targets in order.</summary>
     public Framebuffer Get(ResourceFactory factory, int layers, Texture? depth, params ReadOnlySpan<Texture> colors)

@@ -11,8 +11,8 @@ public static partial class HumanTrait
 {
     private static readonly HumanBodyBone[] s_all = Enum.GetValues<HumanBodyBone>();
 
-    private static readonly HashSet<HumanBodyBone> s_required = new()
-    {
+    private static readonly HashSet<HumanBodyBone> s_required =
+    [
         HumanBodyBone.Hips,
         HumanBodyBone.LeftUpperLeg, HumanBodyBone.RightUpperLeg,
         HumanBodyBone.LeftLowerLeg, HumanBodyBone.RightLowerLeg,
@@ -22,7 +22,7 @@ public static partial class HumanTrait
         HumanBodyBone.LeftUpperArm, HumanBodyBone.RightUpperArm,
         HumanBodyBone.LeftLowerArm, HumanBodyBone.RightLowerArm,
         HumanBodyBone.LeftHand, HumanBodyBone.RightHand,
-    };
+    ];
 
     // Lowercase, side-stripped name fragments matched against normalized bone names.
     private static readonly Dictionary<HumanBodyBone, string[]> s_aliases = new()
@@ -161,7 +161,7 @@ public static partial class HumanTrait
     /// "hips", "pelvis"). Used by <see cref="HumanoidAutoMapper"/> after prefix/side normalization.
     /// </summary>
     public static IReadOnlyList<string> GetNameAliases(HumanBodyBone bone)
-        => s_aliases.TryGetValue(bone, out var aliases) ? aliases : Array.Empty<string>();
+        => s_aliases.TryGetValue(bone, out string[]? aliases) ? aliases : Array.Empty<string>();
 
     /// <summary>The (upper, mid, end) bone chain solved for a humanoid IK goal.</summary>
     public static (HumanBodyBone Upper, HumanBodyBone Mid, HumanBodyBone End) GetGoalChain(HumanGoal goal) => goal switch

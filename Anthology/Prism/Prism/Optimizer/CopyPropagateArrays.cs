@@ -17,7 +17,7 @@ public static partial class SpirVOptimizer
         uint nextId = m.Header[3];
         var def = new Dictionary<uint, SpvInstr>();
         var users = new Dictionary<uint, List<SpvInstr>>();
-        foreach (var ins in m.Instrs) Track(ins);
+        foreach (SpvInstr ins in m.Instrs) Track(ins);
 
         void Track(SpvInstr ins)
         {
@@ -28,12 +28,12 @@ public static partial class SpirVOptimizer
         }
         void AddUser(uint id, SpvInstr ins)
         {
-            if (!users.TryGetValue(id, out var l)) users[id] = l = [];
+            if (!users.TryGetValue(id, out List<SpvInstr>? l)) users[id] = l = [];
             int at = l.Count; while (at > 0 && l[at - 1].Serial > ins.Serial) at--;
             if (at > 0 && l[at - 1] == ins) return;
             l.Insert(at, ins);
         }
-        List<SpvInstr> Users(uint id) => users.TryGetValue(id, out var l) ? [.. l] : [];
+        List<SpvInstr> Users(uint id) => users.TryGetValue(id, out List<SpvInstr>? l) ? [.. l] : [];
         void SetOperand(SpvInstr ins, int index, uint value)
         {
             uint old = ins.Operands[index];
@@ -41,14 +41,14 @@ public static partial class SpirVOptimizer
             ins.Classify(out int ri, out bool[] isId);
             bool stillUses = false;
             for (int k = 0; k < ins.Operands.Length; k++) if (isId[k] && k != ri && ins.Operands[k] == old) stillUses = true;
-            if (!stillUses && users.TryGetValue(old, out var l)) l.Remove(ins);
+            if (!stillUses && users.TryGetValue(old, out List<SpvInstr>? l)) l.Remove(ins);
             AddUser(value, ins);
         }
         // Every (user, operand index) pair of an id, in user order.
         List<(SpvInstr Use, int Index)> Uses(uint id)
         {
             var r = new List<(SpvInstr, int)>();
-            foreach (var u in Users(id))
+            foreach (SpvInstr u in Users(id))
             {
                 u.Classify(out int ri, out bool[] isId);
                 for (int k = 0; k < u.Operands.Length; k++) if (isId[k] && k != ri && u.Operands[k] == id) r.Add((u, k));
@@ -57,13 +57,13 @@ public static partial class SpirVOptimizer
         }
 
         int glslStd = -1;
-        foreach (var ins in m.Instrs)
+        foreach (SpvInstr ins in m.Instrs)
             if (ins.Opcode == 11 && DecodeSpvString(ins.Operands, 1) == "GLSL.std.450") { glslStd = (int)ins.Operands[0]; break; }
         bool IsInterpolation(SpvInstr i) => i.Opcode == OpExtInst && i.Operands.Length > 4 && i.Operands[2] == (uint)glslStd && i.Operands[3] is 76 or 77 or 78;
         static bool IsDecoration(SpvInstr i) => i.Opcode is 71 or 72 or 73 or 74 or 332 or 5632 or 5633;
-        bool IsDebugDeclareOrValue(SpvInstr i) => i.Opcode == OpExtInst && i.Operands.Length > 3 && def.TryGetValue(i.Operands[2], out var set)
+        bool IsDebugDeclareOrValue(SpvInstr i) => i.Opcode == OpExtInst && i.Operands.Length > 3 && def.TryGetValue(i.Operands[2], out SpvInstr? set)
             && DecodeSpvString(set.Operands, 1).StartsWith("NonSemantic.Shader.DebugInfo", StringComparison.Ordinal) && i.Operands[3] is 28 or 29;
-        bool IsCommonDebug(SpvInstr i) => i.Opcode == OpExtInst && i.Operands.Length > 2 && def.TryGetValue(i.Operands[2], out var set)
+        bool IsCommonDebug(SpvInstr i) => i.Opcode == OpExtInst && i.Operands.Length > 2 && def.TryGetValue(i.Operands[2], out SpvInstr? set)
             && DecodeSpvString(set.Operands, 1).StartsWith("NonSemantic.Shader.DebugInfo", StringComparison.Ordinal);
 
         // New types and constants join the end of the types-and-values section.
@@ -71,7 +71,7 @@ public static partial class SpirVOptimizer
         uint AddGlobal(SpvInstr g) { m.Instrs.Insert(TypesEnd(), g); Track(g); return g.ResultId; }
         uint FindPointerToType(uint pointee, uint storage)
         {
-            foreach (var g in m.Instrs)
+            foreach (SpvInstr g in m.Instrs)
             {
                 if (g.Opcode == OpFunction) break;
                 if (g.Opcode == OpTypePointer && g.Operands[1] == storage && g.Operands[2] == pointee) return g.Operands[0];
@@ -82,7 +82,7 @@ public static partial class SpirVOptimizer
         {
             foreach (uint index in chain)
             {
-                var t = def[id];
+                SpvInstr t = def[id];
                 id = t.Opcode switch
                 {
                     OpTypeArray or OpTypeRuntimeArray or OpTypeMatrix or OpTypeVector => t.Operands[1],
@@ -95,13 +95,13 @@ public static partial class SpirVOptimizer
         bool ConstU32(uint id, out uint v)
         {
             v = 0;
-            if (!def.TryGetValue(id, out var c) || c.Opcode != OpConstant || !def.TryGetValue(c.Operands[0], out var ct) || ct.Opcode != 21) return false;
+            if (!def.TryGetValue(id, out SpvInstr? c) || c.Opcode != OpConstant || !def.TryGetValue(c.Operands[0], out SpvInstr? ct) || ct.Opcode != 21) return false;
             v = c.Operands[2];
             return true;
         }
         uint NumberOfMembers(uint type)
         {
-            var t = def[type];
+            SpvInstr t = def[type];
             return t.Opcode switch
             {
                 OpTypeStruct => (uint)(t.Operands.Length - 1),
@@ -122,13 +122,13 @@ public static partial class SpirVOptimizer
             uint BlockOf(int i) { while (m.Instrs[i].Opcode != OpLabel) i--; return m.Instrs[i].Operands[0]; }
             uint ba = BlockOf(ia), bb = BlockOf(ib);
             if (ba == bb) return ia < ib;
-            var blocks = ParseBlocks(m, fs, fe, out _);
+            List<Blk> blocks = ParseBlocks(m, fs, fe, out _);
             return Dominates(ba, bb, ComputeIdom(blocks));
         }
 
         bool HasValidReferencesOnly(SpvInstr ptr, SpvInstr store)
         {
-            foreach (var use in Users(ptr.ResultId))
+            foreach (SpvInstr use in Users(ptr.ResultId))
             {
                 bool ok;
                 if (use.Opcode is OpLoad or OpImageTexelPointer) ok = InstDominates(store, use);
@@ -144,7 +144,7 @@ public static partial class SpirVOptimizer
 
         bool HasNoStores(SpvInstr ptr)
         {
-            foreach (var use in Users(ptr.ResultId))
+            foreach (SpvInstr use in Users(ptr.ResultId))
             {
                 bool ok = use.Opcode switch
                 {
@@ -163,13 +163,13 @@ public static partial class SpirVOptimizer
 
         MemoryObject? SourceOf(uint result)
         {
-            var inst = def[result];
+            SpvInstr inst = def[result];
             switch (inst.Opcode)
             {
                 case OpLoad:
                 {
                     var chain = new List<(bool, uint)>();
-                    var cur = def[inst.Operands[2]];
+                        SpvInstr cur = def[inst.Operands[2]];
                     while (cur.Opcode == OpAccessChain)
                     {
                         for (int k = cur.Operands.Length - 1; k >= 3; k--) chain.Add((true, cur.Operands[k]));
@@ -181,20 +181,20 @@ public static partial class SpirVOptimizer
                 }
                 case OpCompositeExtract:
                 {
-                    var r = SourceOf(inst.Operands[2]);
+                        MemoryObject? r = SourceOf(inst.Operands[2]);
                     if (r is null) return null;
                     for (int k = 3; k < inst.Operands.Length; k++) r.Chain.Add((false, inst.Operands[k]));
                     return r;
                 }
                 case OpCompositeConstruct:
                 {
-                    var mo = SourceOf(inst.Operands[2]);
+                        MemoryObject? mo = SourceOf(inst.Operands[2]);
                     if (mo is null || mo.Chain.Count == 0 || !IndexEquals(mo.Chain[^1], 0)) return null;
                     mo.Chain.RemoveAt(mo.Chain.Count - 1);
                     if (ObjectMembers(mo) != inst.Operands.Length - 2) return null;
                     for (int i = 1; i < inst.Operands.Length - 2; i++)
                     {
-                        var member = SourceOf(inst.Operands[2 + i]);
+                            MemoryObject? member = SourceOf(inst.Operands[2 + i]);
                         if (member is null || member.Chain.Count == 0 || !mo.Contains(member) || !IndexEquals(member.Chain[^1], (uint)i)) return null;
                     }
                     return mo;
@@ -205,14 +205,14 @@ public static partial class SpirVOptimizer
                 {
                     uint count = NumberOfMembers(inst.Operands[0]);
                     if (count == 0 || inst.Operands.Length != 5 || inst.Operands[4] != count - 1) return null;
-                    var mo = SourceOf(inst.Operands[2]);
+                        MemoryObject? mo = SourceOf(inst.Operands[2]);
                     if (mo is null || mo.Chain.Count == 0 || !IndexEquals(mo.Chain[^1], count - 1)) return null;
                     mo.Chain.RemoveAt(mo.Chain.Count - 1);
-                    var current = def[inst.Operands[3]];
+                        SpvInstr current = def[inst.Operands[3]];
                     for (uint i = count - 1; i > 0; i--)
                     {
                         if (current.Opcode != OpCompositeInsert || current.Operands.Length != 5 || current.Operands[4] != i - 1) return null;
-                        var part = SourceOf(current.Operands[2]);
+                            MemoryObject? part = SourceOf(current.Operands[2]);
                         if (part is null || part.Chain.Count == 0 || mo.Chain.Count + 1 != part.Chain.Count || !mo.Contains(part)
                             || !IndexEquals(part.Chain[^1], i - 1)) return null;
                         current = def[current.Operands[3]];
@@ -228,16 +228,16 @@ public static partial class SpirVOptimizer
         uint ObjectMembers(MemoryObject mo) => NumberOfMembers(MemberTypeId(def[mo.Var.Operands[0]].Operands[2], AccessIds(mo)));
         uint ObjectPointerType(MemoryObject mo)
         {
-            var varPtr = def[mo.Var.Operands[0]];
+            SpvInstr varPtr = def[mo.Var.Operands[0]];
             return FindPointerToType(MemberTypeId(varPtr.Operands[2], AccessIds(mo)), varPtr.Operands[1]);
         }
 
         bool CanUpdateUses(SpvInstr original, uint typeId)
         {
-            var type = def[typeId];
+            SpvInstr type = def[typeId];
             if (type.Opcode == OpTypeRuntimeArray) return false;
             if (type.Opcode is not (OpTypeStruct or OpTypeArray or OpTypePointer)) return true;
-            foreach (var (use, _) in Uses(original.ResultId))
+            foreach ((SpvInstr? use, int _) in Uses(original.ResultId))
             {
                 if (IsDebugDeclareOrValue(use)) continue;
                 bool ok;
@@ -292,7 +292,7 @@ public static partial class SpirVOptimizer
         {
             uint origType = obj.Operands[0];
             if (origType == newType) return obj.ResultId;
-            var ot = def[origType]; var nt = def[newType];
+            SpvInstr ot = def[origType]; SpvInstr nt = def[newType];
             if (ot.Opcode != nt.Opcode) return 0;
             var elements = new List<uint>();
             if (ot.Opcode == OpTypeArray)
@@ -327,14 +327,14 @@ public static partial class SpirVOptimizer
         var worklist = new Queue<SpvInstr>();
         void AddUsesToWorklist(SpvInstr inst)
         {
-            foreach (var (use, _) in Uses(inst.ResultId))
-                if (use.Opcode == OpStore && def.TryGetValue(use.Operands[0], out var target) && target.Opcode == OpVariable)
+            foreach ((SpvInstr? use, int _) in Uses(inst.ResultId))
+                if (use.Opcode == OpStore && def.TryGetValue(use.Operands[0], out SpvInstr? target) && target.Opcode == OpVariable)
                     worklist.Enqueue(target);
         }
 
         bool UpdateUses(SpvInstr original, SpvInstr newPtr)
         {
-            foreach (var (use, index) in Uses(original.ResultId))
+            foreach ((SpvInstr? use, int index) in Uses(original.ResultId))
             {
                 if (IsCommonDebug(use)) { SetOperand(use, index, newPtr.ResultId); continue; }
                 switch (use.Opcode)
@@ -360,7 +360,7 @@ public static partial class SpirVOptimizer
                         SetOperand(use, index, newPtr.ResultId);
                         var chain = new List<uint>();
                         for (int k = 3; k < use.Operands.Length; k++) chain.Add(ConstU32(use.Operands[k], out uint v) ? v : 0);
-                        var ptrType = def[newPtr.Operands[0]];
+                            SpvInstr ptrType = def[newPtr.Operands[0]];
                         uint newPtrType = FindPointerToType(MemberTypeId(ptrType.Operands[2], chain), ptrType.Operands[1]);
                         if (newPtrType != use.Operands[0])
                         {
@@ -411,19 +411,19 @@ public static partial class SpirVOptimizer
 
         while (worklist.Count > 0)
         {
-            var var = worklist.Dequeue();
+            SpvInstr var = worklist.Dequeue();
             if (!m.Instrs.Contains(var)) continue;
             SpvInstr? store = null;
-            foreach (var use in Users(var.ResultId))
+            foreach (SpvInstr use in Users(var.ResultId))
                 if (use.Opcode == OpStore && use.Operands[0] == var.ResultId)
                 {
                     if (store is null) store = use;
                     else { store = null; break; }
                 }
             if (store is null || !HasValidReferencesOnly(var, store)) continue;
-            var source = SourceOf(store.Operands[1]);
+            MemoryObject? source = SourceOf(store.Operands[1]);
             if (source is null || !HasNoStores(source.Var)) continue;
-            var varPointee = def[def[var.Operands[0]].Operands[2]];
+            SpvInstr varPointee = def[def[var.Operands[0]].Operands[2]];
             bool arrayLike = varPointee.Opcode is OpTypeArray or OpTypeImage;
             if (!arrayLike && def[source.Var.Operands[0]].Operands[1] != InputStorage) continue;
 
@@ -436,21 +436,21 @@ public static partial class SpirVOptimizer
             else
             {
                 var ids = new List<uint>();
-                foreach (var (isId, value) in source.Chain)
+                foreach ((bool isId, uint value) in source.Chain)
                 {
                     if (isId) { ids.Add(value); continue; }
                     uint uintType = 0;
-                    foreach (var g in m.Instrs) { if (g.Opcode == OpFunction) break; if (g.Opcode == 21 && g.Operands[1] == 32 && g.Operands[2] == 0) { uintType = g.Operands[0]; break; } }
+                    foreach (SpvInstr g in m.Instrs) { if (g.Opcode == OpFunction) break; if (g.Opcode == 21 && g.Operands[1] == 32 && g.Operands[2] == 0) { uintType = g.Operands[0]; break; } }
                     if (uintType == 0) return;
                     uint constant = 0;
-                    foreach (var g in m.Instrs) { if (g.Opcode == OpFunction) break; if (g.Opcode == OpConstant && g.Operands[0] == uintType && g.Operands.Length == 3 && g.Operands[2] == value) { constant = g.Operands[1]; break; } }
+                    foreach (SpvInstr g in m.Instrs) { if (g.Opcode == OpFunction) break; if (g.Opcode == OpConstant && g.Operands[0] == uintType && g.Operands.Length == 3 && g.Operands[2] == value) { constant = g.Operands[1]; break; } }
                     ids.Add(constant != 0 ? constant : AddGlobal(new SpvInstr(OpConstant, [uintType, nextId++, value])));
                 }
                 newPtr = new SpvInstr(OpAccessChain, [pointerType, nextId++, source.Var.ResultId, .. ids]);
                 InsertBefore(store, newPtr);
             }
             // KillNamesAndDecorates on the propagated variable.
-            foreach (var use in Users(var.ResultId))
+            foreach (SpvInstr use in Users(var.ResultId))
                 if (IsDecoration(use) || use.Opcode == 5) m.Instrs.Remove(use);
             if (!UpdateUses(var, newPtr)) break;
         }

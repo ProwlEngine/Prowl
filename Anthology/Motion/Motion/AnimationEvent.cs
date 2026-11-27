@@ -212,7 +212,7 @@ public readonly struct SampledEventRange
 /// </summary>
 public sealed class SampledEventsBuffer : IReadOnlyList<SampledEvent>
 {
-    private readonly List<SampledEvent> _events = new();
+    private readonly List<SampledEvent> _events = [];
 
     public int Count => _events.Count;
 

@@ -9,7 +9,7 @@ namespace Prowl.OrigamiUI;
 public sealed partial class CodeEditor
 {
     // Visual column each caret aims for while moving up and down, so short lines do not lose it.
-    private readonly List<int> _goalColumns = new();
+    private readonly List<int> _goalColumns = [];
     private bool _keepGoalColumns;
 
     #region Columns
@@ -72,7 +72,7 @@ public sealed partial class CodeEditor
         int i = p.Column;
         while (i > 0 && Classify(s[i - 1]) == CharClass.Space) i--;
         if (i == 0) return new TextPosition(p.Line, 0);
-        var cls = Classify(s[i - 1]);
+        CharClass cls = Classify(s[i - 1]);
         while (i > 0 && Classify(s[i - 1]) == cls) i--;
         return new TextPosition(p.Line, i);
     }
@@ -82,7 +82,7 @@ public sealed partial class CodeEditor
         string s = Document[p.Line];
         if (p.Column >= s.Length) return p.Line < Document.LineCount - 1 ? new TextPosition(p.Line + 1, 0) : p;
         int i = p.Column;
-        var cls = Classify(s[i]);
+        CharClass cls = Classify(s[i]);
         if (cls != CharClass.Space)
             while (i < s.Length && Classify(s[i]) == cls) i++;
         while (i < s.Length && Classify(s[i]) == CharClass.Space) i++;
@@ -113,13 +113,13 @@ public sealed partial class CodeEditor
         if (!vertical || !_keepGoalColumns)
         {
             _goalColumns.Clear();
-            foreach (var s in _selections) _goalColumns.Add(VisualColumn(s.Caret.Line, s.Caret.Column));
+            foreach (CodeSelection s in _selections) _goalColumns.Add(VisualColumn(s.Caret.Line, s.Caret.Column));
         }
 
         for (int i = 0; i < _selections.Count; i++)
         {
-            var s = _selections[i];
-            var to = Document.Clamp(target(s, i));
+            CodeSelection s = _selections[i];
+            TextPosition to = Document.Clamp(target(s, i));
             _selections[i] = extend ? new CodeSelection(s.Anchor, to) : new CodeSelection(to);
         }
 
@@ -133,7 +133,7 @@ public sealed partial class CodeEditor
         Move((s, _) =>
         {
             if (!extend && !s.IsEmpty && !word) return s.Start;
-            var p = s.Caret;
+            TextPosition p = s.Caret;
             if (word) return WordLeft(p);
             if (p.Column > 0) return new TextPosition(p.Line, p.Column - 1);
             return PrevVisibleLineEnd(p.Line, p);
@@ -145,7 +145,7 @@ public sealed partial class CodeEditor
         Move((s, _) =>
         {
             if (!extend && !s.IsEmpty && !word) return s.End;
-            var p = s.Caret;
+            TextPosition p = s.Caret;
             if (word) return WordRight(p);
             if (p.Column < Document.GetLineLength(p.Line)) return new TextPosition(p.Line, p.Column + 1);
             int next = NextVisibleLine(p.Line);
@@ -172,7 +172,7 @@ public sealed partial class CodeEditor
     {
         Move((s, i) =>
         {
-            var p = s.Caret;
+            TextPosition p = s.Caret;
             if (!extend && !s.IsEmpty && rows != 0) p = rows < 0 ? s.Start : s.End;
             int row = LineToRow(p.Line) + rows;
             if (row < 0) return TextPosition.Zero;
@@ -188,7 +188,7 @@ public sealed partial class CodeEditor
     {
         Move((s, _) =>
         {
-            var p = s.Caret;
+            TextPosition p = s.Caret;
             int first = FirstNonBlank(Document[p.Line]);
             return new TextPosition(p.Line, p.Column == first ? 0 : first);
         }, extend);
@@ -225,9 +225,9 @@ public sealed partial class CodeEditor
     {
         for (int i = 0; i < _selections.Count; i++)
         {
-            var s = _selections[i];
+            CodeSelection s = _selections[i];
             int a = s.Start.Line, b = s.End.Line;
-            var end = b + 1 < Document.LineCount ? new TextPosition(b + 1, 0) : new TextPosition(b, Document.GetLineLength(b));
+            TextPosition end = b + 1 < Document.LineCount ? new TextPosition(b + 1, 0) : new TextPosition(b, Document.GetLineLength(b));
             _selections[i] = new CodeSelection(new TextPosition(a, 0), end);
         }
         NormalizeSelections();
@@ -237,12 +237,12 @@ public sealed partial class CodeEditor
     /// <summary>Selects the word at each caret, or adds a caret at the next match of the primary selection.</summary>
     public void AddNextOccurrence()
     {
-        var primary = _selections[_primary];
+        CodeSelection primary = _selections[_primary];
         if (primary.IsEmpty)
         {
             for (int i = 0; i < _selections.Count; i++)
             {
-                var w = WordAt(_selections[i].Caret);
+                TextRange w = WordAt(_selections[i].Caret);
                 if (!w.IsEmpty) _selections[i] = new CodeSelection(w.Start, w.End);
             }
             NormalizeSelections();
@@ -253,10 +253,10 @@ public sealed partial class CodeEditor
         string needle = Document.GetText(primary.Range);
         if (needle.Length == 0 || needle.Contains('\n')) return;
 
-        var last = OrderedSelections()[^1].End;
-        var found = FindNext(needle, last, true, false, wrap: true);
+        TextPosition last = OrderedSelections()[^1].End;
+        TextRange? found = FindNext(needle, last, true, false, wrap: true);
         if (found == null) return;
-        foreach (var s in _selections)
+        foreach (CodeSelection s in _selections)
             if (s.Start == found.Value.Start) return;
         AddSelection(new CodeSelection(found.Value.Start, found.Value.End));
     }
@@ -268,8 +268,8 @@ public sealed partial class CodeEditor
     /// <summary>Adds a caret on the row past the outermost caret in <paramref name="direction"/>, in the original screen column.</summary>
     public void AddCaretVertical(int direction)
     {
-        var edge = _selections[0];
-        foreach (var s in _selections)
+        CodeSelection edge = _selections[0];
+        foreach (CodeSelection s in _selections)
             if (direction > 0 ? s.Caret > edge.Caret : s.Caret < edge.Caret) edge = s;
 
         int key = HashCode.Combine(_selections.Count, edge.Caret);
@@ -299,12 +299,12 @@ public sealed partial class CodeEditor
             int col = side == 0 ? p.Column - 1 : p.Column;
             if (col < 0 || col >= s.Length) continue;
             char c = s[col];
-            foreach (var (o, cl) in _language.Brackets)
+            foreach ((char o, char cl) in _language.Brackets)
             {
                 if (c != o && c != cl) continue;
                 if (!IsCodeAt(p.Line, col)) break;
                 bool forward = c == o;
-                var match = ScanBracket(new TextPosition(p.Line, col), o, cl, forward);
+                TextPosition? match = ScanBracket(new TextPosition(p.Line, col), o, cl, forward);
                 if (match == null) return false;
                 open = forward ? new TextPosition(p.Line, col) : match.Value;
                 close = forward ? match.Value : new TextPosition(p.Line, col);
@@ -341,25 +341,25 @@ public sealed partial class CodeEditor
     internal void LexLine(int line, List<CodeToken> tokens)
     {
         tokens.Clear();
-        var lexer = _language.Lexer;
+        ICodeLexer? lexer = _language.Lexer;
         if (lexer == null) tokens.Add(new CodeToken(0, Document.GetLineLength(line), CodeTokenKind.Plain));
         else lexer.Tokenize(Document[line], GetLineState(line), tokens);
     }
 
     private static bool IsPunctuation(List<CodeToken> tokens, int col)
     {
-        foreach (var t in tokens)
+        foreach (CodeToken t in tokens)
             if (col >= t.Start && col < t.End) return t.Kind == CodeTokenKind.Punctuation || t.Kind == CodeTokenKind.Plain;
         return true;
     }
 
-    private readonly List<CodeToken> _probeTokens = new();
+    private readonly List<CodeToken> _probeTokens = [];
 
     /// <summary>True when the char at the position is code rather than a string or comment.</summary>
     internal bool IsCodeAt(int line, int col)
     {
         LexLine(line, _probeTokens);
-        foreach (var t in _probeTokens)
+        foreach (CodeToken t in _probeTokens)
         {
             if (col < t.Start || col >= t.End) continue;
             return t.Kind is not (CodeTokenKind.String or CodeTokenKind.StringEscape or CodeTokenKind.Char
@@ -373,14 +373,14 @@ public sealed partial class CodeEditor
         if (p.Column == 0) return CodeTokenKind.Plain;
         LexLine(p.Line, _probeTokens);
         int col = p.Column - 1;
-        foreach (var t in _probeTokens)
+        foreach (CodeToken t in _probeTokens)
             if (col >= t.Start && col < t.End) return t.Kind;
         return CodeTokenKind.Plain;
     }
 
     public void GoToMatchingBracket()
     {
-        if (!TryFindMatchingBracket(Caret, out var open, out var close)) return;
+        if (!TryFindMatchingBracket(Caret, out TextPosition open, out TextPosition close)) return;
         bool atClose = Caret.Line == close.Line && (Caret.Column == close.Column || Caret.Column == close.Column + 1);
         SetCaret(atClose ? open : new TextPosition(close.Line, close.Column + 1));
     }

@@ -20,10 +20,9 @@ freely, subject to the following restrictions:
 
 using Prowl.Recast.Core;
 
-namespace Prowl.Recast.Detour.TileCache.Io.Compress
+namespace Prowl.Recast.Detour.TileCache.Io.Compress;
+
+public interface IDtTileCacheCompressorFactory
 {
-    public interface IDtTileCacheCompressorFactory
-    {
-        IRcCompressor Create(int compatibility);
-    }
+    IRcCompressor Create(int compatibility);
 }

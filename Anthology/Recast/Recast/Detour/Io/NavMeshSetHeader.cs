@@ -16,19 +16,18 @@ freely, subject to the following restrictions:
 3. This notice may not be removed or altered from any source distribution.
 */
 
-namespace Prowl.Recast.Detour.Io
-{
-    public struct NavMeshSetHeader
-    {
-        public const int NAVMESHSET_MAGIC = 'M' << 24 | 'S' << 16 | 'E' << 8 | 'T'; // 'MSET';
-        public const int NAVMESHSET_VERSION = 1;
-        public const int NAVMESHSET_VERSION_RECAST4J_1 = 0x8801;
-        public const int NAVMESHSET_VERSION_RECAST4J = 0x8802;
+namespace Prowl.Recast.Detour.Io;
 
-        public int magic;
-        public int version;
-        public int numTiles;
-        public DtNavMeshParams option;
-        public int maxVertsPerPoly;
-    }
+public struct NavMeshSetHeader
+{
+    public const int NAVMESHSET_MAGIC = 'M' << 24 | 'S' << 16 | 'E' << 8 | 'T'; // 'MSET';
+    public const int NAVMESHSET_VERSION = 1;
+    public const int NAVMESHSET_VERSION_RECAST4J_1 = 0x8801;
+    public const int NAVMESHSET_VERSION_RECAST4J = 0x8802;
+
+    public int magic;
+    public int version;
+    public int numTiles;
+    public DtNavMeshParams option;
+    public int maxVertsPerPoly;
 }

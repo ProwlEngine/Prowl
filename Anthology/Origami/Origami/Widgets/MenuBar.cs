@@ -42,7 +42,7 @@ public sealed class MenuBarBuilder
     private readonly Paper _paper;
     private readonly string _id;
     private readonly OrigamiTheme _theme;
-    private readonly List<(string Label, Action<ContextBuilder> Build)> _menus = new();
+    private readonly List<(string Label, Action<ContextBuilder> Build)> _menus = [];
     private float _height = 32f;
     private bool _background = true;
 
@@ -70,13 +70,13 @@ public sealed class MenuBarBuilder
     /// <summary>Render the menu bar.</summary>
     public void Show()
     {
-        var ink = _theme.Ink;
-        var font = _theme.Medium ?? _theme.Font;
+        OrigamiRamp ink = _theme.Ink;
+        Scribe.FontFile? font = _theme.Medium ?? _theme.Font;
         if (font == null || _menus.Count == 0) return;
 
         // State lives on the parent element, keyed by this bar's id (so sibling bars don't collide).
-        var parentH = _paper.CurrentParent;
-        var state = _paper.GetElementStorage<State>(parentH, $"{_id}_st", null!) ?? new State();
+        ElementHandle parentH = _paper.CurrentParent;
+        State state = _paper.GetElementStorage<State>(parentH, $"{_id}_st", null!) ?? new State();
         _paper.SetElementStorage(parentH, $"{_id}_st", state);
 
         bool open = state.Open >= 0 && state.Open < _menus.Count;
@@ -122,7 +122,7 @@ public sealed class MenuBarBuilder
     {
         bool active = state.Open == index;
 
-        var box = _paper.Box($"{_id}_i{index}")
+        ElementBuilder box = _paper.Box($"{_id}_i{index}")
             .Width(UnitValue.Auto).Height(UnitValue.Auto).Rounded(_theme.Metrics.Rounding).Padding(10, 10, 4, 4)
             .Margin(0, 0, UnitValue.Stretch(), UnitValue.Stretch())
             .BackgroundColor(active ? _theme.Hover : Color.FromArgb(0, 0, 0, 0))
@@ -133,7 +133,7 @@ public sealed class MenuBarBuilder
             // hover then lands the drop correctly with no build-vs-event timing gap.
             .OnPostLayout((_, rect) =>
             {
-                var pr = parentH.Data.LayoutRect;
+                Vector.Rect pr = parentH.Data.LayoutRect;
                 state.AnchorX[index] = (float)(rect.Min.X - pr.Min.X);
                 state.AnchorY[index] = (float)(rect.Max.Y - pr.Min.Y) + 4f;
             });

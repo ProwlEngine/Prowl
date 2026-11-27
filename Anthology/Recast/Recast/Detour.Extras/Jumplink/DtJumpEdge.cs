@@ -1,10 +1,9 @@
 using Prowl.Recast.Core.Numerics;
 
-namespace Prowl.Recast.Detour.Extras.Jumplink
+namespace Prowl.Recast.Detour.Extras.Jumplink;
+
+public class DtJumpEdge
 {
-    public class DtJumpEdge
-    {
-        public RcVec3f sp = new RcVec3f();
-        public RcVec3f sq = new RcVec3f();
-    }
+    public RcVec3f sp = new RcVec3f();
+    public RcVec3f sq = new RcVec3f();
 }

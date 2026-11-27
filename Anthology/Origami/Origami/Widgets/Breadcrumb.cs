@@ -155,10 +155,10 @@ public sealed class BreadcrumbBuilder
     /// <summary>Render the breadcrumb trail.</summary>
     public void Show()
     {
-        var m = _theme.Metrics;
-        var font = _theme.Font;
-        var ink = _theme.Ink;
-        var ramp = _theme.Get(_variant);
+        OrigamiMetrics m = _theme.Metrics;
+        Scribe.FontFile? font = _theme.Font;
+        OrigamiRamp ink = _theme.Ink;
+        OrigamiRamp ramp = _theme.Get(_variant);
         if (font == null) return;
 
         int activeIdx = _activeIndex ?? (_highlightLast ? _items.Count - 1 : -1);
@@ -184,7 +184,7 @@ public sealed class BreadcrumbBuilder
         {
             for (int i = 0; i < _items.Count; i++)
             {
-                var item = _items[i];
+                BreadcrumbItem item = _items[i];
                 int idx = i;
                 bool isActive = i == activeIdx;
                 bool isLast = i == _items.Count - 1;
@@ -240,7 +240,7 @@ public sealed class BreadcrumbBuilder
                     {
                         if (item.IconDraw != null)
                         {
-                            var icon = item.IconDraw;
+                            IOrigamiIcon icon = item.IconDraw;
                             Color icoCol = isActive ? textColor : ink.C400;
                             float isz = fontSize;
                             _paper.Box("ico", i)

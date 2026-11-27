@@ -10,12 +10,12 @@ namespace Prowl.Graphite;
 public sealed partial class FrameGraph : IDisposable
 {
     private readonly ResourceStore _store = new();
-    private readonly List<FrameResource> _resources = new();
-    private readonly Dictionary<(RenderResourceID, int), int> _created = new();
-    private readonly Dictionary<object, int> _imported = new();
-    private readonly List<FramePass> _passes = new();
-    private readonly List<GroupInfo> _groups = new();
-    private readonly List<int> _groupStack = new();
+    private readonly List<FrameResource> _resources = [];
+    private readonly Dictionary<(RenderResourceID, int), int> _created = [];
+    private readonly Dictionary<object, int> _imported = [];
+    private readonly List<FramePass> _passes = [];
+    private readonly List<GroupInfo> _groups = [];
+    private readonly List<int> _groupStack = [];
     private readonly PassBuilder _builder;
     private int _resourceCount;
     private int _passCount;

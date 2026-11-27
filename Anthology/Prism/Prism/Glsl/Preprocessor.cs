@@ -1,5 +1,6 @@
 using System.Globalization;
 using System.Text;
+
 using Prowl.Prism.Compiler;
 namespace Prowl.Prism.Glsl;
 
@@ -27,7 +28,7 @@ public sealed class Preprocessor
         public bool AnyTaken;
     }
 
-    readonly Dictionary<string, Macro> _macros = new();
+    readonly Dictionary<string, Macro> _macros = [];
     readonly List<CondFrame> _cond = [];
     readonly HashSet<string> _hidden = [];   // macros currently expanding (recursion guard)
     readonly List<string> _extensions = [];   // #extension directives, in source order
@@ -72,7 +73,7 @@ public sealed class Preprocessor
     /// </summary>
     public static (List<Token> Tokens, int Version, bool IsEs, List<string> Extensions, List<string> Pragmas) Process(string source, IReadOnlyDictionary<string, string>? defines = null, IncludeCallback? includes = null)
     {
-        var r = ProcessPooled(source, defines, includes);
+        (List<Token> Tokens, int Version, bool IsEs, List<string> Extensions, List<string> Pragmas, List<string?> SourceNames, int InvariantAllFrom) r = ProcessPooled(source, defines, includes);
         // The pooled buffer is reused by the next call on this thread, so a public caller gets a copy. Public callers
         // get the line within the file; the segment only matters to diagnostics.
         var tokens = r.Tokens.Select(t => t with { Line = t.Line % SegmentStride }).ToList();
@@ -87,8 +88,8 @@ public sealed class Preprocessor
     public static PreprocessResult Preprocess(string source, IReadOnlyDictionary<string, string>? defines = null, IncludeCallback? includes = null)
     {
         var output = new List<Token>();
-        var pp = Execute(source, defines, includes, new List<Token>(), output, null);
-        var macros = pp._macros.Where(m => !pp._predefined.Contains(m.Key)).Select(m => new MacroDefinition(m.Key, m.Value.IsFunction ? m.Value.Parameters : null, Spell(m.Value.Body)));
+        Preprocessor pp = Execute(source, defines, includes, [], output, null);
+        IEnumerable<MacroDefinition> macros = pp._macros.Where(m => !pp._predefined.Contains(m.Key)).Select(m => new MacroDefinition(m.Key, m.Value.IsFunction ? m.Value.Parameters : null, Spell(m.Value.Body)));
         return new PreprocessResult(pp.Emit(output), pp._version, pp._isEs, pp._extensions, pp._pragmas, macros.ToList(), pp._includedFiles);
     }
 
@@ -100,8 +101,8 @@ public sealed class Preprocessor
         // pool them per-thread. Both are fully consumed within one compile (input by Run, output by the
         // parser) before the next compile reuses them, so reuse is safe. Nested macro/paste tokenizations
         // use the allocating Tokenize overload and never touch these buffers.
-        var output = _outputBuf ??= [];
-        var pp = Execute(source, defines, includes, _inputBuf ??= [], output, stage);
+        List<Token> output = _outputBuf ??= [];
+        Preprocessor pp = Execute(source, defines, includes, _inputBuf ??= [], output, stage);
         try
         {
             // glslang compiles ES only for SPIR-V from version 310 on ("#version: ES shaders for SPIR-V
@@ -111,7 +112,7 @@ public sealed class Preprocessor
                 throw new GlslParseException("#version: ES shaders for SPIR-V require version 310 or higher");
             // A reserved keyword cannot be used as an identifier (glslang's ReservedSet, checked after
             // preprocessing so disabled #if blocks and macro bodies are already resolved).
-            foreach (var t in output)
+            foreach (Token t in output)
                 if (t.Kind == TokenKind.Identifier && ReservedWords.Contains(t.Text))
                     throw new GlslParseException($"'{t.Text}' : reserved word cannot be used as an identifier", t.Line);
         }
@@ -127,7 +128,7 @@ public sealed class Preprocessor
     {
         var pp = new Preprocessor(includes, stage);
         if (defines is not null)
-            foreach (var (name, value) in defines) pp.Define(name, value);
+            foreach ((string? name, string? value) in defines) pp.Define(name, value);
 
         try
         {
@@ -157,7 +158,7 @@ public sealed class Preprocessor
             {
                 _sawCode = true;
                 EnsurePreamble();
-                var token = input[i];
+                Token token = input[i];
                 // glslang's scanner (outside any #if) requires a decimal point or exponent before a float suffix.
                 if (_cond.Count == 0 && token.Kind is TokenKind.FloatConst or TokenKind.HalfConst or TokenKind.DoubleConst
                     && token.Text.IndexOfAny(['.', 'e', 'E']) < 0 && !token.Text.StartsWith("0x", StringComparison.OrdinalIgnoreCase))
@@ -240,7 +241,7 @@ public sealed class Preprocessor
     void LineDirective(List<Token> dir)
     {
         var s = new PpStream(dir) { Pos = 1 };
-        var tok = Scan(s);
+        PTok tok = Scan(s);
         if (tok.T.Kind == TokenKind.End)
             throw new GlslParseException("#line must be followed by a line number", _directiveLine);
         int n = Eval(s, ref tok, 0, false, 0);
@@ -253,7 +254,7 @@ public sealed class Preprocessor
             throw new GlslParseException("'#line' : unexpected tokens following directive", _directiveLine);
         if (file is int f) _file = f;
         bool setsNextLine = _isEs || _version >= 330;
-        int next = dir[0].Line + 1 + (_joins.TryGetValue(dir[0].Line, out var joined) ? joined.Count : 0);
+        int next = dir[0].Line + 1 + (_joins.TryGetValue(dir[0].Line, out List<int>? joined) ? joined.Count : 0);
         _lineOffset = unchecked(n - next + (setsNextLine ? 0 : 1));
         NewSegment(name);
     }
@@ -284,8 +285,8 @@ public sealed class Preprocessor
         int line = _directiveLine;
         if (_includes is null)
             throw new GlslParseException("#include requires an include callback", line);
-        var (header, isSystem) = HeaderName(dir, line);
-        var file = _includes(header, isSystem, _currentFile)
+        (string? header, bool isSystem) = HeaderName(dir, line);
+        IncludeResult file = _includes(header, isSystem, _currentFile)
             ?? throw new GlslParseException($"cannot open include file '{Clip(header)}'", line);
         if (file.Name is null || file.Content is null)
             throw new GlslParseException($"cannot open include file '{Clip(header)}'", line);
@@ -295,7 +296,7 @@ public sealed class Preprocessor
 
         _included.Add(file.Name);
         _includedFiles.Add(file.Name);
-        var saved = (_currentFile, _file, _lineOffset, _condFloor, _segment, _joins);
+        (string _currentFile, int _file, int _lineOffset, int _condFloor, int _segment, Dictionary<int, List<int>> _joins) saved = (_currentFile, _file, _lineOffset, _condFloor, _segment, _joins);
         (_currentFile, _file, _lineOffset, _condFloor) = (file.Name, _includedFiles.Count, 0, _cond.Count);
         NewSegment(file.Name);
         _includeDepth++;
@@ -404,7 +405,7 @@ public sealed class Preprocessor
 
     void AddImpliedExtensions(string ext)
     {
-        foreach (var implied in ImpliedExtensions(ext))
+        foreach (string implied in ImpliedExtensions(ext))
             if (!_impliedExtensions.Contains(implied))
             {
                 _impliedExtensions.Add(implied);
@@ -524,7 +525,7 @@ public sealed class Preprocessor
     void Elif(Func<bool> condition)
     {
         if (_cond.Count <= _condFloor) throw new GlslParseException("#elif without #if", _directiveLine);
-        var f = _cond[^1];
+        CondFrame f = _cond[^1];
         bool take = f.ParentEmitting && !f.AnyTaken && condition();
         f.Emitting = take;
         f.AnyTaken |= take;
@@ -533,7 +534,7 @@ public sealed class Preprocessor
     void Else()
     {
         if (_cond.Count <= _condFloor) throw new GlslParseException("#else without #if", _directiveLine);
-        var f = _cond[^1];
+        CondFrame f = _cond[^1];
         f.Emitting = f.ParentEmitting && !f.AnyTaken;
         f.AnyTaken = true;
     }
@@ -568,7 +569,7 @@ public sealed class Preprocessor
         }
         var replacement = new Macro(isFunction, parameters, dir.Skip(idx).ToList());
         // Redefining a macro is only legal when the new definition is identical to the old one.
-        if (_macros.TryGetValue(macro, out var existing) && !SameDefinition(existing, replacement))
+        if (_macros.TryGetValue(macro, out Macro? existing) && !SameDefinition(existing, replacement))
             throw new GlslParseException($"'{Clip(macro)}' : redefinition of a macro with a different definition", _directiveLine);
         _macros[macro] = replacement;
     }
@@ -581,7 +582,7 @@ public sealed class Preprocessor
 
     void Define(string name, string? value)
     {
-        var body = string.IsNullOrEmpty(value)
+        List<Token> body = string.IsNullOrEmpty(value)
             ? [new Token(TokenKind.IntConst, "1", 0, 0)]
             : Lexer.Tokenize(value).Where(t => t.Kind != TokenKind.End).ToList();
         _macros[name] = new Macro(false, [], body);
@@ -623,7 +624,7 @@ public sealed class Preprocessor
     // The physical line of a token of the file being read: its line plus the continuations joined before it.
     int Physical(Token t)
     {
-        if (_joins.Count == 0 || !_joins.TryGetValue(t.Line, out var cols)) return t.Line;
+        if (_joins.Count == 0 || !_joins.TryGetValue(t.Line, out List<int>? cols)) return t.Line;
         int line = t.Line;
         foreach (int c in cols) if (t.Column >= c) line++;
         return line;
@@ -634,7 +635,7 @@ public sealed class Preprocessor
     {
         while (s.Frames.Count > 0)
         {
-            var f = s.Frames[^1];
+            Frame f = s.Frames[^1];
             if (f.Pos < f.Tokens.Count)
             {
                 tok = f.Tokens[f.Pos++];
@@ -647,7 +648,7 @@ public sealed class Preprocessor
         s.FromFrame = s.FromMacro = false;
         if (s.Pos < s.Source.Count && s.Source[s.Pos].Kind != TokenKind.End)
         {
-            var t = s.Source[s.Pos++];
+            Token t = s.Source[s.Pos++];
             if (s.TracksLine) _curLine = Physical(t);
             tok = new PTok(t);
             return true;
@@ -656,7 +657,7 @@ public sealed class Preprocessor
         return false;
     }
 
-    PTok Scan(PpStream s) => Next(s, out var tok) ? tok : new PTok(new Token(TokenKind.End, "", 0, 0));
+    PTok Scan(PpStream s) => Next(s, out PTok tok) ? tok : new PTok(new Token(TokenKind.End, "", 0, 0));
 
     // Puts back the token the last Next returned. Next pops only exhausted lists before reading, so the list it
     // read from is still on top.
@@ -678,7 +679,7 @@ public sealed class Preprocessor
 
     void PopFrame(PpStream s)
     {
-        var f = s.Frames[^1];
+        Frame f = s.Frames[^1];
         s.Frames.RemoveAt(s.Frames.Count - 1);
         if (f.Macro is not null) _hidden.Remove(f.Macro);
     }
@@ -688,7 +689,7 @@ public sealed class Preprocessor
     {
         while (s.Frames.Count > 0)
         {
-            var f = s.Frames[^1];
+            Frame f = s.Frames[^1];
             if (f.Pos < f.Tokens.Count) return true;
             PopFrame(s);
         }
@@ -699,7 +700,7 @@ public sealed class Preprocessor
     // consume further source tokens as arguments).
     void ExpandSourceToken(PpStream s, List<Token> output)
     {
-        if (!Next(s, out var tok)) return;
+        if (!Next(s, out PTok tok)) return;
         Expand(s, tok, output);
         while (Pending(s) && Next(s, out tok)) Expand(s, tok, output);
     }
@@ -717,7 +718,7 @@ public sealed class Preprocessor
     Expansion MacroExpand(PpStream s, PTok tok, bool expandUndefined)
     {
         if (tok.Painted) return Expansion.NotStarted;
-        var t = tok.T;
+        Token t = tok.T;
         switch (t.Text)
         {
             case "__LINE__":
@@ -729,7 +730,7 @@ public sealed class Preprocessor
             case "__FILE__": PushFrame(s, [new PTok(Int(_file))], null); return Expansion.Started;
             case "__VERSION__": PushFrame(s, [new PTok(Int(_version))], null); return Expansion.Started;
         }
-        if (!_macros.TryGetValue(t.Text, out var macro))
+        if (!_macros.TryGetValue(t.Text, out Macro? macro))
         {
             if (!expandUndefined) return Expansion.NotStarted;
             PushFrame(s, [new PTok(Int(0))], null);
@@ -739,7 +740,7 @@ public sealed class Preprocessor
         List<List<Token>>? args = null;
         if (macro.IsFunction)
         {
-            if (!Next(s, out var paren)) return Expansion.NotStarted;
+            if (!Next(s, out PTok paren)) return Expansion.NotStarted;
             if (paren.T.Kind != TokenKind.LParen) { Unget(s); return Expansion.NotStarted; }
             args = CollectArgs(s, t.Text, macro.Parameters.Count);
         }
@@ -767,9 +768,9 @@ public sealed class Preprocessor
         int depth = 0;
         while (true)
         {
-            if (!Next(s, out var tok))
+            if (!Next(s, out PTok tok))
                 throw new GlslParseException($"'macro expansion' : End of input in macro {Clip(name)}", _site);
-            var t = tok.T;
+            Token t = tok.T;
             if (t.Kind == TokenKind.RParen && depth == 0) break;
             if (t.Kind == TokenKind.Comma && depth == 0) { args.Add(current); current = []; continue; }
             if (t.Kind == TokenKind.LParen) depth++;
@@ -789,7 +790,7 @@ public sealed class Preprocessor
     // __LINE__ in the body reports the line the invocation ended on.
     List<PTok> Substitute(Macro macro, List<List<Token>>? args)
     {
-        var body = macro.Body;
+        List<Token> body = macro.Body;
         List<PTok>[]? expanded = null;
         if (args is not null)
         {
@@ -799,12 +800,12 @@ public sealed class Preprocessor
         var result = new List<PTok>(body.Count);
         for (int j = 0; j < body.Count; j++)
         {
-            var bt = body[j];
+            Token bt = body[j];
             int p = args is not null && bt.Kind == TokenKind.Identifier ? macro.Parameters.LastIndexOf(bt.Text) : -1;
             if (p >= 0 && p < args!.Count)
             {
                 if (IsPaste(body, j - 2) || IsPaste(body, j + 1))
-                    foreach (var a in args[p]) result.Add(new PTok(a));
+                    foreach (Token a in args[p]) result.Add(new PTok(a));
                 else result.AddRange(expanded![p]);
             }
             else result.Add(new PTok(bt.Text == "__LINE__" ? bt with { Line = _curLine } : bt));
@@ -826,13 +827,13 @@ public sealed class Preprocessor
         {
             var s = new PpStream(arg, tracksLine: false);
             var output = new List<Token>();
-            while (Next(s, out var tok)) Expand(s, tok, output);
+            while (Next(s, out PTok tok)) Expand(s, tok, output);
             var result = new List<PTok>(output.Count);
             for (int k = 0; k < output.Count; k++)
             {
-                var t = output[k];
+                Token t = output[k];
                 bool callable = k == output.Count - 1 && t.Kind == TokenKind.Identifier
-                    && _macros.TryGetValue(t.Text, out var m) && m.IsFunction;
+                    && _macros.TryGetValue(t.Text, out Macro? m) && m.IsFunction;
                 result.Add(new PTok(t, !callable));
             }
             return result;
@@ -843,7 +844,7 @@ public sealed class Preprocessor
     static List<PTok> Paste(List<PTok> body)
     {
         bool any = false;
-        foreach (var t in body) if (t.T.Kind == TokenKind.Hash) { any = true; break; }
+        foreach (PTok t in body) if (t.T.Kind == TokenKind.Hash) { any = true; break; }
         if (!any) return body;
         var result = new List<PTok>();
         for (int j = 0; j < body.Count; j++)
@@ -853,7 +854,7 @@ public sealed class Preprocessor
                 string left = result.Count > 0 ? result[^1].T.Text : "";
                 string right = j + 2 < body.Count ? body[j + 2].T.Text : "";
                 if (result.Count > 0) result.RemoveAt(result.Count - 1);
-                foreach (var t in Lexer.Tokenize(left + right))
+                foreach (Token t in Lexer.Tokenize(left + right))
                     if (t.Kind != TokenKind.End) result.Add(new PTok(t));
                 j += 2;
             }
@@ -880,7 +881,7 @@ public sealed class Preprocessor
     bool EvalIf(List<Token> dir, string label)
     {
         var s = new PpStream(dir) { Pos = 1 };
-        var tok = Scan(s);
+        PTok tok = Scan(s);
         int value = Eval(s, ref tok, 0, false, 0);
         if (tok.T.Kind != TokenKind.End)
             throw new GlslParseException($"'{label}' : unexpected tokens following directive", _directiveLine);
@@ -894,7 +895,7 @@ public sealed class Preprocessor
         if (depth > Parser.MaxNestingDepth)
             throw new GlslParseException($"expression nesting is too deep (limit {Parser.MaxNestingDepth})", _directiveLine);
         int res;
-        var t = tok.T;
+        Token t = tok.T;
         if (t.Kind == TokenKind.Identifier && t.Text == "defined")
         {
             if (s.FromMacro)
@@ -1085,7 +1086,7 @@ public sealed class Preprocessor
 
     void Predefine(params string[] names)
     {
-        foreach (var name in names) PredefineValue(name, "1");
+        foreach (string name in names) PredefineValue(name, "1");
     }
 
     void PredefineValue(string name, string value)
@@ -1194,7 +1195,7 @@ public sealed class Preprocessor
                     i = j;
                     if (joins is not null)
                     {
-                        if (!joins.TryGetValue(line, out var cols)) joins[line] = cols = [];
+                        if (!joins.TryGetValue(line, out List<int>? cols)) joins[line] = cols = [];
                         cols.Add(sb.Length - lineStart + 1);
                     }
                     continue;
@@ -1221,12 +1222,12 @@ public sealed class Preprocessor
     {
         var sb = new StringBuilder();
         if (_sawVersion) sb.Append("#version ").Append(_version).Append(_isEs ? " es" : "").Append('\n');
-        foreach (var ext in _extensions) sb.Append("#extension ").Append(ext).Append(" : enable\n");
+        foreach (string ext in _extensions) sb.Append("#extension ").Append(ext).Append(" : enable\n");
 
         int segment = -1, line = -1;
         bool open = false;   // a line of tokens is in progress and has no newline yet
         Token previous = default;
-        foreach (var t in tokens)
+        foreach (Token t in tokens)
         {
             if (t.Kind == TokenKind.End) continue;
             int s = t.Line / SegmentStride, l = t.Line % SegmentStride;

@@ -1,12 +1,11 @@
-namespace Prowl.Recast.Toolset.Gizmos
-{
-    public class RcCompositeGizmo : IRcGizmoMeshFilter
-    {
-        public readonly IRcGizmoMeshFilter[] gizmoMeshes;
+namespace Prowl.Recast.Toolset.Gizmos;
 
-        public RcCompositeGizmo(params IRcGizmoMeshFilter[] gizmoMeshes)
-        {
-            this.gizmoMeshes = gizmoMeshes;
-        }
+public class RcCompositeGizmo : IRcGizmoMeshFilter
+{
+    public readonly IRcGizmoMeshFilter[] gizmoMeshes;
+
+    public RcCompositeGizmo(params IRcGizmoMeshFilter[] gizmoMeshes)
+    {
+        this.gizmoMeshes = gizmoMeshes;
     }
 }

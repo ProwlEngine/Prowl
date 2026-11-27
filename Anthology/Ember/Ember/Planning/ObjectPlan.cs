@@ -91,7 +91,7 @@ internal sealed class ObjectPlan : MigrationPlan
     /// </summary>
     public static Type? SubclassBoundary(Type type)
     {
-        for (var level = type; level != null; level = level.BaseType)
+        for (Type? level = type; level != null; level = level.BaseType)
             if (level.Assembly != type.Assembly)
                 return level;
 
@@ -107,10 +107,10 @@ internal sealed class ObjectPlan : MigrationPlan
 
     public override void Fill(object source, object target, MigrationContext context)
     {
-        var steps = Select(source, target);
+        FieldStep[] steps = Select(source, target);
         List<MethodInfo>? deferred = null;
 
-        foreach (var step in steps)
+        foreach (FieldStep step in steps)
         {
             object? value;
 
@@ -137,7 +137,7 @@ internal sealed class ObjectPlan : MigrationPlan
                     break;
 
                 case FieldAction.Initialize:
-                    (deferred ??= new List<MethodInfo>()).Add(step.Initializer!);
+                    (deferred ??= []).Add(step.Initializer!);
                     continue;
 
                 default:
@@ -164,7 +164,7 @@ internal sealed class ObjectPlan : MigrationPlan
 
         // Initializer methods run only once every field is populated, so one may read any sibling field
         // regardless of declaration order.
-        foreach (var initializer in deferred)
+        foreach (MethodInfo initializer in deferred)
         {
             try
             {
@@ -182,15 +182,15 @@ internal sealed class ObjectPlan : MigrationPlan
     {
         if (ReferenceEquals(source, target)) return _sameInstance;
 
-        var actualType = target.GetType();
+        Type actualType = target.GetType();
         if (ReferenceEquals(actualType, _targetType)) return _replace;
 
         // A pre-existing target, which happens when a readonly static is upgraded in place, or a slot holding a
         // more derived instance than the field declares.
-        _unexpected ??= new Dictionary<(Type, FillMode), FieldStep[]>();
-        var key = (actualType, FillMode.CarryOnly);
+        _unexpected ??= [];
+        (Type actualType, FillMode CarryOnly) key = (actualType, FillMode.CarryOnly);
 
-        if (!_unexpected.TryGetValue(key, out var steps))
+        if (!_unexpected.TryGetValue(key, out FieldStep[]? steps))
             _unexpected[key] = steps = Build(actualType, FillMode.CarryOnly);
 
         return steps;
@@ -203,11 +203,11 @@ internal sealed class ObjectPlan : MigrationPlan
         var claimed = new HashSet<FieldInfo>();
 
         // Pair each target field with the source field at the hierarchy level it was matched to.
-        foreach (var (sourceLevel, targetLevel) in MatchHierarchies(_sourceType, targetType).Reverse())
+        foreach ((Type? sourceLevel, Type? targetLevel) in MatchHierarchies(_sourceType, targetType).Reverse())
         {
             if (!IsHandledLevel(targetLevel)) continue;
 
-            foreach (var targetField in targetLevel.GetFields(DeclaredInstance))
+            foreach (FieldInfo targetField in targetLevel.GetFields(DeclaredInstance))
             {
                 if (targetField.DeclaringType != targetLevel) continue;
                 if (targetField.FieldType.IsPointer) continue;
@@ -223,7 +223,7 @@ internal sealed class ObjectPlan : MigrationPlan
                     continue;
                 }
 
-                var sourceField = ReferenceEquals(sourceLevel, targetLevel)
+                FieldInfo? sourceField = ReferenceEquals(sourceLevel, targetLevel)
                     ? targetField
                     : sourceLevel?.GetField(targetField.Name, DeclaredInstance);
 
@@ -233,15 +233,15 @@ internal sealed class ObjectPlan : MigrationPlan
         }
 
         // Relocation across the boundary into a container's internals would be meaningless.
-        var relocated = _below == null ? UnclaimedSourceFields(claimed) : new Dictionary<string, FieldInfo>();
+        Dictionary<string, FieldInfo> relocated = _below == null ? UnclaimedSourceFields(claimed) : [];
 
-        foreach (var (targetField, matched) in pairs)
+        foreach ((FieldInfo? targetField, FieldInfo? matched) in pairs)
         {
-            var sourceField = matched;
+            FieldInfo? sourceField = matched;
 
             // A field pushed down to a base class, or pulled up from one, has no counterpart at its own level.
             // Claiming an unambiguous one of the same name from elsewhere in the source carries it anyway.
-            if (sourceField == null && relocated.Remove(targetField.Name, out var moved))
+            if (sourceField == null && relocated.Remove(targetField.Name, out FieldInfo? moved))
                 sourceField = moved;
 
             if (BuildStep(sourceField, targetField, mode) is { } step)
@@ -264,8 +264,8 @@ internal sealed class ObjectPlan : MigrationPlan
         var byName = new Dictionary<string, FieldInfo>(StringComparer.Ordinal);
         var ambiguous = new List<string>();
 
-        for (var level = _sourceType; level != null; level = level.BaseType)
-            foreach (var field in level.GetFields(DeclaredInstance))
+        for (Type? level = _sourceType; level != null; level = level.BaseType)
+            foreach (FieldInfo field in level.GetFields(DeclaredInstance))
             {
                 if (field.DeclaringType != level) continue;
                 if (field.FieldType.IsPointer) continue;
@@ -275,7 +275,7 @@ internal sealed class ObjectPlan : MigrationPlan
                 if (!byName.TryAdd(field.Name, field)) ambiguous.Add(field.Name);
             }
 
-        foreach (var name in ambiguous)
+        foreach (string name in ambiguous)
             byName.Remove(name);
 
         return byName;
@@ -302,7 +302,7 @@ internal sealed class ObjectPlan : MigrationPlan
 
     private bool CarriesOver(FieldInfo sourceField, FieldInfo targetField)
     {
-        var resolved = _context.Types.Resolve(sourceField.FieldType);
+        TypeResolution resolved = _context.Types.Resolve(sourceField.FieldType);
 
         if (!resolved.IsRemoved && targetField.FieldType.IsAssignableFrom(resolved.Target))
             return true;
@@ -318,7 +318,7 @@ internal sealed class ObjectPlan : MigrationPlan
     /// had. Silent, because opting out is deliberate and there is nothing to warn about.
     /// </summary>
     private FieldStep? IgnoredFieldStep(FieldInfo targetField)
-        => _context.TryGetFieldDefault(targetField, out var factory)
+        => _context.TryGetFieldDefault(targetField, out Func<object?>? factory)
             ? new FieldStep(null, targetField, FieldAction.Default, factory, null)
             : null;
 
@@ -328,7 +328,7 @@ internal sealed class ObjectPlan : MigrationPlan
         {
             if (attribute.MethodName == null) return null; // deliberately left at its default
 
-            var initializer = targetField.DeclaringType!.GetMethod(attribute.MethodName,
+            MethodInfo? initializer = targetField.DeclaringType!.GetMethod(attribute.MethodName,
                 BindingFlags.Instance | BindingFlags.Public | BindingFlags.NonPublic, Type.EmptyTypes);
 
             if (initializer == null)
@@ -342,7 +342,7 @@ internal sealed class ObjectPlan : MigrationPlan
             return new FieldStep(null, targetField, FieldAction.Initialize, null, initializer);
         }
 
-        if (_context.TryGetFieldDefault(targetField, out var factory))
+        if (_context.TryGetFieldDefault(targetField, out Func<object?>? factory))
             return new FieldStep(null, targetField, FieldAction.Default, factory, null);
 
         _context.Report(ReloadCode.NewFieldDefaulted, ReloadSeverity.Info,
@@ -356,11 +356,11 @@ internal sealed class ObjectPlan : MigrationPlan
     // Walk the target's base chain, pairing each level with the source level that maps onto it.
     private IEnumerable<(Type? SourceLevel, Type TargetLevel)> MatchHierarchies(Type? sourceType, Type targetType)
     {
-        var sourceLevel = sourceType;
+        Type? sourceLevel = sourceType;
 
-        for (var targetLevel = targetType; targetLevel != null; targetLevel = targetLevel.BaseType)
+        for (Type? targetLevel = targetType; targetLevel != null; targetLevel = targetLevel.BaseType)
         {
-            var matched = FindMatchingLevel(sourceLevel, targetLevel);
+            Type? matched = FindMatchingLevel(sourceLevel, targetLevel);
 
             if (matched != null)
             {

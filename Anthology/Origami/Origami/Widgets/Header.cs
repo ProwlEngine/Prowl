@@ -4,6 +4,7 @@
 using System;
 
 using Prowl.PaperUI;
+using Prowl.Scribe;
 using Prowl.Vector;
 
 using Color = Prowl.Vector.Color;
@@ -147,16 +148,16 @@ public sealed class HeaderBuilder
 
     public void Show()
     {
-        var font = _theme.Font;
+        FontFile? font = _theme.Font;
         if (font == null) return;
 
-        var ink = _theme.Ink;
-        var metrics = _theme.Metrics;
-        var ramp = _variant == OrigamiVariant.Default ? ink : _theme.Get(_variant);
+        OrigamiRamp ink = _theme.Ink;
+        OrigamiMetrics metrics = _theme.Metrics;
+        OrigamiRamp ramp = _variant == OrigamiVariant.Default ? ink : _theme.Get(_variant);
         bool isComponent = _style == HeaderStyle.Component;
 
         // Component title is 600 (semi-bold); the uppercase section label is 700 (bold).
-        var labelFont = (isComponent ? _theme.SemiBold : _theme.Bold) ?? font;
+        FontFile labelFont = (isComponent ? _theme.SemiBold : _theme.Bold) ?? font;
 
         // Section label ~= 11px (metrics-2); component title ~= 12.5px (metrics).
         float fontSize = _fontSizeOverride ?? (isComponent ? metrics.FontSize : metrics.FontSize - 2f);
@@ -210,7 +211,7 @@ public sealed class HeaderBuilder
         };
 
         // Single box - all drawing happens in the canvas callback.
-        var box = _paper.Box(_id)
+        ElementBuilder box = _paper.Box(_id)
             .Height(rowHeight)
             .Margin(0, 0, _topMargin, _bottomMargin);
 
@@ -222,7 +223,7 @@ public sealed class HeaderBuilder
 
         if (_onClick != null)
         {
-            var click = _onClick;
+            Action click = _onClick;
             if (!isComponent) box.Rounded(rounding);
             box.OnClick(_ => click());
             box.Hovered.BackgroundColor(_theme.Hover).End(); // hover

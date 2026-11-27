@@ -59,7 +59,7 @@ public sealed class ReloadCache<TKey, TValue> : IReloadAware, IReloadObserver
         // on both paths.
         var entries = new ConcurrentDictionary<TKey, TValue>();
 
-        foreach (var item in _seed)
+        foreach (KeyValuePair<TKey, TValue> item in _seed)
             entries.TryAdd(item.Key, item.Value);
 
         _entries = entries;

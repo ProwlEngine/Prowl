@@ -7,19 +7,19 @@ public static partial class SpirVOptimizer
     // whatever only it kept alive. Array inserts are never optimized. Repeats per reachable function until stable.
     static void DeadInsertElim(SpvModule m)
     {
-        var def = m.DefMap();
+        DefTable def = m.DefMap();
         var users = new Dictionary<uint, List<SpvInstr>>();
-        foreach (var ins in m.Instrs)
+        foreach (SpvInstr ins in m.Instrs)
         {
             ins.Classify(out int ri, out bool[] isId);
             for (int k = 0; k < ins.Operands.Length; k++)
-                if (isId[k] && k != ri) (users.TryGetValue(ins.Operands[k], out var l) ? l : users[ins.Operands[k]] = []).Add(ins);
+                if (isId[k] && k != ri) (users.TryGetValue(ins.Operands[k], out List<SpvInstr>? l) ? l : users[ins.Operands[k]] = []).Add(ins);
         }
         uint glslSet = 0;
-        foreach (var ins in m.Instrs) if (ins.Opcode == 11 && ins.Operands.Length >= 2 && DecodeSpvString(ins.Operands, 1) == "GLSL.std.450") { glslSet = ins.Operands[0]; break; }
+        foreach (SpvInstr ins in m.Instrs) if (ins.Opcode == 11 && ins.Operands.Length >= 2 && DecodeSpvString(ins.Operands, 1) == "GLSL.std.450") { glslSet = ins.Operands[0]; break; }
         var killed = new HashSet<SpvInstr>();
 
-        List<SpvInstr> UsersOf(uint id) => users.TryGetValue(id, out var l) ? l : [];
+        List<SpvInstr> UsersOf(uint id) => users.TryGetValue(id, out List<SpvInstr>? l) ? l : [];
         uint TypeOf(SpvInstr i) { i.Classify(out int ri, out _); return ri >= 1 ? i.Operands[ri - 1] : 0; }
         static bool IsAnnotation(int op) => op is 5 or 6 or 71 or 72 or 332 or 5632 or 5633;
         bool OnlyNamesAndDecorates(uint id) => UsersOf(id).All(u => u.Opcode is 5 or OpDecorate or 332);
@@ -32,7 +32,7 @@ public static partial class SpirVOptimizer
             {
                 case 23: case 24: return type.Operands[2];   // OpTypeVector, OpTypeMatrix
                 case 28:   // OpTypeArray
-                    if (!def.TryGetValue(type.Operands[2], out var len) || len.Opcode != OpConstant) return 0;
+                    if (!def.TryGetValue(type.Operands[2], out SpvInstr? len) || len.Opcode != OpConstant) return 0;
                     return def[len.Operands[0]].Operands[1] != 32 ? 0 : len.Operands[2];
                 case 30: return (uint)(type.Operands.Length - 1);   // OpTypeStruct
                 default: return 0;
@@ -58,7 +58,7 @@ public static partial class SpirVOptimizer
         var live = new HashSet<uint>();
         void MarkChain(SpvInstr chain, List<uint>? ext, int off, HashSet<uint> visitedPhis)
         {
-            var type = def[TypeOf(chain)];
+            SpvInstr type = def[TypeOf(chain)];
             if (type.Opcode == 28) return;
             if (chain.Opcode is not (82 or 245)) return;
             if (ext is null)
@@ -70,7 +70,7 @@ public static partial class SpirVOptimizer
                     return;
                 }
             }
-            var ins = chain;
+            SpvInstr ins = chain;
             while (ins.Opcode == 82)
             {
                 if (ext is null)
@@ -106,7 +106,7 @@ public static partial class SpirVOptimizer
         // MemPass::GetPtr's base variable of a load's pointer.
         uint BaseVar(uint ptr)
         {
-            for (int g = 0; g < 64 && def.TryGetValue(ptr, out var d); g++)
+            for (int g = 0; g < 64 && def.TryGetValue(ptr, out SpvInstr? d); g++)
             {
                 if (d.Opcode is OpVariable or 55) return ptr;   // OpFunctionParameter
                 if (d.Opcode is OpAccessChain or OpInBoundsAccessChain or OpPtrAccessChain or OpInBoundsPtrAccessChain or 60 or OpCopyObject)
@@ -119,10 +119,10 @@ public static partial class SpirVOptimizer
             u.Opcode is OpAccessChain or OpInBoundsAccessChain or OpCopyObject ? HasLoads(u.ResultId)
             : u.Opcode is not (OpStore or 5 or OpDecorate or 332));
         bool IsLiveVar(uint id) =>
-            !def.TryGetValue(id, out var v) || v.Opcode != OpVariable || v.Operands[2] != OpTypePointerSc || HasLoads(id);
+            !def.TryGetValue(id, out SpvInstr? v) || v.Opcode != OpVariable || v.Operands[2] != OpTypePointerSc || HasLoads(id);
         void AddStores(uint ptr, Queue<SpvInstr> q)
         {
-            foreach (var u in UsersOf(ptr).ToArray())
+            foreach (SpvInstr u in UsersOf(ptr).ToArray())
                 if (u.Opcode is OpAccessChain or OpInBoundsAccessChain) AddStores(u.ResultId, q);
                 else if (u.Opcode == OpStore) q.Enqueue(u);
         }
@@ -133,10 +133,10 @@ public static partial class SpirVOptimizer
             killed.Add(di);
             di.Classify(out int ri, out bool[] isId);
             for (int k = 0; k < di.Operands.Length; k++)
-                if (isId[k] && k != ri && users.TryGetValue(di.Operands[k], out var l)) l.Remove(di);
+                if (isId[k] && k != ri && users.TryGetValue(di.Operands[k], out List<SpvInstr>? l)) l.Remove(di);
             if (ri < 0) return;
             uint r = di.Operands[ri];
-            foreach (var u in UsersOf(r).ToArray())
+            foreach (SpvInstr u in UsersOf(r).ToArray())
                 if (IsAnnotation(u.Opcode) && u.Operands[0] == r) Kill(u);
         }
 
@@ -146,7 +146,7 @@ public static partial class SpirVOptimizer
             q.Enqueue(inst);
             while (q.Count > 0)
             {
-                var di = q.Dequeue();
+                SpvInstr di = q.Dequeue();
                 if (di.Opcode == OpLabel || killed.Contains(di)) continue;
                 var ids = new SortedSet<uint>();
                 di.Classify(out int ri, out bool[] isId);
@@ -155,7 +155,7 @@ public static partial class SpirVOptimizer
                 pending.Remove(di);
                 Kill(di);
                 foreach (uint id in ids)
-                    if (OnlyNamesAndDecorates(id) && def.TryGetValue(id, out var odi) && !killed.Contains(odi) && Combinator(odi)) q.Enqueue(odi);
+                    if (OnlyNamesAndDecorates(id) && def.TryGetValue(id, out SpvInstr? odi) && !killed.Contains(odi) && Combinator(odi)) q.Enqueue(odi);
                 if (varId != 0 && !IsLiveVar(varId)) AddStores(varId, q);
             }
         }
@@ -165,12 +165,12 @@ public static partial class SpirVOptimizer
             live.Clear();
             for (int i = fs; i < fe; i++)
             {
-                var ins = m.Instrs[i];
+                SpvInstr ins = m.Instrs[i];
                 if (killed.Contains(ins) || ins.Opcode is not (82 or 245)) continue;
-                var type = def[TypeOf(ins)];
+                SpvInstr type = def[TypeOf(ins)];
                 if (ins.Opcode == 245 && type.Opcode is not (23 or 24 or 28 or 29 or 30 or 4456 or 5358)) continue;
                 if (ins.Opcode == 82 && type.Opcode == 28) { live.Add(ins.ResultId); continue; }
-                foreach (var u in UsersOf(ins.ResultId).ToArray())
+                foreach (SpvInstr u in UsersOf(ins.ResultId).ToArray())
                 {
                     if (u.Opcode is 82 or 245) continue;
                     if (u.Opcode == OpCompositeExtract) MarkChain(ins, [.. u.Operands.Skip(3)], 0, []);
@@ -180,22 +180,22 @@ public static partial class SpirVOptimizer
             var dead = new List<SpvInstr>();
             for (int i = fs; i < fe; i++)
             {
-                var ins = m.Instrs[i];
+                SpvInstr ins = m.Instrs[i];
                 if (killed.Contains(ins) || ins.Opcode != 82 || live.Contains(ins.ResultId)) continue;
                 uint id = ins.ResultId, repl = ins.Operands[3];
-                foreach (var u in UsersOf(id).ToArray())
+                foreach (SpvInstr u in UsersOf(id).ToArray())
                 {
                     u.Classify(out int ri, out bool[] isId);
                     for (int k = 0; k < u.Operands.Length; k++)
                         if (isId[k] && k != ri && u.Operands[k] == id) u.Operands[k] = repl;
-                    (users.TryGetValue(repl, out var l) ? l : users[repl] = []).Add(u);
+                    (users.TryGetValue(repl, out List<SpvInstr>? l) ? l : users[repl] = []).Add(u);
                 }
                 users.Remove(id);
                 dead.Add(ins);
             }
             while (dead.Count > 0)
             {
-                var inst = dead[^1];
+                SpvInstr inst = dead[^1];
                 dead.RemoveAt(dead.Count - 1);
                 DceInst(inst, dead);
             }

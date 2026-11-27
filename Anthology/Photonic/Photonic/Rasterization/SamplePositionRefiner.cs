@@ -49,7 +49,7 @@ internal static class SamplePositionRefiner
     {
         if (!options.Diagnostics.DisableSmoothTerminator)
         {
-            var useFlat = new bool[triangleCount];
+            bool[] useFlat = new bool[triangleCount];
             MarkOccludedTriangles(workspaces, blas, options, useFlat, parallelOpts);
             ApplySmoothPositions(workspaces, useFlat, parallelOpts);
         }
@@ -72,7 +72,7 @@ internal static class SamplePositionRefiner
     {
         const float contactTexels = ContactWidthTexels;
 
-        foreach (var ws in workspaces)
+        foreach (TargetWorkspace ws in workspaces)
         {
             int W = ws.Width, H = ws.Height;
             System.Threading.Tasks.Parallel.For(0, H, parallelOpts, y =>
@@ -81,16 +81,16 @@ internal static class SamplePositionRefiner
                 {
                     int idx = y * W + x;
                     if (!ws.Covered[idx]) continue;
-                    var s = ws.Samples[idx];
+                    TexelSample s = ws.Samples[idx];
 
                     float radius = s.WorldRadius * 2f * contactTexels;
                     if (radius <= options.EffectiveRayBias) continue;
 
-                    Hemisphere.BuildOrthonormalBasis(s.Normal, out var tangent, out var bitangent);
-                    var origin = RayMath.OffsetOrigin(s.Position, s.FaceNormal, options.EffectiveRayBias);
+                    Hemisphere.BuildOrthonormalBasis(s.Normal, out Float3 tangent, out Float3 bitangent);
+                    Float3 origin = RayMath.OffsetOrigin(s.Position, s.FaceNormal, options.EffectiveRayBias);
 
                     float nearest = radius;
-                    foreach (var probe in ProximityProbes)
+                    foreach ((float Tilt, float Azimuth) probe in ProximityProbes)
                     {
                         float tilt = probe.Tilt * (System.MathF.PI / 180f);
                         float azimuth = probe.Azimuth * (System.MathF.PI / 180f);
@@ -125,7 +125,7 @@ internal static class SamplePositionRefiner
     private static void MarkOccludedTriangles(TargetWorkspace[] workspaces, Blas blas, BakeOptions options,
                                               bool[] useFlat, System.Threading.Tasks.ParallelOptions parallelOpts)
     {
-        foreach (var ws in workspaces)
+        foreach (TargetWorkspace ws in workspaces)
         {
             int W = ws.Width, H = ws.Height;
             System.Threading.Tasks.Parallel.For(0, H, parallelOpts, y =>
@@ -134,14 +134,14 @@ internal static class SamplePositionRefiner
                 {
                     int idx = y * W + x;
                     if (!ws.Covered[idx]) continue;
-                    var s = ws.Samples[idx];
+                    TexelSample s = ws.Samples[idx];
                     if (s.TriangleId < 0 || s.TriangleId >= useFlat.Length || useFlat[s.TriangleId]) continue;
 
-                    var delta = s.SmoothPosition - s.Position;
+                    Float3 delta = s.SmoothPosition - s.Position;
                     float distance = Float3.Length(delta);
                     if (distance <= options.EffectiveRayBias) continue;
 
-                    var origin = RayMath.OffsetOrigin(s.Position, s.FaceNormal, options.EffectiveRayBias);
+                    Float3 origin = RayMath.OffsetOrigin(s.Position, s.FaceNormal, options.EffectiveRayBias);
                     if (blas.AnyHit(origin, delta / distance, options.EffectiveRayBias, distance))
                         useFlat[s.TriangleId] = true;
                 }
@@ -152,7 +152,7 @@ internal static class SamplePositionRefiner
     private static void ApplySmoothPositions(TargetWorkspace[] workspaces, bool[] useFlat,
                                              System.Threading.Tasks.ParallelOptions parallelOpts)
     {
-        foreach (var ws in workspaces)
+        foreach (TargetWorkspace ws in workspaces)
         {
             int W = ws.Width, H = ws.Height;
             System.Threading.Tasks.Parallel.For(0, H, parallelOpts, y =>
@@ -177,7 +177,7 @@ internal static class SamplePositionRefiner
     private static void PushOutOfSolids(TargetWorkspace[] workspaces, Blas blas, BakeOptions options,
                                         System.Threading.Tasks.ParallelOptions parallelOpts)
     {
-        foreach (var ws in workspaces)
+        foreach (TargetWorkspace ws in workspaces)
         {
             int W = ws.Width, H = ws.Height;
             System.Threading.Tasks.Parallel.For(0, H, parallelOpts, y =>
@@ -186,12 +186,12 @@ internal static class SamplePositionRefiner
                 {
                     int idx = y * W + x;
                     if (!ws.Covered[idx]) continue;
-                    var s = ws.Samples[idx];
+                    TexelSample s = ws.Samples[idx];
                     float reach = s.WorldRadius * ProbeDiagonal;
                     if (reach <= options.EffectiveRayBias) continue;
 
-                    Hemisphere.BuildOrthonormalBasis(s.FaceNormal, out var tangent, out var bitangent);
-                    var origin = RayMath.OffsetOrigin(s.Position, s.FaceNormal, options.EffectiveRayBias);
+                    Hemisphere.BuildOrthonormalBasis(s.FaceNormal, out Float3 tangent, out Float3 bitangent);
+                    Float3 origin = RayMath.OffsetOrigin(s.Position, s.FaceNormal, options.EffectiveRayBias);
 
                     // Take the nearest wall, not the first one probed. On a thin double-sided wall the
                     // probes hit both of its faces, and stepping past the far one drops the sample on
@@ -201,7 +201,7 @@ internal static class SamplePositionRefiner
                     Float3 pushed = default, pushNormal = default;
                     for (int d = 0; d < 4; d++)
                     {
-                        var dir = d switch
+                        Float3 dir = d switch
                         {
                             0 => tangent,
                             1 => -tangent,
@@ -212,7 +212,7 @@ internal static class SamplePositionRefiner
                             continue;
                         if (hitT >= nearest) continue;
 
-                        var hitNormal = GeometricNormal(blas, triIndex);
+                        Float3 hitNormal = GeometricNormal(blas, triIndex);
                         if (Float3.Dot(hitNormal, dir) <= 0f) continue; // front face: nothing is leaking here
 
                         nearest = hitT;
@@ -230,11 +230,11 @@ internal static class SamplePositionRefiner
     /// <summary>Geometric normal of a merged-BLAS triangle, oriented to agree with its vertex normals.</summary>
     private static Float3 GeometricNormal(Blas blas, int triIndex)
     {
-        var tri = blas.Triangles[triIndex];
-        var positions = blas.Mesh.Positions;
-        var normals = blas.Mesh.Normals;
+        Blas.TriRef tri = blas.Triangles[triIndex];
+        Float3[] positions = blas.Mesh.Positions;
+        Float3[] normals = blas.Mesh.Normals;
         var geometric = Float3.Cross(positions[tri.I1] - positions[tri.I0], positions[tri.I2] - positions[tri.I0]);
-        var shading = normals[tri.I0] + normals[tri.I1] + normals[tri.I2];
+        Float3 shading = normals[tri.I0] + normals[tri.I1] + normals[tri.I2];
         if (Float3.Dot(geometric, shading) < 0f) geometric = -geometric;
         return Float3.NormalizeSafe(geometric, Float3.UnitY);
     }

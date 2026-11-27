@@ -1,4 +1,5 @@
 using System.Collections.Generic;
+
 using Prowl.Vector;
 using Prowl.Vector.Spatial;
 
@@ -19,7 +20,7 @@ public sealed class AnimationGraphInstance
     private readonly GraphNodeInstance[] _nodes;
     private readonly ParameterValue[] _parameters;
     private readonly AnimationValueType[] _parameterTypes;
-    private readonly SampledEventsBuffer _events = new();
+    private readonly SampledEventsBuffer _events = [];
     private readonly PoseNodeInstance _root;
     private readonly Pose _previousPose;
     private readonly GraphContext _context;
@@ -28,7 +29,7 @@ public sealed class AnimationGraphInstance
 
     internal AnimationGraphInstance(AnimationGraph graph, Skeleton skeleton, Avatar? avatar = null)
     {
-        _instantiating ??= new List<AnimationGraph>();
+        _instantiating ??= [];
         if (_instantiating.Contains(graph))
             throw new GraphValidationException(-1, null, "the graph references itself as a sub graph (directly or through other sub graphs).");
 
@@ -367,13 +368,13 @@ public sealed class AnimationGraphInstance
     private static void ValidateEdges(AnimationGraph graph, IReadOnlyList<(int From, int To, bool IsPose)> edges)
     {
         int count = graph.NodeCount;
-        var poseParent = new int[count];
+        int[] poseParent = new int[count];
         Array.Fill(poseParent, -1);
         var adjacency = new List<int>[count];
 
         foreach ((int from, int to, bool isPose) in edges)
         {
-            (adjacency[from] ??= new List<int>()).Add(to);
+            (adjacency[from] ??= []).Add(to);
             if (!isPose)
                 continue;
             if (poseParent[to] == from)
@@ -385,7 +386,7 @@ public sealed class AnimationGraphInstance
             poseParent[to] = from;
         }
 
-        var state = new byte[count]; // 0 unvisited, 1 visiting, 2 done
+        byte[] state = new byte[count]; // 0 unvisited, 1 visiting, 2 done
         var stack = new Stack<(int Node, int Next)>();
         for (int start = 0; start < count; start++)
         {

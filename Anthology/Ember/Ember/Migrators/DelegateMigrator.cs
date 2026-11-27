@@ -16,7 +16,7 @@ public sealed class DelegateMigrator : IValueMigrator
 
     public MigrationPlan Plan(Type type, PlanContext context)
     {
-        var resolution = context.Types.Resolve(type);
+        TypeResolution resolution = context.Types.Resolve(type);
         if (resolution.IsRemoved) return MigrationPlan.Dropped;
 
         return new DelegatePlan(resolution.Target!, context.Options.BrokenDelegates);
@@ -40,7 +40,7 @@ public sealed class DelegateMigrator : IValueMigrator
         {
             var previous = (Delegate)source;
 
-            var invocations = previous.GetInvocationList();
+            Delegate[] invocations = previous.GetInvocationList();
             return invocations.Length > 1
                 ? Multicast(previous, invocations, context)
                 : Single(previous, context);
@@ -50,7 +50,7 @@ public sealed class DelegateMigrator : IValueMigrator
         {
             var migrated = new List<Delegate>(invocations.Length);
 
-            foreach (var entry in invocations)
+            foreach (Delegate entry in invocations)
             {
                 if (context.Map(entry) is not Delegate rebuilt) continue;
 
@@ -77,15 +77,15 @@ public sealed class DelegateMigrator : IValueMigrator
         private Allocation Single(Delegate previous, MigrationContext context)
         {
             // A stand-in from an earlier reload keeps its original reason rather than reporting itself.
-            if (BrokenDelegate.IsBroken(previous, out var existingReason, out var existingMethod))
+            if (BrokenDelegate.IsBroken(previous, out BrokenDelegateReason existingReason, out string? existingMethod))
                 return Break(previous, existingReason, existingMethod, context, report: false);
 
-            var method = previous.Method;
+            MethodInfo method = previous.Method;
             if (method.DeclaringType == null)
                 return Break(previous, BrokenDelegateReason.NoDeclaringType, method.Name, context);
 
             string describe = $"{method.DeclaringType.Name}.{method.Name}";
-            var previousTarget = previous.Target;
+            object? previousTarget = previous.Target;
 
             var current = context.Members.Resolve(method) as MethodInfo;
             bool synthetic = LambdaMatcher.IsSynthetic(method);
@@ -117,7 +117,7 @@ public sealed class DelegateMigrator : IValueMigrator
 
             try
             {
-                var rebuilt = currentTarget == null
+                Delegate rebuilt = currentTarget == null
                     ? current.CreateDelegate(_target)
                     : current.CreateDelegate(_target, currentTarget);
 
@@ -158,8 +158,8 @@ public sealed class DelegateMigrator : IValueMigrator
                 return true;
             }
 
-            var before = LambdaMatcher.Identify(previousMethod).Capture;
-            var after = LambdaMatcher.Identify(currentMethod).Capture;
+            CaptureMode before = LambdaMatcher.Identify(previousMethod).Capture;
+            CaptureMode after = LambdaMatcher.Identify(currentMethod).Capture;
 
             switch (before, after)
             {
@@ -183,7 +183,7 @@ public sealed class DelegateMigrator : IValueMigrator
 
                 // The closure collapsed to needing only the instance, which it still holds.
                 case (CaptureMode.DisplayClass, CaptureMode.Instance):
-                    var capturedThis = previousTarget == null ? null : CapturedThis(previousTarget);
+                    object? capturedThis = previousTarget == null ? null : CapturedThis(previousTarget);
                     if (capturedThis == null) return false;
                     currentTarget = context.Map(capturedThis);
                     return true;
@@ -198,8 +198,8 @@ public sealed class DelegateMigrator : IValueMigrator
         {
             if (lambda.IsStatic) return null;
 
-            var declaring = lambda.DeclaringType!;
-            foreach (var field in declaring.GetFields(BindingFlags.Public | BindingFlags.Static))
+            Type declaring = lambda.DeclaringType!;
+            foreach (FieldInfo field in declaring.GetFields(BindingFlags.Public | BindingFlags.Static))
                 if (field.FieldType == declaring)
                     return field.GetValue(null);
 
@@ -209,10 +209,10 @@ public sealed class DelegateMigrator : IValueMigrator
         /// <summary>The captured instance a closure holds, when the lambda turned out to need only that.</summary>
         private static object? CapturedThis(object closure)
         {
-            var closureType = closure.GetType();
-            var instanceType = closureType.DeclaringType;
+            Type closureType = closure.GetType();
+            Type? instanceType = closureType.DeclaringType;
 
-            foreach (var field in closureType.GetFields(BindingFlags.Instance | BindingFlags.Public))
+            foreach (FieldInfo field in closureType.GetFields(BindingFlags.Instance | BindingFlags.Public))
                 if (field.FieldType == instanceType && field.Name.EndsWith("__this", StringComparison.Ordinal))
                     return field.GetValue(closure);
 
@@ -235,7 +235,7 @@ public sealed class DelegateMigrator : IValueMigrator
                     return Allocation.Preserve(previous);
 
                 case BrokenDelegatePolicy.Throwing:
-                    var thrower = BrokenDelegate.Create(_target, reason, describe);
+                    Delegate? thrower = BrokenDelegate.Create(_target, reason, describe);
                     if (thrower != null) return Allocation.Replace(thrower);
                     goto default;
 

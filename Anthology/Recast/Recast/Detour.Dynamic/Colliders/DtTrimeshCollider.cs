@@ -18,53 +18,53 @@ freely, subject to the following restrictions:
 */
 
 using System;
-using Prowl.Recast.Core;
+
 using Prowl.Recast;
+using Prowl.Recast.Core;
 
-namespace Prowl.Recast.Detour.Dynamic.Colliders
+namespace Prowl.Recast.Detour.Dynamic.Colliders;
+
+public class DtTrimeshCollider : DtCollider
 {
-    public class DtTrimeshCollider : DtCollider
+    private readonly float[] vertices;
+    private readonly int[] triangles;
+
+    public DtTrimeshCollider(float[] vertices, int[] triangles, int area, float flagMergeThreshold)
+        : base(area, flagMergeThreshold, ComputeBounds(vertices))
     {
-        private readonly float[] vertices;
-        private readonly int[] triangles;
+        this.vertices = vertices;
+        this.triangles = triangles;
+    }
 
-        public DtTrimeshCollider(float[] vertices, int[] triangles, int area, float flagMergeThreshold)
-            : base(area, flagMergeThreshold, ComputeBounds(vertices))
+    public DtTrimeshCollider(float[] vertices, int[] triangles, float[] bounds, int area, float flagMergeThreshold) :
+        base(area, flagMergeThreshold, bounds)
+    {
+        this.vertices = vertices;
+        this.triangles = triangles;
+    }
+
+    public static float[] ComputeBounds(float[] vertices)
+    {
+        float[] bounds = new float[] { vertices[0], vertices[1], vertices[2], vertices[0], vertices[1], vertices[2] };
+        for (int i = 3; i < vertices.Length; i += 3)
         {
-            this.vertices = vertices;
-            this.triangles = triangles;
+            bounds[0] = Math.Min(bounds[0], vertices[i]);
+            bounds[1] = Math.Min(bounds[1], vertices[i + 1]);
+            bounds[2] = Math.Min(bounds[2], vertices[i + 2]);
+            bounds[3] = Math.Max(bounds[3], vertices[i]);
+            bounds[4] = Math.Max(bounds[4], vertices[i + 1]);
+            bounds[5] = Math.Max(bounds[5], vertices[i + 2]);
         }
 
-        public DtTrimeshCollider(float[] vertices, int[] triangles, float[] bounds, int area, float flagMergeThreshold) :
-            base(area, flagMergeThreshold, bounds)
-        {
-            this.vertices = vertices;
-            this.triangles = triangles;
-        }
+        return bounds;
+    }
 
-        public static float[] ComputeBounds(float[] vertices)
+    public override void Rasterize(RcHeightfield hf, RcContext context)
+    {
+        for (int i = 0; i < triangles.Length; i += 3)
         {
-            float[] bounds = new float[] { vertices[0], vertices[1], vertices[2], vertices[0], vertices[1], vertices[2] };
-            for (int i = 3; i < vertices.Length; i += 3)
-            {
-                bounds[0] = Math.Min(bounds[0], vertices[i]);
-                bounds[1] = Math.Min(bounds[1], vertices[i + 1]);
-                bounds[2] = Math.Min(bounds[2], vertices[i + 2]);
-                bounds[3] = Math.Max(bounds[3], vertices[i]);
-                bounds[4] = Math.Max(bounds[4], vertices[i + 1]);
-                bounds[5] = Math.Max(bounds[5], vertices[i + 2]);
-            }
-
-            return bounds;
-        }
-
-        public override void Rasterize(RcHeightfield hf, RcContext context)
-        {
-            for (int i = 0; i < triangles.Length; i += 3)
-            {
-                RcRasterizations.RasterizeTriangle(context, vertices, triangles[i], triangles[i + 1], triangles[i + 2], area,
-                    hf, (int)MathF.Floor(flagMergeThreshold / hf.ch));
-            }
+            RcRasterizations.RasterizeTriangle(context, vertices, triangles[i], triangles[i + 1], triangles[i + 2], area,
+                hf, (int)MathF.Floor(flagMergeThreshold / hf.ch));
         }
     }
 }

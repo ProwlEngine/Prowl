@@ -32,7 +32,7 @@ public sealed partial class EchoObject
                 return Index.TryGetValue(key, out int found) ? found : -1;
             }
 
-            var entries = Entries;
+            KeyValuePair<string, EchoObject>[] entries = Entries;
             for (int i = 0; i < Count; i++)
                 if (string.Equals(entries[i].Key, key))
                     return i;
@@ -79,7 +79,7 @@ public sealed partial class EchoObject
     private void SetCompoundEntries(IEnumerable<KeyValuePair<string, EchoObject>> entries, int capacity)
     {
         var storage = new CompoundStorage(capacity);
-        foreach (var (key, tag) in entries)
+        foreach ((string? key, EchoObject? tag) in entries)
         {
             tag.Parent = this;
             tag.CompoundKey = key;
@@ -112,11 +112,11 @@ public sealed partial class EchoObject
             if (value.Parent is not null)
                 throw new ArgumentException("Tag already has a parent, Did you want to clone this?", nameof(value));
 
-            var storage = Compound;
+            CompoundStorage storage = Compound;
             int index = storage.IndexOf(tagName);
             if (index >= 0)
             {
-                var oldValue = storage.Entries[index].Value;
+                EchoObject oldValue = storage.Entries[index].Value;
                 oldValue.Parent = null;
                 oldValue.CompoundKey = null;
                 storage.Entries[index] = new KeyValuePair<string, EchoObject>(tagName, value);
@@ -160,7 +160,7 @@ public sealed partial class EchoObject
     /// <exception cref="ArgumentNullException">Thrown if the name is null or empty</exception>
     public EchoObject? Get(string tagName)
     {
-        return TryGet(tagName, out var result) ? result : null;
+        return TryGet(tagName, out EchoObject? result) ? result : null;
     }
 
     /// <summary>
@@ -178,7 +178,7 @@ public sealed partial class EchoObject
         if (string.IsNullOrEmpty(tagName))
             throw new ArgumentNullException(nameof(tagName));
 
-        var storage = Compound;
+        CompoundStorage storage = Compound;
         int index = storage.IndexOf(tagName);
         result = index >= 0 ? storage.Entries[index].Value : null;
         return index >= 0;
@@ -187,7 +187,7 @@ public sealed partial class EchoObject
     // Checks the entry at hint first, which hits when tags are read in the order they were written.
     internal bool TryGet(string tagName, int hint, [NotNullWhen(true)] out EchoObject? result)
     {
-        var storage = Compound;
+        CompoundStorage storage = Compound;
         if ((uint)hint < (uint)storage.Count && string.Equals(storage.Entries[hint].Key, tagName))
         {
             result = storage.Entries[hint].Value;
@@ -228,7 +228,7 @@ public sealed partial class EchoObject
         if (newTag.Parent is not null)
             throw new ArgumentException("Tag already has a parent, Did you want to clone this?", nameof(newTag));
 
-        var storage = Compound;
+        CompoundStorage storage = Compound;
         if (storage.IndexOf(name) >= 0)
             throw new ArgumentException("Tag with this name already exists", nameof(name));
 
@@ -259,12 +259,12 @@ public sealed partial class EchoObject
         if (string.IsNullOrEmpty(name))
             throw new ArgumentNullException(nameof(name));
 
-        var storage = Compound;
+        CompoundStorage storage = Compound;
         int index = storage.IndexOf(name);
         if (index < 0)
             return false;
 
-        var tag = storage.Entries[index].Value;
+        EchoObject tag = storage.Entries[index].Value;
         storage.RemoveAt(index);
         tag.Parent = null;
         tag.CompoundKey = null;
@@ -289,14 +289,14 @@ public sealed partial class EchoObject
             throw new ArgumentNullException(nameof(newName));
         if (oldName == newName) return;
 
-        var storage = Compound;
+        CompoundStorage storage = Compound;
         int index = storage.IndexOf(oldName);
         if (index < 0)
             throw new ArgumentException("Tag with old name doesn't exist", nameof(oldName));
         if (storage.IndexOf(newName) >= 0)
             throw new ArgumentException("Tag with new name already exists", nameof(newName));
 
-        var tag = storage.Entries[index].Value;
+        EchoObject tag = storage.Entries[index].Value;
         storage.Entries[index] = new KeyValuePair<string, EchoObject>(newName, tag);
         storage.Index = null;
         tag.CompoundKey = newName;
@@ -314,7 +314,7 @@ public sealed partial class EchoObject
     /// <returns>The type stored in this compound tag, or null if no type was stored</returns>
     public Type? GetStoredType()
     {
-        if (TryGet("$type", out var typeTag))
+        if (TryGet("$type", out EchoObject? typeTag))
             return ReflectionUtils.FindTypeByName(typeTag!.StringValue);
         return null;
     }
@@ -331,13 +331,13 @@ public readonly struct CompoundTags : IReadOnlyDictionary<string, EchoObject>
     public int Count => _owner.Count;
 
     public EchoObject this[string key] =>
-        _owner.TryGet(key, out var value) ? value! : throw new KeyNotFoundException($"The tag '{key}' was not found.");
+        _owner.TryGet(key, out EchoObject? value) ? value! : throw new KeyNotFoundException($"The tag '{key}' was not found.");
 
     public bool ContainsKey(string key) => _owner.Contains(key);
 
     public bool TryGetValue(string key, out EchoObject value)
     {
-        bool found = _owner.TryGet(key, out var result);
+        bool found = _owner.TryGet(key, out EchoObject? result);
         value = result!;
         return found;
     }
@@ -346,7 +346,7 @@ public readonly struct CompoundTags : IReadOnlyDictionary<string, EchoObject>
     {
         get
         {
-            foreach (var entry in this)
+            foreach (KeyValuePair<string, EchoObject> entry in this)
                 yield return entry.Key;
         }
     }
@@ -355,7 +355,7 @@ public readonly struct CompoundTags : IReadOnlyDictionary<string, EchoObject>
     {
         get
         {
-            foreach (var entry in this)
+            foreach (KeyValuePair<string, EchoObject> entry in this)
                 yield return entry.Value;
         }
     }

@@ -92,7 +92,7 @@ public static class TerrainPackage
         private readonly Stream _stream;
         private readonly TerrainHeader _header;
         private readonly long _start;
-        private readonly List<(TerrainPageKey Key, TerrainPageEntry Entry)> _pages = new();
+        private readonly List<(TerrainPageKey Key, TerrainPageEntry Entry)> _pages = [];
 
         internal Writer(Stream stream, TerrainHeader header)
         {
@@ -209,12 +209,12 @@ public static class TerrainPackage
         long treesAt = reader.ReadInt64();
 
         stream.Position = start + treesAt;
-        List<TerrainTree> trees = new(treeCount);
+        List<TerrainTree> trees = [with(treeCount)];
         for (int i = 0; i < treeCount; i++)
             trees.Add(ReadTree(reader));
 
         stream.Position = start + directory;
-        Dictionary<TerrainPageKey, TerrainPageEntry> pages = new(count);
+        Dictionary<TerrainPageKey, TerrainPageEntry> pages = [with(count)];
         for (int i = 0; i < count; i++)
         {
             TerrainPageKey key = new(reader.ReadByte(), reader.ReadUInt16(), reader.ReadUInt16());

@@ -100,7 +100,7 @@ public static class Serializer
 
     public static EchoObject Serialize(object? value, SerializationContext context)
     {
-        var result = Serialize(value?.GetType(), value, context);
+        EchoObject result = Serialize(value?.GetType(), value, context);
 
         // No targetType was provided by the caller — in Auto mode, ensure the
         // root object includes its type so deserialization can work without
@@ -127,12 +127,12 @@ public static class Serializer
 
             if (targetType.IsValueType || targetType == typeof(string) || targetType == typeof(byte[]))
             {
-                var result = SerializeFast(targetType, value);
+                EchoObject? result = SerializeFast(targetType, value);
                 if (result != null) return result;
             }
         }
 
-        var actualType = value.GetType();
+        Type actualType = value.GetType();
         context.EnterSerialize(value);
         try
         {
@@ -181,7 +181,7 @@ public static class Serializer
         // Check for serialization override (e.g. external asset references)
         if (context.OnSerialize != null)
         {
-            var overrideResult = context.OnSerialize(value, context);
+            EchoObject? overrideResult = context.OnSerialize(value, context);
             if (overrideResult != null)
             {
                 bool needsType = ShouldPreserveType(targetType, actualType, context);
@@ -193,8 +193,8 @@ public static class Serializer
         bool needsTypeInfo = ShouldPreserveType(targetType, actualType, context);
 
         // STEP 2: Serialize the actual data (formatters don't worry about types)
-        var format = GetFormatForType(actualType);
-        var serializedData = format.Serialize(actualType, value, context);
+        ISerializationFormat format = GetFormatForType(actualType);
+        EchoObject serializedData = format.Serialize(actualType, value, context);
 
         // STEP 3: Wrap with type envelope if needed (centralized)
         return WrapWithTypeEnvelope(serializedData, needsTypeInfo ? actualType : null, context);
@@ -242,8 +242,8 @@ public static class Serializer
         context.EnterDeserialize();
         try
         {
-            var data = ExtractTypeEnvelope(value, target.GetType(), out _, out _);
-            var format = GetFormatForType(target.GetType());
+            EchoObject data = ExtractTypeEnvelope(value, target.GetType(), out _, out _);
+            ISerializationFormat format = GetFormatForType(target.GetType());
             if (format is Formatters.AnyObjectFormat anyFormat)
                 anyFormat.DeserializeInto(data, target, context);
         }
@@ -283,36 +283,36 @@ public static class Serializer
             return value.Value;
 
         // STEP 1: Extract type information and data (centralized)
-        var data = ExtractTypeEnvelope(value, targetType, out Type? envelopeType, out bool typeUnresolved);
+        EchoObject data = ExtractTypeEnvelope(value, targetType, out Type? envelopeType, out bool typeUnresolved);
 
         if (typeUnresolved)
             RecordUnresolvedDefinition(data, context);
 
         // STEP 2: Determine actual type to deserialize to
-        var actualType = envelopeType ?? targetType;
+        Type actualType = envelopeType ?? targetType;
 
         // Resolve an external reference stub back to its live instance.
         if (context.ExternalReferences != null &&
             data.TagType == EchoType.Compound &&
-            data.TryGet(ExternalRefKey, out var keyData))
+            data.TryGet(ExternalRefKey, out EchoObject? keyData))
         {
             object? key = Deserialize<object>(keyData, context);
             return key == null ? null : context.ExternalReferences.ResolveReference(key, actualType);
         }
 
         IReferenceRule? rule = ReferenceRule;
-        if (rule != null && data.TagType == EchoType.Compound && data.TryGet(rule.Key, out var reference))
+        if (rule != null && data.TagType == EchoType.Compound && data.TryGet(rule.Key, out EchoObject? reference))
             return rule.Resolve(reference.StringValue ?? "", actualType, context);
 
         // Check for deserialization override (e.g. external asset references)
         if (context.OnDeserialize != null)
         {
-            var (handled, result) = context.OnDeserialize(data, actualType, context);
+            (bool handled, object? result) = context.OnDeserialize(data, actualType, context);
             if (handled) return result;
         }
 
         // STEP 3: Get formatter and deserialize data (no type logic in formatter)
-        var format = GetFormatForType(actualType);
+        ISerializationFormat format = GetFormatForType(actualType);
         return format.Deserialize(data, actualType, context);
     }
 
@@ -320,7 +320,7 @@ public static class Serializer
     [System.Runtime.CompilerServices.MethodImpl(System.Runtime.CompilerServices.MethodImplOptions.NoInlining)]
     private static void RecordUnresolvedDefinition(EchoObject data, SerializationContext context)
     {
-        if (data.TagType != EchoType.Compound || !data.TryGet("$id", out var id)) return;
+        if (data.TagType != EchoType.Compound || !data.TryGet("$id", out EchoObject? id)) return;
 
         foreach (string name in data.GetNames())
         {
@@ -389,8 +389,8 @@ public static class Serializer
     // needing to know the key's type up front, regardless of the context's TypeMode.
     private static EchoObject SerializeExternalKey(object key, SerializationContext context)
     {
-        var keyType = key.GetType();
-        var data = Serialize(keyType, key, context);
+        Type keyType = key.GetType();
+        EchoObject data = Serialize(keyType, key, context);
         return WrapWithTypeEnvelope(data, keyType, context);
     }
 
@@ -443,23 +443,23 @@ public static class Serializer
         typeUnresolved = false;
         // Handle compact type wrapper (for primitives)
         if (value.TagType == EchoType.Compound &&
-            value.TryGet("$t", out var compactType) &&
-            value.TryGet("$v", out var compactValue))
+            value.TryGet("$t", out EchoObject? compactType) &&
+            value.TryGet("$v", out EchoObject? compactValue))
         {
-            var type = TypeNameRegistry.ResolveCompactTypeName(compactType.StringValue);
+            Type? type = TypeNameRegistry.ResolveCompactTypeName(compactType.StringValue);
             actualType = ReconcileType(type, targetType);
             return compactValue!;
         }
 
         // Handle full type wrapper
-        if (value.TagType == EchoType.Compound && value.TryGet("$type", out var typeTag))
+        if (value.TagType == EchoType.Compound && value.TryGet("$type", out EchoObject? typeTag))
         {
             Type? resolved = TypeNameRegistry.ResolveFullTypeName(typeTag.StringValue);
             actualType = ReconcileType(resolved, targetType) ?? targetType;
             typeUnresolved = resolved == null;
 
             // If there's a $value, use that as data
-            return value.TryGet("$value", out var dataValue) ? dataValue! : value;
+            return value.TryGet("$value", out EchoObject? dataValue) ? dataValue! : value;
         }
 
         // No type wrapper - use as-is
@@ -486,11 +486,11 @@ public static class Serializer
 
     internal static ISerializationFormat GetFormatForType(Type type)
     {
-        if (_formatCache.TryGetValue(type, out var cached))
+        if (_formatCache.TryGetValue(type, out ISerializationFormat? cached))
             return cached;
 
         ISerializationFormat? format = null;
-        foreach (var f in _formats)
+        foreach (ISerializationFormat f in _formats)
         {
             if (f.CanHandle(type))
             {

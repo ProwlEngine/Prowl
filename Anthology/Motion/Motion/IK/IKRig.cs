@@ -1,4 +1,5 @@
 using System.Collections.Generic;
+
 using Prowl.Vector;
 
 namespace Prowl.Motion;
@@ -30,7 +31,7 @@ public sealed class IKEffector
 /// <summary>A multi effector IK rig: add effectors, set their targets, and solve them all in one pass.</summary>
 public sealed class IKRig
 {
-    private readonly List<IKEffector> _effectors = new();
+    private readonly List<IKEffector> _effectors = [];
 
     public IReadOnlyList<IKEffector> Effectors => _effectors;
 

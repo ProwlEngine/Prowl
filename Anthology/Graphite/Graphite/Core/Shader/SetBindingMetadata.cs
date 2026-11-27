@@ -57,7 +57,7 @@ internal sealed class SetBindingMetadata
                 }
             }
 
-            System.Collections.Generic.HashSet<PropertyID> names = new();
+            System.Collections.Generic.HashSet<PropertyID> names = [];
             bool hasStorageTexture = false;
             foreach (ResourceLayoutElementDescription element in elements)
             {

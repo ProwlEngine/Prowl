@@ -26,12 +26,12 @@ internal sealed class SyntheticIndex
     private const BindingFlags AllDeclared =
         BindingFlags.Public | BindingFlags.NonPublic | BindingFlags.Instance | BindingFlags.Static | BindingFlags.DeclaredOnly;
 
-    private static readonly ConditionalWeakTable<Assembly, SyntheticIndex> s_cache = new();
+    private static readonly ConditionalWeakTable<Assembly, SyntheticIndex> s_cache = [];
 
-    private readonly Dictionary<SyntheticTypeKey, Type> _types = new();
-    private readonly Dictionary<LambdaKey, LambdaEntry> _lambdas = new();
-    private readonly Dictionary<string, Type> _anonymous = new(StringComparer.Ordinal);
-    private readonly Dictionary<(Type, string?, int), MethodBase?> _scopeMethods = new();
+    private readonly Dictionary<SyntheticTypeKey, Type> _types = [];
+    private readonly Dictionary<LambdaKey, LambdaEntry> _lambdas = [];
+    private readonly Dictionary<string, Type> _anonymous = [with(StringComparer.Ordinal)];
+    private readonly Dictionary<(Type, string?, int), MethodBase?> _scopeMethods = [];
 
     private readonly Assembly _assembly;
     private AssemblyMetadata? _metadata;
@@ -64,7 +64,7 @@ internal sealed class SyntheticIndex
     public bool TryGetLambda(in LambdaKey key, out LambdaEntry entry) => _lambdas.TryGetValue(key, out entry);
 
     public Type? FindAnonymous(string[] propertyNames)
-        => _anonymous.TryGetValue(AnonymousKey(propertyNames), out var type) ? type : null;
+        => _anonymous.TryGetValue(AnonymousKey(propertyNames), out Type? type) ? type : null;
 
     // Property names are identifiers, so a comma cannot appear inside one and distinct lists cannot collide.
     private static string AnonymousKey(string[] propertyNames) => string.Join(',', propertyNames);
@@ -74,11 +74,11 @@ internal sealed class SyntheticIndex
     {
         if (scopeOrdinal < 0) return null;
 
-        var key = (declaringType, scopeName, scopeOrdinal);
-        if (_scopeMethods.TryGetValue(key, out var cached)) return cached;
+        (Type declaringType, string? scopeName, int scopeOrdinal) key = (declaringType, scopeName, scopeOrdinal);
+        if (_scopeMethods.TryGetValue(key, out MethodBase? cached)) return cached;
 
         MethodBase? found = null;
-        foreach (var candidate in CandidateScopeMethods(declaringType, scopeName))
+        foreach (MethodBase candidate in CandidateScopeMethods(declaringType, scopeName))
         {
             if (ScopeOrdinalOf(candidate) != scopeOrdinal) continue;
             found = candidate;
@@ -100,9 +100,9 @@ internal sealed class SyntheticIndex
 
     private void Build()
     {
-        foreach (var type in SafeTypes(_assembly))
+        foreach (Type type in SafeTypes(_assembly))
         {
-            if (!SyntheticName.TryParse(type.Name, out var name))
+            if (!SyntheticName.TryParse(type.Name, out SyntheticName name))
             {
                 IndexLambdasOn(type, type, scopeOrdinalFromDisplayClass: -1);
                 continue;
@@ -124,7 +124,7 @@ internal sealed class SyntheticIndex
 
     private void IndexSyntheticType(Type type, in SyntheticName name)
     {
-        var declaring = type.DeclaringType;
+        Type? declaring = type.DeclaringType;
         if (declaring?.FullName == null) return;
 
         if (name.Ordinal >= 0)
@@ -141,9 +141,9 @@ internal sealed class SyntheticIndex
     {
         if (declaring.FullName is not { } declaringName) return;
 
-        foreach (var method in container.GetMethods(AllDeclared))
+        foreach (MethodInfo method in container.GetMethods(AllDeclared))
         {
-            if (!SyntheticName.TryParse(method.Name, out var name) || !name.IsLambdaLike) continue;
+            if (!SyntheticName.TryParse(method.Name, out SyntheticName name) || !name.IsLambdaLike) continue;
             if (name.Ordinal < 0) continue;
 
             int scopeOrdinal, lambdaOrdinal;
@@ -174,13 +174,13 @@ internal sealed class SyntheticIndex
         if (!type.IsGenericTypeDefinition) return;
         if (!type.Name.StartsWith("<>f__AnonymousType", StringComparison.Ordinal)) return;
 
-        var parameters = type.GetGenericArguments();
+        Type[] parameters = type.GetGenericArguments();
         if (parameters.Length == 0) return;
 
-        var names = new string[parameters.Length];
+        string[] names = new string[parameters.Length];
         for (int i = 0; i < parameters.Length; i++)
         {
-            if (!TryReadAnonymousPropertyName(parameters[i].Name, out var propertyName)) return;
+            if (!TryReadAnonymousPropertyName(parameters[i].Name, out string? propertyName)) return;
             names[i] = propertyName;
         }
 

@@ -4,14 +4,13 @@
 using System;
 using System.Collections.Generic;
 
+using Prowl.OrigamiUI;
 using Prowl.PaperUI;
 using Prowl.PaperUI.LayoutEngine;
 using Prowl.Quill;
 using Prowl.Vector;
 
 using Color = System.Drawing.Color;
-
-using Prowl.OrigamiUI;
 
 namespace Prowl.OrigamiUI.Charts;
 
@@ -29,12 +28,12 @@ public sealed class FlameGraphChart<T> : ChartCore<FlameGraphChart<T>, T>
         public int Index;
         public bool Hidden;
         public T? Item;
-        public readonly List<Node> Children = new();
+        public readonly List<Node> Children = [];
     }
 
-    private readonly List<Node> _roots = new();
-    private readonly List<Node> _flat = new();
-    private readonly List<List<Node>> _rows = new();
+    private readonly List<Node> _roots = [];
+    private readonly List<Node> _flat = [];
+    private readonly List<List<Node>> _rows = [];
     private double _total;
 
     private Func<T, string>? _nameSelector;
@@ -151,7 +150,7 @@ public sealed class FlameGraphChart<T> : ChartCore<FlameGraphChart<T>, T>
             _flat.Add(node);
             if (_colorFunction == null) node.Color = RampColor(i, node.Depth);
 
-            while (_rows.Count <= node.Depth) _rows.Add(new List<Node>());
+            while (_rows.Count <= node.Depth) _rows.Add([]);
             _rows[node.Depth].Add(node);
 
             Index(node.Children);

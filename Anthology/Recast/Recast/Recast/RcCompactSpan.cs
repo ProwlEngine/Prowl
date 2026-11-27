@@ -18,29 +18,28 @@ freely, subject to the following restrictions:
 3. This notice may not be removed or altered from any source distribution.
 */
 
-namespace Prowl.Recast
+namespace Prowl.Recast;
+
+/** Represents a span of unobstructed space within a compact heightfield. */
+public readonly struct RcCompactSpan
 {
-    /** Represents a span of unobstructed space within a compact heightfield. */
-    public readonly struct RcCompactSpan
+    /** The lower extent of the span. (Measured from the heightfield's base.) */
+    public readonly int y;
+
+    /** The id of the region the span belongs to. (Or zero if not in a region.) */
+    public readonly int reg;
+
+    /** Packed neighbor connection data. */
+    public readonly int con;
+
+    /** The height of the span. (Measured from #y.) */
+    public readonly int h;
+
+    public RcCompactSpan(RcCompactSpanBuilder span)
     {
-        /** The lower extent of the span. (Measured from the heightfield's base.) */
-        public readonly int y;
-
-        /** The id of the region the span belongs to. (Or zero if not in a region.) */
-        public readonly int reg;
-
-        /** Packed neighbor connection data. */
-        public readonly int con;
-
-        /** The height of the span. (Measured from #y.) */
-        public readonly int h;
-
-        public RcCompactSpan(RcCompactSpanBuilder span)
-        {
-            y = span.y;
-            reg = span.reg;
-            con = span.con;
-            h = span.h;
-        }
+        y = span.y;
+        reg = span.reg;
+        con = span.con;
+        h = span.h;
     }
 }

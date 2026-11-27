@@ -1,9 +1,8 @@
-namespace Prowl.Recast.Detour
+namespace Prowl.Recast.Detour;
+
+public enum DtConvexConvexIntersection
 {
-    public enum DtConvexConvexIntersection
-    {
-        None,
-        Single,
-        Overlap,
-    }
+    None,
+    Single,
+    Overlap,
 }

@@ -62,7 +62,7 @@ public sealed class NetSession : IDisposable
     private readonly Stopwatch _clock = Stopwatch.StartNew();
     private readonly NetWriter _fragmentWriter = new();
 
-    private readonly Dictionary<ushort, RawMessageHandler> _handlers = new();
+    private readonly Dictionary<ushort, RawMessageHandler> _handlers = [];
 
     // Client only.
     private readonly string _joinName = string.Empty;
@@ -70,10 +70,10 @@ public sealed class NetSession : IDisposable
     private readonly Queue<Loopback> _loopback = new();
 
     private readonly NetSessionOptions _options;
-    private readonly Dictionary<int, NetPeer> _peers = new();
+    private readonly Dictionary<int, NetPeer> _peers = [];
     private readonly SessionPump? _pump;
-    private readonly Dictionary<Connection, Remote> _remotes = new();
-    private readonly List<KeyValuePair<Connection, Remote>> _scratch = new();
+    private readonly Dictionary<Connection, Remote> _remotes = [];
+    private readonly List<KeyValuePair<Connection, Remote>> _scratch = [];
     private readonly NetWriter _writer = new();
     private bool _batchWithHost;
     private bool _runningTimers;

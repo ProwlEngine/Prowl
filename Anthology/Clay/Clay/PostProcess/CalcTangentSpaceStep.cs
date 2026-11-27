@@ -32,7 +32,7 @@ internal sealed class CalcTangentSpaceStep : IPostProcess
 
     public void Execute(IntermediateScene scene, ImportContext context)
     {
-        foreach (var mesh in scene.Meshes)
+        foreach (IntermediateMesh mesh in scene.Meshes)
         {
             if (mesh.Tangents is { Count: > 0 })
                 continue; // Source supplied tangents - keep them.
@@ -46,12 +46,12 @@ internal sealed class CalcTangentSpaceStep : IPostProcess
             var tan1 = new Float3[vertexCount];
             var tan2 = new Float3[vertexCount];
 
-            var positions = CollectionsMarshal.AsSpan(mesh.Positions);
-            var normals = CollectionsMarshal.AsSpan(mesh.Normals);
-            var uvs = CollectionsMarshal.AsSpan(mesh.UVs[0]);
+            Span<Float3> positions = CollectionsMarshal.AsSpan(mesh.Positions);
+            Span<Float3> normals = CollectionsMarshal.AsSpan(mesh.Normals);
+            Span<Float2> uvs = CollectionsMarshal.AsSpan(mesh.UVs[0]);
 
-            var allIndices = mesh.Faces.AllIndices;
-            foreach (var face in mesh.Faces.AsSpan())
+            Span<int> allIndices = mesh.Faces.AllIndices;
+            foreach (IntermediateFace face in mesh.Faces.AsSpan())
             {
                 if (face.Count != 3) continue;
                 int i1 = allIndices[face.Start];
@@ -97,7 +97,7 @@ internal sealed class CalcTangentSpaceStep : IPostProcess
 
             var result = new List<Float4>(vertexCount);
             CollectionsMarshal.SetCount(result, vertexCount);
-            var resultSpan = CollectionsMarshal.AsSpan(result);
+            Span<Float4> resultSpan = CollectionsMarshal.AsSpan(result);
             for (int i = 0; i < vertexCount; i++)
             {
                 Float3 n = normals[i];

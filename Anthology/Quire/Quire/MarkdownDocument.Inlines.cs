@@ -13,7 +13,7 @@ public sealed partial class MarkdownDocument
 
     private void LinkInline(int previous, int next)
     {
-        var p = _inlines[previous];
+        Inline p = _inlines[previous];
         _inlines[previous] = new Inline(p.Kind, p.Style, p.Text, p.Href, p.Title, p.FirstChild, next);
     }
 
@@ -284,7 +284,7 @@ public sealed partial class MarkdownDocument
             return false;
         }
 
-        var span = _source.AsSpan(start + 1, close - (start + 1));
+        ReadOnlySpan<char> span = _source.AsSpan(start + 1, close - (start + 1));
         if (span.IndexOf("://".AsSpan()) < 0 && !span.StartsWith("mailto:".AsSpan()))
         {
             return false;

@@ -31,7 +31,7 @@ public sealed partial class PropertySet
     /// <param name="initialEntryCapacity">Initial dict capacity.</param>
     public PropertySet(int initialEntryCapacity)
     {
-        _entries = new(initialEntryCapacity);
+        _entries = [with(initialEntryCapacity)];
     }
 
 
@@ -62,7 +62,7 @@ public sealed partial class PropertySet
     internal PackedBlock AddPacked(UniformBlockLayout layout)
     {
         PackedBlock packed = new(layout);
-        (_packed ??= new()).Add(packed);
+        (_packed ??= []).Add(packed);
         return packed;
     }
 

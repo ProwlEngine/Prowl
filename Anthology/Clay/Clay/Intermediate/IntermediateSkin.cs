@@ -13,6 +13,6 @@ public sealed class IntermediateSkin
 {
     public string? Name { get; set; }
     public IntermediateNode? RootNode { get; set; }
-    public List<IntermediateNode> BoneNodes { get; } = new();
-    public List<Float4x4> InverseBindPoses { get; } = new();
+    public List<IntermediateNode> BoneNodes { get; } = [];
+    public List<Float4x4> InverseBindPoses { get; } = [];
 }

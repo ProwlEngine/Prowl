@@ -87,7 +87,7 @@ public static class FileDialog
         _isOpen = false;
         if (_modalHandle != null) { Modal.Remove(_modalHandle); _modalHandle = null; }
         if (result != null) _config?.OnFileOpened?.Invoke(result);
-        var cb = _onComplete;
+        Action<string?>? cb = _onComplete;
         _onComplete = null;
         cb?.Invoke(result);
     }
@@ -162,7 +162,7 @@ public static class FileDialog
         try
         {
             var seen = new HashSet<string>();
-            foreach (var d in DriveInfo.GetDrives())
+            foreach (DriveInfo d in DriveInfo.GetDrives())
             {
                 if (!d.IsReady || d.DriveType == DriveType.Ram || IsSystemMount(d.Name)) continue;
                 string dn = d.Name;
@@ -190,7 +190,7 @@ public static class FileDialog
     public static void DrawEmbedded(Paper paper, string id, float width, float height,
         string? startPath = null, FileDialogConfig? config = null)
     {
-        if (!_embedded.TryGetValue(id, out var st))
+        if (!_embedded.TryGetValue(id, out EmbeddedState? st))
             _embedded[id] = st = new EmbeddedState();
         EnsureInit(st, startPath);
         RenderBrowser(paper, id, width, height, st, config, FileDialogMode.Open,
@@ -204,7 +204,7 @@ public static class FileDialog
         if (!Directory.Exists(p)) p = AppContext.BaseDirectory;
         st.Path = Path.GetFullPath(p);
         st.Entries = LoadDir(st.Path, st.SortColumn, st.SortAscending, st.ShowHiddenEntries, st.Filters);
-        st.History = new List<string> { st.Path };
+        st.History = [st.Path];
         st.HistoryIndex = 0;
         st.Initialized = true;
     }
@@ -219,13 +219,13 @@ public static class FileDialog
         EmbeddedState st, FileDialogConfig? config, FileDialogMode mode,
         Action<string>? onChoose, Action? onClose, bool floating, int layer)
     {
-        var theme = Origami.Current;
-        var font = theme.Font;
+        OrigamiTheme theme = Origami.Current;
+        Scribe.FontFile? font = theme.Font;
         if (font == null) return;
-        var ink = theme.Ink;
-        var m = theme.Metrics;
-        var titleFont = theme.SemiBold ?? font;
-        var labelFont = theme.Medium ?? font;
+        OrigamiRamp ink = theme.Ink;
+        OrigamiMetrics m = theme.Metrics;
+        Scribe.FontFile titleFont = theme.SemiBold ?? font;
+        Scribe.FontFile labelFont = theme.Medium ?? font;
 
         // ── navigation / sort (local, per-id) ────────────────────
         void Reload() => st.Entries = LoadDir(st.Path, st.SortColumn, st.SortAscending, st.ShowHiddenEntries, st.Filters);
@@ -248,7 +248,7 @@ public static class FileDialog
         }
         void NavBack() { if (st.HistoryIndex > 0) { st.HistoryIndex--; st.Path = st.History[st.HistoryIndex]; st.Selected = ""; Reload(); } }
         void NavFwd() { if (st.HistoryIndex < st.History.Count - 1) { st.HistoryIndex++; st.Path = st.History[st.HistoryIndex]; st.Selected = ""; Reload(); } }
-        void NavUp() { var p = ParentOf(st); if (p != null) NavigateTo(p, true); }
+        void NavUp() { string? p = ParentOf(st); if (p != null) NavigateTo(p, true); }
         void SetSort(int col)
         {
             if (st.SortColumn == col) st.SortAscending = !st.SortAscending;
@@ -311,7 +311,7 @@ public static class FileDialog
 
         static IOrigamiIcon Ico(IconPainter p, Color col)
         {
-            if (!_icons.TryGetValue((p, col), out var icon))
+            if (!_icons.TryGetValue((p, col), out IOrigamiIcon? icon))
                 _icons[(p, col)] = icon = new IconAction((canvas, rect, _, _) => DrawIcon(canvas, rect, p, (float)rect.Size.X, col));
             return icon;
         }
@@ -341,15 +341,15 @@ public static class FileDialog
         float bodyH = height - toolbarH - footH - 2f;   // dividers below toolbar + above foot
         float listAreaW = width - sideW - 1f;           // vertical divider
 
-        var display = string.IsNullOrEmpty(st.Search)
+        List<FileEntry> display = string.IsNullOrEmpty(st.Search)
             ? st.Entries
             : st.Entries.Where(e => e.Name.Contains(st.Search, StringComparison.OrdinalIgnoreCase)).ToList();
 
         // ── small reusable pieces ────────────────────────────────
         void TbBtn(string bid, IconPainter painter, bool enabled, Action onClick, string? tooltip = null)
         {
-            var col = enabled ? ink.C400 : ink.C200;
-            var b = paper.Box(bid).Width(30).Height(26).Rounded(m.Rounding)
+            Color col = enabled ? ink.C400 : ink.C200;
+            ElementBuilder b = paper.Box(bid).Width(30).Height(26).Rounded(m.Rounding)
                 .Margin(0, 0, UnitValue.Stretch(), UnitValue.Stretch());   // vertically center in the toolbar row
             if (tooltip != null)
                 b.Tooltip(tooltip!);
@@ -367,7 +367,7 @@ public static class FileDialog
 
         void Breadcrumb()
         {
-            var parts = st.Path.Split(new[] { Path.DirectorySeparatorChar, Path.AltDirectorySeparatorChar },
+            string[] parts = st.Path.Split(new[] { Path.DirectorySeparatorChar, Path.AltDirectorySeparatorChar },
                 StringSplitOptions.RemoveEmptyEntries);
             var crumbs = new List<(string Label, string Path)>();
             string accum = "";
@@ -389,7 +389,7 @@ public static class FileDialog
                 if (start > 0)
                 {
                     string tp = crumbs[start - 1].Path;
-                    var eb = paper.Box("cr_ell").Width(UnitValue.Auto).Height(toolbarH).Padding(5, 5, 0, 0).Rounded(m.SmallRounding)
+                    ElementBuilder eb = paper.Box("cr_ell").Width(UnitValue.Auto).Height(toolbarH).Padding(5, 5, 0, 0).Rounded(m.SmallRounding)
                         .Text("...", font).TextColor(ink.C300).FontSize(m.FontSizeSmall).Alignment(TextAlignment.MiddleCenter)
                         .Hovered.BackgroundColor(theme.Hover).End();
                     eb.OnClick(0, (_, _) => NavigateTo(tp, true));
@@ -398,9 +398,9 @@ public static class FileDialog
 
                 for (int i = start; i < crumbs.Count; i++)
                 {
-                    var (label, cpath) = crumbs[i];
+                    (string? label, string? cpath) = crumbs[i];
                     bool last = i == crumbs.Count - 1;
-                    var cb = paper.Box("cr", i).Width(UnitValue.Auto).Height(toolbarH).Padding(5, 5, 0, 0).Rounded(m.SmallRounding)
+                    ElementBuilder cb = paper.Box("cr", i).Width(UnitValue.Auto).Height(toolbarH).Padding(5, 5, 0, 0).Rounded(m.SmallRounding)
                         .Text(label, last ? titleFont : font).TextColor(last ? ink.C500 : ink.C300)
                         .FontSize(m.FontSizeSmall).Alignment(TextAlignment.MiddleCenter);
                     if (!last)
@@ -426,14 +426,14 @@ public static class FileDialog
         void SideRow(string sid, IconPainter painter, Color iconCol, string label, string path)
         {
             bool sel = st.Path.Equals(path, StringComparison.OrdinalIgnoreCase);
-            var r = paper.Row(sid).Height(m.RowHeight)
+            ElementBuilder r = paper.Row(sid).Height(m.RowHeight)
                 .BackgroundColor(sel ? selection : Color.Transparent)
                 .Hovered.BackgroundColor(sel ? selection : theme.Hover).End()
                 .Rounded(m.Rounding).PaddingLeft(7).Gap(6).Clip();
             r.OnClick(0, (_, _) => NavigateTo(path, true));
             using (r.Enter())
             {
-                var ic = sel ? ink.C600 : iconCol;
+                Color ic = sel ? ink.C600 : iconCol;
                 using (paper.Box(sid + "_i").Width(18).Height(m.RowHeight).IsNotInteractable().Enter())
                     paper.Draw((canvas, rect) => DrawIcon(canvas, rect, painter, 14f, ic));
                 paper.Box(sid + "_l").Width(UnitValue.Stretch()).Height(m.RowHeight)
@@ -448,7 +448,7 @@ public static class FileDialog
         float winBlur = m.WindowBackdropBlur;
         Color winBg = OrigamiTheme.WithAlpha(theme.Neutral.C400, winBlur > 0f ? 205 : 235);
 
-        var win = paper.Column($"{id}_win").Size(width, height)
+        ElementBuilder win = paper.Column($"{id}_win").Size(width, height)
             .BackgroundColor(winBg)
             .BorderColor(theme.BorderSoft).BorderWidth(1).Rounded(m.ContainerRounding).Clip();
         if (winBlur > 0f)
@@ -502,7 +502,7 @@ public static class FileDialog
 
                     SideSep("drv");
                     SideSection("drv", "Drives");
-                    foreach (var (dlabel, dn) in _drives)
+                    foreach ((string? dlabel, string? dn) in _drives)
                         SideRow($"{id}_drv_{dn}", DrawDrive, ink.C400, dlabel, dn);
                 }
                 paper.Box("vsep").Width(1).Height(UnitValue.Stretch()).BackgroundColor(theme.BorderSoft);
@@ -557,11 +557,11 @@ public static class FileDialog
 
                     // Row model: optional ".." parent + entries, or an empty-message sentinel.
                     // Kind: 0 = entry, 1 = parent (".."), 2 = message.
-                    var parent = ParentOf(st);
-                    var rows = st.Rows;
+                    string? parent = ParentOf(st);
+                    List<(int Kind, string Name, string Path, bool IsDir, string Size, string Mod, string Ext)> rows = st.Rows;
                     rows.Clear();
                     if (parent != null) rows.Add((1, "..", parent, true, "", "", ""));
-                    foreach (var e in display) rows.Add((0, e.Name, e.FullPath, e.IsDirectory, e.SizeText, e.ModifiedText, e.Extension));
+                    foreach (FileEntry e in display) rows.Add((0, e.Name, e.FullPath, e.IsDirectory, e.SizeText, e.ModifiedText, e.Extension));
                     if (display.Count == 0)
                         rows.Add((2, string.IsNullOrEmpty(st.Search) ? "This folder is empty" : "No matches", "", false, "", "", ""));
 
@@ -569,10 +569,10 @@ public static class FileDialog
                     for (int i = 0; i < rows.Count; i++)
                         if (rows[i].Kind == 0 && rows[i].Path == st.Selected) { selIndex = i; break; }
 
-                    var table = Origami.Table(paper, $"{id}_tbl", selIndex, i =>
+                    TableBuilder table = Origami.Table(paper, $"{id}_tbl", selIndex, i =>
                         {
                             if (i < 0 || i >= rows.Count) return;
-                            var it = rows[i];
+                            (int Kind, string Name, string Path, bool IsDir, string Size, string Mod, string Ext) it = rows[i];
                             if (it.Kind != 0) { st.Selected = ""; return; }
                             st.Selected = it.Path;
                             if (!it.IsDir) st.FileName = it.Name;
@@ -588,7 +588,7 @@ public static class FileDialog
                         .OnRowActivate(i =>
                         {
                             if (i < 0 || i >= rows.Count) return;
-                            var it = rows[i];
+                            (int Kind, string Name, string Path, bool IsDir, string Size, string Mod, string Ext) it = rows[i];
                             if (it.Kind == 2) return;
                             if (it.IsDir) NavigateTo(it.Path, true);
                             else onChoose?.Invoke(it.Path);
@@ -596,17 +596,17 @@ public static class FileDialog
                         .OnRowContext(i =>
                         {
                             if (i < 0 || i >= rows.Count) return;
-                            var it = rows[i];
+                            (int Kind, string Name, string Path, bool IsDir, string Size, string Mod, string Ext) it = rows[i];
                             if (it.Kind == 2) return;
                             RowContextMenu(it.Kind, it.Name, it.Path, it.IsDir);
                         });
 
-                    foreach (var it in rows)
+                    foreach ((int Kind, string Name, string Path, bool IsDir, string Size, string Mod, string Ext) it in rows)
                     {
                         if (it.Kind == 2) { table.Row().Cell(it.Name, ink.C200); continue; }
 
-                        var painter = it.IsDir ? DrawFolder : FileGlyph(it.Ext);
-                        var iconCol = it.IsDir ? theme.Amber.C500 : FileTint(theme, ink, it.Ext);
+                        IconPainter painter = it.IsDir ? DrawFolder : FileGlyph(it.Ext);
+                        Color iconCol = it.IsDir ? theme.Amber.C500 : FileTint(theme, ink, it.Ext);
                         table.Row()
                             .Cell(it.Name, it.Kind == 1 ? ink.C300 : ink.C400, Ico(painter, iconCol))
                             .CellRight(it.Size, ink.C200)
@@ -673,7 +673,7 @@ public static class FileDialog
     private delegate void IconPainter(Canvas canvas, float cx, float cy, float size, Color color);
 
     // One icon per painter and colour, shared by every row that uses it.
-    private static readonly Dictionary<(IconPainter, Color), IOrigamiIcon> _icons = new(new IconKeyComparer());
+    private static readonly Dictionary<(IconPainter, Color), IOrigamiIcon> _icons = [with(new IconKeyComparer())];
 
     // Painters are compared by reference, which avoids the reflection a delegate's own hash does.
     private sealed class IconKeyComparer : IEqualityComparer<(IconPainter Painter, Color Color)>
@@ -685,11 +685,11 @@ public static class FileDialog
             => System.Runtime.CompilerServices.RuntimeHelpers.GetHashCode(key.Painter) ^ key.Color.ToArgb();
     }
 
-    private static readonly HashSet<string> _imgExts = new(StringComparer.OrdinalIgnoreCase)
-        { ".png", ".jpg", ".jpeg", ".gif", ".bmp", ".svg", ".webp", ".ico", ".tga", ".tiff" };
-    private static readonly HashSet<string> _codeExts = new(StringComparer.OrdinalIgnoreCase)
-        { ".cs", ".js", ".ts", ".py", ".cpp", ".c", ".h", ".hpp", ".java", ".json", ".xml",
-          ".html", ".css", ".go", ".rs", ".rb", ".php", ".sh", ".lua", ".glsl", ".shader", ".yml", ".yaml", ".toml" };
+    private static readonly HashSet<string> _imgExts = [with(StringComparer.OrdinalIgnoreCase), ".png", ".jpg", ".jpeg", ".gif", ".bmp", ".svg", ".webp", ".ico", ".tga", ".tiff"];
+    private static readonly HashSet<string> _codeExts =
+        [         with(StringComparer.OrdinalIgnoreCase),
+".cs", ".js", ".ts", ".py", ".cpp", ".c", ".h", ".hpp", ".java", ".json", ".xml",
+          ".html", ".css", ".go", ".rs", ".rb", ".php", ".sh", ".lua", ".glsl", ".shader", ".yml", ".yaml", ".toml" ];
 
     private static IconPainter FileGlyph(string ext) =>
         _imgExts.Contains(ext) ? DrawImage : _codeExts.Contains(ext) ? DrawCode : DrawFile;
@@ -952,12 +952,12 @@ public static class FileDialog
         try
         {
             var di = new DirectoryInfo(path);
-            foreach (var dir in di.EnumerateDirectories())
+            foreach (DirectoryInfo dir in di.EnumerateDirectories())
             {
                 if (!showHidden && (dir.Attributes & FileAttributes.Hidden) != 0) continue;
                 list.Add(new FileEntry(dir.Name, dir.FullName, true, 0, dir.LastWriteTime));
             }
-            foreach (var file in di.EnumerateFiles())
+            foreach (FileInfo file in di.EnumerateFiles())
             {
                 if (!showHidden && (file.Attributes & FileAttributes.Hidden) != 0) continue;
                 if (filters is { Length: > 0 } && !MatchesFilter(file.Name, filters)) continue;
@@ -966,8 +966,8 @@ public static class FileDialog
         }
         catch { }
 
-        var dirs = list.Where(e => e.IsDirectory);
-        var files = list.Where(e => !e.IsDirectory);
+        IEnumerable<FileEntry> dirs = list.Where(e => e.IsDirectory);
+        IEnumerable<FileEntry> files = list.Where(e => !e.IsDirectory);
         IEnumerable<FileEntry> Sort(IEnumerable<FileEntry> items) => sortColumn switch
         {
             1 => ascending ? items.OrderBy(e => e.Size) : items.OrderByDescending(e => e.Size),

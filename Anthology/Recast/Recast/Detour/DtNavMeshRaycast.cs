@@ -18,77 +18,77 @@ freely, subject to the following restrictions:
 */
 
 using System;
+
 using Prowl.Recast.Core;
 using Prowl.Recast.Core.Numerics;
 
-namespace Prowl.Recast.Detour
+namespace Prowl.Recast.Detour;
+
+/**
+* Simple helper to find an intersection between a ray and a nav mesh
+*/
+public static class DtNavMeshRaycast
 {
-    /**
- * Simple helper to find an intersection between a ray and a nav mesh
- */
-    public static class DtNavMeshRaycast
+    public static bool Raycast(DtNavMesh mesh, RcVec3f src, RcVec3f dst, out float hitTime)
     {
-        public static bool Raycast(DtNavMesh mesh, RcVec3f src, RcVec3f dst, out float hitTime)
+        hitTime = 0.0f;
+        for (int t = 0; t < mesh.GetMaxTiles(); ++t)
         {
-            hitTime = 0.0f;
-            for (int t = 0; t < mesh.GetMaxTiles(); ++t)
+            DtMeshTile tile = mesh.GetTile(t);
+            if (tile != null && tile.data != null)
             {
-                DtMeshTile tile = mesh.GetTile(t);
-                if (tile != null && tile.data != null)
+                if (Raycast(tile, src, dst, out hitTime))
                 {
-                    if (Raycast(tile, src, dst, out hitTime))
-                    {
-                        return true;
-                    }
+                    return true;
                 }
             }
-
-            return false;
         }
 
-        private static bool Raycast(DtMeshTile tile, RcVec3f sp, RcVec3f sq, out float hitTime)
+        return false;
+    }
+
+    private static bool Raycast(DtMeshTile tile, RcVec3f sp, RcVec3f sq, out float hitTime)
+    {
+        hitTime = 0.0f;
+        Span<RcVec3f> tempVerts = stackalloc RcVec3f[3];
+        for (int i = 0; i < tile.data.header.polyCount; ++i)
         {
-            hitTime = 0.0f;
-            Span<RcVec3f> tempVerts = stackalloc RcVec3f[3];
-            for (int i = 0; i < tile.data.header.polyCount; ++i)
+            DtPoly p = tile.data.polys[i];
+            if (p.GetPolyType() == DtPolyTypes.DT_POLYTYPE_OFFMESH_CONNECTION)
             {
-                DtPoly p = tile.data.polys[i];
-                if (p.GetPolyType() == DtPolyTypes.DT_POLYTYPE_OFFMESH_CONNECTION)
-                {
-                    continue;
-                }
-
-                ref DtPolyDetail pd = ref tile.data.detailMeshes[i];
-
-                Span<RcVec3f> verts = tempVerts;
-                for (int j = 0; j < pd.triCount; ++j)
-                {
-                    int t = (pd.triBase + j) * 4;
-                    for (int k = 0; k < 3; ++k)
-                    {
-                        int v = tile.data.detailTris[t + k];
-                        if (v < p.vertCount)
-                        {
-                            verts[k].X = tile.data.verts[p.verts[v] * 3];
-                            verts[k].Y = tile.data.verts[p.verts[v] * 3 + 1];
-                            verts[k].Z = tile.data.verts[p.verts[v] * 3 + 2];
-                        }
-                        else
-                        {
-                            verts[k].X = tile.data.detailVerts[(pd.vertBase + v - p.vertCount) * 3];
-                            verts[k].Y = tile.data.detailVerts[(pd.vertBase + v - p.vertCount) * 3 + 1];
-                            verts[k].Z = tile.data.detailVerts[(pd.vertBase + v - p.vertCount) * 3 + 2];
-                        }
-                    }
-
-                    if (RcIntersections.IntersectSegmentTriangle(sp, sq, verts[0], verts[1], verts[2], out hitTime))
-                    {
-                        return true;
-                    }
-                }
+                continue;
             }
 
-            return false;
+            ref DtPolyDetail pd = ref tile.data.detailMeshes[i];
+
+            Span<RcVec3f> verts = tempVerts;
+            for (int j = 0; j < pd.triCount; ++j)
+            {
+                int t = (pd.triBase + j) * 4;
+                for (int k = 0; k < 3; ++k)
+                {
+                    int v = tile.data.detailTris[t + k];
+                    if (v < p.vertCount)
+                    {
+                        verts[k].X = tile.data.verts[p.verts[v] * 3];
+                        verts[k].Y = tile.data.verts[p.verts[v] * 3 + 1];
+                        verts[k].Z = tile.data.verts[p.verts[v] * 3 + 2];
+                    }
+                    else
+                    {
+                        verts[k].X = tile.data.detailVerts[(pd.vertBase + v - p.vertCount) * 3];
+                        verts[k].Y = tile.data.detailVerts[(pd.vertBase + v - p.vertCount) * 3 + 1];
+                        verts[k].Z = tile.data.detailVerts[(pd.vertBase + v - p.vertCount) * 3 + 2];
+                    }
+                }
+
+                if (RcIntersections.IntersectSegmentTriangle(sp, sq, verts[0], verts[1], verts[2], out hitTime))
+                {
+                    return true;
+                }
+            }
         }
+
+        return false;
     }
 }

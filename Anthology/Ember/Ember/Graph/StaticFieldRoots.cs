@@ -17,13 +17,13 @@ public sealed class StaticFieldRoots : IRootProvider
 
     public IEnumerable<Root> Enumerate(RootContext context)
     {
-        foreach (var assembly in AssembliesToWalk(context))
+        foreach (Assembly assembly in AssembliesToWalk(context))
         {
             if (context.Scope.IsExcluded(assembly)) continue;
 
             if (!context.Assemblies.IsSubstituted(assembly)
                 && !context.Assemblies.Added.Contains(assembly)
-                && context.Assemblies.ReferencesSubstituted(assembly, out var reference))
+                && context.Assemblies.ReferencesSubstituted(assembly, out AssemblyName? reference))
             {
                 context.Report(ReloadCode.ScopeAssemblySkipped, ReloadSeverity.Info,
                     $"References {reference.Name}, which this reload replaces, so its statics were compiled against the previous types.",
@@ -31,12 +31,12 @@ public sealed class StaticFieldRoots : IRootProvider
                 continue;
             }
 
-            foreach (var type in SyntheticIndex.SafeTypes(assembly))
+            foreach (Type type in SyntheticIndex.SafeTypes(assembly))
             {
                 if (!context.Scope.Accepts(type)) continue;
                 if (!ShouldWalk(type, context)) continue;
 
-                foreach (var root in RootsOf(type, context))
+                foreach (Root root in RootsOf(type, context))
                     yield return root;
             }
         }
@@ -65,17 +65,17 @@ public sealed class StaticFieldRoots : IRootProvider
 
     private static IEnumerable<Root> RootsOf(Type type, RootContext context)
     {
-        var resolution = context.Types.Resolve(type);
+        TypeResolution resolution = context.Types.Resolve(type);
         if (resolution.Target is not { } currentType) yield break;
 
         bool moved = !resolution.IsUnchanged;
 
-        foreach (var field in type.GetFields(Statics))
+        foreach (FieldInfo field in type.GetFields(Statics))
         {
             if (field.IsLiteral) continue;
             if (IgnoreRules.Applies(field)) continue;
 
-            var destination = moved ? currentType.GetField(field.Name, Statics) : field;
+            FieldInfo? destination = moved ? currentType.GetField(field.Name, Statics) : field;
             if (destination == null) continue;
             if (destination.IsLiteral) continue;
             if (IgnoreRules.Applies(destination)) continue;

@@ -114,19 +114,19 @@ internal static class RoslynMapping
         => s_classifications.TryGetValue(classification, out kind);
 
     public static CodeTokenKind TextTag(string tag)
-        => s_textTags.TryGetValue(tag, out var kind) ? kind : CodeTokenKind.Plain;
+        => s_textTags.TryGetValue(tag, out CodeTokenKind kind) ? kind : CodeTokenKind.Plain;
 
     public static CodeSymbolKind CompletionKind(ImmutableArray<string> tags)
     {
-        foreach (var tag in tags)
-            if (s_completionTags.TryGetValue(tag, out var kind)) return kind;
+        foreach (string tag in tags)
+            if (s_completionTags.TryGetValue(tag, out CodeSymbolKind kind)) return kind;
         return CodeSymbolKind.Text;
     }
 
     public static List<CodeTaggedText> Tagged(IEnumerable<TaggedText> parts)
     {
         var list = new List<CodeTaggedText>();
-        foreach (var part in parts)
+        foreach (TaggedText part in parts)
             list.Add(new CodeTaggedText(part.Text, TextTag(part.Tag)));
         return list;
     }

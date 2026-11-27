@@ -78,7 +78,7 @@ public partial struct Int3 : IEquatable<Int3>, IFormattable
 
     public Int3(IEnumerable<int> values)
     {
-        var array = values.ToArray();
+        int[] array = values.ToArray();
         if (array.Length < 3) throw new ArgumentException("Collection must contain at least 3 elements.", nameof(values));
         X = array[0];
         Y = array[1];

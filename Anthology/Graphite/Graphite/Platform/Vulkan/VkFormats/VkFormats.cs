@@ -12,45 +12,34 @@ internal static partial class VkFormats
 {
     internal static VkSamplerAddressMode ToVkSamplerAddressMode(SamplerAddressMode mode)
     {
-        switch (mode)
+        return mode switch
         {
-            case SamplerAddressMode.Wrap:
-                return VkSamplerAddressMode.Repeat;
-            case SamplerAddressMode.Mirror:
-                return VkSamplerAddressMode.MirroredRepeat;
-            case SamplerAddressMode.Clamp:
-                return VkSamplerAddressMode.ClampToEdge;
-            case SamplerAddressMode.Border:
-                return VkSamplerAddressMode.ClampToBorder;
-            default:
-                throw Illegal.Value<SamplerAddressMode>();
-        }
+            SamplerAddressMode.Wrap => VkSamplerAddressMode.Repeat,
+            SamplerAddressMode.Mirror => VkSamplerAddressMode.MirroredRepeat,
+            SamplerAddressMode.Clamp => VkSamplerAddressMode.ClampToEdge,
+            SamplerAddressMode.Border => VkSamplerAddressMode.ClampToBorder,
+            _ => throw Illegal.Value<SamplerAddressMode>(),
+        };
     }
 
     internal static Filter ToVkFilter(FilterMode mode)
     {
-        switch (mode)
+        return mode switch
         {
-            case FilterMode.Point:
-                return Filter.Nearest;
-            case FilterMode.Linear:
-                return Filter.Linear;
-            default:
-                throw Illegal.Value<FilterMode>();
-        }
+            FilterMode.Point => Filter.Nearest,
+            FilterMode.Linear => Filter.Linear,
+            _ => throw Illegal.Value<FilterMode>(),
+        };
     }
 
     internal static SamplerMipmapMode ToVkMipmapMode(FilterMode mode)
     {
-        switch (mode)
+        return mode switch
         {
-            case FilterMode.Point:
-                return SamplerMipmapMode.Nearest;
-            case FilterMode.Linear:
-                return SamplerMipmapMode.Linear;
-            default:
-                throw Illegal.Value<FilterMode>();
-        }
+            FilterMode.Point => SamplerMipmapMode.Nearest,
+            FilterMode.Linear => SamplerMipmapMode.Linear,
+            _ => throw Illegal.Value<FilterMode>(),
+        };
     }
 
     internal static ImageUsageFlags ToVkTextureUsage(TextureUsage vdUsage)
@@ -79,98 +68,67 @@ internal static partial class VkFormats
 
     internal static ImageType ToVkTextureType(TextureType type)
     {
-        switch (type)
+        return type switch
         {
-            case TextureType.Texture1D:
-                return ImageType.Type1D;
-            case TextureType.Texture2D:
-            case TextureType.TextureCube:
-                return ImageType.Type2D;
-            case TextureType.Texture3D:
-                return ImageType.Type3D;
-            default:
-                throw Illegal.Value<TextureType>();
-        }
+            TextureType.Texture1D => ImageType.Type1D,
+            TextureType.Texture2D or TextureType.TextureCube => ImageType.Type2D,
+            TextureType.Texture3D => ImageType.Type3D,
+            _ => throw Illegal.Value<TextureType>(),
+        };
     }
 
     internal static SampleCountFlags ToVkSampleCount(TextureSampleCount sampleCount)
     {
-        switch (sampleCount)
+        return sampleCount switch
         {
-            case TextureSampleCount.Count1:
-                return SampleCountFlags.Count1Bit;
-            case TextureSampleCount.Count2:
-                return SampleCountFlags.Count2Bit;
-            case TextureSampleCount.Count4:
-                return SampleCountFlags.Count4Bit;
-            case TextureSampleCount.Count8:
-                return SampleCountFlags.Count8Bit;
-            case TextureSampleCount.Count16:
-                return SampleCountFlags.Count16Bit;
-            case TextureSampleCount.Count32:
-                return SampleCountFlags.Count32Bit;
-            default:
-                throw Illegal.Value<TextureSampleCount>();
-        }
+            TextureSampleCount.Count1 => SampleCountFlags.Count1Bit,
+            TextureSampleCount.Count2 => SampleCountFlags.Count2Bit,
+            TextureSampleCount.Count4 => SampleCountFlags.Count4Bit,
+            TextureSampleCount.Count8 => SampleCountFlags.Count8Bit,
+            TextureSampleCount.Count16 => SampleCountFlags.Count16Bit,
+            TextureSampleCount.Count32 => SampleCountFlags.Count32Bit,
+            _ => throw Illegal.Value<TextureSampleCount>(),
+        };
     }
 
     internal static StencilOp ToVkStencilOp(StencilOperation op)
     {
-        switch (op)
+        return op switch
         {
-            case StencilOperation.Keep:
-                return StencilOp.Keep;
-            case StencilOperation.Zero:
-                return StencilOp.Zero;
-            case StencilOperation.Replace:
-                return StencilOp.Replace;
-            case StencilOperation.IncrementAndClamp:
-                return StencilOp.IncrementAndClamp;
-            case StencilOperation.DecrementAndClamp:
-                return StencilOp.DecrementAndClamp;
-            case StencilOperation.Invert:
-                return StencilOp.Invert;
-            case StencilOperation.IncrementAndWrap:
-                return StencilOp.IncrementAndWrap;
-            case StencilOperation.DecrementAndWrap:
-                return StencilOp.DecrementAndWrap;
-            default:
-                throw Illegal.Value<StencilOperation>();
-        }
+            StencilOperation.Keep => StencilOp.Keep,
+            StencilOperation.Zero => StencilOp.Zero,
+            StencilOperation.Replace => StencilOp.Replace,
+            StencilOperation.IncrementAndClamp => StencilOp.IncrementAndClamp,
+            StencilOperation.DecrementAndClamp => StencilOp.DecrementAndClamp,
+            StencilOperation.Invert => StencilOp.Invert,
+            StencilOperation.IncrementAndWrap => StencilOp.IncrementAndWrap,
+            StencilOperation.DecrementAndWrap => StencilOp.DecrementAndWrap,
+            _ => throw Illegal.Value<StencilOperation>(),
+        };
     }
 
     internal static CullModeFlags ToVkCullMode(FaceCullMode cullMode)
     {
-        switch (cullMode)
+        return cullMode switch
         {
-            case FaceCullMode.Back:
-                return CullModeFlags.BackBit;
-            case FaceCullMode.Front:
-                return CullModeFlags.FrontBit;
-            case FaceCullMode.None:
-                return CullModeFlags.None;
-            default:
-                throw Illegal.Value<FaceCullMode>();
-        }
+            FaceCullMode.Back => CullModeFlags.BackBit,
+            FaceCullMode.Front => CullModeFlags.FrontBit,
+            FaceCullMode.None => CullModeFlags.None,
+            _ => throw Illegal.Value<FaceCullMode>(),
+        };
     }
 
     internal static BlendOp ToVkBlendOp(BlendFunction func)
     {
-        switch (func)
+        return func switch
         {
-            case BlendFunction.Add:
-                return BlendOp.Add;
-            case BlendFunction.Subtract:
-                return BlendOp.Subtract;
-            case BlendFunction.ReverseSubtract:
-                return BlendOp.ReverseSubtract;
-            case BlendFunction.Minimum:
-                return BlendOp.Min;
-            case BlendFunction.Maximum:
-                return BlendOp.Max;
-            default:
-                throw Illegal.Value<BlendFunction>();
-        }
+            BlendFunction.Add => BlendOp.Add,
+            BlendFunction.Subtract => BlendOp.Subtract,
+            BlendFunction.ReverseSubtract => BlendOp.ReverseSubtract,
+            BlendFunction.Minimum => BlendOp.Min,
+            BlendFunction.Maximum => BlendOp.Max,
+            _ => throw Illegal.Value<BlendFunction>(),
+        };
     }
 
     internal static ColorComponentFlags ToVkColorWriteMask(ColorWriteMask mask)
@@ -191,125 +149,74 @@ internal static partial class VkFormats
 
     internal static VkPrimitiveTopology ToVkPrimitiveTopology(PrimitiveTopology topology)
     {
-        switch (topology)
+        return topology switch
         {
-            case PrimitiveTopology.TriangleList:
-                return VkPrimitiveTopology.TriangleList;
-            case PrimitiveTopology.TriangleStrip:
-                return VkPrimitiveTopology.TriangleStrip;
-            case PrimitiveTopology.LineList:
-                return VkPrimitiveTopology.LineList;
-            case PrimitiveTopology.LineStrip:
-                return VkPrimitiveTopology.LineStrip;
-            case PrimitiveTopology.PointList:
-                return VkPrimitiveTopology.PointList;
-            default:
-                throw Illegal.Value<PrimitiveTopology>();
-        }
+            PrimitiveTopology.TriangleList => VkPrimitiveTopology.TriangleList,
+            PrimitiveTopology.TriangleStrip => VkPrimitiveTopology.TriangleStrip,
+            PrimitiveTopology.LineList => VkPrimitiveTopology.LineList,
+            PrimitiveTopology.LineStrip => VkPrimitiveTopology.LineStrip,
+            PrimitiveTopology.PointList => VkPrimitiveTopology.PointList,
+            _ => throw Illegal.Value<PrimitiveTopology>(),
+        };
     }
 
     internal static VkBlendFactor ToVkBlendFactor(BlendFactor factor)
     {
-        switch (factor)
+        return factor switch
         {
-            case BlendFactor.Zero:
-                return VkBlendFactor.Zero;
-            case BlendFactor.One:
-                return VkBlendFactor.One;
-            case BlendFactor.SourceAlpha:
-                return VkBlendFactor.SrcAlpha;
-            case BlendFactor.InverseSourceAlpha:
-                return VkBlendFactor.OneMinusSrcAlpha;
-            case BlendFactor.DestinationAlpha:
-                return VkBlendFactor.DstAlpha;
-            case BlendFactor.InverseDestinationAlpha:
-                return VkBlendFactor.OneMinusDstAlpha;
-            case BlendFactor.SourceColor:
-                return VkBlendFactor.SrcColor;
-            case BlendFactor.InverseSourceColor:
-                return VkBlendFactor.OneMinusSrcColor;
-            case BlendFactor.DestinationColor:
-                return VkBlendFactor.DstColor;
-            case BlendFactor.InverseDestinationColor:
-                return VkBlendFactor.OneMinusDstColor;
-            case BlendFactor.BlendFactor:
-                return VkBlendFactor.ConstantColor;
-            case BlendFactor.InverseBlendFactor:
-                return VkBlendFactor.OneMinusConstantColor;
-            default:
-                throw Illegal.Value<BlendFactor>();
-        }
+            BlendFactor.Zero => VkBlendFactor.Zero,
+            BlendFactor.One => VkBlendFactor.One,
+            BlendFactor.SourceAlpha => VkBlendFactor.SrcAlpha,
+            BlendFactor.InverseSourceAlpha => VkBlendFactor.OneMinusSrcAlpha,
+            BlendFactor.DestinationAlpha => VkBlendFactor.DstAlpha,
+            BlendFactor.InverseDestinationAlpha => VkBlendFactor.OneMinusDstAlpha,
+            BlendFactor.SourceColor => VkBlendFactor.SrcColor,
+            BlendFactor.InverseSourceColor => VkBlendFactor.OneMinusSrcColor,
+            BlendFactor.DestinationColor => VkBlendFactor.DstColor,
+            BlendFactor.InverseDestinationColor => VkBlendFactor.OneMinusDstColor,
+            BlendFactor.BlendFactor => VkBlendFactor.ConstantColor,
+            BlendFactor.InverseBlendFactor => VkBlendFactor.OneMinusConstantColor,
+            _ => throw Illegal.Value<BlendFactor>(),
+        };
     }
 
     internal static Format ToVkVertexElementFormat(VertexElementFormat format)
     {
-        switch (format)
+        return format switch
         {
-            case VertexElementFormat.Float1:
-                return Format.R32Sfloat;
-            case VertexElementFormat.Float2:
-                return Format.R32G32Sfloat;
-            case VertexElementFormat.Float3:
-                return Format.R32G32B32Sfloat;
-            case VertexElementFormat.Float4:
-                return Format.R32G32B32A32Sfloat;
-            case VertexElementFormat.Byte2_Norm:
-                return Format.R8G8Unorm;
-            case VertexElementFormat.Byte2:
-                return Format.R8G8Uint;
-            case VertexElementFormat.Byte4_Norm:
-                return Format.R8G8B8A8Unorm;
-            case VertexElementFormat.Byte4:
-                return Format.R8G8B8A8Uint;
-            case VertexElementFormat.SByte2_Norm:
-                return Format.R8G8SNorm;
-            case VertexElementFormat.SByte2:
-                return Format.R8G8Sint;
-            case VertexElementFormat.SByte4_Norm:
-                return Format.R8G8B8A8SNorm;
-            case VertexElementFormat.SByte4:
-                return Format.R8G8B8A8Sint;
-            case VertexElementFormat.UShort2_Norm:
-                return Format.R16G16Unorm;
-            case VertexElementFormat.UShort2:
-                return Format.R16G16Uint;
-            case VertexElementFormat.UShort4_Norm:
-                return Format.R16G16B16A16Unorm;
-            case VertexElementFormat.UShort4:
-                return Format.R16G16B16A16Uint;
-            case VertexElementFormat.Short2_Norm:
-                return Format.R16G16SNorm;
-            case VertexElementFormat.Short2:
-                return Format.R16G16Sint;
-            case VertexElementFormat.Short4_Norm:
-                return Format.R16G16B16A16SNorm;
-            case VertexElementFormat.Short4:
-                return Format.R16G16B16A16Sint;
-            case VertexElementFormat.UInt1:
-                return Format.R32Uint;
-            case VertexElementFormat.UInt2:
-                return Format.R32G32Uint;
-            case VertexElementFormat.UInt3:
-                return Format.R32G32B32Uint;
-            case VertexElementFormat.UInt4:
-                return Format.R32G32B32A32Uint;
-            case VertexElementFormat.Int1:
-                return Format.R32Sint;
-            case VertexElementFormat.Int2:
-                return Format.R32G32Sint;
-            case VertexElementFormat.Int3:
-                return Format.R32G32B32Sint;
-            case VertexElementFormat.Int4:
-                return Format.R32G32B32A32Sint;
-            case VertexElementFormat.Half1:
-                return Format.R16Sfloat;
-            case VertexElementFormat.Half2:
-                return Format.R16G16Sfloat;
-            case VertexElementFormat.Half4:
-                return Format.R16G16B16A16Sfloat;
-            default:
-                throw Illegal.Value<VertexElementFormat>();
-        }
+            VertexElementFormat.Float1 => Format.R32Sfloat,
+            VertexElementFormat.Float2 => Format.R32G32Sfloat,
+            VertexElementFormat.Float3 => Format.R32G32B32Sfloat,
+            VertexElementFormat.Float4 => Format.R32G32B32A32Sfloat,
+            VertexElementFormat.Byte2_Norm => Format.R8G8Unorm,
+            VertexElementFormat.Byte2 => Format.R8G8Uint,
+            VertexElementFormat.Byte4_Norm => Format.R8G8B8A8Unorm,
+            VertexElementFormat.Byte4 => Format.R8G8B8A8Uint,
+            VertexElementFormat.SByte2_Norm => Format.R8G8SNorm,
+            VertexElementFormat.SByte2 => Format.R8G8Sint,
+            VertexElementFormat.SByte4_Norm => Format.R8G8B8A8SNorm,
+            VertexElementFormat.SByte4 => Format.R8G8B8A8Sint,
+            VertexElementFormat.UShort2_Norm => Format.R16G16Unorm,
+            VertexElementFormat.UShort2 => Format.R16G16Uint,
+            VertexElementFormat.UShort4_Norm => Format.R16G16B16A16Unorm,
+            VertexElementFormat.UShort4 => Format.R16G16B16A16Uint,
+            VertexElementFormat.Short2_Norm => Format.R16G16SNorm,
+            VertexElementFormat.Short2 => Format.R16G16Sint,
+            VertexElementFormat.Short4_Norm => Format.R16G16B16A16SNorm,
+            VertexElementFormat.Short4 => Format.R16G16B16A16Sint,
+            VertexElementFormat.UInt1 => Format.R32Uint,
+            VertexElementFormat.UInt2 => Format.R32G32Uint,
+            VertexElementFormat.UInt3 => Format.R32G32B32Uint,
+            VertexElementFormat.UInt4 => Format.R32G32B32A32Uint,
+            VertexElementFormat.Int1 => Format.R32Sint,
+            VertexElementFormat.Int2 => Format.R32G32Sint,
+            VertexElementFormat.Int3 => Format.R32G32B32Sint,
+            VertexElementFormat.Int4 => Format.R32G32B32A32Sint,
+            VertexElementFormat.Half1 => Format.R16Sfloat,
+            VertexElementFormat.Half2 => Format.R16G16Sfloat,
+            VertexElementFormat.Half4 => Format.R16G16B16A16Sfloat,
+            _ => throw Illegal.Value<VertexElementFormat>(),
+        };
     }
 
     internal static ShaderStageFlags ToVkShaderStages(ShaderStages stage)
@@ -339,251 +246,133 @@ internal static partial class VkFormats
 
     internal static BorderColor ToVkSamplerBorderColor(SamplerBorderColor borderColor)
     {
-        switch (borderColor)
+        return borderColor switch
         {
-            case SamplerBorderColor.TransparentBlack:
-                return BorderColor.FloatTransparentBlack;
-            case SamplerBorderColor.OpaqueBlack:
-                return BorderColor.FloatOpaqueBlack;
-            case SamplerBorderColor.OpaqueWhite:
-                return BorderColor.FloatOpaqueWhite;
-            default:
-                throw Illegal.Value<SamplerBorderColor>();
-        }
+            SamplerBorderColor.TransparentBlack => BorderColor.FloatTransparentBlack,
+            SamplerBorderColor.OpaqueBlack => BorderColor.FloatOpaqueBlack,
+            SamplerBorderColor.OpaqueWhite => BorderColor.FloatOpaqueWhite,
+            _ => throw Illegal.Value<SamplerBorderColor>(),
+        };
     }
 
     internal static IndexType ToVkIndexFormat(IndexFormat format)
     {
-        switch (format)
+        return format switch
         {
-            case IndexFormat.UInt16:
-                return IndexType.Uint16;
-            case IndexFormat.UInt32:
-                return IndexType.Uint32;
-            default:
-                throw Illegal.Value<IndexFormat>();
-        }
+            IndexFormat.UInt16 => IndexType.Uint16,
+            IndexFormat.UInt32 => IndexType.Uint32,
+            _ => throw Illegal.Value<IndexFormat>(),
+        };
     }
 
     internal static CompareOp ToVkCompareOp(ComparisonKind comparisonKind)
     {
-        switch (comparisonKind)
+        return comparisonKind switch
         {
-            case ComparisonKind.Never:
-                return CompareOp.Never;
-            case ComparisonKind.Less:
-                return CompareOp.Less;
-            case ComparisonKind.Equal:
-                return CompareOp.Equal;
-            case ComparisonKind.LessEqual:
-                return CompareOp.LessOrEqual;
-            case ComparisonKind.Greater:
-                return CompareOp.Greater;
-            case ComparisonKind.NotEqual:
-                return CompareOp.NotEqual;
-            case ComparisonKind.GreaterEqual:
-                return CompareOp.GreaterOrEqual;
-            case ComparisonKind.Always:
-                return CompareOp.Always;
-            default:
-                throw Illegal.Value<ComparisonKind>();
-        }
+            ComparisonKind.Never => CompareOp.Never,
+            ComparisonKind.Less => CompareOp.Less,
+            ComparisonKind.Equal => CompareOp.Equal,
+            ComparisonKind.LessEqual => CompareOp.LessOrEqual,
+            ComparisonKind.Greater => CompareOp.Greater,
+            ComparisonKind.NotEqual => CompareOp.NotEqual,
+            ComparisonKind.GreaterEqual => CompareOp.GreaterOrEqual,
+            ComparisonKind.Always => CompareOp.Always,
+            _ => throw Illegal.Value<ComparisonKind>(),
+        };
     }
 
     internal static PixelFormat ToPixelFormat(Format vkFormat)
     {
-        switch (vkFormat)
+        return vkFormat switch
         {
-            case Format.R8Unorm:
-                return PixelFormat.R8_UNorm;
-            case Format.R8SNorm:
-                return PixelFormat.R8_SNorm;
-            case Format.R8Uint:
-                return PixelFormat.R8_UInt;
-            case Format.R8Sint:
-                return PixelFormat.R8_SInt;
-
-            case Format.R16Unorm:
-                return PixelFormat.R16_UNorm;
-            case Format.R16SNorm:
-                return PixelFormat.R16_SNorm;
-            case Format.R16Uint:
-                return PixelFormat.R16_UInt;
-            case Format.R16Sint:
-                return PixelFormat.R16_SInt;
-            case Format.R16Sfloat:
-                return PixelFormat.R16_Float;
-
-            case Format.R32Uint:
-                return PixelFormat.R32_UInt;
-            case Format.R32Sint:
-                return PixelFormat.R32_SInt;
-            case Format.R32Sfloat:
-            case Format.D32Sfloat:
-                return PixelFormat.R32_Float;
-
-            case Format.R8G8Unorm:
-                return PixelFormat.R8_G8_UNorm;
-            case Format.R8G8SNorm:
-                return PixelFormat.R8_G8_SNorm;
-            case Format.R8G8Uint:
-                return PixelFormat.R8_G8_UInt;
-            case Format.R8G8Sint:
-                return PixelFormat.R8_G8_SInt;
-
-            case Format.R16G16Unorm:
-                return PixelFormat.R16_G16_UNorm;
-            case Format.R16G16SNorm:
-                return PixelFormat.R16_G16_SNorm;
-            case Format.R16G16Uint:
-                return PixelFormat.R16_G16_UInt;
-            case Format.R16G16Sint:
-                return PixelFormat.R16_G16_SInt;
-            case Format.R16G16Sfloat:
-                return PixelFormat.R16_G16_Float;
-
-            case Format.R32G32Uint:
-                return PixelFormat.R32_G32_UInt;
-            case Format.R32G32Sint:
-                return PixelFormat.R32_G32_SInt;
-            case Format.R32G32Sfloat:
-                return PixelFormat.R32_G32_Float;
-
-            case Format.R8G8B8A8Unorm:
-                return PixelFormat.R8_G8_B8_A8_UNorm;
-            case Format.R8G8B8A8Srgb:
-                return PixelFormat.R8_G8_B8_A8_UNorm_SRgb;
-            case Format.B8G8R8A8Unorm:
-                return PixelFormat.B8_G8_R8_A8_UNorm;
-            case Format.B8G8R8A8Srgb:
-                return PixelFormat.B8_G8_R8_A8_UNorm_SRgb;
-            case Format.R8G8B8A8SNorm:
-                return PixelFormat.R8_G8_B8_A8_SNorm;
-            case Format.R8G8B8A8Uint:
-                return PixelFormat.R8_G8_B8_A8_UInt;
-            case Format.R8G8B8A8Sint:
-                return PixelFormat.R8_G8_B8_A8_SInt;
-
-            case Format.R16G16B16A16Unorm:
-                return PixelFormat.R16_G16_B16_A16_UNorm;
-            case Format.R16G16B16A16SNorm:
-                return PixelFormat.R16_G16_B16_A16_SNorm;
-            case Format.R16G16B16A16Uint:
-                return PixelFormat.R16_G16_B16_A16_UInt;
-            case Format.R16G16B16A16Sint:
-                return PixelFormat.R16_G16_B16_A16_SInt;
-            case Format.R16G16B16A16Sfloat:
-                return PixelFormat.R16_G16_B16_A16_Float;
-
-            case Format.R32G32B32A32Uint:
-                return PixelFormat.R32_G32_B32_A32_UInt;
-            case Format.R32G32B32A32Sint:
-                return PixelFormat.R32_G32_B32_A32_SInt;
-            case Format.R32G32B32A32Sfloat:
-                return PixelFormat.R32_G32_B32_A32_Float;
-
-            case Format.BC1RgbUnormBlock:
-                return PixelFormat.BC1_Rgb_UNorm;
-            case Format.BC1RgbSrgbBlock:
-                return PixelFormat.BC1_Rgb_UNorm_SRgb;
-            case Format.BC1RgbaUnormBlock:
-                return PixelFormat.BC1_Rgba_UNorm;
-            case Format.BC1RgbaSrgbBlock:
-                return PixelFormat.BC1_Rgba_UNorm_SRgb;
-            case Format.BC2UnormBlock:
-                return PixelFormat.BC2_UNorm;
-            case Format.BC2SrgbBlock:
-                return PixelFormat.BC2_UNorm_SRgb;
-            case Format.BC3UnormBlock:
-                return PixelFormat.BC3_UNorm;
-            case Format.BC3SrgbBlock:
-                return PixelFormat.BC3_UNorm_SRgb;
-            case Format.BC4UnormBlock:
-                return PixelFormat.BC4_UNorm;
-            case Format.BC4SNormBlock:
-                return PixelFormat.BC4_SNorm;
-            case Format.BC5UnormBlock:
-                return PixelFormat.BC5_UNorm;
-            case Format.BC5SNormBlock:
-                return PixelFormat.BC5_SNorm;
-            case Format.BC7UnormBlock:
-                return PixelFormat.BC7_UNorm;
-            case Format.BC7SrgbBlock:
-                return PixelFormat.BC7_UNorm_SRgb;
-
-            case Format.Etc2R8G8B8UnormBlock:
-                return PixelFormat.ETC2_R8_G8_B8_UNorm;
-            case Format.Etc2R8G8B8A1UnormBlock:
-                return PixelFormat.ETC2_R8_G8_B8_A1_UNorm;
-            case Format.Etc2R8G8B8A8UnormBlock:
-                return PixelFormat.ETC2_R8_G8_B8_A8_UNorm;
-
-            case Format.Astc4x4UnormBlock:
-                return PixelFormat.ASTC_4x4_UNorm;
-            case Format.Astc4x4SrgbBlock:
-                return PixelFormat.ASTC_4x4_UNorm_SRgb;
-            case Format.Astc5x4UnormBlock:
-                return PixelFormat.ASTC_5x4_UNorm;
-            case Format.Astc5x4SrgbBlock:
-                return PixelFormat.ASTC_5x4_UNorm_SRgb;
-            case Format.Astc5x5UnormBlock:
-                return PixelFormat.ASTC_5x5_UNorm;
-            case Format.Astc5x5SrgbBlock:
-                return PixelFormat.ASTC_5x5_UNorm_SRgb;
-            case Format.Astc6x5UnormBlock:
-                return PixelFormat.ASTC_6x5_UNorm;
-            case Format.Astc6x5SrgbBlock:
-                return PixelFormat.ASTC_6x5_UNorm_SRgb;
-            case Format.Astc6x6UnormBlock:
-                return PixelFormat.ASTC_6x6_UNorm;
-            case Format.Astc6x6SrgbBlock:
-                return PixelFormat.ASTC_6x6_UNorm_SRgb;
-            case Format.Astc8x5UnormBlock:
-                return PixelFormat.ASTC_8x5_UNorm;
-            case Format.Astc8x5SrgbBlock:
-                return PixelFormat.ASTC_8x5_UNorm_SRgb;
-            case Format.Astc8x6UnormBlock:
-                return PixelFormat.ASTC_8x6_UNorm;
-            case Format.Astc8x6SrgbBlock:
-                return PixelFormat.ASTC_8x6_UNorm_SRgb;
-            case Format.Astc8x8UnormBlock:
-                return PixelFormat.ASTC_8x8_UNorm;
-            case Format.Astc8x8SrgbBlock:
-                return PixelFormat.ASTC_8x8_UNorm_SRgb;
-            case Format.Astc10x5UnormBlock:
-                return PixelFormat.ASTC_10x5_UNorm;
-            case Format.Astc10x5SrgbBlock:
-                return PixelFormat.ASTC_10x5_UNorm_SRgb;
-            case Format.Astc10x6UnormBlock:
-                return PixelFormat.ASTC_10x6_UNorm;
-            case Format.Astc10x6SrgbBlock:
-                return PixelFormat.ASTC_10x6_UNorm_SRgb;
-            case Format.Astc10x8UnormBlock:
-                return PixelFormat.ASTC_10x8_UNorm;
-            case Format.Astc10x8SrgbBlock:
-                return PixelFormat.ASTC_10x8_UNorm_SRgb;
-            case Format.Astc10x10UnormBlock:
-                return PixelFormat.ASTC_10x10_UNorm;
-            case Format.Astc10x10SrgbBlock:
-                return PixelFormat.ASTC_10x10_UNorm_SRgb;
-            case Format.Astc12x10UnormBlock:
-                return PixelFormat.ASTC_12x10_UNorm;
-            case Format.Astc12x10SrgbBlock:
-                return PixelFormat.ASTC_12x10_UNorm_SRgb;
-            case Format.Astc12x12UnormBlock:
-                return PixelFormat.ASTC_12x12_UNorm;
-            case Format.Astc12x12SrgbBlock:
-                return PixelFormat.ASTC_12x12_UNorm_SRgb;
-
-            case Format.A2B10G10R10UnormPack32:
-                return PixelFormat.R10_G10_B10_A2_UNorm;
-            case Format.A2B10G10R10UintPack32:
-                return PixelFormat.R10_G10_B10_A2_UInt;
-            case Format.B10G11R11UfloatPack32:
-                return PixelFormat.R11_G11_B10_Float;
-
-            default:
-                throw Illegal.Value<Format>();
-        }
+            Format.R8Unorm => PixelFormat.R8_UNorm,
+            Format.R8SNorm => PixelFormat.R8_SNorm,
+            Format.R8Uint => PixelFormat.R8_UInt,
+            Format.R8Sint => PixelFormat.R8_SInt,
+            Format.R16Unorm => PixelFormat.R16_UNorm,
+            Format.R16SNorm => PixelFormat.R16_SNorm,
+            Format.R16Uint => PixelFormat.R16_UInt,
+            Format.R16Sint => PixelFormat.R16_SInt,
+            Format.R16Sfloat => PixelFormat.R16_Float,
+            Format.R32Uint => PixelFormat.R32_UInt,
+            Format.R32Sint => PixelFormat.R32_SInt,
+            Format.R32Sfloat or Format.D32Sfloat => PixelFormat.R32_Float,
+            Format.R8G8Unorm => PixelFormat.R8_G8_UNorm,
+            Format.R8G8SNorm => PixelFormat.R8_G8_SNorm,
+            Format.R8G8Uint => PixelFormat.R8_G8_UInt,
+            Format.R8G8Sint => PixelFormat.R8_G8_SInt,
+            Format.R16G16Unorm => PixelFormat.R16_G16_UNorm,
+            Format.R16G16SNorm => PixelFormat.R16_G16_SNorm,
+            Format.R16G16Uint => PixelFormat.R16_G16_UInt,
+            Format.R16G16Sint => PixelFormat.R16_G16_SInt,
+            Format.R16G16Sfloat => PixelFormat.R16_G16_Float,
+            Format.R32G32Uint => PixelFormat.R32_G32_UInt,
+            Format.R32G32Sint => PixelFormat.R32_G32_SInt,
+            Format.R32G32Sfloat => PixelFormat.R32_G32_Float,
+            Format.R8G8B8A8Unorm => PixelFormat.R8_G8_B8_A8_UNorm,
+            Format.R8G8B8A8Srgb => PixelFormat.R8_G8_B8_A8_UNorm_SRgb,
+            Format.B8G8R8A8Unorm => PixelFormat.B8_G8_R8_A8_UNorm,
+            Format.B8G8R8A8Srgb => PixelFormat.B8_G8_R8_A8_UNorm_SRgb,
+            Format.R8G8B8A8SNorm => PixelFormat.R8_G8_B8_A8_SNorm,
+            Format.R8G8B8A8Uint => PixelFormat.R8_G8_B8_A8_UInt,
+            Format.R8G8B8A8Sint => PixelFormat.R8_G8_B8_A8_SInt,
+            Format.R16G16B16A16Unorm => PixelFormat.R16_G16_B16_A16_UNorm,
+            Format.R16G16B16A16SNorm => PixelFormat.R16_G16_B16_A16_SNorm,
+            Format.R16G16B16A16Uint => PixelFormat.R16_G16_B16_A16_UInt,
+            Format.R16G16B16A16Sint => PixelFormat.R16_G16_B16_A16_SInt,
+            Format.R16G16B16A16Sfloat => PixelFormat.R16_G16_B16_A16_Float,
+            Format.R32G32B32A32Uint => PixelFormat.R32_G32_B32_A32_UInt,
+            Format.R32G32B32A32Sint => PixelFormat.R32_G32_B32_A32_SInt,
+            Format.R32G32B32A32Sfloat => PixelFormat.R32_G32_B32_A32_Float,
+            Format.BC1RgbUnormBlock => PixelFormat.BC1_Rgb_UNorm,
+            Format.BC1RgbSrgbBlock => PixelFormat.BC1_Rgb_UNorm_SRgb,
+            Format.BC1RgbaUnormBlock => PixelFormat.BC1_Rgba_UNorm,
+            Format.BC1RgbaSrgbBlock => PixelFormat.BC1_Rgba_UNorm_SRgb,
+            Format.BC2UnormBlock => PixelFormat.BC2_UNorm,
+            Format.BC2SrgbBlock => PixelFormat.BC2_UNorm_SRgb,
+            Format.BC3UnormBlock => PixelFormat.BC3_UNorm,
+            Format.BC3SrgbBlock => PixelFormat.BC3_UNorm_SRgb,
+            Format.BC4UnormBlock => PixelFormat.BC4_UNorm,
+            Format.BC4SNormBlock => PixelFormat.BC4_SNorm,
+            Format.BC5UnormBlock => PixelFormat.BC5_UNorm,
+            Format.BC5SNormBlock => PixelFormat.BC5_SNorm,
+            Format.BC7UnormBlock => PixelFormat.BC7_UNorm,
+            Format.BC7SrgbBlock => PixelFormat.BC7_UNorm_SRgb,
+            Format.Etc2R8G8B8UnormBlock => PixelFormat.ETC2_R8_G8_B8_UNorm,
+            Format.Etc2R8G8B8A1UnormBlock => PixelFormat.ETC2_R8_G8_B8_A1_UNorm,
+            Format.Etc2R8G8B8A8UnormBlock => PixelFormat.ETC2_R8_G8_B8_A8_UNorm,
+            Format.Astc4x4UnormBlock => PixelFormat.ASTC_4x4_UNorm,
+            Format.Astc4x4SrgbBlock => PixelFormat.ASTC_4x4_UNorm_SRgb,
+            Format.Astc5x4UnormBlock => PixelFormat.ASTC_5x4_UNorm,
+            Format.Astc5x4SrgbBlock => PixelFormat.ASTC_5x4_UNorm_SRgb,
+            Format.Astc5x5UnormBlock => PixelFormat.ASTC_5x5_UNorm,
+            Format.Astc5x5SrgbBlock => PixelFormat.ASTC_5x5_UNorm_SRgb,
+            Format.Astc6x5UnormBlock => PixelFormat.ASTC_6x5_UNorm,
+            Format.Astc6x5SrgbBlock => PixelFormat.ASTC_6x5_UNorm_SRgb,
+            Format.Astc6x6UnormBlock => PixelFormat.ASTC_6x6_UNorm,
+            Format.Astc6x6SrgbBlock => PixelFormat.ASTC_6x6_UNorm_SRgb,
+            Format.Astc8x5UnormBlock => PixelFormat.ASTC_8x5_UNorm,
+            Format.Astc8x5SrgbBlock => PixelFormat.ASTC_8x5_UNorm_SRgb,
+            Format.Astc8x6UnormBlock => PixelFormat.ASTC_8x6_UNorm,
+            Format.Astc8x6SrgbBlock => PixelFormat.ASTC_8x6_UNorm_SRgb,
+            Format.Astc8x8UnormBlock => PixelFormat.ASTC_8x8_UNorm,
+            Format.Astc8x8SrgbBlock => PixelFormat.ASTC_8x8_UNorm_SRgb,
+            Format.Astc10x5UnormBlock => PixelFormat.ASTC_10x5_UNorm,
+            Format.Astc10x5SrgbBlock => PixelFormat.ASTC_10x5_UNorm_SRgb,
+            Format.Astc10x6UnormBlock => PixelFormat.ASTC_10x6_UNorm,
+            Format.Astc10x6SrgbBlock => PixelFormat.ASTC_10x6_UNorm_SRgb,
+            Format.Astc10x8UnormBlock => PixelFormat.ASTC_10x8_UNorm,
+            Format.Astc10x8SrgbBlock => PixelFormat.ASTC_10x8_UNorm_SRgb,
+            Format.Astc10x10UnormBlock => PixelFormat.ASTC_10x10_UNorm,
+            Format.Astc10x10SrgbBlock => PixelFormat.ASTC_10x10_UNorm_SRgb,
+            Format.Astc12x10UnormBlock => PixelFormat.ASTC_12x10_UNorm,
+            Format.Astc12x10SrgbBlock => PixelFormat.ASTC_12x10_UNorm_SRgb,
+            Format.Astc12x12UnormBlock => PixelFormat.ASTC_12x12_UNorm,
+            Format.Astc12x12SrgbBlock => PixelFormat.ASTC_12x12_UNorm_SRgb,
+            Format.A2B10G10R10UnormPack32 => PixelFormat.R10_G10_B10_A2_UNorm,
+            Format.A2B10G10R10UintPack32 => PixelFormat.R10_G10_B10_A2_UInt,
+            Format.B10G11R11UfloatPack32 => PixelFormat.R11_G11_B10_Float,
+            _ => throw Illegal.Value<Format>(),
+        };
     }
 }

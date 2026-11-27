@@ -44,7 +44,7 @@ internal sealed class BakeAcceleration
         var instanceMaterials = new BakeMaterial?[instances.Length][];
         for (int i = 0; i < instances.Length; i++)
         {
-            var groups = instances[i].Mesh.MaterialGroups;
+            IReadOnlyList<BakeMesh.MaterialGroup> groups = instances[i].Mesh.MaterialGroups;
             var arr = new BakeMaterial?[groups.Count];
             for (int g = 0; g < arr.Length; g++) arr[g] = scene.FindMaterial(groups[g].MaterialName);
             instanceMaterials[i] = arr;
@@ -58,15 +58,15 @@ internal sealed class BakeAcceleration
         var mergedGroups = new List<BakeMesh.MaterialGroup>();
         var mergedMats = new List<BakeMaterial?>();
 
-        foreach (var inst in instances)
+        foreach (BakeInstance inst in instances)
         {
-            var mesh = inst.Mesh;
-            var w = inst.WorldTransform;
+            BakeMesh mesh = inst.Mesh;
+            Float4x4 w = inst.WorldTransform;
             int baseV = positions.Count;
 
-            var srcPos = mesh.Positions;
-            var srcNrm = mesh.Normals;
-            mesh.UVLayers.TryGetValue("UV0", out var srcUV0);
+            Float3[] srcPos = mesh.Positions;
+            Float3[] srcNrm = mesh.Normals;
+            mesh.UVLayers.TryGetValue("UV0", out Float2[]? srcUV0);
             for (int v = 0; v < srcPos.Length; v++)
             {
                 positions.Add(RayMath.Transform(w, srcPos[v], 1f));
@@ -74,11 +74,11 @@ internal sealed class BakeAcceleration
                 uv0.Add(srcUV0 != null && v < srcUV0.Length ? srcUV0[v] : Float2.Zero);
             }
 
-            var groups = mesh.MaterialGroups;
+            IReadOnlyList<BakeMesh.MaterialGroup> groups = mesh.MaterialGroups;
             for (int g = 0; g < groups.Count; g++)
             {
-                var src = groups[g].Indices;
-                var remapped = new int[src.Length];
+                int[] src = groups[g].Indices;
+                int[] remapped = new int[src.Length];
                 for (int k = 0; k < src.Length; k++) remapped[k] = src[k] + baseV;
                 mergedGroups.Add(new BakeMesh.MaterialGroup(groups[g].MaterialName, remapped));
                 mergedMats.Add(scene.FindMaterial(groups[g].MaterialName));

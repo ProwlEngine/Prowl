@@ -37,7 +37,7 @@ public partial struct Double4x4 : System.IEquatable<Double4x4>, IFormattable
     }
 
     /// <summary>Returns a reference to the Double4 (column) at a specified index.</summary>
-    unsafe public ref Double4 this[int index]
+    public unsafe ref Double4 this[int index]
     {
         get
         {
@@ -64,7 +64,7 @@ public partial struct Double4x4 : System.IEquatable<Double4x4>, IFormattable
         {
             if ((uint)column >= 4)
                 throw new System.ArgumentOutOfRangeException(nameof(column));
-            var temp = this[column];
+            Double4 temp = this[column];
             temp[row] = value;
             this[column] = temp;
         }
@@ -472,24 +472,24 @@ public partial struct Double4x4 : System.IEquatable<Double4x4>, IFormattable
     /// <returns>True if the source matrix could be inverted; False otherwise.</returns>
     public static bool Invert(Double4x4 matrix, out Double4x4 result)
     {
-        var a = matrix.c0.X; var b = matrix.c1.X; var c = matrix.c2.X; var d = matrix.c3.X;
-        var e = matrix.c0.Y; var f = matrix.c1.Y; var g = matrix.c2.Y; var h = matrix.c3.Y;
-        var i = matrix.c0.Z; var j = matrix.c1.Z; var k = matrix.c2.Z; var l = matrix.c3.Z;
-        var m = matrix.c0.W; var n = matrix.c1.W; var o = matrix.c2.W; var p = matrix.c3.W;
+        double a = matrix.c0.X; double b = matrix.c1.X; double c = matrix.c2.X; double d = matrix.c3.X;
+        double e = matrix.c0.Y; double f = matrix.c1.Y; double g = matrix.c2.Y; double h = matrix.c3.Y;
+        double i = matrix.c0.Z; double j = matrix.c1.Z; double k = matrix.c2.Z; double l = matrix.c3.Z;
+        double m = matrix.c0.W; double n = matrix.c1.W; double o = matrix.c2.W; double p = matrix.c3.W;
 
-        var kp_lo = k * p - l * o;
-        var jp_ln = j * p - l * n;
-        var jo_kn = j * o - k * n;
-        var ip_lm = i * p - l * m;
-        var io_km = i * o - k * m;
-        var in_jm = i * n - j * m;
+        double kp_lo = k * p - l * o;
+        double jp_ln = j * p - l * n;
+        double jo_kn = j * o - k * n;
+        double ip_lm = i * p - l * m;
+        double io_km = i * o - k * m;
+        double in_jm = i * n - j * m;
 
-        var a11 = +(f * kp_lo - g * jp_ln + h * jo_kn);
-        var a12 = -(e * kp_lo - g * ip_lm + h * io_km);
-        var a13 = +(e * jp_ln - f * ip_lm + h * in_jm);
-        var a14 = -(e * jo_kn - f * io_km + g * in_jm);
+        double a11 = +(f * kp_lo - g * jp_ln + h * jo_kn);
+        double a12 = -(e * kp_lo - g * ip_lm + h * io_km);
+        double a13 = +(e * jp_ln - f * ip_lm + h * in_jm);
+        double a14 = -(e * jo_kn - f * io_km + g * in_jm);
 
-        var det = a * a11 + b * a12 + c * a13 + d * a14;
+        double det = a * a11 + b * a12 + c * a13 + d * a14;
 
         if (Math.Abs(det) < double.Epsilon)
         {
@@ -502,21 +502,21 @@ public partial struct Double4x4 : System.IEquatable<Double4x4>, IFormattable
             return false;
         }
 
-        var invDet = 1.0 / det;
+        double invDet = 1.0 / det;
 
-        var gp_ho = g * p - h * o;
-        var fp_hn = f * p - h * n;
-        var fo_gn = f * o - g * n;
-        var ep_hm = e * p - h * m;
-        var eo_gm = e * o - g * m;
-        var en_fm = e * n - f * m;
+        double gp_ho = g * p - h * o;
+        double fp_hn = f * p - h * n;
+        double fo_gn = f * o - g * n;
+        double ep_hm = e * p - h * m;
+        double eo_gm = e * o - g * m;
+        double en_fm = e * n - f * m;
 
-        var gl_hk = g * l - h * k;
-        var fl_hj = f * l - h * j;
-        var fk_gj = f * k - g * j;
-        var el_hi = e * l - h * i;
-        var ek_gi = e * k - g * i;
-        var ej_fi = e * j - f * i;
+        double gl_hk = g * l - h * k;
+        double fl_hj = f * l - h * j;
+        double fk_gj = f * k - g * j;
+        double el_hi = e * l - h * i;
+        double ek_gi = e * k - g * i;
+        double ej_fi = e * j - f * i;
 
         result = new Double4x4(
             new Double4(

@@ -15,7 +15,7 @@ public static class GizmoUtils
 
     public static bool IntersectPlane(Float3 planeNormal, Float3 planeOrigin, Float3 rayOrigin, Float3 rayDirection, out float t)
     {
-        var denom = Float3.Dot(planeNormal, rayDirection);
+        float denom = Float3.Dot(planeNormal, rayDirection);
         if (MathF.Abs(denom) < 1e-8f)
         {
             t = 0;
@@ -29,8 +29,8 @@ public static class GizmoUtils
     {
         if (IntersectPlane(planeNormal, planeOrigin, rayOrigin, rayDirection, out float t))
         {
-            var p = rayOrigin + rayDirection * t;
-            var v = p - planeOrigin;
+            Float3 p = rayOrigin + rayDirection * t;
+            Float3 v = p - planeOrigin;
             return (t, MathF.Sqrt(Float3.Dot(v, v)));
         }
         return (t, float.MaxValue);
@@ -48,7 +48,7 @@ public static class GizmoUtils
 
     public static Float3 SnapTranslationVector(Float3 delta, TransformGizmo gizmo)
     {
-        var deltaLength = Float3.Length(delta);
+        float deltaLength = Float3.Length(delta);
         if (deltaLength > 1e-5f)
             return delta / deltaLength * RoundToInterval(deltaLength, gizmo.SnapDistance);
         return delta;
@@ -56,15 +56,15 @@ public static class GizmoUtils
 
     public static Float3 SnapTranslationPlane(Float3 delta, GizmoDirection direction, TransformGizmo gizmo)
     {
-        var bitangent = PlaneBitangent(direction);
-        var tangent = PlaneTangent(direction);
+        Float3 bitangent = PlaneBitangent(direction);
+        Float3 tangent = PlaneTangent(direction);
         bitangent = gizmo.Rotation * bitangent;
         tangent = gizmo.Rotation * tangent;
         var cb = Float3.Cross(delta, -bitangent);
         var ct = Float3.Cross(delta, tangent);
-        var lb = Float3.Length(cb);
-        var lt = Float3.Length(ct);
-        var n = GizmoNormal(gizmo, direction);
+        float lb = Float3.Length(cb);
+        float lt = Float3.Length(ct);
+        Float3 n = GizmoNormal(gizmo, direction);
 
         if (lb > 1e-5f && lt > 1e-5f)
         {
@@ -95,7 +95,7 @@ public static class GizmoUtils
 
     public static Color32 GizmoColor(TransformGizmo gizmo, bool focused, GizmoDirection direction)
     {
-        var (r, g, b) = direction switch
+        (int r, int g, int b) = direction switch
         {
             GizmoDirection.X => (226, 55, 56),
             GizmoDirection.Y => (94, 234, 141),
@@ -125,7 +125,7 @@ public static class GizmoUtils
 
     public static Float3 PlaneGlobalOrigin(TransformGizmo gizmo, GizmoDirection direction)
     {
-        var origin = PlaneLocalOrigin(gizmo, direction);
+        Float3 origin = PlaneLocalOrigin(gizmo, direction);
         if (gizmo.Orientation == TransformGizmo.GizmoOrientation.Local)
             origin = gizmo.Rotation * origin;
         return origin + gizmo.Translation;
@@ -133,7 +133,7 @@ public static class GizmoUtils
 
     public static Float3 PlaneLocalOrigin(TransformGizmo gizmo, GizmoDirection direction)
     {
-        var offset = gizmo.ScaleFactor * gizmo.GizmoSize * 0.5f;
+        float offset = gizmo.ScaleFactor * gizmo.GizmoSize * 0.5f;
         return (PlaneBitangent(direction) + PlaneTangent(direction)) * offset;
     }
 
@@ -146,33 +146,33 @@ public static class GizmoUtils
     public static PickResult PickArrow(TransformGizmo gizmo, Ray ray, GizmoDirection direction, TransformGizmoMode mode)
     {
         const float rayLength = 1e+14f;
-        var normal = GizmoNormal(gizmo, direction);
-        var (start, end, length) = ArrowParams(gizmo, normal, mode);
+        Float3 normal = GizmoNormal(gizmo, direction);
+        (Float3 start, Float3 end, float length) = ArrowParams(gizmo, normal, mode);
 
         start += gizmo.Translation;
         end += gizmo.Translation;
 
-        var (rayT, subGizmoT) = SegmentToSegment(ray.Origin, ray.Origin + ray.Direction * rayLength, start, end);
-        var rayPoint = ray.Origin + ray.Direction * rayLength * rayT;
-        var subGizmoPoint = start + normal * length * subGizmoT;
-        var dist = Float3.Length(rayPoint - subGizmoPoint);
+        (float rayT, float subGizmoT) = SegmentToSegment(ray.Origin, ray.Origin + ray.Direction * rayLength, start, end);
+        Float3 rayPoint = ray.Origin + ray.Direction * rayLength * rayT;
+        Float3 subGizmoPoint = start + normal * length * subGizmoT;
+        float dist = Float3.Length(rayPoint - subGizmoPoint);
 
         return new PickResult { SubGizmoPoint = subGizmoPoint, T = rayT, Picked = dist <= gizmo.FocusDistance };
     }
 
     public static PickResult PickPlane(TransformGizmo gizmo, Ray ray, GizmoDirection direction)
     {
-        var origin = PlaneGlobalOrigin(gizmo, direction);
-        var normal = GizmoNormal(gizmo, direction);
-        var (t, distFromOrigin) = RayToPlaneOrigin(normal, origin, ray.Origin, ray.Direction);
+        Float3 origin = PlaneGlobalOrigin(gizmo, direction);
+        Float3 normal = GizmoNormal(gizmo, direction);
+        (float t, float distFromOrigin) = RayToPlaneOrigin(normal, origin, ray.Origin, ray.Direction);
         return new PickResult { SubGizmoPoint = ray.Origin + ray.Direction * t, T = t, Picked = distFromOrigin <= PlaneSize(gizmo) };
     }
 
     public static PickResult PickCircle(TransformGizmo gizmo, Ray ray, float radius, bool filled)
     {
-        var (t, dist) = RayToPlaneOrigin(-gizmo.ViewForward, gizmo.Translation, ray.Origin, ray.Direction);
-        var hitPos = ray.Origin + ray.Direction * t;
-        var picked = filled ? dist <= radius + gizmo.FocusDistance
+        (float t, float dist) = RayToPlaneOrigin(-gizmo.ViewForward, gizmo.Translation, ray.Origin, ray.Direction);
+        Float3 hitPos = ray.Origin + ray.Direction * t;
+        bool picked = filled ? dist <= radius + gizmo.FocusDistance
             : MathF.Abs(dist - radius) <= gizmo.FocusDistance;
         return new PickResult { SubGizmoPoint = hitPos, T = t, Picked = picked };
     }
@@ -193,8 +193,8 @@ public static class GizmoUtils
         bool isScale = mode == TransformGizmoMode.ScaleX || mode == TransformGizmoMode.ScaleY || mode == TransformGizmoMode.ScaleZ;
         bool overlapping = ArrowModesOverlapping(mode, gizmo.Mode);
 
-        var width = gizmo.ScaleFactor * gizmo.StrokeWidth;
-        var gizmoSize = gizmo.ScaleFactor * gizmo.GizmoSize;
+        float width = gizmo.ScaleFactor * gizmo.StrokeWidth;
+        float gizmoSize = gizmo.ScaleFactor * gizmo.GizmoSize;
         Float3 start;
         float length;
 
@@ -228,19 +228,19 @@ public static class GizmoUtils
 
     public static (float, float) SegmentToSegment(Float3 a1, Float3 a2, Float3 b1, Float3 b2)
     {
-        var da = a2 - a1;
-        var db = b2 - b1;
-        var la = Float3.Dot(da, da);
-        var lb = Float3.Dot(db, db);
-        var dd = Float3.Dot(da, db);
-        var d1 = a1 - b1;
-        var d = Float3.Dot(da, d1);
-        var e = Float3.Dot(db, d1);
-        var n = la * lb - dd * dd;
+        Float3 da = a2 - a1;
+        Float3 db = b2 - b1;
+        float la = Float3.Dot(da, da);
+        float lb = Float3.Dot(db, db);
+        float dd = Float3.Dot(da, db);
+        Float3 d1 = a1 - b1;
+        float d = Float3.Dot(da, d1);
+        float e = Float3.Dot(db, d1);
+        float n = la * lb - dd * dd;
 
         float sn, tn;
-        var sd = n;
-        var td = n;
+        float sd = n;
+        float td = n;
 
         if (n < 1e-8f) { sn = 0; sd = 1; tn = e; td = lb; }
         else
@@ -271,19 +271,19 @@ public static class GizmoUtils
 
     public static Float3 PointOnAxis(TransformGizmo gizmo, Ray ray, GizmoDirection direction)
     {
-        var origin = gizmo.Translation;
-        var dir = GizmoNormal(gizmo, direction);
-        var (_, subGizmoT) = RayToRay(ray.Origin, ray.Direction, origin, dir);
+        Float3 origin = gizmo.Translation;
+        Float3 dir = GizmoNormal(gizmo, direction);
+        (float _, float subGizmoT) = RayToRay(ray.Origin, ray.Direction, origin, dir);
         return origin + dir * subGizmoT;
     }
 
     public static (float, float) RayToRay(Float3 a1, Float3 aDir, Float3 b1, Float3 bDir)
     {
-        var b = Float3.Dot(aDir, bDir);
-        var w = a1 - b1;
-        var d = Float3.Dot(aDir, w);
-        var e = Float3.Dot(bDir, w);
-        var dot = 1.0f - b * b;
+        float b = Float3.Dot(aDir, bDir);
+        Float3 w = a1 - b1;
+        float d = Float3.Dot(aDir, w);
+        float e = Float3.Dot(bDir, w);
+        float dot = 1.0f - b * b;
         if (dot < 1e-8f) return (0, e);
         return ((b * e - d) / dot, (e - b * d) / dot);
     }
@@ -322,11 +322,11 @@ public static class GizmoUtils
 
         using (gizmo.Draw3D.Matrix(gizmo.ViewProjection * transform))
         {
-            var color = GizmoColor(gizmo, focused, direction);
-            var scale = PlaneSize(gizmo) * 0.5f;
-            var bitangent = PlaneBitangent(direction) * scale;
-            var tangent = PlaneTangent(direction) * scale;
-            var origin = PlaneLocalOrigin(gizmo, direction);
+            Color32 color = GizmoColor(gizmo, focused, direction);
+            float scale = PlaneSize(gizmo) * 0.5f;
+            Float3 bitangent = PlaneBitangent(direction) * scale;
+            Float3 tangent = PlaneTangent(direction) * scale;
+            Float3 origin = PlaneLocalOrigin(gizmo, direction);
 
             Float3[] verts = [origin - bitangent - tangent, origin + bitangent - tangent, origin + bitangent + tangent, origin - bitangent + tangent];
             gizmo.Draw3D.Polygon(verts, new Stroke3D { Color = color, Thickness = gizmo.StrokeWidth });
@@ -336,9 +336,9 @@ public static class GizmoUtils
 
     public static Float4x4 DrawCircle(TransformGizmo gizmo, bool focused, Float4x4 transform)
     {
-        var viewUp = gizmo.ViewUp;
-        var viewForward = -gizmo.ViewForward;
-        var viewRight = -gizmo.ViewRight;
+        Float3 viewUp = gizmo.ViewUp;
+        Float3 viewForward = -gizmo.ViewForward;
+        Float3 viewRight = -gizmo.ViewRight;
 
         var rotation = new Float4x4(
             new Float4(viewUp.X, viewUp.Y, viewUp.Z, 0),
@@ -351,7 +351,7 @@ public static class GizmoUtils
 
         using (gizmo.Draw3D.Matrix(gizmo.ViewProjection * transform))
         {
-            var color = GizmoColor(gizmo, focused, GizmoDirection.View);
+            Color32 color = GizmoColor(gizmo, focused, GizmoDirection.View);
             gizmo.Draw3D.Circle(InnerCircleRadius(gizmo), new Stroke3D { Color = color, Thickness = gizmo.StrokeWidth });
             return transform;
         }
@@ -359,9 +359,9 @@ public static class GizmoUtils
 
     public static Float4x4 DrawQuad(TransformGizmo gizmo, bool focused, Float4x4 transform)
     {
-        var viewUp = gizmo.ViewUp;
-        var viewForward = -gizmo.ViewForward;
-        var viewRight = -gizmo.ViewRight;
+        Float3 viewUp = gizmo.ViewUp;
+        Float3 viewForward = -gizmo.ViewForward;
+        Float3 viewRight = -gizmo.ViewRight;
 
         var rotation = new Float4x4(
             new Float4(viewUp.X, viewUp.Y, viewUp.Z, 0),
@@ -374,7 +374,7 @@ public static class GizmoUtils
 
         using (gizmo.Draw3D.Matrix(gizmo.ViewProjection * transform))
         {
-            var color = GizmoColor(gizmo, focused, GizmoDirection.View);
+            Color32 color = GizmoColor(gizmo, focused, GizmoDirection.View);
             gizmo.Draw3D.Quad(InnerCircleRadius(gizmo), new Stroke3D { Color = color, Thickness = gizmo.StrokeWidth });
             return transform;
         }
@@ -387,15 +387,15 @@ public static class GizmoUtils
 
         using (gizmo.Draw3D.Matrix(gizmo.ViewProjection * transform))
         {
-            var color = GizmoColor(gizmo, focused, direction);
-            var normal = GizmoLocalNormal(gizmo, direction);
-            var (start, end, length) = ArrowParams(gizmo, normal, mode);
+            Color32 color = GizmoColor(gizmo, focused, direction);
+            Float3 normal = GizmoLocalNormal(gizmo, direction);
+            (Float3 start, Float3 end, float length) = ArrowParams(gizmo, normal, mode);
 
             end *= scale;
 
-            var tipStrokeWidth = 2.4f * gizmo.StrokeWidth;
-            var tipLength = tipStrokeWidth * gizmo.ScaleFactor;
-            var tipStart = end - normal * tipLength;
+            float tipStrokeWidth = 2.4f * gizmo.StrokeWidth;
+            float tipLength = tipStrokeWidth * gizmo.ScaleFactor;
+            Float3 tipStart = end - normal * tipLength;
 
             gizmo.Draw3D.LineSegment(start, tipStart, new Stroke3D { Color = color, Thickness = gizmo.StrokeWidth });
             bool isTranslate = mode == TransformGizmoMode.TranslateX || mode == TransformGizmoMode.TranslateY || mode == TransformGizmoMode.TranslateZ;

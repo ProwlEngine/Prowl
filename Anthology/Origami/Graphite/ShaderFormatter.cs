@@ -15,8 +15,8 @@ internal static class ShaderFormatter
     private const int TabWidth = 4;
 
     private static readonly string[] s_operators = { "<<=", ">>=", "+=", "-=", "*=", "/=", "%=", "&=", "|=", "^=", "==", "!=", "<=", ">=", "&&", "||", "^^", "<<", ">>", "++", "--" };
-    private static readonly HashSet<string> s_spacedBeforeParen = new(StringComparer.Ordinal) { "if", "for", "while", "switch", "return", "else", "do" };
-    private static readonly HashSet<string> s_valueKeywords = new(StringComparer.Ordinal) { "return", "case", "else", "do" };
+    private static readonly HashSet<string> s_spacedBeforeParen = [with(StringComparer.Ordinal), "if", "for", "while", "switch", "return", "else", "do"];
+    private static readonly HashSet<string> s_valueKeywords = [with(StringComparer.Ordinal), "return", "case", "else", "do"];
 
     private enum Role : byte { Word, Punct, Binary, Prefix, Postfix, Comment, Preprocessor }
 
@@ -39,7 +39,7 @@ internal static class ShaderFormatter
     {
         public int Start;
         public string Text = "";
-        public readonly List<Item> Items = new();
+        public readonly List<Item> Items = [];
         public string[] Gaps = Array.Empty<string>();
         public string Indent = "";
         public bool Untouched, Preprocessor;
@@ -48,7 +48,7 @@ internal static class ShaderFormatter
     /// <summary>Edits that format the lines from <paramref name="firstLine"/> to <paramref name="lastLine"/>, the whole text by default.</summary>
     public static List<CodeTextEdit> Format(string text, bool isShaderFile, int firstLine = 0, int lastLine = int.MaxValue)
     {
-        var lines = Lex(text, isShaderFile);
+        List<Line> lines = Lex(text, isShaderFile);
         Layout(lines);
         return Edits(lines, firstLine, lastLine);
     }
@@ -56,24 +56,24 @@ internal static class ShaderFormatter
     /// <summary>Edits after typing <paramref name="typed"/> before <paramref name="offset"/>: the line of a ';', the block of a '}'.</summary>
     public static List<CodeTextEdit> FormatOnType(string text, bool isShaderFile, int offset, char typed)
     {
-        var lines = Lex(text, isShaderFile);
-        var closes = Layout(lines);
+        List<Line> lines = Lex(text, isShaderFile);
+        Dictionary<int, int> closes = Layout(lines);
 
         int at = offset - 1;
         int li = lines.FindLastIndex(l => l.Start <= at);
-        if (li < 0) return new List<CodeTextEdit>();
-        var line = lines[li];
+        if (li < 0) return [];
+        Line line = lines[li];
         int column = at - line.Start;
         int index = line.Items.FindIndex(i => i.Start == column);
-        if (index < 0 || line.Items[index].Role != Role.Punct || line.Items[index].Text != typed.ToString()) return new List<CodeTextEdit>();
+        if (index < 0 || line.Items[index].Role != Role.Punct || line.Items[index].Text != typed.ToString()) return [];
 
-        if (typed == ';') return line.Items[index].Glsl ? Edits(lines, li, li) : new List<CodeTextEdit>();
-        return closes.TryGetValue(at, out int open) ? Edits(lines, open, li) : new List<CodeTextEdit>();
+        if (typed == ';') return line.Items[index].Glsl ? Edits(lines, li, li) : [];
+        return closes.TryGetValue(at, out int open) ? Edits(lines, open, li) : [];
     }
 
     private static List<Line> Lex(string text, bool isShaderFile)
     {
-        var lexer = isShaderFile ? ShaderLexer.ShaderFile : ShaderLexer.GlslFile;
+        ShaderLexer lexer = isShaderFile ? ShaderLexer.ShaderFile : ShaderLexer.GlslFile;
         var lines = new List<Line>();
         var tokens = new List<CodeToken>();
         int state = 0, start = 0;
@@ -82,8 +82,12 @@ internal static class ShaderFormatter
             int end = text.IndexOf('\n', start);
             int stop = end < 0 ? text.Length : end;
             if (stop > start && text[stop - 1] == '\r') stop--;
-            var line = new Line { Start = start, Text = text.Substring(start, stop - start) };
-            line.Untouched = state == ShaderLexer.GlslComment || (isShaderFile && state == ShaderLexer.WrapperComment);
+            var line = new Line
+            {
+                Start = start,
+                Text = text.Substring(start, stop - start),
+                Untouched = state == ShaderLexer.GlslComment || (isShaderFile && state == ShaderLexer.WrapperComment)
+            };
             bool glsl = !isShaderFile || state is ShaderLexer.Glsl or ShaderLexer.GlslComment;
 
             tokens.Clear();
@@ -102,7 +106,7 @@ internal static class ShaderFormatter
         string s = line.Text;
         for (int i = 0; i < tokens.Count; i++)
         {
-            var t = tokens[i];
+            CodeToken t = tokens[i];
             if (t.Kind == CodeTokenKind.Operator)
             {
                 // The lexer splits operators into single characters, adjacent ones are joined back into GLSL operators.
@@ -112,7 +116,7 @@ internal static class ShaderFormatter
                 for (int p = t.Start; p < runEnd;)
                 {
                     int length = 1;
-                    foreach (var op in s_operators)
+                    foreach (string op in s_operators)
                         if (op.Length <= runEnd - p && string.CompareOrdinal(s, p, op, 0, op.Length) == 0) { length = op.Length; break; }
                     Add(line, p, p + length, CodeTokenKind.Operator, glsl);
                     p += length;
@@ -125,8 +129,8 @@ internal static class ShaderFormatter
             if (!glsl && text == "GLSLPROGRAM") glsl = true;
             else if (glsl && text == "ENDGLSL")
             {
-                var items = line.Items;
-                var last = items[^1];
+                List<Item> items = line.Items;
+                Item last = items[^1];
                 last.Glsl = false;
                 items[^1] = last;
                 glsl = false;
@@ -141,7 +145,7 @@ internal static class ShaderFormatter
         for (int i = line.Items.Count - 1; i >= 0; i--)
             if (line.Items[i].Role != Role.Comment) { prev = line.Items[i]; break; }
 
-        var role = kind switch
+        Role role = kind switch
         {
             CodeTokenKind.Comment or CodeTokenKind.DocComment => Role.Comment,
             CodeTokenKind.Preprocessor or CodeTokenKind.PreprocessorText => Role.Preprocessor,
@@ -174,15 +178,15 @@ internal static class ShaderFormatter
 
         for (int li = 0; li < lines.Count; li++)
         {
-            var line = lines[li];
-            var items = line.Items;
+            Line line = lines[li];
+            List<Item> items = line.Items;
             int oldWidth = Width(line.Text);
             line.Preprocessor = !line.Untouched && items.Count > 0 && items[0].Role == Role.Preprocessor;
 
             if (!line.Untouched && items.Count > 0)
             {
-                var first = items[0];
-                var top = stack.Count > 0 ? stack[^1] : null;
+                Item first = items[0];
+                Block? top = stack.Count > 0 ? stack[^1] : null;
                 bool caseLine = first.Glsl && first.Text is "case" or "default";
 
                 if (line.Preprocessor) line.Indent = IndentOf(Math.Max(0, oldWidth + delta), unit);
@@ -191,7 +195,7 @@ internal static class ShaderFormatter
                     bool continuation = first.Glsl && first.Role != Role.Comment && first.Text is not ("{" or "}")
                         && (paren > 0 || (lastCodeGlsl && lastCode is not (null or ";" or "{" or "}" or ":")));
                     int level = 0;
-                    foreach (var b in stack) level += b.Weight;
+                    foreach (Block b in stack) level += b.Weight;
                     // Case labels sit one level inside their switch, or level with its braces when the file writes them so.
                     if (caseLine && top is { IsSwitch: true, InCase: false }) top.FlatCases = top.OpenWidth > 0 && oldWidth <= top.OpenWidth;
                     if (first.Text == "}" && first.Role == Role.Punct && top != null) level -= top.Weight;
@@ -218,7 +222,7 @@ internal static class ShaderFormatter
                 if (caseLine && top is { IsSwitch: true }) top.InCase = true;
             }
 
-            foreach (var item in items)
+            foreach (Item item in items)
             {
                 if (item.Role is Role.Comment or Role.Preprocessor) continue;
                 if (item.Role == Role.Punct)
@@ -290,7 +294,7 @@ internal static class ShaderFormatter
         var edits = new List<CodeTextEdit>();
         for (int li = Math.Max(0, firstLine); li <= Math.Min(lastLine, lines.Count - 1); li++)
         {
-            var line = lines[li];
+            Line line = lines[li];
             string s = line.Text;
             if (line.Untouched) continue;
 
@@ -302,7 +306,7 @@ internal static class ShaderFormatter
                 continue;
             }
 
-            var items = line.Items;
+            List<Item> items = line.Items;
             Replace(edits, line, 0, items[0].Start, line.Indent);
             if (!line.Preprocessor)
                 for (int i = 1; i < items.Count; i++) Replace(edits, line, items[i - 1].End, items[i].Start, line.Gaps[i]);
@@ -320,7 +324,7 @@ internal static class ShaderFormatter
     private static string IndentUnit(List<Line> lines)
     {
         int tabs = 0, spaces = 0;
-        foreach (var line in lines)
+        foreach (Line line in lines)
         {
             if (line.Text.Length == 0 || line.Untouched) continue;
             if (line.Text[0] == '\t') tabs++;

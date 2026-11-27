@@ -27,7 +27,7 @@ internal sealed class FbxAsciiReader
     public uint Version { get; private set; }
 
     private readonly string _text;
-    private readonly List<Tok> _tokens = new();
+    private readonly List<Tok> _tokens = [];
     private int _cursor;
 
     private FbxAsciiReader(string text) { _text = text; }
@@ -45,7 +45,7 @@ internal sealed class FbxAsciiReader
         // FBX ASCII is ASCII / UTF-8 with no declared encoding. Tolerate BOM by skipping it.
         int start = 0;
         if (bytes.Length >= 3 && bytes[0] == 0xEF && bytes[1] == 0xBB && bytes[2] == 0xBF) start = 3;
-        var text = Encoding.UTF8.GetString(bytes, start, bytes.Length - start);
+        string text = Encoding.UTF8.GetString(bytes, start, bytes.Length - start);
         var r = new FbxAsciiReader(text);
         r.Tokenize();
         return r;
@@ -61,8 +61,8 @@ internal sealed class FbxAsciiReader
 
     private void FillVersionFromHeader(FbxNode root)
     {
-        var hdr = root.FindChild("FBXHeaderExtension");
-        var verNode = hdr?.FindChild("FBXVersion");
+        FbxNode? hdr = root.FindChild("FBXHeaderExtension");
+        FbxNode? verNode = hdr?.FindChild("FBXVersion");
         if (verNode is not null && verNode.Properties.Count > 0)
             Version = (uint)verNode.Properties[0].AsInt();
     }
@@ -209,7 +209,7 @@ internal sealed class FbxAsciiReader
     {
         while (_cursor < _tokens.Count)
         {
-            var t = _tokens[_cursor];
+            Tok t = _tokens[_cursor];
             if (t.Type == TT.CloseBracket)
             {
                 if (topLevel) throw new InvalidDataException($"Unexpected '}}' on line {t.Line}.");
@@ -233,7 +233,7 @@ internal sealed class FbxAsciiReader
         // Read tokens until either a key starts the next element or a '}' closes the scope.
         while (_cursor < _tokens.Count)
         {
-            var t = _tokens[_cursor];
+            Tok t = _tokens[_cursor];
             if (t.Type == TT.Comma) { _cursor++; continue; }
             if (t.Type == TT.Data)
             {
@@ -264,10 +264,10 @@ internal sealed class FbxAsciiReader
 
         // Regular element: every data token becomes a property; child scope's children become
         // this node's children.
-        foreach (var dt in dataTokens)
+        foreach (Tok dt in dataTokens)
             node.Properties.Add(ParseDataTokenAsProperty(dt));
         if (compound is not null)
-            foreach (var c in compound.Children)
+            foreach (FbxNode c in compound.Children)
                 node.Children.Add(c);
 
         parent.Children.Add(node);
@@ -277,10 +277,10 @@ internal sealed class FbxAsciiReader
     {
         if (compound is null) return false;
         if (outerTokens.Count != 1) return false;
-        var t = outerTokens[0];
+        Tok t = outerTokens[0];
         if (t.Type != TT.Data || t.Text.Length < 2 || t.Text[0] != '*') return false;
         if (compound.Children.Count != 1) return false;
-        var inner = compound.Children[0];
+        FbxNode inner = compound.Children[0];
         if (inner.Name != "a") return false;
 
         // The inner element has a flat list of data tokens converted to FbxProperties (we'll
@@ -288,10 +288,10 @@ internal sealed class FbxAsciiReader
         // We pack them into a single double[] (or int[]) property on `outer` to match binary form.
         bool allInt = true;
         bool needsLong = false;
-        var data = new double[inner.Properties.Count];
+        double[] data = new double[inner.Properties.Count];
         for (int i = 0; i < inner.Properties.Count; i++)
         {
-            var p = inner.Properties[i];
+            FbxProperty p = inner.Properties[i];
             switch (p.Type)
             {
                 case FbxPropertyType.Int64:
@@ -317,13 +317,13 @@ internal sealed class FbxAsciiReader
         if (allInt && needsLong)
         {
             // At least one element overflows int32 (e.g. KTime ticks); preserve full precision.
-            var longs = new long[inner.Properties.Count];
+            long[] longs = new long[inner.Properties.Count];
             for (int i = 0; i < longs.Length; i++) longs[i] = inner.Properties[i].AsLong();
             outer.Properties.Add(FbxProperty.FromLongArray(longs));
         }
         else if (allInt)
         {
-            var ints = new int[data.Length];
+            int[] ints = new int[data.Length];
             for (int i = 0; i < data.Length; i++) ints[i] = (int)data[i];
             outer.Properties.Add(FbxProperty.FromIntArray(ints));
         }

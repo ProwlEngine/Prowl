@@ -98,7 +98,7 @@ public static class InstrPool
     public static Instruction Rent(Op op, uint typeId = 0, uint resultId = 0)
     {
         if (_bypass > 0) return new Instruction(op, typeId, resultId);
-        var all = _all ??= [];
+        List<Instruction> all = _all ??= [];
         if (_used < all.Count) return all[_used++].Reset(op, typeId, resultId);
         var inst = new Instruction(op, typeId, resultId);
         all.Add(inst);

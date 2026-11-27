@@ -1,6 +1,7 @@
 // This file is part of the Prowl Game Engine
 // Licensed under the MIT License. See the LICENSE file in the project root for details.
 
+using Prowl.Photonic.Sampling;
 using Prowl.Vector;
 
 namespace Prowl.Photonic.Scene.Lights;
@@ -27,15 +28,15 @@ public sealed class PointLight : Light
     public override bool Sample(Float3 position, out Float3 toLight, out Float3 radiance, out float maxDist,
                                 Sampling.IAttenuation defaultAttenuation)
     {
-        var lp = WorldPosition;
-        var d = lp - position;
+        Float3 lp = WorldPosition;
+        Float3 d = lp - position;
         float dist = Float3.Length(d);
         if (dist <= 1e-6f) { toLight = Float3.UnitY; radiance = Float3.Zero; maxDist = 0; return false; }
         toLight = d / dist;
         maxDist = dist;
         if (dist >= Range) { radiance = Float3.Zero; return false; }
 
-        var atten = Attenuation ?? defaultAttenuation;
+        IAttenuation atten = Attenuation ?? defaultAttenuation;
         float a = atten.Evaluate(dist, Range);
         radiance = Color * a;
         return a > 0;

@@ -38,7 +38,7 @@ public enum CodeEditKind : byte { Other, Typing, Deleting }
 
 internal sealed class CodeUndoStep
 {
-    public readonly List<TextChange> Changes = new();
+    public readonly List<TextChange> Changes = [];
     public CodeSelection[] Before = Array.Empty<CodeSelection>();
     public CodeSelection[] After = Array.Empty<CodeSelection>();
     public CodeEditKind Kind;
@@ -48,8 +48,8 @@ internal sealed class CodeUndoStep
 /// <summary>Undo history of a <see cref="CodeEditor"/>. Steps hold the applied changes so undo replays them backwards.</summary>
 public sealed class CodeUndoStack
 {
-    private readonly List<CodeUndoStep> _undo = new();
-    private readonly List<CodeUndoStep> _redo = new();
+    private readonly List<CodeUndoStep> _undo = [];
+    private readonly List<CodeUndoStep> _redo = [];
     private CodeUndoStep? _open;
     private int _depth;
     private int _savePoint;
@@ -90,7 +90,7 @@ public sealed class CodeUndoStack
     internal void End(CodeSelection[] after)
     {
         if (--_depth > 0 || _open == null) return;
-        var step = _open;
+        CodeUndoStep step = _open;
         _open = null;
         if (step.Changes.Count == 0) return;
         step.After = after;
@@ -100,7 +100,7 @@ public sealed class CodeUndoStack
 
         if (_undo.Count > 0 && CanMerge(_undo[^1], step))
         {
-            var last = _undo[^1];
+            CodeUndoStep last = _undo[^1];
             last.Changes.AddRange(step.Changes);
             last.After = step.After;
             last.Time = step.Time;
@@ -144,7 +144,7 @@ public sealed class CodeUndoStack
     internal CodeUndoStep? PopUndo()
     {
         if (_undo.Count == 0) return null;
-        var step = _undo[^1];
+        CodeUndoStep step = _undo[^1];
         _undo.RemoveAt(_undo.Count - 1);
         _redo.Add(step);
         return step;
@@ -153,7 +153,7 @@ public sealed class CodeUndoStack
     internal CodeUndoStep? PopRedo()
     {
         if (_redo.Count == 0) return null;
-        var step = _redo[^1];
+        CodeUndoStep step = _redo[^1];
         _redo.RemoveAt(_redo.Count - 1);
         _undo.Add(step);
         return step;

@@ -150,7 +150,7 @@ internal static class PlaneRebuildOp
         {
             Vertex root = Find(v);
             Float2 p = frame.To2D(v.Point);
-            boxes[root] = boxes.TryGetValue(root, out var box)
+            boxes[root] = boxes.TryGetValue(root, out (Float2 Min, Float2 Max) box)
                 ? (new Float2(MathF.Min(box.Min.X, p.X), MathF.Min(box.Min.Y, p.Y)), new Float2(MathF.Max(box.Max.X, p.X), MathF.Max(box.Max.Y, p.Y)))
                 : (p, p);
         }
@@ -163,10 +163,10 @@ internal static class PlaneRebuildOp
             grew = false;
             foreach (Vertex root in touched.ToList())
             {
-                var a = boxes[root];
+                (Float2 Min, Float2 Max) a = boxes[root];
                 for (int i = pending.Count - 1; i >= 0; i--)
                 {
-                    var b = boxes[pending[i]];
+                    (Float2 Min, Float2 Max) b = boxes[pending[i]];
                     if (a.Min.X > b.Max.X + Eps || b.Min.X > a.Max.X + Eps || a.Min.Y > b.Max.Y + Eps || b.Min.Y > a.Max.Y + Eps) continue;
                     touched.Add(pending[i]);
                     pending.RemoveAt(i);
@@ -274,8 +274,8 @@ internal static class PlaneRebuildOp
         Float2[] pts = verts.Select(v => frame.To2D(v.Point)).ToArray();
 
         // Dangling lines bound nothing, so they are left out of the face search
-        var alive = Enumerable.Repeat(true, edgeList.Count).ToArray();
-        var degree = new int[verts.Count];
+        bool[] alive = Enumerable.Repeat(true, edgeList.Count).ToArray();
+        int[] degree = new int[verts.Count];
         foreach ((int a, int b) in edgeList) { degree[a]++; degree[b]++; }
         var incident = new List<int>[verts.Count];
         for (int i = 0; i < verts.Count; i++) incident[i] = [];
@@ -311,7 +311,7 @@ internal static class PlaneRebuildOp
             Float2 d = pts[heTo[he]] - pts[heFrom[he]];
             return MathF.Atan2(d.Y, d.X);
         }
-        var position = new int[heFrom.Count];
+        int[] position = new int[heFrom.Count];
         for (int v = 0; v < verts.Count; v++)
         {
             outgoing[v].Sort((x, y) => Angle(x).CompareTo(Angle(y)));
@@ -325,7 +325,7 @@ internal static class PlaneRebuildOp
         }
 
         // Components of the live graph, to tell holes from the faces around them
-        var component = Enumerable.Range(0, verts.Count).ToArray();
+        int[] component = Enumerable.Range(0, verts.Count).ToArray();
         int Root(int x) { while (component[x] != x) x = component[x] = component[component[x]]; return x; }
         for (int he = 0; he < heFrom.Count; he += 2)
         {
@@ -333,7 +333,7 @@ internal static class PlaneRebuildOp
             if (ra != rb) component[ra] = rb;
         }
 
-        var visited = new bool[heFrom.Count];
+        bool[] visited = new bool[heFrom.Count];
         var positive = new List<Cycle>();
         var negative = new List<Cycle>();
         for (int start = 0; start < heFrom.Count; start++)

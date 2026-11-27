@@ -30,7 +30,7 @@ internal sealed class SplitLargeMeshesStep : IPostProcess
 
         for (int mi = 0; mi < originalCount; mi++)
         {
-            var src = scene.Meshes[mi];
+            IntermediateMesh src = scene.Meshes[mi];
             if (src.Positions.Count <= max) continue;
             // Skinned + morph meshes are harder to split without breaking weight/morph mapping;
             // skip them and warn.
@@ -42,7 +42,7 @@ internal sealed class SplitLargeMeshesStep : IPostProcess
                 continue;
             }
 
-            var splits = SplitOne(src, max);
+            List<IntermediateMesh> splits = SplitOne(src, max);
             if (splits.Count <= 1) continue;
 
             scene.Meshes[mi] = splits[0];
@@ -68,13 +68,13 @@ internal sealed class SplitLargeMeshesStep : IPostProcess
             if (currentFaces.Count == 0) return;
             result.Add(BuildChunk(src, seen, currentFaces));
             currentFaces = new FaceList();
-            seen = new Dictionary<int, int>();
+            seen = [];
         }
 
         var remapped = new List<int>();
-        foreach (var face in src.Faces)
+        foreach (IntermediateFace face in src.Faces)
         {
-            var indices = src.Faces.IndicesOf(face);
+            Span<int> indices = src.Faces.IndicesOf(face);
             int wouldAdd = 0;
             for (int k = 0; k < indices.Length; k++)
                 if (!seen.ContainsKey(indices[k])) wouldAdd++;
@@ -109,23 +109,23 @@ internal sealed class SplitLargeMeshesStep : IPostProcess
             PrimitiveKinds = src.PrimitiveKinds,
         };
 
-        var ordered = oldToNew.OrderBy(kv => kv.Value).Select(kv => kv.Key).ToArray();
+        int[] ordered = oldToNew.OrderBy(kv => kv.Value).Select(kv => kv.Key).ToArray();
         for (int i = 0; i < ordered.Length; i++)
             dst.Positions.Add(src.Positions[ordered[i]]);
 
         if (src.Normals is { } srcN)
         {
-            dst.Normals = new List<Float3>(ordered.Length);
+            dst.Normals = [with(ordered.Length)];
             for (int i = 0; i < ordered.Length; i++) dst.Normals.Add(srcN[ordered[i]]);
         }
         if (src.Tangents is { } srcT)
         {
-            dst.Tangents = new List<Float4>(ordered.Length);
+            dst.Tangents = [with(ordered.Length)];
             for (int i = 0; i < ordered.Length; i++) dst.Tangents.Add(srcT[ordered[i]]);
         }
         if (src.Colors0 is { } srcC)
         {
-            dst.Colors0 = new List<Color>(ordered.Length);
+            dst.Colors0 = [with(ordered.Length)];
             for (int i = 0; i < ordered.Length; i++) dst.Colors0.Add(srcC[ordered[i]]);
         }
         for (int uv = 0; uv < Mesh.MaxUVChannels; uv++)

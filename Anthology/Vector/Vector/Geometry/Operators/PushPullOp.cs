@@ -5,11 +5,11 @@ using System;
 using System.Collections.Generic;
 using System.Linq;
 
+using static Prowl.Vector.Geometry.Operators.EditingCommon;
+
 using Edge = Prowl.Vector.Geometry.GeometryData.Edge;
 using Face = Prowl.Vector.Geometry.GeometryData.Face;
 using Vertex = Prowl.Vector.Geometry.GeometryData.Vertex;
-
-using static Prowl.Vector.Geometry.Operators.EditingCommon;
 
 namespace Prowl.Vector.Geometry.Operators;
 
@@ -28,7 +28,7 @@ internal static class PushPullOp
         Float3 normal = Float3.Normalize(set.First().Normal());
         Float3 offset = normal * distance;
 
-        var boundary = GeometryData.Boundary(set);
+        List<(Vertex A, Vertex B, Edge Edge, Face Face)> boundary = GeometryData.Boundary(set);
         bool standalone = boundary.All(b => b.Edge.FaceCount == 1);
         bool keep = keepBase || standalone;
         bool flipNew = standalone && distance < 0f;

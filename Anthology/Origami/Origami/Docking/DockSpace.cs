@@ -17,7 +17,7 @@ namespace Prowl.OrigamiUI;
 public class DockSpace
 {
     public DockNode Root { get; set; }
-    public List<FloatingWindow> FloatingWindows { get; } = new();
+    public List<FloatingWindow> FloatingWindows { get; } = [];
 
     // --- Drag state (one unified mode: dragging a tab) ---
     private bool _isDragging;
@@ -42,11 +42,11 @@ public class DockSpace
     private DockNode? _splitterDragNode;
 
     // --- Layout cache ---
-    private readonly Dictionary<DockNode, Rect> _leafRects = new();
+    private readonly Dictionary<DockNode, Rect> _leafRects = [];
     // Per-leaf tab-bar geometry (absolute), for computing tab-insertion drops.
-    private readonly Dictionary<DockNode, (Rect Bar, float[] Edges)> _tabBars = new();
+    private readonly Dictionary<DockNode, (Rect Bar, float[] Edges)> _tabBars = [];
     // Which floating window a leaf belongs to (null = it's in the root tree). For z-ordered hit testing.
-    private readonly Dictionary<DockNode, FloatingWindow?> _leafOwner = new();
+    private readonly Dictionary<DockNode, FloatingWindow?> _leafOwner = [];
 
     // --- Drop preview animation ---
     private Rect _previewRect;
@@ -64,10 +64,10 @@ public class DockSpace
     /// Rects come from the last <see cref="Draw"/>, so call after the dock space has been drawn.</summary>
     public bool TryGetPanelRect(Type panelType, out Rect rect)
     {
-        foreach (var (node, r) in _leafRects)
+        foreach ((DockNode? node, Rect r) in _leafRects)
         {
             if (node.Tabs == null) continue;
-            foreach (var p in node.Tabs)
+            foreach (DockPanel p in node.Tabs)
                 if (panelType.IsInstanceOfType(p)) { rect = r; return true; }
         }
         rect = default;
@@ -76,10 +76,10 @@ public class DockSpace
 
     public void Draw(Paper paper, float x, float y, float w, float h)
     {
-        var theme = Origami.Current;
-        var m = theme.Metrics;
-        var icons = theme.Icons;
-        var font = theme.Font;
+        OrigamiTheme theme = Origami.Current;
+        OrigamiMetrics m = theme.Metrics;
+        OrigamiIcons icons = theme.Icons;
+        FontFile? font = theme.Font;
         _lastDeltaTime = paper.DeltaTime;
 
         _dockSpaceBounds = new Rect(new Float2(x, y), new Float2(x + w, y + h));
@@ -246,10 +246,10 @@ public class DockSpace
                 float gx = rect.Min.X + (horiz ? (w - gripW) / 2f : alongPos);
                 float gy = rect.Min.Y + (horiz ? alongPos : (h - gripH) / 2f);
 
-                var gripColor = active ? theme.Primary.C400 : theme.Primary.C500;
+                Color gripColor = active ? theme.Primary.C400 : theme.Primary.C500;
                 canvas.RoundedRectFilled(gx, gy, gripW, gripH, thickness / 2f, gripColor);
 
-                var grip = horiz ? icons.GripVertical : icons.GripHorizontal;
+                IOrigamiIcon? grip = horiz ? icons.GripVertical : icons.GripHorizontal;
                 var gripRect = new Rect(new Float2(gx, gy), new Float2(gx + gripW, gy + gripH));
                 grip?.Draw(canvas, gripRect, theme.Ink.C300);
             });
@@ -258,8 +258,8 @@ public class DockSpace
 
     private float EstimateSplitSize(DockNode n, bool horiz)
     {
-        var a = FindLeafRect(n.ChildA);
-        var b = FindLeafRect(n.ChildB);
+        Rect? a = FindLeafRect(n.ChildA);
+        Rect? b = FindLeafRect(n.ChildB);
         if (a == null || b == null) return 600f;
         return horiz ? b.Value.Max.X - a.Value.Min.X : b.Value.Max.Y - a.Value.Min.Y;
     }
@@ -267,7 +267,7 @@ public class DockSpace
     private Rect? FindLeafRect(DockNode? n)
     {
         if (n == null) return null;
-        if (n.IsLeaf && _leafRects.TryGetValue(n, out var r)) return r;
+        if (n.IsLeaf && _leafRects.TryGetValue(n, out Rect r)) return r;
         return FindLeafRect(n.ChildA) ?? FindLeafRect(n.ChildB);
     }
 
@@ -291,9 +291,9 @@ public class DockSpace
 
         float bodyAlpha = Math.Clamp(m.WindowOpacity, 0f, 1f);
         float tabBarAlpha = bodyAlpha + (1f - bodyAlpha) * 0.25f;
-        var bodyColor = OrigamiTheme.WithAlpha(theme.Neutral.C400, (int)(bodyAlpha * 255));
-        var tabBarColor = OrigamiTheme.WithAlpha(theme.Neutral.C300, (int)(tabBarAlpha * 255));
-        var borderColor = theme.Neutral.C200;
+        Color bodyColor = OrigamiTheme.WithAlpha(theme.Neutral.C400, (int)(bodyAlpha * 255));
+        Color tabBarColor = OrigamiTheme.WithAlpha(theme.Neutral.C300, (int)(tabBarAlpha * 255));
+        Color borderColor = theme.Neutral.C200;
         int id = node.GetHashCode();
 
         float winBlur = fw != null || m.BlurDockedWindows ? m.WindowBackdropBlur : 0f;
@@ -312,7 +312,7 @@ public class DockSpace
                 .BackdropBlur(winBlur)
                 .BackgroundColor(bodyColor).RoundedBottom(cr);
 
-            var tabbar = paper.Box("leaf_tabbar")
+            ElementBuilder tabbar = paper.Box("leaf_tabbar")
                 .PositionType(PositionType.SelfDirected).Position(0, 0).Size(w, tabH)
                 .BackdropBlur(winBlur)
                 .BackgroundColor(tabBarColor).RoundedTop(cr);
@@ -350,7 +350,7 @@ public class DockSpace
             // Cache the tab-bar geometry (absolute) so a drag can compute a between-tabs insertion index.
             if (node.Tabs.Count > 0)
             {
-                var edges = new float[node.Tabs.Count + 1];
+                float[] edges = new float[node.Tabs.Count + 1];
                 for (int i = 0; i < node.Tabs.Count; i++) edges[i] = x + ox + tabPositions[i];
                 edges[node.Tabs.Count] = x + ox + tabPositions[node.Tabs.Count - 1] + tabWidths[node.Tabs.Count - 1];
                 _tabBars[node] = (new Rect(new Float2(x + ox, y + oy), new Float2(x + w + ox, y + tabH + oy)), edges);
@@ -359,7 +359,7 @@ public class DockSpace
             for (int i = 0; i < node.Tabs.Count; i++)
             {
                 bool isActive = i == node.ActiveTabIndex;
-                var tab = node.Tabs[i];
+                DockPanel tab = node.Tabs[i];
                 int ci = i;
                 float tw = tabWidths[i];
                 float tx = tabPositions[i];
@@ -370,7 +370,7 @@ public class DockSpace
                     TabStyle.Flat => Color.FromArgb(0, 0, 0, 0),
                     _ => isActive ? Color.FromArgb(0, 0, 0, 0) : Color.FromArgb(46, 0, 0, 0),
                 };
-                var tabEl = paper.Box("t", i)
+                ElementBuilder tabEl = paper.Box("t", i)
                     .PositionType(PositionType.SelfDirected)
                     .Position(tx, 0).Size(tw, tabH)
                     .Rounded(i == 0 ? cr : 0f, 0f, 0f, 0f) // clip the first tab to the window's rounded top-left
@@ -385,9 +385,9 @@ public class DockSpace
                     .OnDragStart((node, ci, fw), (cap, e) =>
                     {
                         e.StopPropagation();
-                        var srcNode = cap.node;
-                        var srcIdx = cap.ci;
-                        var srcFw = cap.fw;
+                        DockNode srcNode = cap.node;
+                        int srcIdx = cap.ci;
+                        FloatingWindow? srcFw = cap.fw;
 
                         _draggedPanel = srcNode.Tabs![srcIdx];
                         _isDragging = true;
@@ -449,7 +449,7 @@ public class DockSpace
                 if (showClose)
                 {
                     // The icon font's glyphs are empty, so stroke the "x" onto the canvas.
-                    var closeCol = theme.Ink.C400;
+                    Color closeCol = theme.Ink.C400;
                     float closeSz = m.TabCloseSize;
                     paper.Box("t_close", i)
                         .PositionType(PositionType.SelfDirected)
@@ -458,7 +458,7 @@ public class DockSpace
                         .Rounded(closeSz / 2)
                         .Hovered.BackgroundColor(OrigamiTheme.WithAlpha(theme.Primary.C500, 60)).End()
                         // Per-event stop so closing a tab doesn't select/drag it, while the wheel bubbles.
-                        .OnClick((node, ci, fw), (cap, e) => { e.StopPropagation(); cap.Item1.RemoveTab(cap.Item2)?.OnClosed(); })
+                        .OnClick((node, ci, fw), (cap, e) => { e.StopPropagation(); cap.node.RemoveTab(cap.ci)?.OnClosed(); })
                         .Cursor(PaperCursor.Pointer)
                         .OnPostLayout((h2, r2) => paper.Draw(ref h2, (canvas, rr) =>
                         {
@@ -495,7 +495,7 @@ public class DockSpace
             }
 
             // Panel-supplied header controls, right-aligned in the tab bar (e.g. a refresh button).
-            var activePanel = node.ActiveTabIndex < node.Tabs.Count ? node.Tabs[node.ActiveTabIndex] : null;
+            DockPanel? activePanel = node.ActiveTabIndex < node.Tabs.Count ? node.Tabs[node.ActiveTabIndex] : null;
             float hdrW = activePanel?.HeaderWidth ?? 0f;
             if (activePanel != null && hdrW > 0f)
             {
@@ -635,7 +635,7 @@ public class DockSpace
     private void BringToFront(int index)
     {
         if (index < 0 || index >= FloatingWindows.Count) return;
-        var fw = FloatingWindows[index];
+        FloatingWindow fw = FloatingWindows[index];
         FloatingWindows.RemoveAt(index);
         FloatingWindows.Add(fw);
     }
@@ -652,7 +652,7 @@ public class DockSpace
         // captures the hover, so the root (and any window behind it) is ignored.
         for (int i = FloatingWindows.Count - 1; i >= 0; i--)
         {
-            var fw = FloatingWindows[i];
+            FloatingWindow fw = FloatingWindows[i];
             if (fw == _dragSourceWindow) continue;   // the window we're dragging follows the cursor; ignore it
             if (!Hit(mouse, fw.Position.X, fw.Position.Y, fw.Size.X, fw.Size.Y)) continue;
             if (!HoverTabBars(mouse, fw)) HoverLeaves(mouse, m, fw);
@@ -683,11 +683,11 @@ public class DockSpace
     // Tab-bar insertion among the leaves owned by <paramref name="owner"/> (null = root tree). True when a bar is hovered.
     private bool HoverTabBars(Float2 mouse, FloatingWindow? owner)
     {
-        foreach (var (node, tb) in _tabBars)
+        foreach ((DockNode? node, (Rect Bar, float[] Edges) tb) in _tabBars)
         {
             if (_leafOwner.GetValueOrDefault(node) != owner || node == _dragSourceNode) continue;
             if (!Hit(mouse, (float)tb.Bar.Min.X, (float)tb.Bar.Min.Y, (float)tb.Bar.Size.X, (float)tb.Bar.Size.Y)) continue;
-            var edges = tb.Edges;
+            float[] edges = tb.Edges;
             int idx = edges.Length - 1;
             float caret = edges[edges.Length - 1];
             for (int t = 0; t < edges.Length - 1; t++)
@@ -696,7 +696,7 @@ public class DockSpace
                 if (mouse.X < mid) { idx = t; caret = edges[t]; break; }
             }
             _hoveredLeaf = node;
-            _hoveredLeafRect = _leafRects.TryGetValue(node, out var lr) ? lr : tb.Bar;
+            _hoveredLeafRect = _leafRects.TryGetValue(node, out Rect lr) ? lr : tb.Bar;
             _hoveredZone = DockZone.Tab;
             _hoveredTabIndex = idx;
             _hoveredTabCaretX = caret;
@@ -708,7 +708,7 @@ public class DockSpace
     // Resolve the hovered leaf and its center/edge dock indicator among the leaves owned by <paramref name="owner"/>.
     private void HoverLeaves(Float2 mouse, OrigamiMetrics m, FloatingWindow? owner)
     {
-        foreach (var (node, rect) in _leafRects)
+        foreach ((DockNode? node, Rect rect) in _leafRects)
         {
             if (_leafOwner.GetValueOrDefault(node) != owner) continue;
             if (_dragSourceWindow != null && _dragSourceNode == node) continue;
@@ -741,7 +741,7 @@ public class DockSpace
     // A vertical accent caret marking where a dragged tab will be inserted in the hovered tab bar.
     private void DrawTabInsertionCaret(Paper paper, OrigamiTheme theme)
     {
-        if (_hoveredLeaf == null || !_tabBars.TryGetValue(_hoveredLeaf, out var tb)) return;
+        if (_hoveredLeaf == null || !_tabBars.TryGetValue(_hoveredLeaf, out (Rect Bar, float[] Edges) tb)) return;
         float barTop = (float)tb.Bar.Min.Y;
         float barH = (float)tb.Bar.Size.Y;
         paper.Box("tab_caret")
@@ -764,11 +764,11 @@ public class DockSpace
         DrawDropPreview(paper, m);
 
         if (_hoveredLeaf == null) return;
-        var rect = _hoveredLeafRect;
+        Rect rect = _hoveredLeafRect;
         float cx = rect.Min.X + rect.Size.X / 2, cy = rect.Min.Y + rect.Size.Y / 2;
         float s = m.IndicatorSize, g = m.IndicatorGap, hs = s / 2;
 
-        var theme = Origami.Current;
+        OrigamiTheme theme = Origami.Current;
         var bg = Color.FromArgb(85, theme.Blue.C400);
         var hi = Color.FromArgb(85, theme.Blue.C500);
         var bd = Color.FromArgb(85, theme.Blue.C600);
@@ -814,7 +814,7 @@ public class DockSpace
 
     private void Ind(Paper paper, string id, float x, float y, float s, Color bg, Color bd, IOrigamiIcon? icon, FontFile? font)
     {
-        var inkNearWhite = Origami.Current.Ink.C500;
+        Color inkNearWhite = Origami.Current.Ink.C500;
         var iconCol = Color.FromArgb(230, inkNearWhite.R, inkNearWhite.G, inkNearWhite.B);
         paper.Box(id).PositionType(PositionType.SelfDirected).Position(x, y).Size(s, s)
             .BackgroundColor(bg).BorderColor(bd).BorderWidth(1).Rounded(4)
@@ -848,7 +848,7 @@ public class DockSpace
         }
         else if (_hoveredLeaf != null && _hoveredZone != DockZone.None)
         {
-            var r = _hoveredLeafRect;
+            Rect r = _hoveredLeafRect;
             float hx = r.Min.X, hy = r.Min.Y, hw = r.Size.X, hh = r.Size.Y;
             switch (_hoveredZone)
             {
@@ -1002,7 +1002,7 @@ public class DockSpace
     private void SplitLeaf(DockNode target, DockPanel panel, DockZone zone)
     {
         var newLeaf = DockNode.Leaf(panel);
-        var dir = (zone == DockZone.Left || zone == DockZone.Right) ? SplitDirection.Horizontal : SplitDirection.Vertical;
+        SplitDirection dir = (zone == DockZone.Left || zone == DockZone.Right) ? SplitDirection.Horizontal : SplitDirection.Vertical;
         bool newFirst = zone == DockZone.Left || zone == DockZone.Top;
         var split = DockNode.Split(dir, 0.5f, newFirst ? newLeaf : target, newFirst ? target : newLeaf);
         ReplaceInTree(target, split);

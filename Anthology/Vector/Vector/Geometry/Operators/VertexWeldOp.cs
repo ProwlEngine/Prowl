@@ -38,8 +38,8 @@ internal static class VertexWeldOp
         var grid = new Dictionary<Cell, List<int>>();
         for (int i = 0; i < candidates.Count; i++)
         {
-            var cell = CellOf(candidates[i].Point, threshold);
-            if (!grid.TryGetValue(cell, out var list)) grid[cell] = list = new List<int>();
+            Cell cell = CellOf(candidates[i].Point, threshold);
+            if (!grid.TryGetValue(cell, out List<int>? list)) grid[cell] = list = [];
             list.Add(i);
         }
 
@@ -48,19 +48,19 @@ internal static class VertexWeldOp
 
         for (int i = 0; i < candidates.Count; i++)
         {
-            var v1 = candidates[i];
+            GeometryData.Vertex v1 = candidates[i];
             if (removed.Contains(v1)) continue;
 
             var members = new List<int> { i };
-            var home = CellOf(v1.Point, threshold);
+            Cell home = CellOf(v1.Point, threshold);
             for (int dx = -1; dx <= 1; dx++)
                 for (int dy = -1; dy <= 1; dy++)
                     for (int dz = -1; dz <= 1; dz++)
                     {
-                        if (!grid.TryGetValue(new Cell(home.X + dx, home.Y + dy, home.Z + dz), out var nearby)) continue;
+                        if (!grid.TryGetValue(new Cell(home.X + dx, home.Y + dy, home.Z + dz), out List<int>? nearby)) continue;
                         foreach (int j in nearby)
                         {
-                            var v2 = candidates[j];
+                            GeometryData.Vertex v2 = candidates[j];
                             if (j <= i || removed.Contains(v2) || Float3.Distance(v1.Point, v2.Point) > threshold) continue;
                             members.Add(j);
                         }
@@ -72,7 +72,7 @@ internal static class VertexWeldOp
             var cluster = members.Select(m => candidates[m]).ToList();
 
             Float3 average = Float3.Zero;
-            foreach (var v in cluster) average += v.Point;
+            foreach (GeometryData.Vertex? v in cluster) average += v.Point;
             v1.Point = average / cluster.Count;
             AverageAttributes(mesh, cluster, v1);
 
@@ -85,7 +85,7 @@ internal static class VertexWeldOp
 
         if (mapping.Count == 0) return 0;
 
-        GeometryData.Vertex Map(GeometryData.Vertex v) => mapping.TryGetValue(v, out var kept) ? kept : v;
+        GeometryData.Vertex Map(GeometryData.Vertex v) => mapping.TryGetValue(v, out GeometryData.Vertex? kept) ? kept : v;
 
         // Everything that touches a merged vertex is rebuilt on the vertex that is kept
         var affectedFaces = mesh.Faces.Where(f => f.NeighborVerticesEnumerable().Any(mapping.ContainsKey)).ToList();
@@ -95,7 +95,7 @@ internal static class VertexWeldOp
             .Select(e => (A: Map(e.Vert1), B: Map(e.Vert2), Attributes: AttributeTransfer.Copy(e.Attributes), Loose: e.Loop == null))
             .ToList();
 
-        foreach (var face in affectedFaces) mesh.RemoveFace(face);
+        foreach (GeometryData.Face? face in affectedFaces) mesh.RemoveFace(face);
 
         foreach (FaceSnapshot snapshot in snapshots)
         {
@@ -103,7 +103,7 @@ internal static class VertexWeldOp
             var loops = new List<Dictionary<string, GeometryData.AttributeValue>>();
             for (int i = 0; i < snapshot.Vertices.Count; i++)
             {
-                var mapped = Map(snapshot.Vertices[i]);
+                GeometryData.Vertex mapped = Map(snapshot.Vertices[i]);
                 if (verts.Count > 0 && verts[verts.Count - 1] == mapped) continue;
                 verts.Add(mapped);
                 loops.Add(snapshot.Loops[i]);
@@ -115,7 +115,7 @@ internal static class VertexWeldOp
             }
             if (verts.Count < 3 || verts.Distinct().Count() != verts.Count) continue;
 
-            var face = mesh.AddFace(verts.ToArray());
+            GeometryData.Face? face = mesh.AddFace(verts.ToArray());
             if (face == null) continue;
 
             snapshot.ApplyFaceAttributes(face);
@@ -125,10 +125,10 @@ internal static class VertexWeldOp
         }
 
         var restored = new HashSet<GeometryData.Edge>();
-        foreach (var record in edgeRecords)
+        foreach ((GeometryData.Vertex A, GeometryData.Vertex B, Dictionary<string, GeometryData.AttributeValue> Attributes, bool Loose) record in edgeRecords)
         {
             if (record.A == record.B) continue;
-            var edge = mesh.FindEdge(record.A, record.B);
+            GeometryData.Edge? edge = mesh.FindEdge(record.A, record.B);
             if (edge == null)
             {
                 if (!record.Loose) continue;
@@ -137,7 +137,7 @@ internal static class VertexWeldOp
             if (restored.Add(edge)) AttributeTransfer.Apply(record.Attributes, edge.Attributes);
         }
 
-        foreach (var v in removed)
+        foreach (GeometryData.Vertex v in removed)
             if (mesh.Contains(v)) mesh.RemoveVertex(v);
 
         return mapping.Count;
@@ -145,22 +145,22 @@ internal static class VertexWeldOp
 
     private static void AverageAttributes(GeometryData mesh, List<GeometryData.Vertex> cluster, GeometryData.Vertex target)
     {
-        foreach (var attribute in mesh.VertexAttributes)
+        foreach (GeometryData.AttributeDefinition attribute in mesh.VertexAttributes)
         {
             if (attribute.Type.BaseType == GeometryData.AttributeBaseType.Float)
             {
-                var values = cluster.Select(v => v.Attributes.TryGetValue(attribute.Name, out var a) ? a as GeometryData.FloatAttributeValue : null).Where(a => a != null).ToList();
+                var values = cluster.Select(v => v.Attributes.TryGetValue(attribute.Name, out GeometryData.AttributeValue? a) ? a as GeometryData.FloatAttributeValue : null).Where(a => a != null).ToList();
                 if (values.Count == 0) continue;
-                var data = new float[values[0]!.Data.Length];
+                float[] data = new float[values[0]!.Data.Length];
                 for (int k = 0; k < data.Length; k++)
                     data[k] = values.Sum(a => k < a!.Data.Length ? a.Data[k] : 0f) / values.Count;
                 target.Attributes[attribute.Name] = new GeometryData.FloatAttributeValue { Data = data };
             }
             else if (attribute.Type.BaseType == GeometryData.AttributeBaseType.Int)
             {
-                var values = cluster.Select(v => v.Attributes.TryGetValue(attribute.Name, out var a) ? a as GeometryData.IntAttributeValue : null).Where(a => a != null).ToList();
+                var values = cluster.Select(v => v.Attributes.TryGetValue(attribute.Name, out GeometryData.AttributeValue? a) ? a as GeometryData.IntAttributeValue : null).Where(a => a != null).ToList();
                 if (values.Count == 0) continue;
-                var data = new int[values[0]!.Data.Length];
+                int[] data = new int[values[0]!.Data.Length];
                 for (int k = 0; k < data.Length; k++)
                     data[k] = (int)MathF.Round(values.Sum(a => k < a!.Data.Length ? (float)a.Data[k] : 0f) / values.Count);
                 target.Attributes[attribute.Name] = new GeometryData.IntAttributeValue { Data = data };

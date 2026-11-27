@@ -45,7 +45,7 @@ internal sealed class VkDescriptorSetCache
     {
         _gd = gd;
         _pool = new VkDescriptorPoolManager(gd); // persistent pool: supports per-set Free for eviction
-        _byIdentity = new Dictionary<ulong[], Entry>(IdentityComparer.Instance);
+        _byIdentity = [with(IdentityComparer.Instance)];
         _lookup = _byIdentity.GetAlternateLookup<ReadOnlySpan<ulong>>();
         gd.RegisterDescriptorSetCache(this);
     }

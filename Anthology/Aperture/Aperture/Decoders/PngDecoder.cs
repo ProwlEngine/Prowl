@@ -3,6 +3,7 @@
 
 using System.Buffers;
 using System.Buffers.Binary;
+
 using Prowl.Aperture.Decoders.Png;
 using Prowl.Aperture.Metadata;
 

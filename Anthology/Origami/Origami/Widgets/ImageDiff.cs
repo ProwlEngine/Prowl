@@ -6,6 +6,7 @@ using System;
 using Prowl.PaperUI;
 using Prowl.PaperUI.LayoutEngine;
 using Prowl.Quill;
+using Prowl.Scribe;
 using Prowl.Vector;
 using Prowl.Vector.Spatial;
 
@@ -50,17 +51,17 @@ public sealed class ImageDiffBuilder
 
     public void Show()
     {
-        var m = _theme.Metrics;
-        var capturedA = _imageA;
-        var capturedB = _imageB;
-        var capturedBarW = _barWidth;
-        var capturedHandleSize = _handleSize;
-        var capturedEdgePad = _edgePad;
-        var primary = _theme.Primary;
-        var font = _theme.Font;
+        OrigamiMetrics m = _theme.Metrics;
+        object capturedA = _imageA;
+        object capturedB = _imageB;
+        float capturedBarW = _barWidth;
+        float capturedHandleSize = _handleSize;
+        float capturedEdgePad = _edgePad;
+        OrigamiRamp primary = _theme.Primary;
+        FontFile? font = _theme.Font;
 
         // .w2diff: 1px soft border, clipped, dark fallback behind the images.
-        var container = _paper.Box($"{_id}_box")
+        ElementBuilder container = _paper.Box($"{_id}_box")
             .Width(_width).Height(_height)
             .Rounded(_theme.Metrics.ContainerRounding)
             .BorderColor(_theme.BorderSoft).BorderWidth(1)
@@ -69,7 +70,7 @@ public sealed class ImageDiffBuilder
 
         using (container.Enter())
         {
-            var el = _paper.CurrentParent;
+            ElementHandle el = _paper.CurrentParent;
 
             // Read/write split position from element storage so dragging persists
             float split = _paper.GetElementStorage(el, "split", _splitPos);
@@ -154,7 +155,7 @@ public sealed class ImageDiffBuilder
                     canvas.RestoreState();
 
                     // .w2diff-grip — 26px accent circle (#A855F7).
-                    var accCol = Color32.FromArgb(255, (byte)primary.C500.R, (byte)primary.C500.G, (byte)primary.C500.B);
+                    Vector.Color accCol = Color32.FromArgb(255, (byte)primary.C500.R, (byte)primary.C500.G, (byte)primary.C500.B);
                     canvas.CircleFilled(splitX, cy, handleR, accCol);
 
                     // White left-right drag glyph ("<->") on the grip.
@@ -191,7 +192,7 @@ public sealed class ImageDiffBuilder
                         Color tagBg = Color.FromArgb(140, 0, 0, 0);
                         Color tagFg = Color.FromArgb(255, 255, 255, 255);
 
-                        var bs = canvas.MeasureText("Before", tagFont, font);
+                        Float2 bs = canvas.MeasureText("Before", tagFont, font);
                         float bpw = (float)bs.X + padTX * 2f;
                         float bph = (float)bs.Y + padTY * 2f;
                         float bpx = x + margin;
@@ -199,7 +200,7 @@ public sealed class ImageDiffBuilder
                         canvas.RoundedRectFilled(bpx, bpy, bpw, bph, _theme.Metrics.SmallRounding, tagBg);
                         canvas.DrawText("Before", bpx + padTX, bpy + padTY, tagFg, tagFont, font);
 
-                        var as_ = canvas.MeasureText("After", tagFont, font);
+                        Float2 as_ = canvas.MeasureText("After", tagFont, font);
                         float apw = (float)as_.X + padTX * 2f;
                         float aph = (float)as_.Y + padTY * 2f;
                         float apx = x + w - margin - apw;

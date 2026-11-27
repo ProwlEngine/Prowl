@@ -28,10 +28,10 @@ internal sealed class GlslPragmaScan
     }
 
     private readonly Func<string, string, string?> _resolve;
-    private readonly HashSet<string> _axisMacros = new(StringComparer.Ordinal);
-    private readonly Dictionary<string, Macro> _macros = new(StringComparer.Ordinal);
-    private readonly Dictionary<string, Truth> _entered = new(StringComparer.Ordinal);
-    private readonly HashSet<string> _open = new(StringComparer.Ordinal);
+    private readonly HashSet<string> _axisMacros = [with(StringComparer.Ordinal)];
+    private readonly Dictionary<string, Macro> _macros = [with(StringComparer.Ordinal)];
+    private readonly Dictionary<string, Truth> _entered = [with(StringComparer.Ordinal)];
+    private readonly HashSet<string> _open = [with(StringComparer.Ordinal)];
     private List<VariantSpace> _axes = [];
     private List<ShaderGlobal> _globals = [];
 
