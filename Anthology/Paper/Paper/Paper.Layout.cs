@@ -404,10 +404,14 @@ public partial class Paper
             // menu item).
             float clampedX = data.X;
             if (data.X > screenWidth - rect.Width)
-                clampedX = Math.Max(0, (data._clampToScreenAvoidanceArea != default ? data._clampToScreenAvoidanceArea.Min.X : data.X) - rect.Width);
+                clampedX = Math.Clamp((data._clampToScreenAvoidanceArea != default ? data._clampToScreenAvoidanceArea.Min.X : data.X) - rect.Width, 0, screenWidth - rect.Width);
+            else if (data.X < 0)
+                clampedX = Math.Clamp(data._clampToScreenAvoidanceArea != default ? data._clampToScreenAvoidanceArea.Max.X : data.X, 0, screenWidth - rect.Width);
             float clampedY = data.Y;
             if (data.Y > screenHeight - rect.Height)
-                clampedY = Math.Max(0, (data._clampToScreenAvoidanceArea != default ? data._clampToScreenAvoidanceArea.Min.Y : data.Y) - rect.Height);
+                clampedY = Math.Clamp((data._clampToScreenAvoidanceArea != default ? data._clampToScreenAvoidanceArea.Min.Y : data.Y) - rect.Height, 0, screenHeight - rect.Height);
+            else if (data.Y < 0)
+                clampedY = Math.Clamp(data._clampToScreenAvoidanceArea != default ? data._clampToScreenAvoidanceArea.Max.Y : data.Y, 0, screenHeight - rect.Height);
             data.RelativeX += clampedX - data.X;
             data.RelativeY += clampedY - data.Y;
             data.X = clampedX;
