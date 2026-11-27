@@ -72,4 +72,57 @@ public class CSGApplyTransformTests
         Assert.Equal(new Float3(1.5f, 2f, 1f), root.Transform.LocalScale);
         Assert.Equal(before, WorldPoints(brush));
     }
+
+    private static (CSGModel Model, CSGBrush Brush) Tidy()
+    {
+        var root = new GameObject("Model");
+        CSGModel model = root.AddComponent<CSGModel>();
+        var go = new GameObject("Brush");
+        go.SetParent(root, worldPositionStays: false);
+        CSGBrush brush = go.AddComponent<CSGBrush>();
+        brush.ResetToBox(new Float3(2f));
+        CSGSelection.KeepTidy(model, null);
+        return (model, brush);
+    }
+
+    [Fact]
+    public void AScaleGivenToABrushIsBakedIntoItsPoints()
+    {
+        (CSGModel model, CSGBrush brush) = Tidy();
+
+        brush.Transform.LocalScale = new Float3(2f, 1f, 3f);
+        CSGSelection.KeepTidy(model, null);
+
+        Assert.Equal(Float3.One, brush.Transform.LocalScale);
+        Float3 size = brush.Shape!.Bounds().Size;
+        Assert.True(Float3.Distance(new Float3(4f, 2f, 6f), size) < 1e-3f, $"{size}");
+    }
+
+    [Fact]
+    public void AnEditedBrushKeepsItsPivotCentred()
+    {
+        (CSGModel model, CSGBrush brush) = Tidy();
+
+        CSGControlMesh moved = brush.ControlMesh.Clone();
+        moved.TransformPoints(Float4x4.CreateTranslation(new Float3(3f, 0f, 0f)));
+        brush.SetShape(moved, brush.Surfaces);
+        CSGSelection.KeepTidy(model, null);
+
+        Assert.True(Float3.Distance(new Float3(3f, 0f, 0f), brush.Transform.Position) < 1e-4f, $"{brush.Transform.Position}");
+        Assert.True(Float3.Length(CSGBrushGeometry.Centroid(brush.Shape)) < 1e-4f);
+    }
+
+    [Fact]
+    public void APivotPlacedOnPurposeStaysWhereItIs()
+    {
+        (CSGModel model, CSGBrush brush) = Tidy();
+        brush.CustomPivot = true;
+
+        CSGControlMesh moved = brush.ControlMesh.Clone();
+        moved.TransformPoints(Float4x4.CreateTranslation(new Float3(3f, 0f, 0f)));
+        brush.SetShape(moved, brush.Surfaces);
+        CSGSelection.KeepTidy(model, null);
+
+        Assert.Equal(Float3.Zero, brush.Transform.Position);
+    }
 }

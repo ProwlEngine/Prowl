@@ -432,12 +432,22 @@ public sealed class CSGMeshTool : SceneTool
     {
         CSGBrush brush = Target!;
         CSGSelection.Record("Move CSG Pivot", [brush.GameObject, .. brush.GameObject.Children]);
+        brush.CustomPivot = true;
         CSGSelection.MovePivot(brush, local);
         Reload();
         MarkDirty();
     }
 
     public void DeleteSelectedFaces() => DeleteFaces();
+
+    /// <summary>Something outside the tool moved the brush's points, such as recentring its pivot, so the tool reads them again.</summary>
+    public void ShapeChanged(CSGBrush brush)
+    {
+        if (Active && ReferenceEquals(brush, Target)) Reload();
+    }
+
+    /// <summary>A gesture, transform or edit preview is under way, holding the brush's points as they started.</summary>
+    public bool Busy => _dragging || _transform != null || _action != Action.None || _session != null;
 
     /// <summary>One face is selected, so the bracket keys taper it instead of changing the grid.</summary>
     public bool TapersFace => Active && _faces.Count == 1;

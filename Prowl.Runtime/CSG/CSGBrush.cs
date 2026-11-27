@@ -63,6 +63,9 @@ public sealed class CSGBrush : Component
     /// <summary>Hidden in the editor's viewport. It still shapes the model and is never hidden in a game.</summary>
     public bool HiddenInEditor;
 
+    /// <summary>The pivot was placed on purpose. Otherwise the editor keeps it at the centre of the shape.</summary>
+    [HideInInspector] public bool CustomPivot;
+
     [SerializeIgnore] private GeometryData? _shape;
     [SerializeIgnore] private Plane[]? _planes;
     [SerializeIgnore] private int[] _faceToPlane = [];

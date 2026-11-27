@@ -113,7 +113,11 @@ public static class CSGSelection
 
     private static CSGBrush? _single;
 
-    static CSGSelection() => Selection.OnSelectionChanged += () => _single = null;
+    static CSGSelection()
+    {
+        Selection.OnSelectionChanged += () => _single = null;
+        Undo.undoRedoPerformed += ForgetSeen;
+    }
 
     /// <summary>The brush when exactly one is selected, else null. Kept until the selection changes or the brush goes.</summary>
     public static CSGBrush? SingleBrush()
@@ -213,6 +217,50 @@ public static class CSGSelection
             if (group.IsValid()) result.Add(group);
             CollectGroups(child, result);
         }
+    }
+
+    // What each object under the models was last seen as, so only what changes since is tidied
+    private static readonly Dictionary<GameObject, Float3> s_seenScale = new();
+    private static readonly Dictionary<CSGBrush, int> s_seenVersion = new();
+
+    /// <summary>
+    /// Keeps a model's brushes tidy after each change: a scale given to a brush or anything holding brushes is baked into
+    /// the points, and a pivot not placed on purpose goes back to the centre of its shape. What is there when first seen,
+    /// or put back by undo, is left as it is. Runs between gestures, so a change and its tidying are one undo step.
+    /// </summary>
+    public static void KeepTidy(CSGModel model, CSGMeshTool? mesh)
+    {
+        var scaled = new List<GameObject>();
+        foreach (GameObject go in model.GameObject.GetChildrenDeep())
+        {
+            if (go.GetComponent<CSGModel>().IsValid()) continue;
+            Float3 scale = go.Transform.LocalScale;
+            bool known = s_seenScale.TryGetValue(go, out Float3 seen);
+            s_seenScale[go] = scale;
+            if (known && scale != seen && scale != Float3.One) scaled.Add(go);
+        }
+        if (scaled.Count > 0 && ApplyTransform(scaled, ModelEditingMode.TransformParts.Scale))
+            foreach (GameObject go in scaled.SelectMany(r => r.GetChildrenDeep().Prepend(r))) s_seenScale[go] = Float3.One;
+
+        foreach (CSGBrush brush in BrushesIn(model))
+        {
+            bool known = s_seenVersion.TryGetValue(brush, out int version);
+            s_seenVersion[brush] = brush.Version;
+            if (!known || version == brush.Version || brush.CustomPivot || brush.Shape == null) continue;
+
+            Float3 centre = CSGBrushGeometry.Centroid(brush.Shape);
+            if (Float3.LengthSquared(centre) < 1e-8f) continue;
+            Record("Centre CSG Pivot", [brush.GameObject, .. brush.GameObject.Children]);
+            MovePivot(brush, centre);
+            s_seenVersion[brush] = brush.Version;
+            mesh?.ShapeChanged(brush);
+        }
+    }
+
+    private static void ForgetSeen()
+    {
+        s_seenScale.Clear();
+        s_seenVersion.Clear();
     }
 
     /// <summary>Every brush under a model, nested models excluded.</summary>
@@ -330,8 +378,8 @@ public static class CSGSelection
         }
     }
 
-    /// <summary>Moves each selected pivot onto its solid's centre without moving the geometry.</summary>
-    public static void CentrePivot() => CentrePivots(Brushes(), Groups().Where(g => g.GetComponent<CSGBrush>().IsNotValid()).ToList(), "Centre CSG Pivot");
+    /// <summary>Puts each selected pivot back on its solid's centre, where it stays as the shape changes, without moving the geometry.</summary>
+    public static void CentrePivot() => CentrePivots(Brushes(), Groups().Where(g => g.GetComponent<CSGBrush>().IsNotValid()).ToList(), "Reset CSG Pivot");
 
     /// <summary>Moves the pivot of every brush and group in a model onto its solid's centre without moving the geometry.</summary>
     public static void CentreAllPivots(CSGModel model)
@@ -350,7 +398,10 @@ public static class CSGSelection
             .SelectMany(go => go.Children.Prepend(go)).Distinct());
 
         foreach (CSGBrush brush in brushes)
+        {
+            brush.CustomPivot = false;
             MovePivot(brush, CSGBrushGeometry.Centroid(brush.Shape));
+        }
 
         // A group's pivot goes to the middle of the brushes inside it, which stay where they are
         foreach (CSGGroup group in groups)

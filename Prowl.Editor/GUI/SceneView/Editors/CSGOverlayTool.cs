@@ -69,6 +69,10 @@ public sealed class CSGOverlayTool : SceneTool
     {
         CSGModel? model = CSGSelection.ActiveModel();
 
+        CSGMeshTool? mesh = SceneToolManager.Get<CSGMeshTool>();
+        if (model.IsValid() && !ctx.Handles.Modal && !Input.GetMouseButton(0) && mesh is not { Busy: true })
+            CSGSelection.KeepTidy(model!, mesh);
+
         // A modal operation owns every key. Edit keeps only the tool and grid keys, the rest are its own
         if (ctx.Handles.Modal)
         {
