@@ -13,7 +13,6 @@ using Prowl.Runtime.Resources;
 using Prowl.Vector;
 
 using Lanes = System.Numerics.Vector;
-using Stopwatch = System.Diagnostics.Stopwatch;
 
 namespace Prowl.Runtime.MeshFeatures.Generation;
 
@@ -63,15 +62,12 @@ public static class SDFGenerator
     /// </summary>
     public static MeshSDF? Generate(Mesh mesh, Options options)
     {
-        var sw = Stopwatch.StartNew();
-
         Surface? surface = Surface.From(mesh);
         if (surface == null) return null;
 
         if (!Layout(surface.Bounds, options, out AABB bounds, out float cell, out Int3 resolution)) return null;
 
         float[] distances = ComputeDistances(surface, bounds.Min, cell, resolution);
-        long compute = sw.ElapsedMilliseconds;
 
         // Stored as signed normalized shorts over the longest distance the volume can hold
         float maxDistance = Float3.Length(bounds.Max - bounds.Min);
@@ -81,8 +77,6 @@ public static class SDFGenerator
 
         var volume = new Texture3D((uint)resolution.X, (uint)resolution.Y, (uint)resolution.Z, TextureFormat.R16SNorm);
         volume.SetData<short>(packed);
-
-        Debug.Log($"SDF '{mesh.Name}': {resolution.X}x{resolution.Y}x{resolution.Z}, {surface.TriangleCount:N0} tris in {compute} ms, {sw.ElapsedMilliseconds} ms with the upload");
 
         return new MeshSDF
         {

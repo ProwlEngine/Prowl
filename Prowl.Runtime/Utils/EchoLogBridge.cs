@@ -32,9 +32,9 @@ public static class EchoLogBridge
     /// </summary>
     private sealed class ProwlEchoLogger : IEchoLogger
     {
-        public void Debug(string message) => Prowl.Runtime.Debug.Log($"[Echo] {message}");
+        public void Debug(string message) { }
 
-        public void Info(string message) => Prowl.Runtime.Debug.Log($"[Echo] {message}");
+        public void Info(string message) { }
 
         public void Warning(string message)
             => Prowl.Runtime.Debug.LogWarningOnce($"Echo.{message}", $"[Echo] {message}");

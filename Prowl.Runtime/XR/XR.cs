@@ -251,7 +251,6 @@ public static class XR
         Session = null;
         session.Dispose();
         Graphics.VSync = Application.VSync;
-        Debug.Log("XR stopped.");
         Stopped?.Invoke();
     }
 
@@ -288,7 +287,6 @@ public static class XR
             if (!IsReconnecting || Environment.TickCount64 < s_reconnectAt) return;
             s_reconnectAt = Environment.TickCount64 + ReconnectMilliseconds;
             if (!Connect(s_origin, quiet: true)) return;
-            Debug.Log("XR reconnected to the headset.");
         }
 
         try

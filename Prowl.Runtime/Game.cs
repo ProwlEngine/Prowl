@@ -5,8 +5,6 @@ using System;
 using System.Collections.Generic;
 using System.Globalization;
 
-using Echo.Logging;
-
 using Prowl.Runtime.Audio;
 
 using Prowl.PaperUI;
@@ -19,17 +17,6 @@ using Prowl.Vector;
 using Silk.NET.Maths;
 
 namespace Prowl.Runtime;
-
-public class EchoLogger : IEchoLogger
-{
-    public void Debug(string message) => Prowl.Runtime.Debug.Log(message);
-
-    public void Error(string message, Exception? exception = null) => Prowl.Runtime.Debug.LogError(message);
-
-    public void Info(string message) => Prowl.Runtime.Debug.Log(message);
-
-    public void Warning(string message) => Prowl.Runtime.Debug.LogWarning(message);
-}
 
 public abstract class Game
 {
@@ -254,8 +241,6 @@ public abstract class Game
             AudioContext.Deinitialize();
 
             Tasks.MainThreadContext.Uninstall();
-
-            Debug.Log("Is terminating...");
         };
 
         Debug.LogSuccess("Initialization complete");
@@ -536,7 +521,6 @@ public abstract class Game
     public static void Quit()
     {
         Window.Stop();
-        Debug.Log("Is terminating...");
     }
 }
 

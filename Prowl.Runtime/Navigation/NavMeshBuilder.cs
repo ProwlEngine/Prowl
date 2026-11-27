@@ -143,7 +143,6 @@ public static class NavMeshBuilder
             foreach (NavMeshLinkSource link in links)
                 data.Links.Add(link);
 
-        Debug.Log($"[Navigation] Baked {data.CacheLayers.Count} cache layers ({tilesX}x{tilesZ} grid, {geom.TriangleCount} input triangles, {data.Links.Count} links).");
         return data;
     }
 

@@ -117,8 +117,6 @@ public static class PlayerSettingsLoader
 
                 CollisionMatrix.SetRows(packed);
             }
-
-            Debug.Log("[PlayerSettings] Physics applied.");
         }
         catch (Exception ex) { Debug.LogWarning($"[PlayerSettings] Failed to apply physics: {ex.Message}"); }
     }
@@ -141,8 +139,6 @@ public static class PlayerSettingsLoader
 
             if (rate > 0 && channels > 0 && buffer > 0)
                 AudioContext.Restart((uint)rate, (uint)channels, (uint)buffer);
-
-            Debug.Log("[PlayerSettings] Audio applied.");
         }
         catch (Exception ex) { Debug.LogWarning($"[PlayerSettings] Failed to apply audio: {ex.Message}"); }
     }
@@ -187,7 +183,6 @@ public static class PlayerSettingsLoader
             SceneClock.Defaults = new SceneClockSettings { TimeScale = timeScale };
             foreach (Scene world in Scene.All)
                 world.Clock.TimeScale = timeScale;
-            Debug.Log("[PlayerSettings] Time applied.");
         }
         catch (Exception ex) { Debug.LogWarning($"[PlayerSettings] Failed to apply time: {ex.Message}"); }
     }
@@ -203,7 +198,6 @@ public static class PlayerSettingsLoader
             List<QualityLevel> levels = settings.TryGet("Levels", out EchoObject? levelsProp) ? Serializer.Deserialize<List<QualityLevel>>(levelsProp) ?? [] : [];
             int active = settings.TryGet("Active", out EchoObject? activeProp) ? activeProp!.IntValue : 0;
             QualitySettings.Set(levels, active);
-            Debug.Log($"[PlayerSettings] Quality applied ({QualitySettings.Active.Name}).");
         }
         catch (Exception ex) { Debug.LogWarning($"[PlayerSettings] Failed to apply quality: {ex.Message}"); }
     }
@@ -237,8 +231,6 @@ public static class PlayerSettingsLoader
 
             if (settings.TryGet("SortingLayers", out EchoObject? sortingProp) && Serializer.Deserialize<List<SortingLayerInfo>>(sortingProp) is { } sorting)
                 TagLayerManager.SetSortingLayers(sorting);
-
-            Debug.Log("[PlayerSettings] Tags & Layers applied.");
         }
         catch (Exception ex) { Debug.LogWarning($"[PlayerSettings] Failed to apply tags/layers: {ex.Message}"); }
     }
@@ -254,17 +246,11 @@ public static class PlayerSettingsLoader
             List<string>? names = settings.TryGet("AreaNames", out EchoObject? namesProp) ? Serializer.Deserialize<List<string>>(namesProp) : null;
             List<float>? costs = settings.TryGet("AreaCosts", out EchoObject? costsProp) ? Serializer.Deserialize<List<float>>(costsProp) : null;
             if (names?.Count > 0 || costs?.Count > 0)
-            {
                 NavMeshAreas.ApplyTable(names ?? [], costs ?? []);
-                Debug.Log("[PlayerSettings] Navigation areas applied.");
-            }
 
             if (settings.TryGet("AgentTypes", out EchoObject? typesProp)
                 && Serializer.Deserialize<List<NavMeshAgentType>>(typesProp) is { Count: > 0 } types)
-            {
                 NavMeshAgentTypes.ApplyTable(types);
-                Debug.Log($"[PlayerSettings] Navigation agent types applied ({types.Count}).");
-            }
 
             if (settings.TryGet("World", out EchoObject? worldProp)
                 && Serializer.Deserialize<NavMeshWorldSettings>(worldProp) is { } world)

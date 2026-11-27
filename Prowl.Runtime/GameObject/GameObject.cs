@@ -248,11 +248,8 @@ public partial class GameObject : EngineObject, ISerializable
         }
         if (ReferenceEquals(_section, section)) return;
 
-        SceneSection? from = _section;
         GiveFreshIdentifiersAgainst(section);
         section.Instance.JoinSection(this, section);
-        if (from is { IsPersistent: true } || section.IsPersistent)
-            Debug.Log($"[Scene] '{Name}' moved from '{from?.Name}' to '{section.Name}'.");
 
         foreach (GameObject owned in OwnedRoots())
             owned.MoveTo(section);

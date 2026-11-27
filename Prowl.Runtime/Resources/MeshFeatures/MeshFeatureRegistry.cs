@@ -87,8 +87,6 @@ public static class MeshFeatureRegistry
                 Debug.LogError($"Failed to register MeshFeatureSpec {type.FullName}: {ex.Message}");
             }
         }
-
-        Debug.Log($"MeshFeatureRegistry: {_specs.Count} feature(s) registered.");
     }
 
     /// <summary>

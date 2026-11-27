@@ -330,9 +330,6 @@ internal sealed unsafe partial class OpenXRSession : IDisposable
         CreateSpaces(origin);
 
         Input = new OpenXRInput(_xr, _instance, _session, _appSpace, _handTrackingSupported, _eyeGazeSupported);
-
-        string extras = (_handTrackingSupported ? ", hand tracking" : "") + (_eyeGazeSupported ? ", eye tracking" : "");
-        Debug.Log($"XR started on {SystemName} through {RuntimeName}, {EyeWidth}x{EyeHeight} per eye, tracking from the {TrackingOrigin.ToString().ToLowerInvariant()}{extras}.");
     }
 
     private void ChooseEyeSize(float renderScale)
