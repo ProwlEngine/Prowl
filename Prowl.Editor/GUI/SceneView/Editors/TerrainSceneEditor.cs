@@ -38,7 +38,6 @@ public class TerrainSceneEditor : SceneTool
     // The package's edits when the stroke began, page references only
     private TerrainSnapshot? _beforeStroke;
 
-    public int Priority => 0;
 
     public override void OnActivated(SceneToolContext ctx)
     {

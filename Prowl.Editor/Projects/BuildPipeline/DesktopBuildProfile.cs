@@ -29,9 +29,7 @@ public enum DesktopWindowMode
 /// </summary>
 public class DesktopBuildProfile : PlatformBuildProfile
 {
-    public Type pipelineType => typeof(DesktopBuildPipeline);
-
-    public override Type GetPipelineType() => pipelineType;
+    public override Type GetPipelineType() => typeof(DesktopBuildPipeline);
 
     /// <summary>Kept for projects saved before targets became data. <see cref="TargetId"/> supersedes it.</summary>
     public BuildTarget Platform = BuildTarget.Windows;

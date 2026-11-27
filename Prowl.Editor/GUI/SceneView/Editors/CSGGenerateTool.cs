@@ -53,7 +53,7 @@ public sealed class CSGGenerateTool : SceneTool
     private static readonly Color32 GuideColor = new(140, 200, 255, 200);
 
     /// <summary>Whether drawing is the CSG mode in force.</summary>
-    public bool Drawing => CSGEditMode.Is(CSGMode.Create);
+    private static bool Drawing => CSGEditMode.Is(CSGMode.Create);
 
     /// <summary>Operation the next brush is created with. Choosing one turns <see cref="AutoOperation"/> off.</summary>
     public Operation Operation

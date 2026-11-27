@@ -998,20 +998,6 @@ public class DesktopBuildPipeline : BuildPipeline
         return resources;
     }
 
-    /// <summary> Appends MSBuild PackageReference items for the runtime's NuGet dependencies to the given StringBuilder, reading package metadata embedded in the compiled runtime assembly. </summary>
-    public void ListDependencies(StringBuilder sb)
-    {
-        // Read PackageReferences from assembly metadata embedded by the MSBuild
-        // EmbedPackageReferences target in Prowl.Runtime.csproj. This works regardless
-        // of whether the source tree is present - the data lives in the compiled DLL.
-        List<(string Name, string Version)> packages = GetRuntimePackageReferences();
-
-        sb.AppendLine("  <ItemGroup>");
-        foreach ((string? name, string? version) in packages)
-            sb.AppendLine($"    <PackageReference Include=\"{name}\" Version=\"{version}\" />");
-        sb.AppendLine("  </ItemGroup>");
-    }
-
     /// <summary>
     /// Reads PackageReference metadata stamped into the Prowl.Runtime assembly
     /// by the EmbedPackageReferences MSBuild target. Each entry is an

@@ -18,7 +18,7 @@ public class EditorTask
     /// this survives entering and leaving play mode and script reloads, which end the game's async session.
     /// A condition that throws resumes the wait by rethrowing it.
     /// </summary>
-    public IdleAwaitable IdleOnCondition(Func<bool> condition) => new(condition);
+    public static IdleAwaitable IdleOnCondition(Func<bool> condition) => new(condition);
 
     /// <summary>Resumes every wait whose condition now holds. Called once per editor frame on the main thread.</summary>
     internal static void Poll()

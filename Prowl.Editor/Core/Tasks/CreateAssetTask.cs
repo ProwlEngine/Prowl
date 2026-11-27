@@ -23,9 +23,9 @@ public class CreateAssetTask : EditorTask
 
     /// <summary>Starts naming and creating an asset in <paramref name="relativeFolder"/>. Extension is empty for a folder.</summary>
     public static void Begin(string relativeFolder, string defaultName, string extension, Writer write, bool isFolder = false)
-        => new CreateAssetTask().Run(relativeFolder, defaultName, extension, write, isFolder);
+        => Run(relativeFolder, defaultName, extension, write, isFolder);
 
-    private async void Run(string relativeFolder, string defaultName, string extension, Writer write, bool isFolder)
+    private static async void Run(string relativeFolder, string defaultName, string extension, Writer write, bool isFolder)
     {
         string absoluteFolder = AssetCreateMenu.GetAbsoluteFolder(relativeFolder);
         if (!Directory.Exists(absoluteFolder)) return;

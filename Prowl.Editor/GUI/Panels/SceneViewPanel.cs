@@ -578,7 +578,6 @@ public class SceneViewPanel : DockPanel
                 }
                 UpdatePickControl(scene, new Float2(width, height));
 
-                _handles.EndFrame();
             }
 
             // Render scene (gizmos drawn via Debug.DrawLine render into the RT)

@@ -1771,7 +1771,7 @@ public partial class EditorApplication : Game
     /// <summary>
     /// Saves the editor window position, size and maximization state.
     /// </summary>
-    public void SaveEditorWindowState()
+    private static void SaveEditorWindowState()
     {
         EditorSettings.Instance.WindowX = Window.Position.X;
         EditorSettings.Instance.WindowY = Window.Position.Y;
