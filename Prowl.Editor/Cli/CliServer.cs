@@ -37,6 +37,7 @@ public static class CliServer
     private const int MaxConnections = 32;
     private const int MaxLogLines = 500;
     private static readonly TimeSpan s_readTimeout = TimeSpan.FromSeconds(30);
+    private static readonly TimeSpan s_drainTimeout = TimeSpan.FromSeconds(1);
     private static readonly TimeSpan s_lockCheckInterval = TimeSpan.FromSeconds(2);
 
     private sealed class Server(TcpListener listener, string token, string projectRoot, string libraryPath)
@@ -289,9 +290,21 @@ public static class CliServer
             {
                 (int status, string? body) = await ReadAndRouteAsync(stream, server).ConfigureAwait(false);
                 await WriteResponseAsync(stream, status, body, server.Cts.Token).ConfigureAwait(false);
+                if (status >= 400)
+                    await DrainAsync(client, stream, server.Cts.Token).ConfigureAwait(false);
             }
-            catch (Exception ex) when (ex is IOException or OperationCanceledException or ObjectDisposedException) { }
+            catch (Exception ex) when (ex is IOException or SocketException or OperationCanceledException or ObjectDisposedException) { }
         }
+    }
+
+    // Reads what the peer is still sending, so closing with unread bytes does not reset the connection before it reads the response.
+    private static async Task DrainAsync(TcpClient client, NetworkStream stream, CancellationToken ct)
+    {
+        client.Client.Shutdown(SocketShutdown.Send);
+        using var timeout = CancellationTokenSource.CreateLinkedTokenSource(ct);
+        timeout.CancelAfter(s_drainTimeout);
+        byte[] scratch = new byte[4096];
+        while (await stream.ReadAsync(scratch, timeout.Token).ConfigureAwait(false) > 0) { }
     }
 
     private static async Task<(int Status, string Body)> ReadAndRouteAsync(NetworkStream stream, Server server)
