@@ -88,6 +88,14 @@ public class MeshRenderer : Component, IMaterialRenderer, IRenderSync
         set { receiveShadows = value; Wake(); }
     }
 
+    /// <summary>The layer its transparent materials draw in. Later layers draw in front, whatever the render queue or depth.</summary>
+    public SortingLayer SortingLayer { get => sortingLayer; set { sortingLayer = value; Wake(); } }
+    [SerializeField] private SortingLayer sortingLayer;
+
+    /// <summary>Higher values draw in front of lower ones in the same sorting layer. Clamped to -32768 to 32767.</summary>
+    public int SortingOrder { get => sortingOrder; set { sortingOrder = value; Wake(); } }
+    [SerializeField] private int sortingOrder;
+
     Mesh? IRenderSync.SyncedMesh => DrawnMesh;
 
     [System.NonSerialized, NotHeld] private Mesh? _drawOverride;
@@ -151,6 +159,7 @@ public class MeshRenderer : Component, IMaterialRenderer, IRenderSync
             LayerMask = RenderableState.LayerBit(GameObject.LayerIndex),
             ObjectId = (uint)InstanceID,
             Lightmap = lightmap,
+            Sort = SortingGroup.OrderOf(GameObject, SortingLayer, SortingOrder),
         });
         return RenderableState.MaterialsReady(materials) && !(lightmap.Lightmapped && lightmap.Texture == null);
     }

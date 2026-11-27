@@ -52,6 +52,9 @@ public static class Graphics
     /// <summary>The window's swapchain, null when headless.</summary>
     public static Swapchain? Swapchain => Device?.MainSwapchain;
 
+    /// <summary>How cameras sort transparent renderers unless they override it. Set from the project's Graphics settings.</summary>
+    public static TransparencySort TransparencySort { get; set; }
+
     /// <summary>The largest width or height a texture may have.</summary>
     public static uint MaxTextureSize => 16384;
 

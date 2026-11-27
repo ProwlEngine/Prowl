@@ -88,6 +88,14 @@ public class TextMeshComponent : Component, IMaterialRenderer, IColorTint, IRend
     [SerializeField] private ShadowCasting _shadowCasting = ShadowCasting.Off;
     public ShadowCasting ShadowCasting { get => _shadowCasting; set => SetField(ref _shadowCasting, value); }
 
+    [SerializeField] private SortingLayer _sortingLayer;
+    /// <summary>The layer it draws in. Later layers draw in front, whatever the render queue or depth.</summary>
+    public SortingLayer SortingLayer { get => _sortingLayer; set => SetField(ref _sortingLayer, value); }
+
+    [SerializeField] private int _sortingOrder;
+    /// <summary>Higher values draw in front of lower ones in the same sorting layer. Clamped to -32768 to 32767.</summary>
+    public int SortingOrder { get => _sortingOrder; set => SetField(ref _sortingOrder, value); }
+
     // Shared world-space text material (Default/DefaultTextMesh - SDF, tagged Transparent so the scene
     // pipeline draws it). Distinct from the canvas text material, which is UI-tagged and only drawn by
     // the canvas path. Lazy-allocated and reused across every TextMeshComponent that doesn't override it.
@@ -175,6 +183,7 @@ public class TextMeshComponent : Component, IMaterialRenderer, IColorTint, IRend
             Flags = RenderableState.FlagsFor(GameObject, false, false) | ShadowCasting.ToFlags(),
             LayerMask = RenderableState.LayerBit(GameObject.LayerIndex),
             ObjectId = (uint)InstanceID,
+            Sort = SortingGroup.OrderOf(GameObject, SortingLayer, SortingOrder),
         });
         return false;
     }

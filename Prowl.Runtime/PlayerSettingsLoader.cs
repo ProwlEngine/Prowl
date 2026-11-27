@@ -3,8 +3,10 @@ using System.Collections.Generic;
 using System.IO;
 
 using Prowl.Echo;
+using Prowl.Graphite.Rendering;
 using Prowl.Runtime.Audio;
 using Prowl.Runtime.Resources;
+using Prowl.Vector;
 
 namespace Prowl.Runtime;
 
@@ -33,6 +35,7 @@ public static class PlayerSettingsLoader
         ApplyTime(settingsDir);
         ApplyTagsAndLayers(settingsDir);
         ApplyQuality(settingsDir);
+        ApplyGraphics(settingsDir);
 
         ApplyPhysics(settingsDir);
 
@@ -203,6 +206,20 @@ public static class PlayerSettingsLoader
             Debug.Log($"[PlayerSettings] Quality applied ({QualitySettings.Active.Name}).");
         }
         catch (Exception ex) { Debug.LogWarning($"[PlayerSettings] Failed to apply quality: {ex.Message}"); }
+    }
+
+    private static void ApplyGraphics(string dir)
+    {
+        EchoObject? settings = Read(dir, PlayerSettingsFiles.Graphics);
+        if (settings == null) return;
+
+        try
+        {
+            TransparencySortMode mode = settings.TryGet("TransparencySortMode", out EchoObject? modeProp) ? Serializer.Deserialize<TransparencySortMode>(modeProp) : TransparencySortMode.Default;
+            Float3 axis = settings.TryGet("TransparencySortAxis", out EchoObject? axisProp) ? Serializer.Deserialize<Float3>(axisProp) : new Float3(0, 1, 0);
+            Graphics.TransparencySort = new TransparencySort(mode, axis);
+        }
+        catch (Exception ex) { Debug.LogWarning($"[PlayerSettings] Failed to apply graphics: {ex.Message}"); }
     }
 
     private static void ApplyTagsAndLayers(string dir)

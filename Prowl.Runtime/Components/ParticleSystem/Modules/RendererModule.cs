@@ -100,6 +100,12 @@ public class RendererModule : ParticleSystemModule
     [Tooltip("Moves the whole system in the transparent draw order. Negative draws it later, in front.")]
     public float SortingFudge = 0f;
 
+    [Tooltip("The layer the particles draw in. Later layers draw in front, whatever the render queue or depth.")]
+    public SortingLayer SortingLayer;
+
+    [Tooltip("Higher values draw in front of lower ones in the same sorting layer.")]
+    public int SortingOrder;
+
     [Header("Shading")]
     public ParticleBlendMode BlendMode = ParticleBlendMode.Alpha;
 
@@ -205,6 +211,7 @@ public class RendererModule : ParticleSystemModule
         provider.Begin();
         uint layer = Rendering.RenderableState.LayerBit(system.GameObject.LayerIndex);
         uint objectId = (uint)system.InstanceID;
+        TransparentOrder sort = SortingGroup.OrderOf(system.GameObject, SortingLayer, SortingOrder);
 
         if (Enabled && system.ParticleCount > 0 && system.HasBounds)
         {
@@ -234,6 +241,7 @@ public class RendererModule : ParticleSystemModule
                     Count = count,
                     Sorted = sorted,
                     SortFudge = SortingFudge,
+                    Sort = sort,
                     LayerMask = layer,
                     ViewFlags = Rendering.RenderableState.ViewFlagsFor(system.GameObject),
                     ObjectId = objectId,
@@ -269,6 +277,7 @@ public class RendererModule : ParticleSystemModule
                         Header = header,
                         Count = count,
                         SortFudge = SortingFudge + 0.01f,
+                        Sort = sort,
                         LayerMask = layer,
                         ViewFlags = Rendering.RenderableState.ViewFlagsFor(system.GameObject),
                         ObjectId = objectId,
@@ -391,6 +400,7 @@ internal struct ParticleBatch
     /// <summary>Drawn back to front for each view.</summary>
     public bool Sorted;
     public float SortFudge;
+    public TransparentOrder Sort;
     public uint LayerMask;
     public RenderableFlags ViewFlags;
     public uint ObjectId;
@@ -517,24 +527,25 @@ internal sealed class ParticleRenderProvider(ParticleSystemComponent system, Par
                 LayerMask = batch.LayerMask,
                 ObjectId = batch.ObjectId,
                 Flags = RenderableFlags.ReceiveShadows | batch.ViewFlags,
-                SortDepth = SortDepth(batch, view.Camera, info),
+                SortDepth = SortDepth(batch, view, info),
+                Sort = batch.Sort,
             };
             for (int s = 0; s < batch.SubMeshes; s++)
                 sink.AddInstanced(batch.Mesh, s, batch.Material, item, (uint)batch.Count);
         }
     }
 
-    /// <summary>The distance to the system's center, moved along the view by the sorting fudge but never past the camera.</summary>
-    private static float SortDepth(in ParticleBatch batch, Double3 camera, in ParticleBuffers.ViewInfo info)
+    /// <summary>The view's sort depth of the system's center, moved along the view by the sorting fudge but never past the camera.</summary>
+    private static float SortDepth(in ParticleBatch batch, in ProviderView view, in ParticleBuffers.ViewInfo info)
     {
-        Float3 toCenter = (Float3)(batch.Center - camera);
         if (!info.Found || batch.SortFudge == 0f)
-            return Float3.Length(toCenter);
-        float depth = Float3.Dot(toCenter, info.Forward);
+            return view.SortDepth(batch.Center);
+        float depth = Float3.Dot((Float3)(batch.Center - view.Camera), info.Forward);
         float bias = batch.SortFudge;
         if (depth > 0.01f)
             bias = MathF.Max(bias, 0.01f - depth);
-        return Float3.Length(toCenter + info.Forward * bias);
+        Float3 shift = info.Forward * bias;
+        return view.SortDepth(batch.Center + new Double3(shift.X, shift.Y, shift.Z));
     }
 
     // Farthest first for this view. Returns the order's place in the order buffer, or -1 when it has no room this frame.

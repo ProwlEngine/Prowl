@@ -80,20 +80,7 @@ public class SpriteRenderer : Component, IMaterialRenderer, IColorTint, IRenderS
     // Syncs it again next frame, for a setting that changed
     internal void Wake() => SceneRendering.Wake(this, GameObject);
 
-    /// <summary>Its own sorting layer and order, or inside the nearest enabled <see cref="SortingGroup"/> above it, the group's first.</summary>
-    internal TransparentOrder SortOrder()
-    {
-        int own = TagLayerManager.SortingOrderOf(SortingLayer.Id, SortingOrder);
-        for (GameObject? go = GameObject; go.IsValid(); go = go.Parent)
-        {
-            if (go.GetComponent<SortingGroup>() is not { } group || !group.IsValid() || !group.EnabledInHierarchy)
-                continue;
-            Float3 anchor = group.Transform.Position;
-            return new TransparentOrder(TagLayerManager.SortingOrderOf(group.SortingLayer.Id, group.SortingOrder), (uint)group.InstanceID,
-                new Double3(anchor.X, anchor.Y, anchor.Z), own);
-        }
-        return new TransparentOrder(own);
-    }
+    internal TransparentOrder SortOrder() => SortingGroup.OrderOf(GameObject, SortingLayer, SortingOrder);
 
     bool IRenderSync.Sync(RenderWorld world)
     {
@@ -260,8 +247,8 @@ public class SpriteRenderer : Component, IMaterialRenderer, IColorTint, IRenderS
 }
 
 /// <summary>
-/// Draws every <see cref="SpriteRenderer"/> below it together: they sort as one item at this GameObject's position by the
-/// group's sorting layer and order, then among themselves by their own.
+/// Draws every renderer below it together: they sort as one item at this GameObject's position by the group's sorting
+/// layer and order, then among themselves by their own. A group inside another sorts as one item among the outer's members.
 /// </summary>
 [AddComponentMenu("Rendering/Sorting Group")]
 public class SortingGroup : Component
@@ -274,15 +261,53 @@ public class SortingGroup : Component
     public int SortingOrder { get => sortingOrder; set { sortingOrder = value; WakeMembers(); } }
     [SerializeField] private int sortingOrder;
 
+    [System.NonSerialized] private SortGroupLevel[]? _chain, _outerChain;
+    [System.NonSerialized] private SortGroupLevel _level;
+
     public override void OnEnable() => WakeMembers();
 
     public override void OnDisable() => WakeMembers();
 
+    /// <summary>Where a renderer on a GameObject draws among transparent ones: its own layer and order, inside every enabled group above it.</summary>
+    public static TransparentOrder OrderOf(GameObject gameObject, SortingLayer layer, int order)
+        => new(TagLayerManager.SortingOrderOf(layer.Id, order), ChainAt(gameObject));
+
+    /// <summary>The nearest enabled group on the GameObject or above it, or null.</summary>
+    public static SortingGroup? Nearest(GameObject? gameObject)
+    {
+        for (; gameObject.IsValid(); gameObject = gameObject.Parent)
+            if (gameObject.GetComponent<SortingGroup>() is { } group && group.IsValid() && group.EnabledInHierarchy)
+                return group;
+        return null;
+    }
+
+    /// <summary>The chain of the nearest enabled group on the GameObject or above it, or null.</summary>
+    public static SortGroupLevel[]? ChainAt(GameObject? gameObject)
+    {
+        SortingGroup? group = Nearest(gameObject);
+        return group.IsValid() ? group.Chain() : null;
+    }
+
+    /// <summary>This group and every enabled group above it, outermost first. The same array while none of them changes.</summary>
+    public SortGroupLevel[] Chain()
+    {
+        SortGroupLevel[]? outer = ChainAt(GameObject.Parent);
+        Float3 anchor = Transform.Position;
+        SortGroupLevel level = new(TagLayerManager.SortingOrderOf(sortingLayer.Id, sortingOrder), (uint)InstanceID, new Double3(anchor.X, anchor.Y, anchor.Z));
+        if (_chain != null && level == _level && ReferenceEquals(outer, _outerChain))
+            return _chain;
+        _level = level;
+        _outerChain = outer;
+        _chain = outer == null ? [level] : [.. outer, level];
+        return _chain;
+    }
+
     private void WakeMembers()
     {
         if (GameObject.IsNotValid()) return;
-        foreach (SpriteRenderer sprite in GameObject.GetComponentsInChildren<SpriteRenderer>())
-            sprite.Wake();
+        foreach (Component component in GameObject.GetComponentsInChildren<Component>())
+            if (component is IRenderSync member)
+                SceneRendering.Wake(member, component.GameObject);
     }
 }
 

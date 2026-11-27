@@ -287,7 +287,8 @@ internal static class UIRendering
             Float3 center = (bounds.Min + bounds.Max) * 0.5f;
             Float3 extent = bounds.Max - bounds.Min;
             float radius = MathF.Sqrt(extent.X * extent.X + extent.Y * extent.Y + extent.Z * extent.Z) * 0.5f;
-            frame.Canvases.Add(new CanvasRange(new Double3(center.X, center.Y, center.Z), radius, first, count, sceneViewOnly));
+            Double3 centre = new(center.X, center.Y, center.Z);
+            frame.Canvases.Add(new CanvasRange(centre, radius, first, count, sceneViewOnly, canvas.SortChain(centre)));
         }
 
         // The mesh keeps each vertex's position in its mask's space in UV1, which the material pass clips with
@@ -397,7 +398,7 @@ internal static class UIRendering
         public RenderableFlags ViewFlags;
     }
 
-    private readonly record struct CanvasRange(Double3 Center, float Radius, int First, int Count, bool SceneViewOnly);
+    private readonly record struct CanvasRange(Double3 Center, float Radius, int First, int Count, bool SceneViewOnly, SortGroupLevel[] Groups);
 
     private sealed class ProviderFrame
     {
@@ -429,10 +430,7 @@ internal static class UIRendering
                 if (canvas.SceneViewOnly && !sceneView) continue;
                 if (!view.Sees(canvas.Center, canvas.Radius)) continue;
 
-                // A canvas sorts by its distance, its items one float step apart so they draw in hierarchy order
-                Double3 offset = canvas.Center - view.Camera;
-                float distance = MathF.Max((float)Math.Sqrt(offset.X * offset.X + offset.Y * offset.Y + offset.Z * offset.Z), 1e-3f);
-                uint bits = BitConverter.SingleToUInt32Bits(distance);
+                float depth = view.SortDepth(canvas.Center);
                 for (int i = 0; i < canvas.Count; i++)
                 {
                     ref WorldItem item = ref items[canvas.First + i];
@@ -444,7 +442,8 @@ internal static class UIRendering
                         LayerMask = item.LayerMask,
                         ObjectId = item.ObjectId,
                         Flags = item.ViewFlags,
-                        SortDepth = BitConverter.UInt32BitsToSingle(bits + (uint)(canvas.Count - 1 - i)),
+                        SortDepth = depth,
+                        Sort = new TransparentOrder(i, canvas.Groups),
                     };
                     sink.Add(item.Mesh, 0, item.Material, draw);
                 }

@@ -1799,6 +1799,7 @@ public class BuildSystemTests : IDisposable
     [InlineData(PlayerSettingsFiles.Assets)]
     [InlineData(PlayerSettingsFiles.TagsAndLayers)]
     [InlineData(PlayerSettingsFiles.Navigation)]
+    [InlineData(PlayerSettingsFiles.Graphics)]
     public void EveryFileThePlayerReads_IsExportedByATypeOfThatName(string expected)
     {
         EditorRegistries.SettingsEntry entry = Assert.Single(EditorRegistries.SettingsEntries.Where(e => e.Type.Name == expected));
@@ -1850,6 +1851,26 @@ public class BuildSystemTests : IDisposable
             Assert.Equal([4, SortingLayer.DefaultId, 9], TagLayerManager.SortingLayers.Select(l => l.Id));
         }
         finally { TagLayerManager.ResetDefault(); }
+    }
+
+    [Fact]
+    public void ProjectTransparencySort_ReachesThePlayer()
+    {
+        var settings = new GraphicsSettings { TransparencySortMode = Graphite.Rendering.TransparencySortMode.CustomAxis, TransparencySortAxis = new Vector.Float3(0, 1, -0.25f) };
+
+        string dir = Path.Combine(_root, "Settings");
+        Directory.CreateDirectory(dir);
+        EchoObject echo = Prowl.Echo.Serializer.Serialize(typeof(GraphicsSettings), settings, Prowl.Echo.TypeMode.None);
+        File.WriteAllText(Path.Combine(dir, PlayerSettingsFiles.Graphics + ".yaml"), echo.WriteToYaml());
+
+        Graphics.TransparencySort = default;
+        try
+        {
+            PlayerSettingsLoader.Apply(dir);
+
+            Assert.Equal(new Graphite.Rendering.TransparencySort(Graphite.Rendering.TransparencySortMode.CustomAxis, new Vector.Float3(0, 1, -0.25f)), Graphics.TransparencySort);
+        }
+        finally { Graphics.TransparencySort = default; }
     }
 
     // ---------------------------------------------------------------- BuildTargetProviderScanTests

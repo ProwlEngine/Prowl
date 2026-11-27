@@ -38,6 +38,12 @@ public class LineRenderer : Component, IMaterialRenderer, IRenderSync
     public float TextureTiling = 1.0f; // Controls UV tiling for Tile mode
     public ShadowCasting ShadowCasting = ShadowCasting.Off;
 
+    /// <summary>The layer it draws in. Later layers draw in front, whatever the render queue or depth.</summary>
+    public SortingLayer SortingLayer;
+
+    /// <summary>Higher values draw in front of lower ones in the same sorting layer. Clamped to -32768 to 32767.</summary>
+    public int SortingOrder;
+
     /// <summary>Unused: the ribbon faces the view in its shader, so it has no fixed normals.</summary>
     public bool RecalculateNormals = false;
 
@@ -97,6 +103,7 @@ public class LineRenderer : Component, IMaterialRenderer, IRenderSync
             LayerMask = RenderableState.LayerBit(GameObject.LayerIndex),
             ObjectId = (uint)InstanceID,
             Bounds = WidenedBounds(),
+            Sort = SortingGroup.OrderOf(GameObject, SortingLayer, SortingOrder),
         });
         return false;
     }

@@ -54,6 +54,12 @@ public class SkinnedMeshRenderer : Component, IMaterialRenderer, IColorTint, IRe
     public ShadowCasting ShadowCasting = ShadowCasting.On;
     public bool ReceiveShadows = true;
 
+    /// <summary>The layer its transparent materials draw in. Later layers draw in front, whatever the render queue or depth.</summary>
+    public SortingLayer SortingLayer;
+
+    /// <summary>Higher values draw in front of lower ones in the same sorting layer. Clamped to -32768 to 32767.</summary>
+    public int SortingOrder;
+
     // Resolved at runtime
     [System.NonSerialized] private Transform? _rootBone;
     [System.NonSerialized] private Transform?[]? _bones;
@@ -350,6 +356,7 @@ public class SkinnedMeshRenderer : Component, IMaterialRenderer, IColorTint, IRe
             LayerMask = RenderableState.LayerBit(GameObject.LayerIndex),
             ObjectId = (uint)InstanceID,
             Lightmap = BakedLightingBinding.For(GameObject, ref _lightmapCache),
+            Sort = SortingGroup.OrderOf(GameObject, SortingLayer, SortingOrder),
             Bounds = bounds,
         });
 

@@ -158,6 +158,14 @@ public class Camera : Component
     /// <summary>The part of the target the camera draws into, as x, y, width and height from 0 to 1, y down from the top.</summary>
     public Float4 ViewportRect = new(0, 0, 1, 1);
 
+    /// <summary>Sorts this camera's transparent renderers by its own mode instead of the project's Graphics setting.</summary>
+    public bool OverrideTransparencySort;
+
+    [ShowIf(nameof(OverrideTransparencySort))] public TransparencySortMode TransparencySortMode;
+
+    /// <summary>The axis the custom axis mode sorts along, renderers further along it drawn first.</summary>
+    [ShowIf(nameof(OverrideTransparencySort))] public Float3 TransparencySortAxis = new(0, 1, 0);
+
     [SerializeField] private int depth = -1;
 
     /// <summary>Cameras draw lowest depth first, each over the ones before.</summary>
@@ -489,6 +497,7 @@ public class Camera : Component
         view.Ldr = !HDR;
         view.Path = RenderingPath;
         view.EarlyDepth = EarlyDepth;
+        view.TransparencySort = OverrideTransparencySort ? new TransparencySort(TransparencySortMode, TransparencySortAxis) : Graphics.TransparencySort;
         DisplacementSettings displacement = Displacement ?? new();
         view.DisplacementCell = displacement.Cell;
         view.DisplacementCreaseBlend = displacement.CreaseBlend;

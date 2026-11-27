@@ -71,11 +71,31 @@ public class GameCanvas : Component, IRenderSync
     }
 
     [SerializeField] private int _sortOrder;
-    /// <summary>Sort order relative to other screen-space canvases. Higher = on top.</summary>
+    /// <summary>Higher draws on top: among screen space canvases, and for a world space canvas, in its sorting layer.</summary>
     public int SortOrder
     {
         get => _sortOrder;
         set => SetField(ref _sortOrder, value, UIDirtyFlags.Hierarchy);
+    }
+
+    [SerializeField] private SortingLayer _sortingLayer;
+    /// <summary>The layer a world space canvas draws in. Later layers draw in front, whatever the render queue or depth.</summary>
+    public SortingLayer SortingLayer { get => _sortingLayer; set => SetField(ref _sortingLayer, value, UIDirtyFlags.Hierarchy); }
+
+    [System.NonSerialized] private Graphite.Rendering.SortGroupLevel[]? _sortChain, _outerSortChain;
+    [System.NonSerialized] private Graphite.Rendering.SortGroupLevel _sortLevel;
+
+    /// <summary>The canvas as a sort group at its centre, inside every enabled sorting group above it, so its items draw together in hierarchy order.</summary>
+    internal Graphite.Rendering.SortGroupLevel[] SortChain(Double3 center)
+    {
+        Graphite.Rendering.SortGroupLevel[]? outer = SortingGroup.ChainAt(GameObject);
+        Graphite.Rendering.SortGroupLevel level = new(TagLayerManager.SortingOrderOf(_sortingLayer.Id, _sortOrder), (uint)InstanceID, center);
+        if (_sortChain != null && level == _sortLevel && ReferenceEquals(outer, _outerSortChain))
+            return _sortChain;
+        _sortLevel = level;
+        _outerSortChain = outer;
+        _sortChain = outer == null ? [level] : [.. outer, level];
+        return _sortChain;
     }
 
     [SerializeField] private ScaleMode _uiScaleMode = ScaleMode.ConstantPixelSize;
