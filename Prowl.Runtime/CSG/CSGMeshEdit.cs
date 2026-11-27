@@ -17,7 +17,7 @@ public static class CSGMeshEdit
         => RemoveFace(planes, planeIndex, out result, out _, []);
 
     /// <inheritdoc cref="RemoveFace(Plane[], int, out Plane[])"/>
-    /// <param name="surfaces">The brush's surface data, returned without the removed face so the rest keep their faces.</param>
+    /// <remarks><paramref name="surfaces"/> is the brush's surface data, returned without the removed face so the rest keep their faces.</remarks>
     public static bool RemoveFace(Plane[] planes, int planeIndex, out Plane[] result, out SurfaceData[] keptSurfaces, SurfaceData[] surfaces)
     {
         result = planes;
@@ -43,7 +43,9 @@ public static class CSGMeshEdit
 
     /// <summary>Cuts a corner or an edge off by adding one plane along the average of the meeting faces' normals.</summary>
     /// <param name="normals">Outward normals of the faces meeting at the corner or edge.</param>
+    /// <param name="corner">The point the cut is measured back from.</param>
     /// <param name="distance">How far back along the average normal to cut.</param>
+    /// <param name="plane">The cutting plane.</param>
     public static bool ChamferPlane(IReadOnlyList<Float3> normals, Float3 corner, float distance, out Plane plane)
     {
         plane = default;

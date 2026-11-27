@@ -1283,6 +1283,8 @@ public sealed class AssetWalker
     }
 
     // NativeAOT keeps no reference list, so there every assembly is scanned.
+    [UnconditionalSuppressMessage("Trimming", "IL2026:RequiresUnreferencedCode",
+        Justification = "Only reads assembly names, a missing list falls back to scanning the assembly.")]
     private static bool MayReference(Assembly assembly, Assembly engine)
     {
         try { return assembly.GetReferencedAssemblies().Any(reference => reference.Name == engine.GetName().Name); }

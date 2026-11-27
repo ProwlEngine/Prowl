@@ -261,11 +261,11 @@ public interface IModelTextureResolver
 {
     /// <summary>
     /// Resolve a texture referenced by a sibling file on disk. <paramref name="sourcePath"/> is
-    /// always an already-resolved, existing, absolute path.
+    /// always an already-resolved, existing, absolute path. <paramref name="srgb"/> says whether materials sample it as
+    /// colour, so the GPU decodes it; normal, surface and occlusion maps are data.
     /// </summary>
     /// <returns>The texture, or null if it can't/shouldn't be resolved - the caller falls back to the
     /// material slot's built-in default texture (Grid/Normal/Surface/Emission).</returns>
-    /// <param name="srgb">Whether materials sample it as colour, so the GPU decodes it; normal, surface and occlusion maps are data.</param>
     Texture2D? ResolveExternal(string sourcePath, bool srgb);
 
     /// <summary>

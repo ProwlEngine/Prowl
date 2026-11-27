@@ -815,6 +815,7 @@ public class Mesh : Asset, ISerializable
     }
 
     /// <summary>A UV sphere with its poles on Y, u running around it and v from the bottom pole to the top.</summary>
+    /// <param name="radius">Distance from the centre to the surface.</param>
     /// <param name="rings">Bands from pole to pole.</param>
     /// <param name="slices">Segments around.</param>
     public static Mesh CreateSphere(float radius, int rings, int slices)
@@ -911,6 +912,7 @@ public class Mesh : Asset, ISerializable
     /// A capsule on Y, centred on the origin: a cylinder with a hemisphere on each end. v runs along its profile from the
     /// bottom pole to the top, spaced by distance so the texture keeps its proportions.
     /// </summary>
+    /// <param name="radius">Radius of the cylinder and both caps.</param>
     /// <param name="height">Total height, caps included. Never less than the two caps.</param>
     /// <param name="slices">Segments around.</param>
     /// <param name="stacks">Bands in each hemisphere.</param>

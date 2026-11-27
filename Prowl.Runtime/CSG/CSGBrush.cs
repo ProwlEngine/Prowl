@@ -53,7 +53,9 @@ public struct SurfaceData
 public sealed class CSGBrush : Component
 {
     [SerializeField] private CSGOperation operation = CSGOperation.Additive;
+#pragma warning disable PROWLCO003 // Pure geometry, reaches nothing in the scene
     [SerializeField, HideInInspector] private CSGControlMesh controlMesh = CSGControlMesh.FromPlanes(GeometryGenerator.BoxPlanes(Float3.One))!;
+#pragma warning restore PROWLCO003
 
     /// <summary>Texture and flag data, one per face of <see cref="controlMesh"/>.</summary>
     [SerializeField, HideInInspector] private SurfaceData[] surfaces = [];

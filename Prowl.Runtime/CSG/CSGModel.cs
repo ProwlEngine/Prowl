@@ -119,6 +119,9 @@ public sealed class CSGModel : Component
 
     /// <summary>Picks against the generated surfaces and resolves the hit back to the brush and face that produced it.</summary>
     /// <param name="worldRay">Ray in world space.</param>
+    /// <param name="brush">The brush that produced the hit face.</param>
+    /// <param name="planeIndex">The hit face's plane on that brush.</param>
+    /// <param name="worldPoint">The hit point in world space.</param>
     /// <param name="accept">Brushes it returns false for are seen through, as hidden ones are.</param>
     public bool Raycast(Ray worldRay, out CSGBrush brush, out int planeIndex, out Float3 worldPoint, Func<CSGBrush, bool>? accept = null)
         => Raycast(worldRay, out brush, out planeIndex, out worldPoint, out _, accept);
@@ -825,7 +828,7 @@ public sealed class CSGModel : Component
         renderer.Materials = GeneratedMaterials!;
 
         // Hidden brushes only leave what is drawn, so saves, copies, undo and bakes keep every brush
-        renderer.SetDrawOverride(_preview, _preview.IsValid() ? _previewMaterials! : null, _hidesAll);
+        renderer.SetDrawOverride(_preview, (_preview.IsValid() ? _previewMaterials : null)!, _hidesAll);
     }
 
     private void ApplyCollider()

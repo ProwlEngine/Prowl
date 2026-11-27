@@ -17,7 +17,7 @@ public static class CSGBrushGeometry
         => Raycast(planes, origin, direction, out distance, out _);
 
     /// <inheritdoc cref="Raycast(IReadOnlyList{Plane}, Float3, Float3, out float)"/>
-    /// <param name="planeIndex">The plane the ray entered through, or -1 when it started inside.</param>
+    /// <remarks><paramref name="planeIndex"/> is the plane the ray entered through, or -1 when it started inside.</remarks>
     public static bool Raycast(IReadOnlyList<Plane> planes, Float3 origin, Float3 direction,
                                out float distance, out int planeIndex)
     {

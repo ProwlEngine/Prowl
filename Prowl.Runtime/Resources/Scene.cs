@@ -105,7 +105,7 @@ public class Scene : EngineObject, ISerializable
     /// <summary>Whether a world is bound as <see cref="Main"/>.</summary>
     public static bool HasMain => !ReferenceEquals(_main, null) && _main._state != SceneState.Destroyed;
 
-    /// <summary>Fires when a world is created with <see cref="Create"/>.</summary>
+    /// <summary>Fires when a world is created with <see cref="Create(string, SceneMode)"/>.</summary>
     public static event Action<Scene>? Created;
 
     /// <summary>Fires when a world starts its teardown, inside that world.</summary>
@@ -126,7 +126,7 @@ public class Scene : EngineObject, ISerializable
         }
     }
 
-    /// <summary>Creates an empty, dormant world. Call <see cref="Activate"/> to start it.</summary>
+    /// <summary>Creates an empty, dormant world. Call <see cref="Activate()"/> to start it.</summary>
     public static Scene Create(string name, SceneMode mode = SceneMode.Game)
     {
         MainThreadContext.AssertMainThread(nameof(Create));
@@ -140,7 +140,7 @@ public class Scene : EngineObject, ISerializable
 
     /// <summary>
     /// The ambient world: the one whose code is running right now. While the engine runs a callback on a component it
-    /// is that component's scene, inside <see cref="Enter"/> it is that scene, and across an await it is whatever was
+    /// is that component's scene, inside <see cref="Enter()"/> it is that scene, and across an await it is whatever was
     /// active where the await started. Otherwise it is Main. Main thread only.
     /// </summary>
     public static Scene Active
@@ -1410,7 +1410,7 @@ public class Scene : EngineObject, ISerializable
         return go.IsValid() && ReferenceEquals(go!.Scene, this) && (section == null || ReferenceEquals(go.Section, section));
     }
 
-    /// <summary>Creates an empty, dormant world. <see cref="Create"/> is the same and raises <see cref="Created"/>.</summary>
+    /// <summary>Creates an empty, dormant world. <see cref="Create(string, SceneMode)"/> is the same and raises <see cref="Created"/>.</summary>
     public Scene(SceneMode mode = SceneMode.Game)
     {
         Mode = mode;

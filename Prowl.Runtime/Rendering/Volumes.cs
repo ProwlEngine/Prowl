@@ -44,7 +44,7 @@ public abstract class VolumeParameter
 /// </summary>
 public class VolumeParameter<T> : VolumeParameter
 {
-    private static readonly Func<T, T, float, T>? s_lerp = VolumeLerp.For<T>();
+    [ReloadIgnore] private static readonly Func<T, T, float, T>? s_lerp = VolumeLerp.For<T>();
 
     public T Value = default!;
 
@@ -159,6 +159,8 @@ public abstract class VolumeComponent
     /// <summary>Copies the blended values into the camera's feature, before each frame it draws. Main thread.</summary>
     protected internal abstract void ApplyToFeature(RenderFeature feature, Camera camera);
 
+    [UnconditionalSuppressMessage("Trimming", "IL2075:DynamicallyAccessedMembers",
+        Justification = "Volume component types keep their fields, which the application's trim configuration must preserve.")]
     private static FieldInfo[] CollectParameters(Type type)
     {
         var chain = new List<Type>();
@@ -389,7 +391,11 @@ public sealed class VolumeStack : IDisposable
     /// <summary>Resolves an effect stays on for after its values turned it off.</summary>
     public const int DeactivationFrames = 30;
 
-    private static readonly ReloadCache<Type, VolumeComponent> s_defaults = new(type => (VolumeComponent)Activator.CreateInstance(type)!);
+    private static readonly ReloadCache<Type, VolumeComponent> s_defaults = new(CreateDefault);
+
+    [UnconditionalSuppressMessage("Trimming", "IL2067:DynamicallyAccessedMembers",
+        Justification = "Volume component types keep their parameterless constructors, which the application's trim configuration must preserve.")]
+    private static VolumeComponent CreateDefault(Type type) => (VolumeComponent)Activator.CreateInstance(type)!;
 
     private sealed class Entry(VolumeComponent blended, FieldInfo[] fields)
     {

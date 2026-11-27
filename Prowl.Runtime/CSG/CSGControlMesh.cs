@@ -10,10 +10,6 @@ using Prowl.Vector.Geometry;
 
 namespace Prowl.Runtime.CSG;
 
-/// <summary>
-/// A brush's shape as points and polygons: any closed solid, concave or with bent polygons. Each polygon is wound so its
-/// normal points out. Planes are only derived from it, see <see cref="ToPlanes"/>.
-/// </summary>
 /// <summary>The first thing keeping a brush's points and faces from enclosing a solid cleanly, as <see cref="CSGControlMesh.Check"/> finds it.</summary>
 public enum CSGMeshProblem
 {
@@ -35,6 +31,10 @@ public enum CSGMeshProblem
     SelfIntersecting,
 }
 
+/// <summary>
+/// A brush's shape as points and polygons: any closed solid, concave or with bent polygons. Each polygon is wound so its
+/// normal points out. Planes are only derived from it, see <see cref="ToPlanes"/>.
+/// </summary>
 public sealed class CSGControlMesh
 {
     [SerializeField] private List<Float3> points = new();

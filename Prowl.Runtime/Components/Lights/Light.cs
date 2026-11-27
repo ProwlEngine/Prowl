@@ -116,7 +116,9 @@ public abstract class Light : Component, IRenderSync
 
     private bool ShowsShadows => CanCastShadows && CastShadows;
 
+#pragma warning disable PROWLCO001 // Sets field defaults only, serialized values overwrite them
     protected Light() => ApplyPreset(DefaultPreset);
+#pragma warning restore PROWLCO001
 
     /// <summary>The real lights this kind of light can start from.</summary>
     public abstract IReadOnlyList<LightPreset> Presets { get; }
