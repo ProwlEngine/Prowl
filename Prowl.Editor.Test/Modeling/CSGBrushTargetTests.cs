@@ -93,25 +93,6 @@ public class CSGBrushTargetTests
         Assert.Equal(8, mesh.Points.Count);
     }
 
-    /// <summary>An edit that folds a brush through itself is refused and the mesh put back.</summary>
-    [Fact]
-    public void AnEditFoldingTheBrushIsRefusedAndUndone()
-    {
-        CSGControlMesh box = Box();
-        var target = new CSGBrushTarget(box, Marked(box));
-        GeometryData geometry = target.Target.Mesh;
-        Float3[] before = geometry.Vertices.Select(v => v.Point).ToArray();
-
-        string? problem = MeshEdit.Run(target.Target, (mesh, selected) =>
-        {
-            GeometryData.Vertex corner = mesh.Vertices.First(v => Float3.Distance(v.Point, new Float3(1f, 1f, 1f)) < 1e-4f);
-            corner.Point += new Float3(-1.5f, -3.5f, -1.5f);
-        }, new ElementSelection());
-
-        Assert.NotNull(problem);
-        Assert.Equal(before, target.Target.Mesh.Vertices.Select(v => v.Point).ToArray());
-    }
-
     /// <summary>An edit leaving a hole is kept, since the brush repairs it when it builds.</summary>
     [Fact]
     public void AnEditLeavingAHoleIsKept()
@@ -191,4 +172,31 @@ public class CSGBrushTargetTests
 
     [Fact]
     public void AnImportedTinyCubeKeepsItsShape() => AssertImportKeepsItsShape(Mesh.CreateCube(new Float3(0.0009f)));
+
+    [Fact]
+    public void AnEditThatFoldsTheBrushIsKept()
+    {
+        CSGControlMesh box = Box();
+        var target = new CSGBrushTarget(box, Marked(box));
+
+        string? problem = MeshEdit.Run(target.Target, (mesh, _) =>
+        {
+            GeometryData.Vertex top = mesh.Vertices.First(v => v.Point.Y > 0f);
+            top.Point = new Float3(top.Point.X, -3f, top.Point.Z);
+        }, new ElementSelection());
+
+        Assert.Null(problem);
+        Assert.Equal(CSGMeshProblem.SelfIntersecting, target.ToBrush().Mesh.Check());
+    }
+
+    [Fact]
+    public void SeparatingAFaceThatCannotCloseStillSplitsIt()
+    {
+        CSGControlMesh box = Box();
+
+        Assert.True(CSGBrushTarget.Separate(box, Marked(box), [0], out var kept, out var separated));
+
+        Assert.Equal(CSGMeshProblem.None, kept.Mesh.Check());
+        Assert.Single(separated.Mesh.Polygons);
+    }
 }

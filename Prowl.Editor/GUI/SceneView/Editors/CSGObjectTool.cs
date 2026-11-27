@@ -246,8 +246,18 @@ public sealed class CSGObjectTool : SceneTool
                 continue;
             }
 
-            // Only selected brushes are outlined, and unselected carving ones while their toggle is on
+            // A brush showing its last good shape is outlined as it was edited, so it can be found and fixed
             bool selected = Selection.IsSelected(brush.GameObject);
+            if (brush.UsesLastGood)
+            {
+                Float4x4 toWorld = brush.Transform.LocalToWorldMatrix;
+                CSGControlMesh edited = brush.ControlMesh;
+                foreach ((int a, int b) in edited.Edges())
+                    CSGGizmos.Line(Float4x4.TransformPoint(edited.Points[a], toWorld), Float4x4.TransformPoint(edited.Points[b], toWorld), InvalidColor, selected ? 2f : 1f);
+                continue;
+            }
+
+            // Only selected brushes are outlined, and unselected carving ones while their toggle is on
             if (!selected && brush.Operation == Operation.Additive) continue;
             if (!selected && brush.Operation == Operation.Subtractive && !CSGHelperSurfaces.SubtractiveOutlines) continue;
             if (!selected && brush.Operation == Operation.Intersect && !CSGHelperSurfaces.IntersectOutlines) continue;

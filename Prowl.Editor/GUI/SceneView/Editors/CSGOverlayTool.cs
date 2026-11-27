@@ -523,7 +523,7 @@ public sealed class CSGOverlayTool : SceneTool
         CSGModel? model = CSGSelection.ActiveModel();
         if (model.IsNotValid()) return;
 
-        List<CSGBrush> invalid = CSGSelection.BrushesIn(model!).Where(b => !b.IsShapeValid).ToList();
+        List<CSGBrush> invalid = CSGSelection.BrushesIn(model!).Where(b => !b.IsShapeValid || b.UsesLastGood).ToList();
         if (invalid.Count > 0)
         {
             paper.Box($"{id}_warn_bad").Width(UnitValue.Auto).Height(22).Padding(6, 6, 0, 0).Rounded(5)

@@ -43,9 +43,9 @@ public class OperatorTests
         Assert.All(upward, p => Assert.Equal(top, (int)surfaces[p].Offset.X));
     }
 
-    /// <summary>An inset wider than its face cannot be made, and leaves the mesh as it was.</summary>
+    /// <summary>An inset wider than its face is kept as made, the brush building from a repaired or last good shape.</summary>
     [Fact]
-    public void AnInsetTooWideIsRefused()
+    public void AnInsetTooWideIsKept()
     {
         CSGControlMesh box = Box();
         int top = Enumerable.Range(0, box.Polygons.Count).First(p => box.PolygonNormal(p).Y > 0.99f);
@@ -54,8 +54,8 @@ public class OperatorTests
 
         string? problem = MeshEdit.Run(target.Target, (mesh, selected) => Operators.Inset(mesh, target.FacesOf([top]), 5f, selected), new ElementSelection());
 
-        Assert.NotNull(problem);
-        Assert.Equal(faces, target.Target.Mesh.Faces.Count);
+        Assert.Null(problem);
+        Assert.True(target.Target.Mesh.Faces.Count > faces);
     }
 
     private static int TopOf(CSGControlMesh mesh) => Enumerable.Range(0, mesh.Polygons.Count).First(p => mesh.PolygonNormal(p).Y > 0.99f);

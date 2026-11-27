@@ -19,10 +19,6 @@ public sealed class CSGBrushTarget
     /// <summary>Face attribute holding the polygon index the face came from, plus one, so 0 means made from nothing.</summary>
     public const string SurfaceAttribute = "csg:surface";
 
-    /// <summary>Why an edit was refused, as locale keys.</summary>
-    public const string FoldsThroughItself = "csg.status_folds";
-    public const string EnclosesNothing = "csg.status_encloses_nothing";
-
     private readonly SurfaceData[] _surfaces;
     private readonly Float3[] _normals;
 
@@ -39,7 +35,7 @@ public sealed class CSGBrushTarget
         _normals = new Float3[mesh.Polygons.Count];
         for (int p = 0; p < _normals.Length; p++) _normals[p] = mesh.PolygonNormal(p);
 
-        Target = new EditTarget(geometry, localToWorld ?? Float4x4.Identity, Validate);
+        Target = new EditTarget(geometry, localToWorld ?? Float4x4.Identity);
     }
 
     public EditTarget Target { get; }
@@ -85,15 +81,6 @@ public sealed class CSGBrushTarget
             surfaces[p] = tag >= 0 && tag < _surfaces.Length ? _surfaces[tag] : Nearest(mesh.PolygonNormal(p));
         }
         return (mesh, surfaces);
-    }
-
-    private static string? Validate(GeometryData geometry)
-    {
-        CSGControlMesh mesh = ToControlMesh(geometry, out _, out _, out _);
-        CSGMeshProblem problem = mesh.Check();
-        if (problem == CSGMeshProblem.None) return null;
-        if (problem == CSGMeshProblem.SelfIntersecting) return FoldsThroughItself;
-        return mesh.Repaired(out _) != null ? null : EnclosesNothing;
     }
 
     /// <summary>
@@ -218,19 +205,22 @@ public sealed class CSGBrushTarget
         kept = default;
         separated = default;
         if (chosen.Count == 0 || rest.Count == 0) return false;
-        if (Closed(mesh, surfaces, rest) is not { } keptPart || Closed(mesh, surfaces, [.. chosen]) is not { } separatedPart) return false;
-        kept = keptPart;
-        separated = separatedPart;
+        kept = Closed(mesh, surfaces, rest);
+        separated = Closed(mesh, surfaces, [.. chosen]);
         return true;
     }
 
-    // Some of a brush's polygons as a closed brush, the gaps filled, each polygon keeping its surface
-    private static (CSGControlMesh Mesh, SurfaceData[] Surfaces)? Closed(CSGControlMesh mesh, SurfaceData[] surfaces, IReadOnlyList<int> polygons)
+    // Some of a brush's polygons as a brush, the gaps filled where they can be, each polygon keeping its surface
+    private static (CSGControlMesh Mesh, SurfaceData[] Surfaces) Closed(CSGControlMesh mesh, SurfaceData[] surfaces, IReadOnlyList<int> polygons)
     {
         var rings = new List<int[]>(polygons.Count);
         foreach (int p in polygons) rings.Add((int[])mesh.Polygons[p].Clone());
         CSGControlMesh part = CSGControlMesh.FromPolygons([.. mesh.Points], rings);
-        if (part.Repaired(out int[] source) is not { } closed) return null;
+        if (part.Repaired(out int[] source) is not { } closed)
+        {
+            closed = part;
+            source = [.. System.Linq.Enumerable.Range(0, rings.Count)];
+        }
 
         var partSurfaces = new SurfaceData[closed.Polygons.Count];
         for (int p = 0; p < partSurfaces.Length; p++)

@@ -75,7 +75,7 @@ public sealed class CSGMeshTool : SceneTool
     public bool CanInset => Active && _faces.Count > 0;
 
     /// <summary>Whether selected faces can be dropped, which only means something on a convex brush.</summary>
-    public bool CanDeleteFaces => Active && _faces.Count > 0 && Target.IsValid() && Target!.ControlMesh.IsConvex();
+    public bool CanDeleteFaces => Active && _faces.Count > 0 && Target.IsValid();
 
     public bool CanSnap => Active && _vertices.Count > 0;
 
@@ -330,11 +330,7 @@ public sealed class CSGMeshTool : SceneTool
     {
         if (!CanSeparate || Target.IsNotValid()) return;
         CSGBrush brush = Target!;
-        if (!CSGBrushTarget.Separate(brush.ControlMesh, brush.Surfaces, _faces, out var kept, out var separated))
-        {
-            CSGStatus.Flash(Loc.Get("csg.status_separate"));
-            return;
-        }
+        if (!CSGBrushTarget.Separate(brush.ControlMesh, brush.Surfaces, _faces, out var kept, out var separated)) return;
 
         Undo.RecordObject(brush, "Separate CSG Faces");
         brush.SetShape(kept.Mesh, kept.Surfaces);
@@ -1101,6 +1097,7 @@ public sealed class CSGMeshTool : SceneTool
         (CSGControlMesh mesh, SurfaceData[] surfaces) = _target.ToBrush(selected, out HashSet<int> points, out List<int> faces);
         _target.ToBrush(hidden, out HashSet<int> hiddenPoints, out List<int> hiddenFaces);
         Target!.SetShape(mesh, surfaces);
+        WarnLastGood(Target);
         ClearSelection();
         _vertices.UnionWith(points);
         _faces.AddRange(faces);
@@ -1117,8 +1114,15 @@ public sealed class CSGMeshTool : SceneTool
     private void ApplyShape(CSGBrush brush, CSGControlMesh mesh, SurfaceData[] surfaces)
     {
         brush.SetShape(mesh, surfaces);
+        WarnLastGood(brush);
         if (ReferenceEquals(brush, Target)) Reload();
         MarkDirty();
+    }
+
+    // An edit is always kept, the status line says when the model has to show the last shape that built
+    private static void WarnLastGood(CSGBrush brush)
+    {
+        if (brush.UsesLastGood) CSGStatus.Flash(Loc.Get("csg.status_last_good"));
     }
 
     /// <summary>The surface of a polygon of the points, which is the polygon's own index.</summary>
@@ -2644,14 +2648,28 @@ public sealed class CSGMeshTool : SceneTool
     {
         if (_faces.Count == 0 || Target.IsNotValid()) return;
 
-        // Dropping a face lets its neighbours grow over the gap, which only has a meaning for a convex brush
+        Undo.RecordObject(Target!, "Remove CSG Face");
+
+        // A convex brush lets the neighbours grow over the gap, any other leaves a hole the brush fills when it builds
         if (!Target!.ControlMesh.IsConvex())
         {
-            CSGStatus.Flash(Loc.Get("csg.status_delete_concave"));
+            CSGControlMesh mesh = Target.ControlMesh;
+            var gone = new HashSet<int>(_faces);
+            var rings = new List<int[]>();
+            var kept = new List<SurfaceData>();
+            for (int p = 0; p < mesh.Polygons.Count; p++)
+            {
+                if (gone.Contains(p)) continue;
+                rings.Add((int[])mesh.Polygons[p].Clone());
+                kept.Add(Target.Surfaces[p]);
+            }
+            Target.SetShape(CSGControlMesh.FromPolygons([.. mesh.Points], rings), [.. kept]);
+            WarnLastGood(Target);
+            ClearSelection();
+            Reload();
+            MarkDirty();
             return;
         }
-
-        Undo.RecordObject(Target!, "Remove CSG Face");
 
         // Planes found first, then removed highest first, so removing one does not renumber the others
         var planes = new List<int>();
