@@ -348,17 +348,17 @@ Check our [Contributing guide](https://github.com/ProwlEngine/Prowl/blob/main/CO
                 </a>
             </td>
             <td align="center">
-                <a href="https://github.com/ZedDevStuff">
-                    <img src="https://avatars.githubusercontent.com/u/98429642?v=4" width="100;" alt="ZedDevStuff"/>
-                    <br />
-                    <sub><b>Kouame Benoit Junior Augustin</b></sub>
-                </a>
-            </td>
-            <td align="center">
                 <a href="https://github.com/IsaacMarovitz">
                     <img src="https://avatars.githubusercontent.com/u/42140194?v=4" width="100;" alt="IsaacMarovitz"/>
                     <br />
                     <sub><b>Isaac Marovitz</b></sub>
+                </a>
+            </td>
+            <td align="center">
+                <a href="https://github.com/ZedDevStuff">
+                    <img src="https://avatars.githubusercontent.com/u/98429642?v=4" width="100;" alt="ZedDevStuff"/>
+                    <br />
+                    <sub><b>Kouame Benoit Junior Augustin</b></sub>
                 </a>
             </td>
             <td align="center">
