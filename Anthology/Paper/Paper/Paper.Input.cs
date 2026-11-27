@@ -51,14 +51,15 @@ namespace Prowl.PaperUI
 
         // Auto-repeat configuration
         private bool _keyAutoRepeatEnabled = true;
-        private float _autoRepeatDelay = 0.8f; // Initial delay in seconds before repeating starts
-        private float _autoRepeatRate = 0.05f; // Time between repeats once started (20 repeats per second)
+        private float _autoRepeatDelay = SystemInformation.KeyRepeatDelay;   // Initial delay in seconds before repeating starts
+        private float _autoRepeatRate = SystemInformation.KeyRepeatInterval; // Time between repeats once started
 
         // Auto-repeat state tracking
         private float[] _keyRepeatTimer;
         private bool[] _keyRepeating;
 
         // Public properties for configuration
+
         /// <summary> Gets or sets whether holding a key down automatically repeats key-press events. Defaults to true. </summary>
         public bool KeyAutoRepeatEnabled
         {
@@ -146,7 +147,6 @@ namespace Prowl.PaperUI
         // Set when a press completes a double-click, so the release that follows does not re-arm the
         // window; without this a third click keeps chaining into further double-clicks.
         private bool[] _pointerDoubleClickConsumed;
-        private const float MaxDoubleClickTime = 0.25f;
 
         #endregion
 
@@ -401,7 +401,8 @@ namespace Prowl.PaperUI
                 // If this press falls inside the armed window near the last click, it completes a
                 // double-click. Flag it and disarm now so the matching release does not re-arm.
                 if (justPressed && _time < _pointerLastClickTime[i] &&
-                    Float2.LengthSquared(PointerPos - _pointerLastClickPos[i]) < 2)
+                    Math.Abs(PointerPos.X - _pointerLastClickPos[i].X) <= SystemInformation.DoubleClickDistance.X &&
+                    Math.Abs(PointerPos.Y - _pointerLastClickPos[i].Y) <= SystemInformation.DoubleClickDistance.Y)
                 {
                     _pointerDoubleClickConsumed[i] = true;
                     _pointerLastClickTime[i] = 0.0f;
@@ -414,7 +415,7 @@ namespace Prowl.PaperUI
                         _pointerDoubleClickConsumed[i] = false;
                     else
                     {
-                        _pointerLastClickTime[i] = _time + MaxDoubleClickTime;
+                        _pointerLastClickTime[i] = _time + SystemInformation.DoubleClickTime;
                         _pointerLastClickPos[i] = PointerPos;
                     }
                 }

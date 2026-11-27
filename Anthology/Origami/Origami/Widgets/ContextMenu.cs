@@ -322,9 +322,6 @@ public sealed class ContextBuilder
         public string Label = "", Icon = "";
         public ContextBuilder? Sub;
 
-        // The delay, in seconds, before the submenu opens or closes.
-        private const float SUBMENU_DELAY_TIME = 0.4f; // seconds
-
         private struct OpenSubmenuState
         {
             public int Index;
@@ -352,7 +349,7 @@ public sealed class ContextBuilder
                 // open on (this frame's layout isn't available yet at build time).
                 .OnPostLayout((h, r) => paper.SetElementStorage(h, "srect", r))
                 // A press opens the submenu straight away, without waiting out the hover delay.
-                .OnPress(_ => paper.SetElementStorage(rowHandle, "hover_time", SUBMENU_DELAY_TIME))
+                .OnPress(_ => paper.SetElementStorage(rowHandle, "hover_time", SystemInformation.MenuShowDelay))
                 .Enter())
             {
                 rowHandle = paper.CurrentParent;
@@ -377,7 +374,7 @@ public sealed class ContextBuilder
                 // Accumulate a hover time. The submenu can only open after the threshold has been reached.
                 var hoverTime = hovered ? paper.GetElementStorage(paper.CurrentParent, "hover_time", 0f) + paper.DeltaTime : 0f;
                 paper.SetElementStorage(paper.CurrentParent, "hover_time", hoverTime);
-                if (hoverTime >= SUBMENU_DELAY_TIME)
+                if (hoverTime >= SystemInformation.MenuShowDelay)
                     submenuIsOpen = true;
 
                 if (submenuIsOpen && Sub != null)
@@ -401,7 +398,7 @@ public sealed class ContextBuilder
                     // If the mouse is actually hovering over the context menu (or the submenu), continually
                     // refresh the remaining time so the submenu doesn't close.
                     if (hovered)
-                        submenuState = new OpenSubmenuState { Index = index, RemainingTime = SUBMENU_DELAY_TIME + paper.DeltaTime };
+                        submenuState = new OpenSubmenuState { Index = index, RemainingTime = SystemInformation.MenuShowDelay + paper.DeltaTime };
                 }
             }
 
