@@ -26,13 +26,14 @@ jobs:
             10.0.x
             11.0.x
 
-      # Releases leave out every sample project and the Graphite test projects, which need a GPU.
+      # Releases leave out every sample project and the test projects CI cannot run: Graphite needs a GPU,
+      # Clay needs model assets that are not committed and Slang needs native binaries fetched after the tests.
       # Prowl.Runtime joins the libraries so it is built and packed with them.
       - name: Trim solution
         working-directory: Anthology
         run: |
           cp Anthology.slnx Publish.slnx
-          excluded=$(dotnet sln Publish.slnx list | tr '\\' '/' | grep -Ei '^Graphite/Tests/|(^|/)Samples?/|Sample[^/]*\.csproj$')
+          excluded=$(dotnet sln Publish.slnx list | tr '\\' '/' | grep -Ei '^Graphite/Tests/|^Clay/Tests/|^Slang/Tests/|(^|/)Samples?/|Sample[^/]*\.csproj$')
           echo "Leaving out:"
           echo "$excluded"
           dotnet sln Publish.slnx remove $excluded
@@ -44,12 +45,11 @@ jobs:
       - name: Build
         run: dotnet build Anthology/Publish.slnx -c Release --no-restore
 
-      # Some suites need things CI lacks (they pass locally), so they're excluded: Clay (uncommitted model
-      # assets) and Slang (native binaries fetched after this step). Matching is substring on
-      # FullyQualifiedName (the test namespace, not the .csproj name): Slang's namespace is
-      # "Prowl.Slang.Test" (singular) even though its project is Prowl.Slang.Tests. Everything else gates the release.
+      # Runs from Anthology so its global.json selects the test runner the library tests are built for.
+      # One assembly at a time, because the networking tests time out when every suite competes for the machine.
       - name: Test
-        run: dotnet test Anthology/Publish.slnx -c Release --no-build --filter "FullyQualifiedName!~Prowl.Clay.Tests&FullyQualifiedName!~Prowl.Slang.Test"
+        working-directory: Anthology
+        run: dotnet test --solution Publish.slnx -c Release --no-build --max-parallel-test-modules 1
 
       # Slang's native binaries are not committed; fetch them so they pack into runtimes/.
       - name: Fetch Slang native binaries

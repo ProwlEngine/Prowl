@@ -46,21 +46,23 @@ jobs:
             10.0.x
             11.0.x
 
-      # Samples are left out, and so are the Graphite test projects, which need a GPU.
+      # Samples are left out, and so are the test projects CI cannot run: Graphite needs a GPU, Clay needs
+      # model assets that are not committed and Slang needs native binaries that are fetched separately.
       - name: Trim solution
         if: steps.changes.outputs.libraries == 'true'
         working-directory: Anthology
         run: |
           cp Anthology.slnx Tested.slnx
-          excluded=$(dotnet sln Tested.slnx list | tr '\\' '/' | grep -Ei '^Graphite/Tests/|(^|/)Samples?/|Sample[^/]*\.csproj$')
+          excluded=$(dotnet sln Tested.slnx list | tr '\\' '/' | grep -Ei '^Graphite/Tests/|^Clay/Tests/|^Slang/Tests/|(^|/)Samples?/|Sample[^/]*\.csproj$')
           dotnet sln Tested.slnx remove $excluded
 
       - name: Build
         if: steps.changes.outputs.libraries == 'true'
         run: dotnet build Anthology/Tested.slnx -c Release
 
-      # Clay needs model assets that are not committed and Slang needs native binaries that are
-      # fetched separately, so neither suite can run here.
+      # Runs from Anthology so its global.json selects the test runner the library tests are built for.
+      # One assembly at a time, because the networking tests time out when every suite competes for the machine.
       - name: Test
         if: steps.changes.outputs.libraries == 'true'
-        run: dotnet test Anthology/Tested.slnx -c Release --no-build --filter "FullyQualifiedName!~Prowl.Clay.Tests&FullyQualifiedName!~Prowl.Slang.Test"
+        working-directory: Anthology
+        run: dotnet test --solution Tested.slnx -c Release --no-build --max-parallel-test-modules 1
