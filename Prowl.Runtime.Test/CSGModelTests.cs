@@ -780,6 +780,70 @@ public class CSGModelTests : RuntimeTestBase
         Assert.Equal(8f, VolumeOf(_model.GeneratedMesh!), 2);
     }
 
+    // The box with one top corner pushed down through the bottom, so its faces cross
+    private static CSGControlMesh Folded(CSGBrush brush)
+    {
+        CSGControlMesh folded = brush.ControlMesh.Clone();
+        int corner = Enumerable.Range(0, folded.Points.Count).First(i => folded.Points[i].Y > 0f);
+        Float3 point = folded.Points[corner];
+        var points = folded.Points.ToList();
+        points[corner] = new Float3(point.X, -3f, point.Z);
+        return CSGControlMesh.FromPolygons(points, folded.Polygons.Select(p => (int[])p.Clone()).ToList());
+    }
+
+    [Fact]
+    public void AFoldedBrushBuildsFromItsRepairedCopy()
+    {
+        CreateModel();
+        CSGBrush brush = AddBrush(Float3.One * 2f, Float3.Zero);
+        Update(_scene);
+
+        CSGControlMesh folded = Folded(brush);
+        Assert.Equal(CSGMeshProblem.SelfIntersecting, folded.Check());
+        brush.SetShape(folded, new SurfaceData[folded.Polygons.Count]);
+        Update(_scene);
+
+        Assert.Same(folded, brush.ControlMesh);
+        Assert.True(brush.IsRepaired);
+        Assert.False(brush.UsesLastGood);
+        Assert.All(brush.FaceToPlane, plane => Assert.InRange(plane, 0, folded.Polygons.Count - 1));
+        Assert.True(VolumeOf(_model.GeneratedMesh!) > 1f);
+    }
+
+    [Fact]
+    public void AnEditThatEnclosesNothingKeepsTheLastGoodShape()
+    {
+        CreateModel();
+        AddBrush(Float3.One * 2f, Float3.Zero);
+        CSGBrush brush = AddBrush(Float3.One * 2f, new Float3(10, 0, 0));
+        Update(_scene);
+
+        Break(brush);
+        Update(_scene);
+
+        Assert.True(brush.UsesLastGood);
+        Assert.Equal(3, brush.ControlMesh.Points.Count);
+        Assert.All(brush.FaceToPlane, plane => Assert.Equal(0, plane));
+        Assert.Equal(16f, VolumeOf(_model.GeneratedMesh!), 2);
+    }
+
+    [Fact]
+    public void FixingTheEditDropsTheLastGoodShape()
+    {
+        CreateModel();
+        CSGBrush brush = AddBrush(Float3.One * 2f, Float3.Zero);
+        Update(_scene);
+        Break(brush);
+        Update(_scene);
+        Assert.True(brush.UsesLastGood);
+
+        brush.ResetToBox(Float3.One * 4f);
+        Update(_scene);
+
+        Assert.False(brush.UsesLastGood);
+        Assert.Equal(64f, VolumeOf(_model.GeneratedMesh!), 2);
+    }
+
     /// <summary>A brush that encloses nothing even when repaired is left out of the model.</summary>
     [Fact]
     public void ABrushThatCannotBeRepairedIsLeftOut()

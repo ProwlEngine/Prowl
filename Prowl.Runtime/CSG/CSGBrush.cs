@@ -44,7 +44,11 @@ public struct SurfaceData
     public static SurfaceData Default => new() { Scale = Float2.One, Flags = CSGSurfaceFlags.WorldSpaceTexture };
 }
 
-/// <summary>One brush: a closed solid given by its points and faces. It can be any shape, concave or with bent faces.</summary>
+/// <summary>
+/// One brush: a solid given by its points and faces, any shape, concave or with bent faces. The points and faces are kept
+/// exactly as edited, whatever they are. The CSG builds from them when they enclose a clean solid, else from a repaired
+/// copy, else from the last shape that built.
+/// </summary>
 [AddComponentMenu("CSG/CSG Brush")]
 public sealed class CSGBrush : Component
 {
@@ -63,9 +67,15 @@ public sealed class CSGBrush : Component
     [SerializeIgnore] private Plane[]? _planes;
     [SerializeIgnore] private int[] _faceToPlane = [];
 
-    // The points the CSG builds from: the control mesh itself when it encloses a solid, else a repaired copy of it
+    /// <summary>The last shape that built, kept with the brush while its points and faces do not build.</summary>
+    [SerializeField, HideInInspector] private CSGControlMesh? lastGood;
+
+    // The points the CSG builds from: the control mesh, a repaired copy of it, or the last good shape
     [SerializeIgnore] private CSGControlMesh? _buildMesh;
-    [SerializeIgnore] private bool _valid;
+    [SerializeIgnore] private bool _valid, _usesLastGood;
+
+    // A copy of the last shape that built, held so it can be kept when an edit stops building
+    [SerializeIgnore] private CSGControlMesh? _built;
 
     public CSGOperation Operation
     {
@@ -106,7 +116,13 @@ public sealed class CSGBrush : Component
     /// <summary>Whether the faces had stray faces clipped or holes filled to enclose a solid. The control mesh keeps them as made.</summary>
     public bool IsRepaired
     {
-        get { EnsureShape(); return _valid && !ReferenceEquals(_buildMesh, controlMesh); }
+        get { EnsureShape(); return _valid && !_usesLastGood && !ReferenceEquals(_buildMesh, controlMesh); }
+    }
+
+    /// <summary>Whether the points and faces do not build even repaired, such as folded through themselves, so the CSG uses the last shape that did.</summary>
+    public bool UsesLastGood
+    {
+        get { EnsureShape(); return _usesLastGood; }
     }
 
     /// <summary>The solid as a mesh in brush local space, built from the repaired faces when they needed it, or null when it encloses nothing.</summary>
@@ -192,14 +208,50 @@ public sealed class CSGBrush : Component
         if (_shape != null) return;
 
         int[]? sourceOfPolygon = null;
-        _buildMesh = controlMesh.IsValid() ? controlMesh : controlMesh.Repaired(out sourceOfPolygon);
-        _valid = _buildMesh != null;
-        _shape = _buildMesh?.ToMesh(out _faceToPlane);
+        CSGControlMesh? built = controlMesh.Check() == CSGMeshProblem.None ? controlMesh : controlMesh.Repaired(out sourceOfPolygon);
+        if (built != null && built.Check() != CSGMeshProblem.None) built = null;
+
+        _usesLastGood = built == null && (lastGood ?? _built) != null;
+        if (built != null)
+        {
+            _built = built.Clone();
+            lastGood = null;
+        }
+        else if (_usesLastGood)
+        {
+            built = lastGood ??= _built;
+            sourceOfPolygon = NearestPolygons(built!);
+        }
+
+        _buildMesh = built;
+        _valid = built != null;
+        _shape = built?.ToMesh(out _faceToPlane);
         if (_shape == null) _faceToPlane = [];
 
-        // The repaired polygons name the surfaces of the polygons they came from
+        // Polygons that are not the control mesh's own name the surfaces of the polygons they came from
         if (sourceOfPolygon != null)
             for (int i = 0; i < _faceToPlane.Length; i++) _faceToPlane[i] = sourceOfPolygon[_faceToPlane[i]];
+    }
+
+    // For each polygon of another shape, the control mesh polygon nearest it by facing and place, whose surface it shows
+    private int[] NearestPolygons(CSGControlMesh other)
+    {
+        var result = new int[other.Polygons.Count];
+        int count = controlMesh.Polygons.Count;
+        for (int p = 0; p < result.Length; p++)
+        {
+            Float3 normal = other.PolygonNormal(p), centre = other.PolygonCentre(p);
+            float best = float.MaxValue;
+            for (int q = 0; q < count; q++)
+            {
+                Float3 own = controlMesh.PolygonNormal(q);
+                float score = 1f - Float3.Dot(normal, own) + MathF.Abs(Float3.Dot(own, centre - controlMesh.PolygonCentre(q)));
+                if (score >= best) continue;
+                best = score;
+                result[p] = q;
+            }
+        }
+        return result;
     }
 
     private void ResizeSurfaces()
