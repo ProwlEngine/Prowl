@@ -50,11 +50,11 @@ namespace Prowl.Recast.Core
 
         public static void ReadLine(string line, RcObjImporterContext context)
         {
-            if (line.StartsWith("v"))
+            if (line.StartsWith('v'))
             {
                 ReadVertex(line, context);
             }
-            else if (line.StartsWith("f"))
+            else if (line.StartsWith('f'))
             {
                 ReadFace(line, context);
             }

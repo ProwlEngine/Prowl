@@ -14,8 +14,14 @@ namespace Prowl.OrigamiUI;
 /// Supports constants: pi, e, tau
 /// Used by NumericField to allow users to type expressions like "2*3+1" or "360/16".
 /// </summary>
-internal static class MathParser
+internal static partial class MathParser
 {
+    [GeneratedRegex(@"\s+")]
+    private static partial Regex Whitespace();
+
+    [GeneratedRegex(@"(\+|-|\*|/|\^|\(|\))|(\d+(\.\d+)?)|([a-zA-Z]+)")]
+    private static partial Regex Token();
+
     /// <summary>
     /// Try to parse and evaluate a math expression. Returns true if successful.
     /// </summary>
@@ -37,7 +43,7 @@ internal static class MathParser
 
     private static double Evaluate(string expression)
     {
-        var clean = Regex.Replace(expression, @"\s+", "");
+        var clean = Whitespace().Replace(expression, "");
         var tokens = Tokenize(clean);
         var postfix = ShuntingYard(tokens);
         return EvaluatePostfix(postfix);
@@ -46,7 +52,7 @@ internal static class MathParser
     private static List<string> Tokenize(string expression)
     {
         var tokens = new List<string>();
-        var matches = Regex.Matches(expression, @"(\+|-|\*|/|\^|\(|\))|(\d+(\.\d+)?)|([a-zA-Z]+)");
+        var matches = Token().Matches(expression);
 
         for (int i = 0; i < matches.Count; i++)
         {

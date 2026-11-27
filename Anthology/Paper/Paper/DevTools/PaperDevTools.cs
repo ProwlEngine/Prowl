@@ -297,7 +297,7 @@ public sealed partial class PaperDevTools
 
     // A vertically scrollable region. Children go inside the returned scope. Content column is
     // self-directed and offset by the stored scroll amount; wheel + measured height drive it.
-    private IDisposable BeginScroll(string key, float w, float h)
+    private ScrollScope BeginScroll(string key, float w, float h)
     {
         float sy = _scroll.GetValueOrDefault(key);
         float maxScroll = MathF.Max(0f, _scrollContent.GetValueOrDefault(key) - h);

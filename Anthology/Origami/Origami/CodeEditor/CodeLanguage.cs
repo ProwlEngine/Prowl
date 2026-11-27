@@ -466,5 +466,5 @@ public abstract class CodeLanguageSession : IDisposable
     public virtual Task<CodeRenameResult?> RenameAsync(int offset, string newName, CancellationToken ct)
         => Task.FromResult<CodeRenameResult?>(null);
 
-    public virtual void Dispose() { }
+    public virtual void Dispose() => GC.SuppressFinalize(this);
 }

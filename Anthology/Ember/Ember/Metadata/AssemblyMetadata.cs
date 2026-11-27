@@ -134,7 +134,7 @@ internal sealed class AssemblyMetadata : IDisposable
 
     /// <summary>
     /// The value a field would have received from its field initializer, as a factory evaluated once per
-    /// instance so that <c>= new List<T>()</c> produces a fresh list each time. False when the field has
+    /// instance so that <c>= new List&lt;T&gt;()</c> produces a fresh list each time. False when the field has
     /// no independent initializer, or its expression could not be translated.
     /// </summary>
     public bool TryGetFieldInitializer(FieldInfo field, out Func<object?> factory)

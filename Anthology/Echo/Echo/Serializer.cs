@@ -77,7 +77,7 @@ public static class Serializer
         // Create a new list with the new format
         var newFormats = new List<ISerializationFormat> { format };
         newFormats.AddRange(_formats.Where(f => !(f is AnyObjectFormat)));
-        newFormats.Add(_formats.Last()); // Add AnyObjectFormat back at the end
+        newFormats.Add(_formats[^1]); // Add AnyObjectFormat back at the end
         _formats = newFormats.AsReadOnly();
     }
 
@@ -296,7 +296,7 @@ public static class Serializer
             data.TagType == EchoType.Compound &&
             data.TryGet(ExternalRefKey, out var keyData))
         {
-            object? key = Deserialize(keyData, typeof(object), context);
+            object? key = Deserialize<object>(keyData, context);
             return key == null ? null : context.ExternalReferences.ResolveReference(key, actualType);
         }
 

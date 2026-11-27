@@ -200,6 +200,7 @@ internal sealed class GraphRewriter
     /// it, so the previous finalizer must not run and free that handle out from under it. A handle the
     /// replacement did not take is leaked instead, which is the safer of the two failures.
     /// </summary>
+    [System.Diagnostics.CodeAnalysis.SuppressMessage("Usage", "CA1816", Justification = "The replaced object is not disposed, only handed over")]
     private void HandOverOwnership(object source, object target)
     {
         if (ReferenceEquals(source, target)) return;

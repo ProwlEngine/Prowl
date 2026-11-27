@@ -37,21 +37,21 @@ public readonly struct ValueSlot
 
     public static ValueSlot StaticField(FieldInfo field)
     {
-        if (field == null) throw new ArgumentNullException(nameof(field));
+        ArgumentNullException.ThrowIfNull(field);
         if (!field.IsStatic) throw new ArgumentException("Field is not static.", nameof(field));
         return new ValueSlot(SlotKind.StaticField, null, field, null, null);
     }
 
     public static ValueSlot InstanceField(object target, FieldInfo field)
     {
-        if (target == null) throw new ArgumentNullException(nameof(target));
-        if (field == null) throw new ArgumentNullException(nameof(field));
+        ArgumentNullException.ThrowIfNull(target);
+        ArgumentNullException.ThrowIfNull(field);
         return new ValueSlot(SlotKind.InstanceField, target, field, null, null);
     }
 
     public static ValueSlot ArrayElement(Array array, params int[] indices)
     {
-        if (array == null) throw new ArgumentNullException(nameof(array));
+        ArgumentNullException.ThrowIfNull(array);
         if (indices == null || indices.Length != array.Rank)
             throw new ArgumentException("Index count does not match the array rank.", nameof(indices));
         return new ValueSlot(SlotKind.ArrayElement, array, null, indices, null);
@@ -63,8 +63,8 @@ public readonly struct ValueSlot
     /// </summary>
     public static ValueSlot Custom(Func<object?> read, Action<object?>? write, Type declaredType, string description)
     {
-        if (read == null) throw new ArgumentNullException(nameof(read));
-        if (declaredType == null) throw new ArgumentNullException(nameof(declaredType));
+        ArgumentNullException.ThrowIfNull(read);
+        ArgumentNullException.ThrowIfNull(declaredType);
 
         return new ValueSlot(SlotKind.Custom, null, null, null, new CustomSlot
         {

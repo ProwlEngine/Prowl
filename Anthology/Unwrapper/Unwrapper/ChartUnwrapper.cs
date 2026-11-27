@@ -48,8 +48,8 @@ public static class ChartUnwrapper
     /// </param>
     public static ChartUnwrapResult Unwrap(Double3[] positions, int[] triangles, UnwrapOptions? options = null, IReadOnlyDictionary<int, Double2>? pins = null)
     {
-        if (positions is null) throw new System.ArgumentNullException(nameof(positions));
-        if (triangles is null) throw new System.ArgumentNullException(nameof(triangles));
+        System.ArgumentNullException.ThrowIfNull(positions);
+        System.ArgumentNullException.ThrowIfNull(triangles);
         if (triangles.Length % 3 != 0) throw new System.ArgumentException("triangles length must be a multiple of 3.", nameof(triangles));
         options ??= new UnwrapOptions();
 
@@ -146,7 +146,7 @@ public static class ChartUnwrapper
     /// </summary>
     public static void Pack(IReadOnlyList<Double2[]> islands, double margin = 1.0 / 256.0)
     {
-        if (islands is null) throw new System.ArgumentNullException(nameof(islands));
+        System.ArgumentNullException.ThrowIfNull(islands);
         var charts = new List<UvChart>(islands.Count);
         foreach (Double2[] island in islands)
         {

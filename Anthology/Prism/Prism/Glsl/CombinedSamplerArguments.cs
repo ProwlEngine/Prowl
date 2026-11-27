@@ -108,7 +108,7 @@ public static class CombinedSamplerArguments
         };
 
         // A call passing a constructed combined sampler to a user function goes to the copy taking its parts.
-        private Expr Call(Call c)
+        private Call Call(Call c)
         {
             if (!Functions.TryGetValue(c.Name, out List<FunctionDef>? overloads) || c.IsArray)
                 return c;

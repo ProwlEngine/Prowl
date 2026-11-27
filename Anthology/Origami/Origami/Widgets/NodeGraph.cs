@@ -2111,7 +2111,7 @@ public sealed class NodeGraphBuilder
     /// its ends and races through the middle, so stepping the parameter evenly makes every dot look
     /// like it is speeding up as it travels.
     /// </summary>
-    private static void PaintFlowDots(Canvas canvas, IReadOnlyList<Float2> pts, Color from, Color to, float width, float zoom, float time)
+    private static void PaintFlowDots(Canvas canvas, List<Float2> pts, Color from, Color to, float width, float zoom, float time)
     {
         if (pts.Count < 2) return;
 
@@ -2139,7 +2139,7 @@ public sealed class NodeGraphBuilder
             (int)(a.B + (b.B - a.B) * f));
     }
 
-    private static Float2 PointAtDistance(IReadOnlyList<Float2> pts, float distance)
+    private static Float2 PointAtDistance(List<Float2> pts, float distance)
     {
         float walked = 0f;
         for (int i = 1; i < pts.Count; i++)

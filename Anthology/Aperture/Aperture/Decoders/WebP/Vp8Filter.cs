@@ -17,7 +17,7 @@ internal static class Vp8Filter
     private static int ClipDelta(int value) => value < -16 ? -16 : value > 15 ? 15 : value;
 
     /// <summary>Whether the step across the edge is small enough to be worth softening.</summary>
-    private static bool Needs(Span<byte> data, int at, int step, int threshold)
+    private static bool Needs(ReadOnlySpan<byte> data, int at, int step, int threshold)
     {
         int p1 = data[at - (2 * step)];
         int p0 = data[at - step];
@@ -27,7 +27,7 @@ internal static class Vp8Filter
     }
 
     /// <summary>The stricter test, which also asks that the pixels either side are smooth.</summary>
-    private static bool Needs2(Span<byte> data, int at, int step, int threshold, int inner)
+    private static bool Needs2(ReadOnlySpan<byte> data, int at, int step, int threshold, int inner)
     {
         int p3 = data[at - (4 * step)];
         int p2 = data[at - (3 * step)];
@@ -47,7 +47,7 @@ internal static class Vp8Filter
     }
 
     /// <summary>Whether the edge is sharp enough that only the two nearest pixels should move.</summary>
-    private static bool HighEdge(Span<byte> data, int at, int step, int threshold)
+    private static bool HighEdge(ReadOnlySpan<byte> data, int at, int step, int threshold)
     {
         int p1 = data[at - (2 * step)];
         int p0 = data[at - step];

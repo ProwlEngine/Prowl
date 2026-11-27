@@ -559,7 +559,7 @@ namespace Prowl.PaperUI
     /// Provides a fluent API for building and configuring UI elements.
     /// Implements IDisposable to support hierarchical element creation using 'using' blocks.
     /// </summary>
-    public class ElementBuilder : StyleSetterBase<ElementBuilder>, IDisposable
+    public sealed class ElementBuilder : StyleSetterBase<ElementBuilder>, IDisposable
     {
         internal Paper _paper;
 

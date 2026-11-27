@@ -284,7 +284,7 @@ public partial struct Float2x2 : System.IEquatable<Float2x2>, IFormattable
         sb.Append(this.c0.Y.ToString(format, formatProvider));
         sb.Append(", ");
         sb.Append(this.c1.Y.ToString(format, formatProvider));
-        sb.Append(")");
+        sb.Append(')');
         return sb.ToString();
     }
 

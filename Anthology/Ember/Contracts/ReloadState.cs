@@ -27,7 +27,7 @@ public sealed class ReloadState
 
     public void Set<T>(string key, T value)
     {
-        if (key == null) throw new ArgumentNullException(nameof(key));
+        ArgumentNullException.ThrowIfNull(key);
 
         if (_index.TryGetValue(key, out var at))
             _entries[at] = new KeyValuePair<string, object?>(key, value);

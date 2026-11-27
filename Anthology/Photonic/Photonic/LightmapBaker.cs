@@ -111,7 +111,7 @@ public sealed class LightmapBaker : System.IDisposable
     public Sh9Rgb[] BakeProbes(System.Collections.Generic.IReadOnlyList<Float3> positions,
                                int samplesPerProbe = 256, int? bounces = null)
     {
-        if (positions is null) throw new System.ArgumentNullException(nameof(positions));
+        System.ArgumentNullException.ThrowIfNull(positions);
         if (_scene is null) throw new System.InvalidOperationException("No scene has been begun.");
         if (!_scene.Ended) throw new System.InvalidOperationException("Scene was not ended (call BakeScene.End()).");
 

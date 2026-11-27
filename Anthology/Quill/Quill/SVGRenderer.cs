@@ -12,12 +12,12 @@ namespace Prowl.Quill
         /// <summary>
         /// The current color used when SVG elements specify "currentColor".
         /// </summary>
-        public static Color32 currentColor = Color.White;
+        public static Color32 CurrentColor { get; set; } = Color.White;
 
         /// <summary>
         /// When true, outputs debug information during rendering.
         /// </summary>
-        public static bool debug;
+        public static bool Debug { get; set; }
 
         /// <summary>
         /// Draws an SVG element and all its children to a canvas at the specified position.
@@ -50,7 +50,7 @@ namespace Prowl.Quill
                 else if (element is SvgPolygonElement polygonElement)
                     DrawPolygon(canvas, position, polygonElement);
             }
-            debug = false;
+            Debug = false;
         }
 
         static void SetState(Canvas canvas, SvgElement pathElement)
@@ -61,7 +61,7 @@ namespace Prowl.Quill
                     canvas.SetStrokeColor(pathElement.stroke);
                     break;
                 case SvgElement.ColorType.currentColor:
-                    canvas.SetStrokeColor(currentColor);
+                    canvas.SetStrokeColor(CurrentColor);
                     break;
             }
             switch (pathElement.fillType)
@@ -70,7 +70,7 @@ namespace Prowl.Quill
                     canvas.SetFillColor(pathElement.fill);
                     break;
                 case SvgElement.ColorType.currentColor:
-                    canvas.SetFillColor(currentColor);
+                    canvas.SetFillColor(CurrentColor);
                     break;
             }
 
@@ -107,7 +107,7 @@ namespace Prowl.Quill
                 var offset = cmd.relative ? currentPoint : position;
 
                 var cp = ReflectPoint(canvas.CurrentPoint, lastControlPoint);
-                if (debug)
+                if (Debug)
                     Console.WriteLine($"[{i}]{offset} cmd:{cmd}");
 
                 switch (cmd.type)

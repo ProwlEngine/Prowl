@@ -855,7 +855,7 @@ namespace Prowl.PaperUI
         {
             if (stringID == null)
             {
-                throw new ArgumentException(nameof(stringID));
+                throw new ArgumentNullException(nameof(stringID));
             }
 
             int storageHash = HashCode.Combine(CurrentParent.Data.ID, _IDStack.Peek(), stringID, intID, lineID);
@@ -946,7 +946,7 @@ namespace Prowl.PaperUI
         public void Draw(ref ElementHandle handle, Action<Canvas, Rect> renderAction)
         {
             if (renderAction == null)
-                throw new ArgumentException(nameof(renderAction));
+                throw new ArgumentNullException(nameof(renderAction));
 
             handle.Data._renderCommands ??= TakeCommandList();
             handle.Data._renderCommands.Add(new ElementRenderCommand {
@@ -984,7 +984,7 @@ namespace Prowl.PaperUI
         public void DrawForeground(ref ElementHandle handle, Action<Canvas, Rect> renderAction)
         {
             if (renderAction == null)
-                throw new ArgumentException(nameof(renderAction));
+                throw new ArgumentNullException(nameof(renderAction));
 
             handle.Data._foregroundRenderCommands ??= TakeCommandList();
             handle.Data._foregroundRenderCommands.Add(new ElementRenderCommand {

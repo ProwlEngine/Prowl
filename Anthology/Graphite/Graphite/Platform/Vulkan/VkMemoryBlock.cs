@@ -42,4 +42,8 @@ internal unsafe struct VkMemoryBlock : IEquatable<VkMemoryBlock>
             && Offset.Equals(other.Offset)
             && Size.Equals(other.Size);
     }
+
+    public override readonly bool Equals(object? obj) => obj is VkMemoryBlock other && Equals(other);
+
+    public override readonly int GetHashCode() => HashCode.Combine(DeviceMemory.Handle, Offset, Size);
 }

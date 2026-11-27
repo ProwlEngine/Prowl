@@ -42,6 +42,9 @@ public struct BoneWeight : IEquatable<BoneWeight>
     /// <inheritdoc />
     public override readonly bool Equals(object? obj) => obj is BoneWeight w && Equals(w);
 
+    public static bool operator ==(BoneWeight a, BoneWeight b) => a.Equals(b);
+    public static bool operator !=(BoneWeight a, BoneWeight b) => !a.Equals(b);
+
     /// <inheritdoc />
     public override readonly int GetHashCode() =>
         HashCode.Combine(Index0, Index1, Index2, Index3, Weight0, Weight1, Weight2, Weight3);

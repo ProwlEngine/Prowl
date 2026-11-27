@@ -538,7 +538,7 @@ public sealed class Module
         return _decorations;
     }
 
-    static readonly IComparer<Instruction> DecorationOrder = Comparer<Instruction>.Create((a, b) =>
+    static readonly Comparer<Instruction> DecorationOrder = Comparer<Instruction>.Create((a, b) =>
     {
         if (a.Operands[0] != b.Operands[0]) return a.Operands[0].CompareTo(b.Operands[0]);
         if (a.Op != b.Op) return ((uint)a.Op).CompareTo((uint)b.Op);

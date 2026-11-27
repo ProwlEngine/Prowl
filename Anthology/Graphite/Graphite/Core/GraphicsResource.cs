@@ -39,6 +39,7 @@ public abstract class GraphicsResource : IDisposable
             return;
 
         IsDisposed = true;
+        GC.SuppressFinalize(this);
         OnDisposing();
         DisposeCore();
     }

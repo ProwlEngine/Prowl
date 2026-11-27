@@ -337,7 +337,7 @@ public sealed class Parser
 
     // A GLSL 4.20 brace initializer means the same as the type's constructor, so it parses straight into
     // one: `float a[] = {1, 2}` is `float[](1, 2)`, and a nested brace is the element's constructor.
-    Expr ParseBraceInit(TypeRef type, int arrayDepth)
+    Call ParseBraceInit(TypeRef type, int arrayDepth)
     {
         if (++_depth > MaxNestingDepth) { _depth--; throw new GlslParseException($"initializer nesting is too deep (limit {MaxNestingDepth})", Cur.Line); }
         try { return ParseBraceInitCore(type, arrayDepth); }
@@ -353,7 +353,7 @@ public sealed class Parser
         return arrayDepth >= 0 ? inner : inner is Call c ? c with { Name = "" } : inner;
     }
 
-    Expr ParseBraceInitCore(TypeRef type, int arrayDepth)
+    Call ParseBraceInitCore(TypeRef type, int arrayDepth)
     {
         Expect(TokenKind.LBrace);
         var items = new List<Expr>();
@@ -598,7 +598,7 @@ public sealed class Parser
         return i < _t.Count && _t[i].Kind == TokenKind.Identifier;
     }
 
-    Stmt ParseIf()
+    IfStmt ParseIf()
     {
         ExpectText("if");
         Expect(TokenKind.LParen);
@@ -609,7 +609,7 @@ public sealed class Parser
         return new IfStmt(cond, then, els);
     }
 
-    Stmt ParseFor()
+    ForStmt ParseFor()
     {
         ExpectText("for");
         Expect(TokenKind.LParen);
@@ -624,7 +624,7 @@ public sealed class Parser
         return new ForStmt(init, cond, update, ParseStatement());
     }
 
-    Stmt ParseWhile()
+    WhileStmt ParseWhile()
     {
         ExpectText("while");
         Expect(TokenKind.LParen);
@@ -633,7 +633,7 @@ public sealed class Parser
         return new WhileStmt(cond, ParseStatement());
     }
 
-    Stmt ParseDoWhile()
+    DoWhileStmt ParseDoWhile()
     {
         ExpectText("do");
         var body = ParseStatement();
@@ -645,7 +645,7 @@ public sealed class Parser
         return new DoWhileStmt(body, cond);
     }
 
-    Stmt ParseSwitch()
+    SwitchStmt ParseSwitch()
     {
         ExpectText("switch");
         Expect(TokenKind.LParen);
@@ -672,7 +672,7 @@ public sealed class Parser
         return new SwitchStmt(value, cases);
     }
 
-    Stmt ParseReturn()
+    ReturnStmt ParseReturn()
     {
         ExpectText("return");
         Expr? value = IsKind(TokenKind.Semicolon) ? null : ParseExpression();

@@ -48,7 +48,7 @@ namespace Prowl.Recast.Core.Buffers
         private int _size;
 
         public RcCyclicBuffer(int capacity)
-            : this(capacity, new T[] { })
+            : this(capacity, Array.Empty<T>())
         {
         }
 

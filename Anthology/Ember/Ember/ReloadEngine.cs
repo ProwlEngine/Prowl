@@ -19,7 +19,7 @@ public sealed class ReloadEngine
 
     public static ReloadEngine Create(Action<ReloadOptions> configure)
     {
-        if (configure == null) throw new ArgumentNullException(nameof(configure));
+        ArgumentNullException.ThrowIfNull(configure);
 
         var options = new ReloadOptions();
         configure(options);
@@ -34,7 +34,7 @@ public sealed class ReloadEngine
     /// </summary>
     public ReloadReport Apply(ReloadRequest request)
     {
-        if (request == null) throw new ArgumentNullException(nameof(request));
+        ArgumentNullException.ThrowIfNull(request);
 
         if (Interlocked.Exchange(ref _running, 1) == 1)
             throw new InvalidOperationException("A reload is already in progress on this engine.");
@@ -55,8 +55,8 @@ public sealed class ReloadEngine
     /// </summary>
     public PlanExplanation Explain(Type type, ReloadRequest request)
     {
-        if (type == null) throw new ArgumentNullException(nameof(type));
-        if (request == null) throw new ArgumentNullException(nameof(request));
+        ArgumentNullException.ThrowIfNull(type);
+        ArgumentNullException.ThrowIfNull(request);
 
         var session = new Session(Options, request);
         try

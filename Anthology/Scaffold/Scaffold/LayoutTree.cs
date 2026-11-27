@@ -609,7 +609,7 @@ public sealed partial class LayoutTree
 
         if (style.Layout == LayoutMode.Grid && style.GridColumns < 1)
         {
-            throw new ArgumentOutOfRangeException(nameof(style.GridColumns));
+            throw new ArgumentOutOfRangeException(nameof(style), style.GridColumns, "GridColumns must be at least 1.");
         }
     }
 }

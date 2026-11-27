@@ -76,4 +76,6 @@ public struct SurfaceTexSpace : IEquatable<SurfaceTexSpace>
     public readonly bool Equals(SurfaceTexSpace other) => UAxis.Equals(other.UAxis) && VAxis.Equals(other.VAxis);
     public override readonly bool Equals(object? obj) => obj is SurfaceTexSpace o && Equals(o);
     public override readonly int GetHashCode() => HashCode.Combine(UAxis, VAxis);
+    public static bool operator ==(SurfaceTexSpace a, SurfaceTexSpace b) => a.Equals(b);
+    public static bool operator !=(SurfaceTexSpace a, SurfaceTexSpace b) => !a.Equals(b);
 }

@@ -711,7 +711,7 @@ public partial struct Float4x4 : System.IEquatable<Float4x4>, IFormattable
         sb.Append(this.c2.W.ToString(format, formatProvider));
         sb.Append(", ");
         sb.Append(this.c3.W.ToString(format, formatProvider));
-        sb.Append(")");
+        sb.Append(')');
         return sb.ToString();
     }
 

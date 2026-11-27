@@ -45,7 +45,7 @@ public sealed class PlanContext
 
     /// <summary>
     /// A factory for the value a field's initializer would have produced, evaluated once per instance so that
-    /// <c>= new List<T>()</c> yields a fresh list each time. False when there is no independent
+    /// <c>= new List&lt;T&gt;()</c> yields a fresh list each time. False when there is no independent
     /// initializer, or its expression could not be translated.
     /// </summary>
     public bool TryGetFieldDefault(FieldInfo field, out Func<object?> factory)

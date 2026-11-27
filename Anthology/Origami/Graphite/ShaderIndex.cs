@@ -712,6 +712,8 @@ public sealed class ShaderIndex
 
     #region Directives and wrapper
 
+    private static readonly char[] s_includeOpeners = ['"', '<'];
+
     private void ParseDirectives()
     {
         foreach (var d in Directives)
@@ -721,7 +723,7 @@ public sealed class ShaderIndex
             {
                 case "include":
                 {
-                    int q = Text.IndexOfAny(new[] { '"', '<' }, d.ArgsOffset, d.End - d.ArgsOffset);
+                    int q = Text.IndexOfAny(s_includeOpeners, d.ArgsOffset, d.End - d.ArgsOffset);
                     if (q < 0) break;
                     char closeChar = Text[q] == '"' ? '"' : '>';
                     int qe = Text.IndexOf(closeChar, q + 1, d.End - q - 1);

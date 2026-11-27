@@ -481,7 +481,7 @@ namespace Prowl.Vector
         public Float3[] GetCorners()
         {
             if (Planes == null || Planes.Length != 6)
-                return new Float3[0];
+                return Array.Empty<Float3>();
 
             var corners = new Float3[8];
 

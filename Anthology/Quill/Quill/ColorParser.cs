@@ -38,13 +38,13 @@ namespace Prowl.Quill
             try
             {
                 string trimmedAttribute = attribute.Trim();
-                if (trimmedAttribute.StartsWith("#"))
+                if (trimmedAttribute.StartsWith('#'))
                 {
                     if (trimmedAttribute.Length == 7) // #RRGGBB
                     {
-                        int r = int.Parse(trimmedAttribute.Substring(1, 2), NumberStyles.HexNumber, CultureInfo.InvariantCulture);
-                        int g = int.Parse(trimmedAttribute.Substring(3, 2), NumberStyles.HexNumber, CultureInfo.InvariantCulture);
-                        int b = int.Parse(trimmedAttribute.Substring(5, 2), NumberStyles.HexNumber, CultureInfo.InvariantCulture);
+                        int r = int.Parse(trimmedAttribute.AsSpan(1, 2), NumberStyles.HexNumber, CultureInfo.InvariantCulture);
+                        int g = int.Parse(trimmedAttribute.AsSpan(3, 2), NumberStyles.HexNumber, CultureInfo.InvariantCulture);
+                        int b = int.Parse(trimmedAttribute.AsSpan(5, 2), NumberStyles.HexNumber, CultureInfo.InvariantCulture);
                         color = Color32.FromArgb(255, r, g, b);
                     }
                     else if (trimmedAttribute.Length == 4) // #RGB

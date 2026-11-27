@@ -2,7 +2,10 @@
 // Licensed under the MIT License. See the LICENSE file in the project root for details.
 
 using System;
+using System.Globalization;
 using System.Runtime.InteropServices;
+
+namespace Prowl.Scribe;
 
 [StructLayout(LayoutKind.Sequential, Pack = 1)]
 public struct FontColor
@@ -61,31 +64,24 @@ public struct FontColor
         if (string.IsNullOrEmpty(hex) || hex[0] != '#')
             throw new ArgumentException("Invalid hex color format");
 
-        hex = hex.Substring(1);
+        ReadOnlySpan<char> digits = hex.AsSpan(1);
 
-        return hex.Length switch
+        return digits.Length switch
         {
-            3 => new FontColor( // #RGB
-                Convert.ToByte(hex.Substring(0, 1) + hex.Substring(0, 1), 16),
-                Convert.ToByte(hex.Substring(1, 1) + hex.Substring(1, 1), 16),
-                Convert.ToByte(hex.Substring(2, 1) + hex.Substring(2, 1), 16)),
-            4 => new FontColor( // #RGBA
-                Convert.ToByte(hex.Substring(0, 1) + hex.Substring(0, 1), 16),
-                Convert.ToByte(hex.Substring(1, 1) + hex.Substring(1, 1), 16),
-                Convert.ToByte(hex.Substring(2, 1) + hex.Substring(2, 1), 16),
-                Convert.ToByte(hex.Substring(3, 1) + hex.Substring(3, 1), 16)),
-            6 => new FontColor( // #RRGGBB
-                Convert.ToByte(hex.Substring(0, 2), 16),
-                Convert.ToByte(hex.Substring(2, 2), 16),
-                Convert.ToByte(hex.Substring(4, 2), 16)),
-            8 => new FontColor( // #RRGGBBAA
-                Convert.ToByte(hex.Substring(0, 2), 16),
-                Convert.ToByte(hex.Substring(2, 2), 16),
-                Convert.ToByte(hex.Substring(4, 2), 16),
-                Convert.ToByte(hex.Substring(6, 2), 16)),
+            3 => new FontColor(HexDigit(digits, 0), HexDigit(digits, 1), HexDigit(digits, 2)), // #RGB
+            4 => new FontColor(HexDigit(digits, 0), HexDigit(digits, 1), HexDigit(digits, 2), HexDigit(digits, 3)), // #RGBA
+            6 => new FontColor(HexPair(digits, 0), HexPair(digits, 2), HexPair(digits, 4)), // #RRGGBB
+            8 => new FontColor(HexPair(digits, 0), HexPair(digits, 2), HexPair(digits, 4), HexPair(digits, 6)), // #RRGGBBAA
             _ => throw new ArgumentException("Invalid hex color format")
         };
     }
+
+    // One hex digit stands for itself repeated, so F reads as FF
+    private static byte HexDigit(ReadOnlySpan<char> digits, int at)
+        => (byte)(byte.Parse(digits.Slice(at, 1), NumberStyles.HexNumber, CultureInfo.InvariantCulture) * 17);
+
+    private static byte HexPair(ReadOnlySpan<char> digits, int at)
+        => byte.Parse(digits.Slice(at, 2), NumberStyles.HexNumber, CultureInfo.InvariantCulture);
 
     public static implicit operator FontColor(System.Drawing.Color color) =>
         new FontColor(color.R, color.G, color.B, color.A);

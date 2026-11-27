@@ -111,7 +111,7 @@ internal sealed class SparseNeighbours
     /// way, and how much a nearer point in the same direction already covers it.
     /// </summary>
     private static float Weigh(TargetWorkspace ws, SparseTexelSet points, Blas? blas, BakeOptions options,
-                               in TexelSample texel, System.Span<int> found, System.Span<float> distance,
+                               in TexelSample texel, System.ReadOnlySpan<int> found, System.ReadOnlySpan<float> distance,
                                System.Span<float> weight, int count)
     {
         float floor = System.MathF.Max(texel.WorldRadius, 1e-5f);

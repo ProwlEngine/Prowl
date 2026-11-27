@@ -170,10 +170,7 @@ public sealed class NetWriter : IDisposable
 
     private void Grow(int required)
     {
-        if (_buffer.Length == 0)
-        {
-            throw new ObjectDisposedException(nameof(NetWriter));
-        }
+        ObjectDisposedException.ThrowIf(_buffer.Length == 0, this);
 
         byte[] larger = ArrayPool<byte>.Shared.Rent(Math.Max(required, _buffer.Length * 2));
         _buffer.AsSpan(0, Length).CopyTo(larger);

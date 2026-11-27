@@ -234,6 +234,7 @@ public abstract partial class GraphicsDevice : IDisposable
             return;
         }
         _disposed = true;
+        GC.SuppressFinalize(this);
 
         WaitForIdle();
         _transientTexturePool.Dispose();

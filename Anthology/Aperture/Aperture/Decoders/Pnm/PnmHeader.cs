@@ -123,10 +123,10 @@ internal struct PnmHeader
             string value = line[(space + 1)..].Trim();
             switch (line[..space])
             {
-                case "WIDTH": long.TryParse(value, out width); break;
-                case "HEIGHT": long.TryParse(value, out height); break;
-                case "DEPTH": long.TryParse(value, out depth); break;
-                case "MAXVAL": long.TryParse(value, out maxValue); break;
+                case "WIDTH": if (!long.TryParse(value, out width)) { error = ApertureError.InvalidHeader; return false; } break;
+                case "HEIGHT": if (!long.TryParse(value, out height)) { error = ApertureError.InvalidHeader; return false; } break;
+                case "DEPTH": if (!long.TryParse(value, out depth)) { error = ApertureError.InvalidHeader; return false; } break;
+                case "MAXVAL": if (!long.TryParse(value, out maxValue)) { error = ApertureError.InvalidHeader; return false; } break;
                 case "TUPLTYPE": header.TupleType = value; break;
             }
         }

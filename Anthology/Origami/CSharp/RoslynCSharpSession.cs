@@ -449,7 +449,7 @@ public sealed partial class RoslynCSharpSession : CodeLanguageSession
             return changes.Select(c => new CodeTextEdit(c.Span.Start, c.Span.Length, c.NewText ?? "")).ToList();
         }, ct);
 
-    private static IReadOnlyList<CodeTextEdit> FormatSpan(Document document, SyntaxNode root, TextSpan span, CancellationToken ct)
+    private static List<CodeTextEdit> FormatSpan(Document document, SyntaxNode root, TextSpan span, CancellationToken ct)
     {
         var workspace = document.Project.Solution.Workspace;
         var options = document.Project.Solution.Options.WithChangedOption(FormattingOptions.NewLine, LanguageNames.CSharp, "\n");

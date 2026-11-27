@@ -73,7 +73,7 @@ internal static class ComparerSupport
         return null;
     }
 
-    private static object? FromName(string name) => name switch
+    private static StringComparer? FromName(string name) => name switch
     {
         "Ordinal" => StringComparer.Ordinal,
         "OrdinalIgnoreCase" => StringComparer.OrdinalIgnoreCase,

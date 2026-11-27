@@ -290,7 +290,7 @@ public static class PropertyGridRenderer
     /// True while the field currently being drawn has differing values across a multi-object selection.
     /// FieldDrawers may read this to render a "mixed" placeholder; the grid also marks it visually.
     /// </summary>
-    [ThreadStatic] public static bool IsMixedField;
+    [ThreadStatic] internal static bool IsMixedField;
 
     // The overridden field about to be drawn, consumed by DrawField so the marker also shows on fields an attribute handler draws.
     [ThreadStatic] private static string? _pendingOverride;

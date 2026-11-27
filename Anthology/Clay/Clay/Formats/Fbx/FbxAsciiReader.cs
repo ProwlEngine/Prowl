@@ -411,7 +411,7 @@ internal sealed class FbxAsciiReader
         { value = double.NaN; return true; }
         // "nan(payload)" - well-known IEEE 754 NaN-with-payload form, e.g. nan(12345), nan(ind).
         int paren = upper.IndexOf('(');
-        if (paren > 0 && upper.EndsWith(")", StringComparison.Ordinal))
+        if (paren > 0 && upper.EndsWith(')'))
         {
             string head = upper[..paren];
             if (head == "NAN" || head == "QNAN" || head == "SNAN")

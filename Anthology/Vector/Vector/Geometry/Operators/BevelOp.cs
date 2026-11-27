@@ -404,7 +404,7 @@ internal static class BevelOp
 
     // New faces take what the face they grew out of carried, with texture coordinates continuing across it
     // The face attributes come from the first source, and each corner samples whichever source it lies closest to the plane of
-    private static void Inherit(GeometryData mesh, Face target, IReadOnlyList<FaceSnapshot> sources)
+    private static void Inherit(GeometryData mesh, Face target, List<FaceSnapshot> sources)
     {
         if (mesh.LoopAttributes.Count == 0) return;
         FaceSnapshot.ApplyLoops(target, v =>

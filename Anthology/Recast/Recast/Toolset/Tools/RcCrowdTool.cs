@@ -57,13 +57,15 @@ namespace Prowl.Recast.Toolset.Tools
             return _moveTargetPos;
         }
 
+        private static readonly float[] s_areaCosts = [1f, 10f, 1f, 1f, 2f, 1.5f];
+
         public void Setup(float agentRadius, DtNavMesh navMesh)
         {
             DtCrowdConfig config = new DtCrowdConfig(agentRadius);
             crowd = new DtCrowd(config, navMesh, __ => new DtQueryDefaultFilter(
                 SampleAreaModifications.SAMPLE_POLYFLAGS_ALL,
                 SampleAreaModifications.SAMPLE_POLYFLAGS_DISABLED,
-                new float[] { 1f, 10f, 1f, 1f, 2f, 1.5f })
+                s_areaCosts)
             );
 
             // Setup local avoidance option to different qualities.

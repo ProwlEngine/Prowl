@@ -53,7 +53,7 @@ public sealed class ImmutableMigrator : IValueMigrator
         return new ImmutablePlan(rebuild, target);
     }
 
-    private static object RebuildDictionary<TKey, TValue>(object source, MigrationContext context) where TKey : notnull
+    private static ImmutableDictionary<TKey, TValue> RebuildDictionary<TKey, TValue>(object source, MigrationContext context) where TKey : notnull
     {
         var builder = ImmutableDictionary.CreateBuilder<TKey, TValue>();
 
@@ -64,7 +64,7 @@ public sealed class ImmutableMigrator : IValueMigrator
         return builder.ToImmutable();
     }
 
-    private static object RebuildSet<T>(object source, MigrationContext context)
+    private static ImmutableHashSet<T> RebuildSet<T>(object source, MigrationContext context)
     {
         var builder = ImmutableHashSet.CreateBuilder<T>();
 

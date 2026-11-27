@@ -498,7 +498,7 @@ namespace Prowl.Recast
                     srcDist[idx] = dirtyEntries[i].distance2;
                 }
 
-                if (failed == stack.Count())
+                if (failed == stack.Count)
                 {
                     break;
                 }

@@ -695,7 +695,7 @@ namespace Prowl.PaperUI
                 }
                 foreach (var kv in _flameParent)
                 {
-                    if (kv.Value != 0 && _flameNodes.ContainsKey(kv.Value)) _flameNodes[kv.Value].Kids.Add(kv.Key);
+                    if (kv.Value != 0 && _flameNodes.TryGetValue(kv.Value, out FNode parent)) parent.Kids.Add(kv.Key);
                     else _flameRoots.Add(kv.Key);
                 }
             }

@@ -214,7 +214,7 @@ internal static class SvgPath
             else break;
         }
         int len = i - start;
-        if (len <= 0 || !double.TryParse(d.Substring(start, len), System.Globalization.NumberStyles.Float,
+        if (len <= 0 || !double.TryParse(d.AsSpan(start, len), System.Globalization.NumberStyles.Float,
                 System.Globalization.CultureInfo.InvariantCulture, out double val))
             return 0.0; // malformed / no number here - don't throw
         return val;

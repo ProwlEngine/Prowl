@@ -30,14 +30,14 @@ public sealed class ScopeRules
     /// </summary>
     public ScopeRules Include(Assembly assembly, Func<Type, bool>? typeFilter = null)
     {
-        if (assembly == null) throw new ArgumentNullException(nameof(assembly));
+        ArgumentNullException.ThrowIfNull(assembly);
         _included[assembly] = typeFilter;
         return this;
     }
 
     public ScopeRules Exclude(Assembly assembly)
     {
-        if (assembly == null) throw new ArgumentNullException(nameof(assembly));
+        ArgumentNullException.ThrowIfNull(assembly);
         _excluded.Add(assembly);
         return this;
     }

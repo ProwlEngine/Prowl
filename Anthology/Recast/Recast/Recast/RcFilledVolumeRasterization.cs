@@ -326,7 +326,7 @@ namespace Prowl.Recast
             return s;
         }
 
-        private static float[] CylinderCapIntersection(RcVec3f start, float radiusSqr, float[] s, int i, Span<RcVec3f> rectangleOnPlane)
+        private static float[] CylinderCapIntersection(RcVec3f start, float radiusSqr, float[] s, int i, ReadOnlySpan<RcVec3f> rectangleOnPlane)
         {
             int j = (i + 1) % 4;
             // Ray against sphere intersection
@@ -499,7 +499,7 @@ namespace Prowl.Recast
             return new float[] { point.Y + Math.Min(t1, t2), point.Y + Math.Max(t1, t2) };
         }
 
-        private static float[] IntersectBox(float[] rectangle, Span<float> vertices, float[][] planes)
+        private static float[] IntersectBox(float[] rectangle, ReadOnlySpan<float> vertices, float[][] planes)
         {
             float yMin = float.PositiveInfinity;
             float yMax = float.NegativeInfinity;

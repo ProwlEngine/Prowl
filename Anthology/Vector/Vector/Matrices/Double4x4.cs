@@ -683,7 +683,7 @@ public partial struct Double4x4 : System.IEquatable<Double4x4>, IFormattable
         sb.Append(this.c2.W.ToString(format, formatProvider));
         sb.Append(", ");
         sb.Append(this.c3.W.ToString(format, formatProvider));
-        sb.Append(")");
+        sb.Append(')');
         return sb.ToString();
     }
 

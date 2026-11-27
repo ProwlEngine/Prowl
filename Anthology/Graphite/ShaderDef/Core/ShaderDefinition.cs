@@ -20,8 +20,11 @@ public sealed record ShaderSurface(string Model, string Code, int Line, string L
 /// GBuffer. Properties join the base model's. Defines are set in every pass. Pack is code for the pass that keeps the
 /// surface, Unpack and Lighting code for the pass that lights it. ForwardOnly models are never kept, only lit as they draw.
 /// </summary>
-public sealed record ShadingModelDefinition(string Name, string Base, ShaderProperty[] Properties, string[] Defines, bool ForwardOnly, string Pack, string Unpack, string Lighting)
+public sealed partial record ShadingModelDefinition(string Name, string Base, ShaderProperty[] Properties, string[] Defines, bool ForwardOnly, string Pack, string Unpack, string Lighting)
 {
+    [GeneratedRegex(@"//[^\n]*|/\*.*?\*/", RegexOptions.Singleline)]
+    private static partial Regex Comments();
+
     /// <summary>Whether the lights behind a surface light it too, as for lighting that wraps past the terminator.</summary>
     public bool LightWraps { get; init; }
 
@@ -40,11 +43,10 @@ public sealed record ShadingModelDefinition(string Name, string Base, ShaderProp
 
     public bool DefinesAmbient => DefinesFunction(Lighting, "vec3", "Model_Ambient");
 
-    private static readonly Regex s_comments = new(@"//[^\n]*|/\*.*?\*/", RegexOptions.Singleline);
 
     /// <summary>Whether GLSL code defines or declares a function of a return type and name, outside its comments.</summary>
     public static bool DefinesFunction(string code, string returns, string name)
-        => code.Length > 0 && Regex.IsMatch(s_comments.Replace(code, " "), $@"\b{returns}\s+{name}\s*\(");
+        => code.Length > 0 && Regex.IsMatch(Comments().Replace(code, " "), $@"\b{returns}\s+{name}\s*\(");
 }
 
 

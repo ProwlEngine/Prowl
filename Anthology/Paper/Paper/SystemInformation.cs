@@ -443,7 +443,7 @@ public static partial class SystemInformation
                 }
                 finally
                 {
-                    XCloseDisplay(display);
+                    _ = XCloseDisplay(display);
                 }
             }
             catch (Exception e) when (e is DllNotFoundException or EntryPointNotFoundException)

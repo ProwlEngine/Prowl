@@ -75,6 +75,9 @@ public struct Bounds : IEquatable<Bounds>
     /// <inheritdoc />
     public override readonly bool Equals(object? obj) => obj is Bounds b && Equals(b);
 
+    public static bool operator ==(Bounds a, Bounds b) => a.Equals(b);
+    public static bool operator !=(Bounds a, Bounds b) => !a.Equals(b);
+
     /// <inheritdoc />
     public override readonly int GetHashCode() => HashCode.Combine(Min, Max);
 

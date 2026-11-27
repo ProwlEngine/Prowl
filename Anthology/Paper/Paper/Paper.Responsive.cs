@@ -53,6 +53,8 @@ namespace Prowl.PaperUI
 
         public override readonly bool Equals(object? obj) => obj is Breakpoint other && Equals(other);
         public override readonly int GetHashCode() => HashCode.Combine(MinWidth, MaxWidth, MinHeight, MaxHeight, MinAspect, MaxAspect);
+        public static bool operator ==(Breakpoint a, Breakpoint b) => a.Equals(b);
+        public static bool operator !=(Breakpoint a, Breakpoint b) => !a.Equals(b);
     }
 
     public partial class Paper

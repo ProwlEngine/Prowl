@@ -552,7 +552,7 @@ internal sealed class Bc4BlockEncoder(TextureEncodeQuality quality, int channels
         }
     }
 
-    private static int Nearest(Span<int> palette, int value, out int error)
+    private static int Nearest(ReadOnlySpan<int> palette, int value, out int error)
     {
         int best = 0;
         error = int.MaxValue;

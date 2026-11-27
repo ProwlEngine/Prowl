@@ -160,7 +160,7 @@ internal unsafe partial class VkGraphicsDevice
         return Vk.WaitSemaphores(Device, in waitInfo, nanosecondTimeout);
     }
 
-    private readonly object _serialFenceLock = new();
+    private readonly System.Threading.Lock _serialFenceLock = new();
     private readonly Queue<(ulong Serial, Fence Fence)> _serialFences = new();
     private readonly Stack<Fence> _freeSerialFences = new();
     private ulong _fenceCompletedSerial;

@@ -130,10 +130,7 @@ public ref struct NetReader
     /// <summary>Reads <paramref name="count" /> raw bytes. The span points into the source data.</summary>
     public ReadOnlySpan<byte> ReadBytes(int count)
     {
-        if (count < 0)
-        {
-            throw new ArgumentOutOfRangeException(nameof(count));
-        }
+        ArgumentOutOfRangeException.ThrowIfNegative(count);
 
         return Take(count);
     }

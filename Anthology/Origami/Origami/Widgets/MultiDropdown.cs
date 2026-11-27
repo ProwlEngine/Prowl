@@ -213,8 +213,7 @@ public sealed class MultiDropdownBuilder<T>
                     IsSelected = item => _selected.Contains(item),
                     OnItemClick = (idx, item) =>
                     {
-                        if (_selected.Contains(item)) _selected.Remove(item);
-                        else _selected.Add(item);
+                        if (!_selected.Remove(item)) _selected.Add(item);
                         _setter(_selected.ToList());
                     },
                     CustomItemRender = _itemRender,

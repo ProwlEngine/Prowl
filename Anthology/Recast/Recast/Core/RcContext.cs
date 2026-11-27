@@ -42,7 +42,7 @@ namespace Prowl.Recast.Core
     {
         /// Where Warn and Log go when a host sets one. Static because a build owns a context per
         /// thread, so there is no single instance to configure; unset, messages go to the console.
-        public static Action<RcLogCategory, string> Sink;
+        public static Action<RcLogCategory, string> Sink { get; set; }
 
         private readonly ThreadLocal<Dictionary<string, RcAtomicLong>> _timerStart;
         private readonly ConcurrentDictionary<string, RcAtomicLong> _timerAccum;

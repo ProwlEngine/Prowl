@@ -150,9 +150,12 @@ public sealed class KcpTransport : Transport
         }
 
         CancellationTokenSource cancellation = new();
+        // Read once when already done, otherwise converted once to a task below
+#pragma warning disable CA2012
         ValueTask<SocketAddress[]?> resolution = TryResolveAllAsync(address, Settings.Port, _socket!.AddressFamily,
             cancellation.Token, _resolver);
         SocketAddress[]? remotes = resolution.IsCompletedSuccessfully ? Unused(resolution.Result) : null;
+#pragma warning restore CA2012
 
         ECDiffieHellman? exchange = null;
         byte[]? publicKey = null;
@@ -1254,7 +1257,7 @@ public sealed class KcpTransport : Transport
                 host = address[..colon];
             }
 
-            ips = await ResolveHostAsync(host, cancellation, resolver).ConfigureAwait(false);
+            ips = await ResolveHostAsync(host, resolver, cancellation).ConfigureAwait(false);
         }
 
         if (port == 0)
@@ -1278,8 +1281,8 @@ public sealed class KcpTransport : Transport
         return usable.Count == 0 ? null : usable.ToArray();
     }
 
-    private static async ValueTask<IPAddress[]> ResolveHostAsync(string host, CancellationToken cancellation,
-        Func<string, CancellationToken, Task<IPAddress[]>>? resolver)
+    private static async ValueTask<IPAddress[]> ResolveHostAsync(string host,
+        Func<string, CancellationToken, Task<IPAddress[]>>? resolver, CancellationToken cancellation)
     {
         try
         {

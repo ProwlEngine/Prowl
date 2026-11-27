@@ -304,7 +304,7 @@ internal sealed class OverlapChecker
         }
     }
 
-    private static void FindUvBounds(UvChart chart, IList<int> chartFaces, out double uvExt, out Double2 uvMin)
+    private static void FindUvBounds(UvChart chart, List<int> chartFaces, out double uvExt, out Double2 uvMin)
     {
         Double2 lo = new(1e32, 1e32), hi = new(-1e32, -1e32);
         for (int facetI = 0; facetI < chartFaces.Count; ++facetI)

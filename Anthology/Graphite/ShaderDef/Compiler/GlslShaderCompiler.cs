@@ -100,8 +100,11 @@ public sealed class GlslProgram
 /// <summary>
 /// Compiles GLSLPROGRAM passes to SPIR-V through Prism. Thread safe, one instance can serve every shader.
 /// </summary>
-public sealed class GlslShaderCompiler : IShaderCompiler, IDisposable
+public sealed partial class GlslShaderCompiler : IShaderCompiler, IDisposable
 {
+    [System.Text.RegularExpressions.GeneratedRegex(@"#\s*pragma\s+resource_set\s+(\d+)")]
+    private static partial System.Text.RegularExpressions.Regex ResourceSetPragma();
+
     private readonly GlslCompilerOptions _options;
     private readonly ConcurrentDictionary<(string File, string Source), (VariantSpace[] Axes, ShaderGlobal[] Globals, string Includes)> _pragmas = new();
 
@@ -237,7 +240,7 @@ public sealed class GlslShaderCompiler : IShaderCompiler, IDisposable
             DeclareGlobals(Pragmas(pass).Globals, stages);
 
         // The preprocessor drops pragmas it does not know, so the default set is read from the pass's own source
-        System.Text.RegularExpressions.Match resourceSet = s_resourceSet.Match(pass.Source ?? "");
+        System.Text.RegularExpressions.Match resourceSet = ResourceSetPragma().Match(pass.Source ?? "");
         uint? defaultSet = resourceSet.Success ? uint.Parse(resourceSet.Groups[1].Value, System.Globalization.CultureInfo.InvariantCulture) : pass.Material?.ResourceSet;
         return (stages, new GlslProgramLayout(stages, defaultSet));
     }
@@ -367,7 +370,6 @@ public sealed class GlslShaderCompiler : IShaderCompiler, IDisposable
     }
 
 
-    private static readonly System.Text.RegularExpressions.Regex s_resourceSet = new(@"#\s*pragma\s+resource_set\s+(\d+)");
 
     // Bump when the compile settings below change in a way the key does not show
     private const string CacheSalt = "graphite-prism-5";

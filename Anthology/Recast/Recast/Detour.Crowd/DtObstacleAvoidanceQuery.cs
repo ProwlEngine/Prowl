@@ -374,7 +374,7 @@ namespace Prowl.Recast.Detour.Crowd
 
         // vector normalization that ignores the y-component.
         [MethodImpl(MethodImplOptions.AggressiveInlining)]
-        RcVec3f DtRotate2D(Span<float> v, float ang)
+        RcVec3f DtRotate2D(ReadOnlySpan<float> v, float ang)
         {
             RcVec3f dest = new RcVec3f();
             float c = MathF.Cos(ang);

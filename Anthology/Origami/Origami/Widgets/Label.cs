@@ -725,11 +725,11 @@ public sealed class LabelBuilder
         while (lo < hi)
         {
             int mid = (lo + hi + 1) >> 1;
-            float w = (float)canvas.MeasureText(text.Substring(0, mid) + ell, fontSize, font, letterSpacing).X;
+            float w = (float)canvas.MeasureText(string.Concat(text.AsSpan(0, mid), ell), fontSize, font, letterSpacing).X;
             if (w <= maxWidth) lo = mid;
             else hi = mid - 1;
         }
-        return lo <= 0 ? ell : text.Substring(0, lo) + ell;
+        return lo <= 0 ? ell : string.Concat(text.AsSpan(0, lo), ell);
     }
 
     // ── Tooltip ──────────────────────────────────────────────────

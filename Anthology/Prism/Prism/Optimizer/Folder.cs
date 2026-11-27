@@ -394,7 +394,7 @@ internal sealed class Folder
     /// <summary>Instruction::IsFoldable: FoldInstructionToConstant can act on it at all.</summary>
     public bool IsFoldable(SpvInstr inst) => IsFoldableByFoldScalar(inst) || IsFoldableByFoldVector(inst) || HasFoldingRule(inst);
 
-    IReadOnlyList<Rule> RulesFor(SpvInstr inst)
+    List<Rule> RulesFor(SpvInstr inst)
     {
         if (inst.Opcode == OpExtInst)
         {
@@ -421,7 +421,7 @@ internal sealed class Folder
     void AddF(int op, params FoldRule[] rs) { if (!_foldRules.TryGetValue(op, out var l)) _foldRules[op] = l = []; l.AddRange(rs); }
     void AddFExt(uint op, params FoldRule[] rs) { if (!_foldExtRules.TryGetValue(op, out var l)) _foldExtRules[op] = l = []; l.AddRange(rs); }
 
-    IReadOnlyList<FoldRule> FoldRulesFor(SpvInstr inst)
+    List<FoldRule> FoldRulesFor(SpvInstr inst)
     {
         if (inst.Opcode == OpExtInst)
         {

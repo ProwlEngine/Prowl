@@ -37,12 +37,12 @@ public static partial class SpirVOptimizer
             var preds = blocks.ToDictionary(b => b.Label, _ => new List<uint>());
             foreach (var b in blocks) foreach (var s in BlockSuccs(b)) if (preds.TryGetValue(s, out var pl) && !pl.Contains(b.Label)) pl.Add(b.Label);
             var idom = ImmediateDominators(blocks, preds);
-            bool Dom(uint a, uint b) { for (uint x = b; ; x = idom[x]) { if (x == a) return true; if (!idom.ContainsKey(x) || idom[x] == x) return false; } }
+            bool Dom(uint a, uint b) { for (uint x = b; ; x = idom[x]) { if (x == a) return true; if (!idom.TryGetValue(x, out uint up) || up == x) return false; } }
             uint CommonDom(uint a, uint b)
             {
                 var anc = new HashSet<uint>();
-                for (uint x = a; ; x = idom[x]) { anc.Add(x); if (!idom.ContainsKey(x) || idom[x] == x) break; }
-                for (uint x = b; ; x = idom[x]) { if (anc.Contains(x)) return x; if (!idom.ContainsKey(x) || idom[x] == x) return 0; }
+                for (uint x = a; ; x = idom[x]) { anc.Add(x); if (!idom.TryGetValue(x, out uint up) || up == x) break; }
+                for (uint x = b; ; x = idom[x]) { if (anc.Contains(x)) return x; if (!idom.TryGetValue(x, out uint up) || up == x) return 0; }
             }
             var users = new Dictionary<uint, List<SpvInstr>>();
             foreach (var b in blocks) foreach (var ins in b.Insts)

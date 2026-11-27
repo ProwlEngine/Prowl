@@ -44,10 +44,10 @@ public static class AutoAtlasPacker
         int padding = 2,
         string bakeUVLayer = "UV1")
     {
-        if (baker is null) throw new System.ArgumentNullException(nameof(baker));
-        if (meshes is null) throw new System.ArgumentNullException(nameof(meshes));
+        System.ArgumentNullException.ThrowIfNull(baker);
+        System.ArgumentNullException.ThrowIfNull(meshes);
         if (atlasWidth <= 0 || atlasHeight <= 0) throw new System.ArgumentOutOfRangeException(nameof(atlasWidth));
-        if (texelsPerWorldUnit <= 0) throw new System.ArgumentOutOfRangeException(nameof(texelsPerWorldUnit));
+        System.ArgumentOutOfRangeException.ThrowIfNegativeOrZero(texelsPerWorldUnit);
 
         int n = meshes.Count;
         int maxSide = System.Math.Min(atlasWidth, atlasHeight) - 2 * padding;
@@ -166,8 +166,8 @@ public static class AutoAtlasPacker
         int atlasHeight,
         string bakeUVLayer = "UV1")
     {
-        if (baker is null) throw new System.ArgumentNullException(nameof(baker));
-        if (items is null) throw new System.ArgumentNullException(nameof(items));
+        System.ArgumentNullException.ThrowIfNull(baker);
+        System.ArgumentNullException.ThrowIfNull(items);
         if (atlasWidth <= 0 || atlasHeight <= 0) throw new System.ArgumentOutOfRangeException(nameof(atlasWidth));
 
         int n = items.Count;

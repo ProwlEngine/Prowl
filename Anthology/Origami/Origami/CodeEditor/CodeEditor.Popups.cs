@@ -656,7 +656,7 @@ public sealed partial class CodeEditor
 
                     if (!string.IsNullOrEmpty(item.Detail))
                     {
-                        string d = item.Detail!.Length > 40 ? item.Detail.Substring(0, 39) + "..." : item.Detail;
+                        string d = item.Detail!.Length > 40 ? string.Concat(item.Detail.AsSpan(0, 39), "...") : item.Detail;
                         float dx = r.Max.X - 10 - d.Length * cw;
                         if (dx > tx + (label.Length + 2) * cw) DrawPlain(canvas, font, d, dx, ty, pal.PopupTextDim, PopupFontSize);
                     }
@@ -1367,7 +1367,7 @@ public sealed partial class CodeEditor
                     DrawPlain(canvas, font, item.Label.PadLeft(labelChars), lx, ty, pal.PopupTextDim, PopupFontSize);
 
                     float dx = lx + (labelChars + 2) * cw;
-                    string detail = item.Detail.Length > maxDetail ? item.Detail.Substring(0, maxDetail - 3) + "..." : item.Detail;
+                    string detail = item.Detail.Length > maxDetail ? string.Concat(item.Detail.AsSpan(0, maxDetail - 3), "...") : item.Detail;
                     if (item.MatchStart >= 0 && item.MatchStart + item.MatchLength <= detail.Length)
                     {
                         canvas.RoundedRectFilled(dx + item.MatchStart * cw - 1, ry + 2, item.MatchLength * cw + 2, rowH - 4, 2, pal.FindMatch);

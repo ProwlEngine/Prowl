@@ -36,7 +36,7 @@ internal sealed class PopulateSkeletonsStep : IPostProcess
         }
     }
 
-    private static IntermediateNode? FindClosestCommonAncestor(IReadOnlyList<IntermediateNode> nodes)
+    private static IntermediateNode? FindClosestCommonAncestor(List<IntermediateNode> nodes)
     {
         if (nodes.Count == 0) return null;
         if (nodes.Count == 1) return nodes[0];

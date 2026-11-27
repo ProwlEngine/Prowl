@@ -78,7 +78,7 @@ internal static class BrokenDelegate
 
         // Returns the exception rather than throwing it, so the emitted body can end in "throw". A body that
         // called a void method and then returned would be invalid IL for any delegate with a return value.
-        public Exception Build() => new ReloadedDelegateException(Reason, PreviousMethod);
+        public ReloadedDelegateException Build() => new ReloadedDelegateException(Reason, PreviousMethod);
     }
 
     private static readonly MethodInfo s_build =

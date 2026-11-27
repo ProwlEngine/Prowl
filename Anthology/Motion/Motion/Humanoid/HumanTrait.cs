@@ -9,8 +9,7 @@ internal enum BoneSide : byte { Center, Left, Right }
 /// <summary>Reference data about the humanoid rig: required bones, parents, names and the auto mapper's aliases.</summary>
 public static partial class HumanTrait
 {
-    private static readonly HumanBodyBone[] s_all =
-        (HumanBodyBone[])Enum.GetValues(typeof(HumanBodyBone));
+    private static readonly HumanBodyBone[] s_all = Enum.GetValues<HumanBodyBone>();
 
     private static readonly HashSet<HumanBodyBone> s_required = new()
     {

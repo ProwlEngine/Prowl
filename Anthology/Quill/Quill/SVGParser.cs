@@ -223,7 +223,7 @@ namespace Prowl.Quill
             if (v == null)
                 return fallback;
             v = v.Trim();
-            bool percent = v.EndsWith("%", StringComparison.Ordinal);
+            bool percent = v.EndsWith('%');
             if (!TryParseLeadingNumber(v, out var num))
                 return fallback;
             if (percent)

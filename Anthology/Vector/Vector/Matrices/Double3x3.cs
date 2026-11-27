@@ -510,7 +510,7 @@ public partial struct Double3x3 : System.IEquatable<Double3x3>, IFormattable
         sb.Append(this.c1.Z.ToString(format, formatProvider));
         sb.Append(", ");
         sb.Append(this.c2.Z.ToString(format, formatProvider));
-        sb.Append(")");
+        sb.Append(')');
         return sb.ToString();
     }
 

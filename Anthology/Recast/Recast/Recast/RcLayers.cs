@@ -92,7 +92,7 @@ namespace Prowl.Recast
             for (int y = borderSize; y < h - borderSize; ++y)
             {
                 // Collect spans from this row.
-                prevCount.Fill(0);
+                prevCount.Clear();
                 byte sweepId = 0;
 
                 for (int x = borderSize; x < w - borderSize; ++x)

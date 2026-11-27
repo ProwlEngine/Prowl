@@ -2041,6 +2041,8 @@ public sealed partial class Lowerer
     // Records an interface variable's location/component footprint and rejects any overlap with one already
     // placed in the same direction and index (glslang's "overlapping use of location" error). Only 32-bit
     // scalars/vectors can be component-packed, so wider or aggregate types conservatively fill their rows.
+    static readonly string[] s_interpolationQualifiers = ["centroid", "smooth", "flat", "sample", "patch"];
+
     void ReserveLocations(StorageClass storage, Qualifiers quals, int location, GlslType type, string name)
     {
         int index = LayoutInt(quals, "index") ?? 0;
@@ -2057,7 +2059,7 @@ public sealed partial class Lowerer
             ScalarType or VectorType or MatrixType => BaseScalar(t) switch { Scalar.UInt => "Int", Scalar.UInt64 => "Int64", var k => k.ToString() },
             _ => t.GetType().Name,
         };
-        string alias = Kind(type) + string.Concat(new[] { "centroid", "smooth", "flat", "sample", "patch" }.Where(quals.Has).Select(w => " " + w));
+        string alias = Kind(type) + string.Concat(s_interpolationQualifiers.Where(quals.Has).Select(w => " " + w));
         foreach (var u in list)
         {
             if (location < u.Hi && u.Lo < location + span && compLo < u.CompHi && u.CompLo < compHi)
@@ -2515,7 +2517,7 @@ public sealed partial class Lowerer
 
     // A perviewNV mesh output has a view dimension (the second for a variable, the first for a block member)
     // that must be gl_MaxMeshViewCountNV or implicitly sized to it (glslang checkAndResizeMeshViewDim).
-    IReadOnlyList<Expr?> MeshViewDims(IReadOnlyList<Expr?> dims, int viewDim, int line)
+    List<Expr?> MeshViewDims(IReadOnlyList<Expr?> dims, int viewDim, int line)
     {
         if (stage != ShaderStage.Mesh)
             throw new GlslParseException("'perviewNV' : not supported in this stage", line);
@@ -3100,13 +3102,13 @@ public sealed partial class Lowerer
         return normalize ? Rebuild(v, ComponentOf(v), [.. p.Select(c => c / length)]) : new CScalar(ComponentOf(v), length, 0);
     }
 
-    static CVal? ConstDot(CVal a, CVal b)
+    static CScalar? ConstDot(CVal a, CVal b)
     {
         if (FloatParts(a) is not { } x || FloatParts(b) is not { } y || x.Length != y.Length) return null;
         return new CScalar(ComponentOf(a), x.Zip(y).Sum(t => t.First * t.Second), 0);
     }
 
-    static CVal? ConstDistance(CVal a, CVal b)
+    static CScalar? ConstDistance(CVal a, CVal b)
     {
         if (FloatParts(a) is not { } x || FloatParts(b) is not { } y || x.Length != y.Length) return null;
         return new CScalar(ComponentOf(a), Math.Sqrt(x.Zip(y).Sum(t => (t.First - t.Second) * (t.First - t.Second))), 0);
@@ -3180,7 +3182,7 @@ public sealed partial class Lowerer
     };
 
     // outerProduct(c, r) is the matrix whose element [col][row] is c[row] * r[col].
-    CVal? ConstOuterProduct(CAgg c, CAgg r)
+    CAgg? ConstOuterProduct(CAgg c, CAgg r)
     {
         var ct = (VectorType)c.Type;
         var rt = (VectorType)r.Type;
@@ -3201,7 +3203,7 @@ public sealed partial class Lowerer
 
     // Folded constructor arguments converted to the member/element types they initialize (null when one
     // cannot be).
-    static List<CVal>? ConvertConstTo(List<CVal> values, IReadOnlyList<GlslType> targets)
+    static List<CVal>? ConvertConstTo(List<CVal> values, List<GlslType> targets)
     {
         var result = new List<CVal>(values.Count);
         for (int i = 0; i < values.Count; i++)
@@ -3320,7 +3322,7 @@ public sealed partial class Lowerer
         return sum;
     }
 
-    CVal? ConstMatrixTimesVector(CAgg m, CAgg v)   // matCxR * vecC -> vecR
+    CAgg? ConstMatrixTimesVector(CAgg m, CAgg v)   // matCxR * vecC -> vecR
     {
         var mt = (MatrixType)m.Type;
         if (((VectorType)v.Type).Size != mt.Columns) return null;
@@ -3333,7 +3335,7 @@ public sealed partial class Lowerer
         return new CAgg(new VectorType(mt.Component, mt.Rows), parts);
     }
 
-    CVal? ConstVectorTimesMatrix(CAgg v, CAgg m)   // vecR * matCxR -> vecC
+    CAgg? ConstVectorTimesMatrix(CAgg v, CAgg m)   // vecR * matCxR -> vecC
     {
         var mt = (MatrixType)m.Type;
         if (((VectorType)v.Type).Size != mt.Rows) return null;
@@ -3346,7 +3348,7 @@ public sealed partial class Lowerer
         return new CAgg(new VectorType(mt.Component, mt.Columns), parts);
     }
 
-    CVal? ConstMatrixCompMult(CAgg a, CAgg b)   // component-wise product; both matrices must share dimensions
+    CAgg? ConstMatrixCompMult(CAgg a, CAgg b)   // component-wise product; both matrices must share dimensions
     {
         var at = (MatrixType)a.Type;
         var bt = (MatrixType)b.Type;
@@ -3365,7 +3367,7 @@ public sealed partial class Lowerer
         return new CAgg(at, columns);
     }
 
-    CVal? ConstMatrixTimesMatrix(CAgg a, CAgg b)   // matA(Ca,Ra) * matB(Cb,Rb) -> mat(Cb,Ra), needs Ca == Rb
+    CAgg? ConstMatrixTimesMatrix(CAgg a, CAgg b)   // matA(Ca,Ra) * matB(Cb,Rb) -> mat(Cb,Ra), needs Ca == Rb
     {
         var at = (MatrixType)a.Type;
         var bt = (MatrixType)b.Type;
@@ -3541,7 +3543,7 @@ public sealed partial class Lowerer
 
     static CScalar FirstScalar(CAgg a) => a.Parts[0] switch { CScalar s => s, CAgg inner => FirstScalar(inner), _ => throw new InvalidOperationException() };
 
-    CVal? BuildConstVector(VectorType vt, List<CVal> args)
+    CAgg? BuildConstVector(VectorType vt, List<CVal> args)
     {
         var comps = new List<CScalar>();
         int lastCount = 0;
@@ -7752,7 +7754,7 @@ public sealed partial class Lowerer
     }
 
     // The dimension list naming an array type, outermost first, as constructor syntax expects it.
-    static IReadOnlyList<Expr?> ArrayDimsOf(GlslType t, int outerCount)
+    static List<Expr?> ArrayDimsOf(GlslType t, int outerCount)
     {
         var dims = new List<Expr?>();
         for (GlslType cur = t; ; )
@@ -7843,7 +7845,7 @@ public sealed partial class Lowerer
     }
 
     // The type an operand takes when promoted against the other, or null when it already has it.
-    static GlslType? PromotedType(GlslType self, GlslType other) => (self, other) switch
+    static ScalarType? PromotedType(GlslType self, GlslType other) => (self, other) switch
     {
         (ScalarType a, VectorType v) when a.Kind != v.Component => new ScalarType(v.Component),
         (ScalarType a, ScalarType b) when a.Kind != b.Kind => new ScalarType(Wider(a.Kind, b.Kind)),
@@ -11639,7 +11641,7 @@ public sealed partial class Lowerer
     }
 
     // The memory qualifiers a declaration carries, in the order glslang emits them.
-    IReadOnlyList<Decoration> MemoryDecorationsOf(Qualifiers q)
+    List<Decoration> MemoryDecorationsOf(Qualifiers q)
     {
         var list = new List<Decoration>();
         if (q.Has("readonly")) list.Add(Decoration.NonWritable);
@@ -11651,10 +11653,10 @@ public sealed partial class Lowerer
     }
 
     void DecorateLayout(StructType s, uint structTypeId, uint[] memberIds, BlockLayout layout,
-        IReadOnlyList<Decoration>? memberQualifiers = null, IReadOnlyList<int?>? explicitOffsets = null,
-        IReadOnlyList<bool>? rowMajor = null, IReadOnlyList<int?>? aligns = null,
-        IReadOnlyList<IReadOnlyList<Decoration>>? perMemberQualifiers = null, bool rowMajorAll = false,
-        IReadOnlyList<GlslType>? offsetTypes = null)
+        IReadOnlyList<Decoration>? memberQualifiers = null, List<int?>? explicitOffsets = null,
+        IReadOnlyList<bool>? rowMajor = null, List<int?>? aligns = null,
+        List<List<Decoration>>? perMemberQualifiers = null, bool rowMajorAll = false,
+        List<GlslType>? offsetTypes = null)
     {
         if (!_decorated.Add(structTypeId)) return;
         var alignBits = _memberAlignBits[structTypeId] = new int[s.Fields.Count];

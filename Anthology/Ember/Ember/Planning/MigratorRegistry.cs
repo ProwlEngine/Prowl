@@ -77,7 +77,7 @@ public sealed class MigratorRegistry : IReadOnlyList<IValueMigrator>
 
     private void Insert<TExisting>(IValueMigrator migrator, int offset) where TExisting : IValueMigrator
     {
-        if (migrator == null) throw new ArgumentNullException(nameof(migrator));
+        ArgumentNullException.ThrowIfNull(migrator);
 
         int at = IndexOf<TExisting>();
         if (at < 0)

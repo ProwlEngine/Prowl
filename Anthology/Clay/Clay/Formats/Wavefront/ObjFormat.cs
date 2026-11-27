@@ -99,7 +99,7 @@ internal sealed class ObjFormat : IModelFormat
         string? l;
         while ((l = reader.ReadLine()) is not null)
         {
-            if (l.EndsWith("\\", StringComparison.Ordinal))
+            if (l.EndsWith('\\'))
             {
                 pending ??= new System.Text.StringBuilder();
                 pending.Append(l, 0, l.Length - 1);

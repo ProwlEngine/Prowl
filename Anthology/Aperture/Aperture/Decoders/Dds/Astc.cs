@@ -786,7 +786,7 @@ internal static class Astc
     /// do this for pictures in the ordinary range, trading how many values are stored against how
     /// much of the colour they describe.
     /// </summary>
-    internal static bool DecodeEndpoints(int mode, Span<byte> values, Span<int> to)
+    internal static bool DecodeEndpoints(int mode, ReadOnlySpan<byte> values, Span<int> to)
     {
         int v0 = values[0];
         int v1 = values[1];

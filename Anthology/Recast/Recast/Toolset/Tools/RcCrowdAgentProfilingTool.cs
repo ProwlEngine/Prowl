@@ -20,7 +20,7 @@ namespace Prowl.Recast.Toolset.Tools
 
         private DtNavMesh _navMesh;
 
-        private IRcRand _rand;
+        private RcRand _rand;
         private readonly List<DtPolyPoint> _polyPoints;
 
         private const int SamplingCount = 500;
@@ -133,12 +133,14 @@ namespace Prowl.Recast.Toolset.Tools
             }
         }
 
+        private static readonly float[] s_areaCosts = [1f, 10f, 1f, 1f, 2f, 1.5f];
+
         private void CreateCrowd()
         {
             _crowd = new DtCrowd(_crowdCfg, _navMesh, __ => new DtQueryDefaultFilter(
                 SampleAreaModifications.SAMPLE_POLYFLAGS_ALL,
                 SampleAreaModifications.SAMPLE_POLYFLAGS_DISABLED,
-                new float[] { 1f, 10f, 1f, 1f, 2f, 1.5f })
+                s_areaCosts)
             );
 
             DtObstacleAvoidanceParams option = new DtObstacleAvoidanceParams(_crowd.GetObstacleAvoidanceParams(0));

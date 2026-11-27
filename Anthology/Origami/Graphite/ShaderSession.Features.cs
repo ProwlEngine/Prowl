@@ -15,6 +15,21 @@ namespace Prowl.OrigamiUI.Graphite;
 
 public sealed partial class ShaderSession
 {
+    [GeneratedRegex(@"[A-Za-z_][A-Za-z0-9_]*")]
+    private static partial Regex Identifier();
+
+    [GeneratedRegex("\"([A-Za-z]+)\"\\s*=\\s*\"[^\"]*$")]
+    private static partial Regex TagKeyPrefix();
+
+    [GeneratedRegex(@"^(?<file>.*?)(:(?<line>\d+))?: (?<severity>error|warning): (?<text>.*)$", RegexOptions.Multiline)]
+    private static partial Regex CompilerError();
+
+    [GeneratedRegex(@" at line \d+, column \d+\.?$")]
+    private static partial Regex LineColumnSuffix();
+
+    [GeneratedRegex(@"^\s*#version", RegexOptions.Multiline)]
+    private static partial Regex VersionDirective();
+
     #region Completion
 
     private static CodeCompletionItem Item(string label, CodeSymbolKind kind, string? detail = null, string? insert = null)
@@ -146,6 +161,8 @@ public sealed partial class ShaderSession
 
     private static string VectorOf(string vectorType, int n) => (vectorType[0] == 'v' ? "vec" : vectorType.Substring(0, 4)) + n;
 
+    private static readonly char[] s_includeOpeners = ['"', '<'];
+
     private CodeCompletionList? DirectiveCompletions(ShaderIndex index, Directive directive, int offset, int wordStart)
     {
         string text = index.Text;
@@ -155,7 +172,7 @@ public sealed partial class ShaderSession
 
         if (directive.Name == "include")
         {
-            int quote = text.IndexOfAny(new[] { '"', '<' }, directive.ArgsOffset);
+            int quote = text.IndexOfAny(s_includeOpeners, directive.ArgsOffset);
             if (quote < 0 || quote >= offset) return null;
             int start = quote + 1;
             return List(_workspace.IncludeNames(_path).Select(n => Item(n, CodeSymbolKind.Text, "include")), start);
@@ -204,7 +221,7 @@ public sealed partial class ShaderSession
         int lineStart = text.LastIndexOf('\n', Math.Max(0, wordStart - 1)) + 1;
         string before = text.Substring(lineStart, wordStart - lineStart);
         string trimmed = before.TrimStart();
-        var words = Regex.Matches(trimmed, @"[A-Za-z_][A-Za-z0-9_]*").Select(m => m.Value).ToList();
+        var words = Identifier().Matches(trimmed).Select(m => m.Value).ToList();
         bool firstOnLine = trimmed.Length == 0;
 
         // Inside [ ] after a property: its attributes.
@@ -224,7 +241,7 @@ public sealed partial class ShaderSession
 
         if (string.Equals(block, "Tags", StringComparison.OrdinalIgnoreCase))
         {
-            var key = Regex.Match(before, "\"([A-Za-z]+)\"\\s*=\\s*\"[^\"]*$");
+            var key = TagKeyPrefix().Match(before);
             if (key.Success && ShaderSyntax.TagValues.TryGetValue(key.Groups[1].Value, out var values))
                 foreach (var v in values) yield return Item(v, CodeSymbolKind.EnumMember);
             else if (before.Count(c => c == '"') % 2 == 1)
@@ -271,7 +288,7 @@ public sealed partial class ShaderSession
 
     #region Hover
 
-    private static IReadOnlyList<CodeTaggedText> Tagged(string detail, string name, CodeTokenKind nameKind)
+    private static CodeTaggedText[] Tagged(string detail, string name, CodeTokenKind nameKind)
     {
         int at = name.Length > 0 ? detail.IndexOf(name, StringComparison.Ordinal) : -1;
         if (at < 0) return new[] { new CodeTaggedText(detail) };
@@ -448,7 +465,6 @@ public sealed partial class ShaderSession
 
     #region Diagnostics
 
-    private static readonly Regex s_compilerError = new(@"^(?<file>.*?)(:(?<line>\d+))?: (?<severity>error|warning): (?<text>.*)$", RegexOptions.Multiline);
 
     public override Task<IReadOnlyList<CodeDiagnostic>> GetDiagnosticsAsync(CancellationToken ct) => Run<IReadOnlyList<CodeDiagnostic>>(() =>
     {
@@ -473,7 +489,7 @@ public sealed partial class ShaderSession
         {
             int at = OffsetOf(text, e.Line, e.Column);
             var (a, b) = WordAt(text, at);
-            string message = Regex.Replace(e.Message, @" at line \d+, column \d+\.?$", "");
+            string message = LineColumnSuffix().Replace(e.Message, "");
             result.Add(new CodeDiagnostic { Start = a, Length = Math.Max(1, b - a), Severity = CodeDiagnosticSeverity.Error, Id = "shader", Message = message });
             return;
         }
@@ -520,7 +536,7 @@ public sealed partial class ShaderSession
 
     private static string FirstMessage(string message)
     {
-        var m = s_compilerError.Match(message);
+        var m = CompilerError().Match(message);
         return m.Success ? m.Groups["text"].Value.Trim() : message;
     }
 
@@ -528,7 +544,7 @@ public sealed partial class ShaderSession
     private bool AddCompilerMessages(string text, string messages, string file, int fallback, CodeDiagnosticSeverity severity, List<CodeDiagnostic> result)
     {
         bool any = false;
-        foreach (Match m in s_compilerError.Matches(messages))
+        foreach (Match m in CompilerError().Matches(messages))
         {
             any = true;
             string where = m.Groups["file"].Value;
@@ -573,7 +589,7 @@ public sealed partial class ShaderSession
     // A .glsl or .compute file has no passes to compile, so it is parsed as GLSL to catch syntax errors.
     private void CheckGlsl(string text, List<CodeDiagnostic> result)
     {
-        string source = Regex.IsMatch(text, @"^\s*#version", RegexOptions.Multiline) ? text : "#version 460\n#line 1\n" + text;
+        string source = VersionDirective().IsMatch(text) ? text : "#version 460\n#line 1\n" + text;
         try
         {
             Prowl.Prism.Glsl.Parser.Parse(source, _workspace.Defines, (name, isSystem, requesting) =>

@@ -1209,7 +1209,7 @@ public static partial class SpirVOptimizer
         Dfs(blocks[0]); ord.Reverse();
         var rpo = new Dictionary<uint, int>(); for (int i = 0; i < ord.Count; i++) rpo[ord[i].Label] = i;
         var preds = new Dictionary<uint, List<uint>>(); foreach (var b in blocks) preds[b.Label] = [];
-        foreach (var b in blocks) foreach (var s in BlockSuccs(b)) if (preds.ContainsKey(s)) preds[s].Add(b.Label);
+        foreach (var b in blocks) foreach (var s in BlockSuccs(b)) if (preds.TryGetValue(s, out var pl)) pl.Add(b.Label);
         var idom = new Dictionary<uint, uint> { [ord[0].Label] = ord[0].Label };
         bool changed = true;
         while (changed)
@@ -1914,7 +1914,7 @@ public static partial class SpirVOptimizer
             Dfs(blocks[0]); ord.Reverse();
             var rpoIndex = new Dictionary<uint, int>(); for (int i = 0; i < ord.Count; i++) rpoIndex[ord[i].Label] = i;
             var preds = new Dictionary<uint, List<uint>>(); foreach (var b in blocks) preds[b.Label] = [];
-            foreach (var b in blocks) foreach (var s in Succs(b)) if (preds.ContainsKey(s)) preds[s].Add(b.Label);
+            foreach (var b in blocks) foreach (var s in Succs(b)) if (preds.TryGetValue(s, out var pl)) pl.Add(b.Label);
             var idom = new Dictionary<uint, uint>(); idom[ord[0].Label] = ord[0].Label;
             bool changed = true;
             while (changed) { changed = false; for (int i = 1; i < ord.Count; i++) { uint b = ord[i].Label, nd = 0; foreach (var p in preds[b]) { if (!rpoIndex.ContainsKey(p)) continue; if (!idom.ContainsKey(p)) continue; if (nd == 0) nd = p; else { uint a = p, c = nd; while (a != c) { while (rpoIndex[a] > rpoIndex[c]) a = idom[a]; while (rpoIndex[c] > rpoIndex[a]) c = idom[c]; } nd = a; } } if (nd != 0 && (!idom.TryGetValue(b, out var cur) || cur != nd)) { idom[b] = nd; changed = true; } } }

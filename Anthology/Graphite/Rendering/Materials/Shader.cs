@@ -488,8 +488,20 @@ public sealed class MaterialAxis
 /// A shader the renderer can draw with: its definition, the material schema from its Properties block, and its
 /// variant axes split by scope.
 /// </summary>
-public sealed class Shader
+public sealed partial class Shader
 {
+    [System.Text.RegularExpressions.GeneratedRegex(@"^[ \t]*#[ \t]*pragma[ \t]+surface[ \t]*\r?$", System.Text.RegularExpressions.RegexOptions.Multiline)]
+    private static partial System.Text.RegularExpressions.Regex SurfaceMarker();
+
+    [System.Text.RegularExpressions.GeneratedRegex(@"^[ \t]*#[ \t]*pragma[ \t]+surface_vertex[ \t]*\r?$", System.Text.RegularExpressions.RegexOptions.Multiline)]
+    private static partial System.Text.RegularExpressions.Regex VertexMarker();
+
+    [System.Text.RegularExpressions.GeneratedRegex(@"^[ \t]*#[ \t]*pragma[ \t]+surface_lighting[ \t]*\r?$", System.Text.RegularExpressions.RegexOptions.Multiline)]
+    private static partial System.Text.RegularExpressions.Regex LightingMarker();
+
+    [System.Text.RegularExpressions.GeneratedRegex(@"\bShared\s*\{")]
+    private static partial System.Text.RegularExpressions.Regex SharedBlock();
+
     /// <summary>Render queue of a shader whose passes give none. Queues from 2500 up are transparent.</summary>
     public const int DefaultRenderQueue = 2000;
 
@@ -610,9 +622,6 @@ public sealed class Shader
         TransmissiveAxis = FindAttributeAxis("Transmissive");
     }
 
-    private static readonly System.Text.RegularExpressions.Regex s_surfaceMarker = new(@"^[ \t]*#[ \t]*pragma[ \t]+surface[ \t]*\r?$", System.Text.RegularExpressions.RegexOptions.Multiline);
-    private static readonly System.Text.RegularExpressions.Regex s_vertexMarker = new(@"^[ \t]*#[ \t]*pragma[ \t]+surface_vertex[ \t]*\r?$", System.Text.RegularExpressions.RegexOptions.Multiline);
-    private static readonly System.Text.RegularExpressions.Regex s_lightingMarker = new(@"^[ \t]*#[ \t]*pragma[ \t]+surface_lighting[ \t]*\r?$", System.Text.RegularExpressions.RegexOptions.Multiline);
 
     /// <summary>
     /// Expands a Surface block into the passes of its model, the library shader Graphite/Standard/{Model}.shader or a
@@ -651,19 +660,19 @@ public sealed class Shader
         bool moved = false;
         foreach (ShaderPass pass in standard)
         {
-            moved |= s_vertexMarker.IsMatch(pass.Source);
-            pass.Source = s_vertexMarker.Replace(pass.Source, _ => vertex);
+            moved |= VertexMarker().IsMatch(pass.Source);
+            pass.Source = VertexMarker().Replace(pass.Source, _ => vertex);
 
             string passCode = code;
-            if (s_lightingMarker.IsMatch(pass.Source))
+            if (LightingMarker().IsMatch(pass.Source))
             {
                 lit = true;
-                pass.Source = s_lightingMarker.Replace(pass.Source, _ => lightingDefines);
+                pass.Source = LightingMarker().Replace(pass.Source, _ => lightingDefines);
                 if (lighting.Length > 0)
                     passCode = code + "\n" + lighting;
             }
-            spliced |= s_surfaceMarker.IsMatch(pass.Source);
-            pass.Source = s_surfaceMarker.Replace(pass.Source, _ => passCode);
+            spliced |= SurfaceMarker().IsMatch(pass.Source);
+            pass.Source = SurfaceMarker().Replace(pass.Source, _ => passCode);
             pass.SourceName = name;
         }
         if (code.Length > 0 && !spliced)
@@ -695,7 +704,6 @@ public sealed class Shader
         definition.Surface = null;
     }
 
-    private static readonly System.Text.RegularExpressions.Regex s_sharedBlock = new(@"\bShared\s*\{");
 
     // The shader a surface model's passes and properties come from: the library shader of its name, or for a
     // ShadingModel document, the renderer's or the library's, the model it is based on with the document applied
@@ -748,19 +756,19 @@ public sealed class Shader
                     + (packs ? "#define GRAPHITE_STANDARD_MODEL_CUSTOM\n" : "") + paramsDefine + shading.Pack + "\nvec4 graphite_ModelCustom = vec4(0.0);\n"
                     + $"void graphite_ModelGBuffer(inout Graphite_GBuffer g, PBR_Params p)\n{{\n    g.model = {id}u;\n    g.custom = graphite_ModelCustom;\n}}\n";
             }
-            else if ((light || ambient || paramsDefine.Length > 0) && s_lightingMarker.IsMatch(pass.Source))
+            else if ((light || ambient || paramsDefine.Length > 0) && LightingMarker().IsMatch(pass.Source))
             {
                 if (light || ambient)
-                    pass.Source = s_lightingMarker.Replace(pass.Source, "");
+                    pass.Source = LightingMarker().Replace(pass.Source, "");
                 shared += (light ? "#define GRAPHITE_CUSTOM_BRDF\n" : "") + (ambient ? "#define GRAPHITE_CUSTOM_AMBIENT_BRDF\n" : "");
                 code = (packs ? "#define GRAPHITE_STANDARD_MODEL_CUSTOM\n" : "") + paramsDefine + shading.Pack + "\nvec4 graphite_ModelCustom = vec4(0.0);\n" + shading.Lighting + "\n"
                     + (light ? "vec3 Graphite_BRDF(PBR_Closure c, Graphite_LightContribution l) { return Model_Light(c, l, graphite_ModelCustom); }\n" : "")
                     + (ambient ? "vec3 Graphite_AmbientBRDF(PBR_Closure c, PBR_Indirect i) { return Model_Ambient(c, i, graphite_ModelCustom); }\n" : "");
             }
             if (shared.Length > 0)
-                pass.Source = s_sharedBlock.Replace(pass.Source, match => match.Value + "\n" + shared, 1);
+                pass.Source = SharedBlock().Replace(pass.Source, match => match.Value + "\n" + shared, 1);
             if (code.Length > 0)
-                pass.Source = s_surfaceMarker.Replace(pass.Source, _ => code + "\n#pragma surface", 1);
+                pass.Source = SurfaceMarker().Replace(pass.Source, _ => code + "\n#pragma surface", 1);
             passes.Add(pass);
         }
         model.Passes = [.. passes];

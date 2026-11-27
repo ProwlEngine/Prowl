@@ -29,6 +29,8 @@ public readonly struct CodeSelection : IEquatable<CodeSelection>
     public bool Equals(CodeSelection other) => Anchor == other.Anchor && Caret == other.Caret;
     public override bool Equals(object? obj) => obj is CodeSelection s && Equals(s);
     public override int GetHashCode() => HashCode.Combine(Anchor, Caret);
+    public static bool operator ==(CodeSelection a, CodeSelection b) => a.Equals(b);
+    public static bool operator !=(CodeSelection a, CodeSelection b) => !a.Equals(b);
 }
 
 /// <summary>Why an edit happened. Consecutive edits of the same typing kind merge into one undo step.</summary>

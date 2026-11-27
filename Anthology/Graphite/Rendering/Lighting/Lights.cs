@@ -398,6 +398,8 @@ public struct WindDesc : IEquatable<WindDesc>
     public readonly bool Equals(WindDesc other) => Direction == other.Direction && Strength == other.Strength && GustSpeed == other.GustSpeed;
     public override readonly bool Equals(object? obj) => obj is WindDesc other && Equals(other);
     public override readonly int GetHashCode() => HashCode.Combine(Direction, Strength, GustSpeed);
+    public static bool operator ==(WindDesc a, WindDesc b) => a.Equals(b);
+    public static bool operator !=(WindDesc a, WindDesc b) => !a.Equals(b);
 }
 
 /// <summary>
@@ -420,6 +422,8 @@ public struct WindZoneDesc : IEquatable<WindZoneDesc>
         && Turbulence == other.Turbulence && PulseMagnitude == other.PulseMagnitude && PulseFrequency == other.PulseFrequency;
     public override readonly bool Equals(object? obj) => obj is WindZoneDesc other && Equals(other);
     public override readonly int GetHashCode() => HashCode.Combine(Center, Radius, Strength, Turbulence, PulseMagnitude, PulseFrequency);
+    public static bool operator ==(WindZoneDesc a, WindZoneDesc b) => a.Equals(b);
+    public static bool operator !=(WindZoneDesc a, WindZoneDesc b) => !a.Equals(b);
 }
 
 /// <summary>A world's ambient light, fog and sun. Changes to the world's own instance apply at the next frame.</summary>

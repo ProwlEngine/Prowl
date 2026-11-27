@@ -35,5 +35,7 @@ public readonly struct FrameTime : IEquatable<FrameTime>
     public bool Equals(FrameTime other) => _frameIndex == other._frameIndex && _percentage.Equals(other._percentage);
     public override bool Equals(object? obj) => obj is FrameTime other && Equals(other);
     public override int GetHashCode() => HashCode.Combine(_frameIndex, _percentage);
+    public static bool operator ==(FrameTime a, FrameTime b) => a.Equals(b);
+    public static bool operator !=(FrameTime a, FrameTime b) => !a.Equals(b);
     public override string ToString() => $"FrameTime(frame {_frameIndex}, {_percentage:0.###})";
 }

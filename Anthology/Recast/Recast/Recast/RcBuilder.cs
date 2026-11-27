@@ -56,7 +56,7 @@ namespace Prowl.Recast
 
             if (1 < threads)
             {
-                return BuildMultiThread(geom, cfg, bmin, bmax, tw, th, threads, taskFactory ?? Task.Factory, cancellation, keepInterResults, buildAll);
+                return BuildMultiThread(geom, cfg, bmin, bmax, tw, th, threads, taskFactory ?? Task.Factory, keepInterResults, buildAll, cancellation);
             }
 
             return BuildSingleThread(geom, cfg, bmin, bmax, tw, th, keepInterResults, buildAll);
@@ -81,8 +81,8 @@ namespace Prowl.Recast
         }
         
         private List<RcBuilderResult> BuildMultiThread(IRcInputGeomProvider geom, RcConfig cfg, RcVec3f bmin, RcVec3f bmax, int tw, int th,
-            int threads, TaskFactory taskFactory, CancellationToken cancellation,
-            bool keepInterResults, bool buildAll)
+            int threads, TaskFactory taskFactory,
+            bool keepInterResults, bool buildAll, CancellationToken cancellation)
         {
             var results = new ConcurrentQueue<RcBuilderResult>();
             RcAtomicInteger progress = new RcAtomicInteger(0);

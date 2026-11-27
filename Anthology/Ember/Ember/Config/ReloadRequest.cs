@@ -45,8 +45,8 @@ public sealed class ReloadRequest
 
         public Builder Replace(Assembly previous, Assembly current)
         {
-            if (previous == null) throw new ArgumentNullException(nameof(previous));
-            if (current == null) throw new ArgumentNullException(nameof(current));
+            ArgumentNullException.ThrowIfNull(previous);
+            ArgumentNullException.ThrowIfNull(current);
             if (ReferenceEquals(previous, current))
                 throw new ArgumentException($"Cannot replace {previous.GetName().Name} with itself.", nameof(current));
 
@@ -56,28 +56,28 @@ public sealed class ReloadRequest
 
         public Builder Add(Assembly current)
         {
-            if (current == null) throw new ArgumentNullException(nameof(current));
+            ArgumentNullException.ThrowIfNull(current);
             _changes.Add(new AssemblyChange(null, current));
             return this;
         }
 
         public Builder Remove(Assembly previous)
         {
-            if (previous == null) throw new ArgumentNullException(nameof(previous));
+            ArgumentNullException.ThrowIfNull(previous);
             _changes.Add(new AssemblyChange(previous, null));
             return this;
         }
 
         public Builder Root(object instance)
         {
-            if (instance == null) throw new ArgumentNullException(nameof(instance));
+            ArgumentNullException.ThrowIfNull(instance);
             _roots.Add(instance);
             return this;
         }
 
         public Builder Roots(IEnumerable<object> instances)
         {
-            if (instances == null) throw new ArgumentNullException(nameof(instances));
+            ArgumentNullException.ThrowIfNull(instances);
             foreach (var instance in instances) Root(instance);
             return this;
         }

@@ -123,7 +123,7 @@ internal sealed class ArrayFormat : ISerializationFormat
             // Multi-dimensional array
             else if (value.TryGet("dimensions", out var dimensionsTag))
             {
-                var dimensions = Serializer.Deserialize(dimensionsTag, typeof(int[]), context) as int[];
+                var dimensions = Serializer.Deserialize<int[]>(dimensionsTag, context);
                 var elementsTag = value.Get("elements")
                     ?? throw new InvalidDataException("Missing elements in multi-dimensional array");
 

@@ -65,7 +65,7 @@ public static class ModelImporter
         IFileResolver? resolver = null,
         CancellationToken cancellationToken = default)
     {
-        if (stream is null) throw new ArgumentNullException(nameof(stream));
+        ArgumentNullException.ThrowIfNull(stream);
         IModelFormat? format = formatHint is null ? null : DetectFromPath(formatHint);
         return LoadCore(stream, format, settings, resolver, sourcePath: null, cancellationToken);
     }

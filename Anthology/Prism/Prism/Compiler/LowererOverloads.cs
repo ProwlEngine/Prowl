@@ -190,7 +190,7 @@ public sealed partial class Lowerer
 
     // glslang TParseContextBase::selectFunction over candidates with matching arity: the index of the best
     // viable candidate (or -1 when none is viable) and whether another candidate ties with it.
-    int SelectCandidate(IReadOnlyList<GlslType> args, IReadOnlyList<(GlslType Type, bool In, bool Out)[]> candidates, out bool tie)
+    int SelectCandidate(List<GlslType> args, IReadOnlyList<(GlslType Type, bool In, bool Out)[]> candidates, out bool tie)
     {
         tie = false;
         var viable = new List<int>();

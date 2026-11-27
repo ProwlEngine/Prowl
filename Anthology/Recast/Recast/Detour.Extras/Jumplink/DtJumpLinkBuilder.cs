@@ -11,7 +11,7 @@ namespace Prowl.Recast.Detour.Extras.Jumplink
     {
         private readonly DtEdgeExtractor edgeExtractor = new DtEdgeExtractor();
         private readonly DtEdgeSamplerFactory edgeSamplerFactory = new DtEdgeSamplerFactory();
-        private readonly IDtGroundSampler groundSampler = new DtNavMeshGroundSampler();
+        private readonly DtNavMeshGroundSampler groundSampler = new DtNavMeshGroundSampler();
         private readonly DtTrajectorySampler trajectorySampler = new DtTrajectorySampler();
         private readonly DtJumpSegmentBuilder jumpSegmentBuilder = new DtJumpSegmentBuilder();
 

@@ -43,7 +43,7 @@ public static partial class Origami
 
     /// <summary>Global switch for dark elevation drop shadows (popovers, cards, dialogs). Default true.
     /// Gates <see cref="OrigamiShadow.DropShadow{T}"/>.</summary>
-    public static bool DropShadowsEnabled = true;
+    public static bool DropShadowsEnabled { get; set; } = true;
 
     /// <summary>
     /// The layer popups drawn inline by a widget (dropdown lists, autocomplete, tooltips) open on. It rises while a
@@ -52,14 +52,14 @@ public static partial class Origami
     public static int PopupLayer { get; internal set; } = Layer.Topmost;
 
     /// <summary>Scales every icon inside the box it is drawn in. Above 1 an icon can spill past its box.</summary>
-    public static float IconScale = 1f;
+    public static float IconScale { get; set; } = 1f;
 
     /// <summary>Global switch for accent-tinted glows (selected pills, focus rings, active toolbar
     /// buttons, tab underlines, etc.). Default true. Gates <see cref="OrigamiShadow.Glow{T}"/> and the
     /// widgets' canvas-painted glows.</summary>
-    public static bool GlowsEnabled = true;
+    public static bool GlowsEnabled { get; set; } = true;
 
-    public static bool LegendSelectionEnabled = true;
+    public static bool LegendSelectionEnabled { get; set; } = true;
 
     // Transition state (lerp from start → target over duration).
     private static OrigamiTheme? _transitionStart;

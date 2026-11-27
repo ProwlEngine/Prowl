@@ -34,8 +34,8 @@ public sealed class UnwrapMesh
     /// <param name="triangles">Flat triangle list: indices into <paramref name="positions"/>, three per face.</param>
     public UnwrapMesh(Double3[] positions, int[] triangles)
     {
-        if (positions is null) throw new System.ArgumentNullException(nameof(positions));
-        if (triangles is null) throw new System.ArgumentNullException(nameof(triangles));
+        System.ArgumentNullException.ThrowIfNull(positions);
+        System.ArgumentNullException.ThrowIfNull(triangles);
         if (triangles.Length % 3 != 0) throw new System.ArgumentException("triangles length must be a multiple of 3.", nameof(triangles));
 
         int vertexCount = positions.Length;
@@ -119,22 +119,22 @@ public sealed class UnwrapMesh
                 throw new System.ArgumentOutOfRangeException(name, v, $"{name} must be a non-negative finite value.");
         }
 
-        if (o.Projection is null) throw new System.ArgumentNullException(nameof(o.Projection));
-        if (o.Conformal is null) throw new System.ArgumentNullException(nameof(o.Conformal));
+        if (o.Projection is null) throw new System.ArgumentNullException(nameof(o), "Projection must be set.");
+        if (o.Conformal is null) throw new System.ArgumentNullException(nameof(o), "Conformal must be set.");
 
         if (!(o.HardAngle > 0 && o.HardAngle <= 180))
-            throw new System.ArgumentOutOfRangeException(nameof(o.HardAngle), o.HardAngle, "HardAngle must be in (0, 180].");
+            throw new System.ArgumentOutOfRangeException(nameof(o), o.HardAngle, "HardAngle must be in (0, 180].");
 
         NonNegative(o.PackMargin, nameof(o.PackMargin));
         if (o.PackMargin >= 0.5)
-            throw new System.ArgumentOutOfRangeException(nameof(o.PackMargin), o.PackMargin, "PackMargin must be less than 0.5.");
+            throw new System.ArgumentOutOfRangeException(nameof(o), o.PackMargin, "PackMargin must be less than 0.5.");
 
         if (o.MaxDegreeOfParallelism == 0 || o.MaxDegreeOfParallelism < -1)
-            throw new System.ArgumentOutOfRangeException(nameof(o.MaxDegreeOfParallelism), o.MaxDegreeOfParallelism,
+            throw new System.ArgumentOutOfRangeException(nameof(o), o.MaxDegreeOfParallelism,
                 "MaxDegreeOfParallelism must be -1 or a positive integer.");
 
         if (o.Projection.MinChartTriangles < 0)
-            throw new System.ArgumentOutOfRangeException(nameof(o.Projection.MinChartTriangles), o.Projection.MinChartTriangles,
+            throw new System.ArgumentOutOfRangeException(nameof(o), o.Projection.MinChartTriangles,
                 "MinChartTriangles must be non-negative.");
 
         var c = o.Conformal;
@@ -148,7 +148,7 @@ public sealed class UnwrapMesh
         NonNegative(c.LloydChangePrev2Threshold, nameof(c.LloydChangePrev2Threshold));
 
         if (c.MergeTimeBudgetMs < 0)
-            throw new System.ArgumentOutOfRangeException(nameof(c.MergeTimeBudgetMs), c.MergeTimeBudgetMs,
+            throw new System.ArgumentOutOfRangeException(nameof(o), c.MergeTimeBudgetMs,
                 "MergeTimeBudgetMs must be non-negative.");
     }
 }

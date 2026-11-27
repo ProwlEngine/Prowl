@@ -285,7 +285,7 @@ namespace Prowl.Vector
             sb.Append(this.c0.Y.ToString(format, formatProvider));
             sb.Append(", ");
             sb.Append(this.c1.Y.ToString(format, formatProvider));
-            sb.Append(")");
+            sb.Append(')');
             return sb.ToString();
         }
 
