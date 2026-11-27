@@ -20,6 +20,9 @@ public struct RenderMeshOptions
 
     /// <summary>Winds triangles against their face, as <see cref="GeometryData.ToTriangleMesh"/> does, for renderers whose front faces turn that way.</summary>
     public bool ReverseWinding;
+
+    /// <summary>Only the faces it accepts are drawn. The others still shade their smooth neighbours, so a piece matches the whole.</summary>
+    public Predicate<GeometryData.Face>? Emit;
 }
 
 /// <summary>
@@ -156,6 +159,7 @@ public partial class GeometryData
         {
             if (!faceDrawn[f]) continue;
             Face face = Faces[f];
+            if (options.Emit != null && !options.Emit(face)) continue;
             int material = hasMaterial ? face.Material : 0;
             if (!byMaterial.TryGetValue(material, out var target))
                 byMaterial[material] = target = (new List<uint>(), new List<int>());

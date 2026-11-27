@@ -158,4 +158,18 @@ public class GeometryRenderMeshTests
         Assert.NotNull(render.UVs);
         Assert.Equal(8, render.Positions.Length);
     }
+
+    [Fact]
+    public void ToRenderMesh_EmitDrawsSomeFacesShadedAsTheWhole()
+    {
+        GeometryData mesh = GeometryGenerator.Plane(new Float2(2, 1), segments: new Int2(2, 1));
+        GeometryData.Face first = mesh.Faces[0];
+
+        RenderMesh whole = mesh.ToRenderMesh(new RenderMeshOptions { ForceSmooth = true });
+        RenderMesh piece = mesh.ToRenderMesh(new RenderMeshOptions { ForceSmooth = true, Emit = f => f == first });
+
+        Assert.Equal(6, piece.Indices.Length);
+        Assert.Equal(4, piece.Positions.Length);
+        foreach (Float3 normal in piece.Normals) Assert.Contains(whole.Normals, n => Float3.Distance(n, normal) < 1e-5f);
+    }
 }
