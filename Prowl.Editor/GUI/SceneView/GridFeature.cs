@@ -13,7 +13,8 @@ namespace Prowl.Editor;
 
 /// <summary>
 /// The editor's ground grid: the plane y = 0 traced per pixel over the finished image, hidden behind geometry, with the
-/// X and Z axes drawn in red and blue and a fade into the distance.
+/// X and Z axes drawn in red and blue and a fade into the distance. The 2D grid traces z = 0 instead, its X and Y axes in
+/// red and green, without the fade, and draws before transparents so sprites cover it.
 /// </summary>
 internal sealed class GridFeature : RenderFeature
 {
@@ -27,6 +28,7 @@ internal sealed class GridFeature : RenderFeature
         uniform float _LineWidth;
         uniform float _Falloff;
         uniform float _MaxDist;
+        uniform float _PlaneXY;
 
         // Anti aliased grid lines from screen space derivatives
         float pristineGrid(vec2 uv, vec2 lineWidth)
@@ -52,9 +54,12 @@ internal sealed class GridFeature : RenderFeature
             vec3 nearPoint = Graphite_RelativeFromDepth(view, vUV, 1.0);
             vec3 farPoint = Graphite_RelativeFromDepth(view, vUV, 0.5);
             vec3 direction = farPoint - nearPoint;
-            float t = abs(direction.y) > 1e-6 ? (-camera.y - nearPoint.y) / direction.y : -1.0;
+            bool xy = _PlaneXY > 0.5;
+            float along = xy ? direction.z : direction.y;
+            float from = xy ? camera.z + nearPoint.z : camera.y + nearPoint.y;
+            float t = abs(along) > 1e-6 ? -from / along : -1.0;
             vec3 hit = nearPoint + direction * t;
-            vec2 uv = hit.xz + camera.xz;
+            vec2 uv = xy ? hit.xy + camera.xy : hit.xz + camera.xz;
 
             float sceneDepth = Graphite_Sample(_CameraDepthTexture, vUV).r;
             vec3 scene = Graphite_RelativeFromDepth(view, vUV, max(sceneDepth, 1e-7));
@@ -71,10 +76,10 @@ internal sealed class GridFeature : RenderFeature
             float zAxis = 1.0 - smoothstep(0.0, dxPerPx * 1.5, abs(uv.x));
             color = mix(color, vec3(0.9, 0.2, 0.2), xAxis);
             gridAlpha = max(gridAlpha, xAxis * 0.9);
-            color = mix(color, vec3(0.2, 0.4, 0.9), zAxis);
+            color = mix(color, xy ? vec3(0.3, 0.8, 0.3) : vec3(0.2, 0.4, 0.9), zAxis);
             gridAlpha = max(gridAlpha, zAxis * 0.9);
 
-            float fade = 1.0 - pow(clamp(length(hit) / _MaxDist, 0.0, 1.0), _Falloff);
+            float fade = xy ? 1.0 : 1.0 - pow(clamp(length(hit) / _MaxDist, 0.0, 1.0), _Falloff);
             float alpha = hidden ? 0.0 : clamp(gridAlpha * _GridColor.a * fade, 0.0, 1.0);
             outColor = vec4(mix(source.rgb, color, alpha), source.a);
         }
@@ -83,12 +88,16 @@ internal sealed class GridFeature : RenderFeature
     private static Renderer? s_renderer;
     private static readonly List<RenderFeature> s_list = [];
     private static readonly List<RenderFeature> s_sceneList = [];
+    private static readonly List<RenderFeature> s_scene2DList = [];
 
     /// <summary>The grid as the extra features of a camera render, made for the current renderer. One line a unit.</summary>
     public static IReadOnlyList<RenderFeature>? List => Lists() ? s_list : null;
 
     /// <summary>The Scene view's grid, one line per grid snap step, so what snaps lines up with what is drawn.</summary>
     public static IReadOnlyList<RenderFeature>? SceneList => Lists() ? s_sceneList : null;
+
+    /// <summary>The Scene view's grid in 2D mode, on the XY plane, one line per grid snap step.</summary>
+    public static IReadOnlyList<RenderFeature>? Scene2DList => Lists() ? s_scene2DList : null;
 
     private static bool Lists()
     {
@@ -100,6 +109,8 @@ internal sealed class GridFeature : RenderFeature
             s_list.Add(new GridFeature(s_renderer, static () => 1f));
             s_sceneList.Clear();
             s_sceneList.Add(new GridFeature(s_renderer, static () => SceneTools.MoveSnap));
+            s_scene2DList.Clear();
+            s_scene2DList.Add(new GridFeature(s_renderer, static () => SceneTools.MoveSnap, xy: true));
         }
         return true;
     }
@@ -108,9 +119,11 @@ internal sealed class GridFeature : RenderFeature
     private readonly PropertySet _properties = new();
     private readonly Sampler _point;
     private readonly Func<float> _cellSize;
+    private readonly bool _xy;
 
-    private GridFeature(Renderer renderer, Func<float> cellSize) : base(RenderSlot.Overlay, runsOn: ViewKinds.All)
+    private GridFeature(Renderer renderer, Func<float> cellSize, bool xy = false) : base(xy ? RenderSlot.AfterOpaques : RenderSlot.Overlay, runsOn: ViewKinds.All)
     {
+        _xy = xy;
         _program = renderer.CreateFullscreenProgram(Fragment, "Editor Grid");
         _point = Graphics.GetSampler(SamplerDescription.Point);
         _cellSize = cellSize;
@@ -133,6 +146,7 @@ internal sealed class GridFeature : RenderFeature
         _properties.SetFloat("_LineWidth", 0.02f);
         _properties.SetFloat("_Falloff", 1.5f);
         _properties.SetFloat("_MaxDist", 500f);
+        _properties.SetFloat("_PlaneXY", _xy ? 1f : 0f);
         context.Fullscreen(_program, _properties);
     }
 }
