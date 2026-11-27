@@ -2647,7 +2647,7 @@ public sealed partial class Lowerer
             case Unary u:
                 return Floating(u.Operand) || FloatSpecOperation(u.Operand);
             case Call c when Types.IsTypeName(c.Name) && !c.IsArray && Types.Resolve(c.Name) is ScalarType or VectorType:
-                var to = BaseScalar(Types.Resolve(c.Name));
+                var to = BaseScalar(Types.Resolve(c.Name)!);
                 foreach (var a in c.Args)
                     if (UsesSpecConstant(a) && InferType(a) is ScalarType or VectorType && !IsSpecConversion(BaseScalar(InferType(a)), to))
                         return true;

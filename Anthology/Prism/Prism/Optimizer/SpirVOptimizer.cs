@@ -2487,7 +2487,6 @@ public static partial class SpirVOptimizer
             }
         }
         static bool IsSameBlockOp(SpvInstr i) => i.Opcode is 86 or 100;   // OpSampledImage, OpImage
-        static bool IsAbort(int op) => op is 252 or 255 or 4416 or 4448 or 4449 or 5294;
         // In-operand ids (everything but the result type and result id).
         static void ForEachInId(SpvInstr ins, Func<uint, uint> f)
         {
@@ -3602,15 +3601,6 @@ public static partial class SpirVOptimizer
             if (ins.Opcode is 15 or 72 or 332) continue;   // skip OpEntryPoint / names
             ins.Classify(out int ri, out bool[] isId);
             for (int i = 0; i < ins.Operands.Length; i++) if (isId[i] && i != ri) usedByNonEntry.Add(ins.Operands[i]);
-        }
-        uint RootVar(uint id)
-        {
-            for (int g = 0; g < 64 && def.TryGetValue(id, out var d); g++)
-            {
-                if (d.Opcode is OpAccessChain or OpInBoundsAccessChain or OpPtrAccessChain or OpInBoundsPtrAccessChain or OpCopyObject) id = d.Operands[2];
-                else break;
-            }
-            return id;
         }
 
         // Dead module-scope-variable elimination (spirv-opt ADCE, preserve_interface=false,

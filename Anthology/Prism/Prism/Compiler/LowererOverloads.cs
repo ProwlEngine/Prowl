@@ -398,7 +398,7 @@ public sealed partial class Lowerer
         for (int i = 0; i < args.Length; i++)
         {
             bool afterTexel = sparseTexel is { Slot: var slot } && slot == i;
-            if (afterTexel) _sparseTexelAccess = ResolveAccess(sparseTexel.Value.Arg);
+            if (afterTexel) _sparseTexelAccess = ResolveAccess(sparseTexel!.Value.Arg);
             if (imageOp && !afterTexel && RepeatsPreviousSymbol(call, i, j => targets?[j])) args[i] = args[i - 1];
             else args[i] = targets?[i] is { } t ? LowerArgAs(call.Args[i], t, $"argument {i + 1} of '{call.Name}'") : LowerExpr(call.Args[i]);
         }
