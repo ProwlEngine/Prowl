@@ -7,7 +7,7 @@ namespace Prowl.Graphite.Rendering;
 /// Where each of a scene's colour targets sits, the locations Graphite/Passes.glsl writes them at. A scene has the
 /// first <see cref="ViewGraph.SceneTargetCount"/> of them.
 /// </summary>
-internal static class SceneTarget
+public static class SceneTarget
 {
     public const int Color = 0, Motion = 1, Reactive = 2, Normals = 3, Material = 4;
 }

@@ -17,7 +17,7 @@ namespace Prowl.Graphite.Rendering;
 /// Word 0 of the buffer holds the words of a layer, then each layer has a header, <see cref="ZBins"/> words per set of
 /// packed first and last item (16 bits each, all ones for none), then each set's tile masks, a tile's words together.
 /// </remarks>
-internal sealed class SpatialBinPass(InternalCompute program) : IDisposable
+internal sealed class SpatialBinPass(LazyCompute program) : IDisposable
 {
     /// <summary>The sets binned: lights, decals and probes, by their slots.</summary>
     public const int Sets = SpatialIndex.FirstHostSet;

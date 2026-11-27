@@ -100,7 +100,7 @@ internal sealed class TerrainGrass : IDisposable
         }
     }
 
-    private readonly InternalCompute _program;
+    private readonly LazyCompute _program;
     private readonly PropertySet _properties = new();
     private readonly Sampler _point, _linear;
     private BufferHandle _counts;
@@ -113,7 +113,7 @@ internal sealed class TerrainGrass : IDisposable
         Instances.Name = "Graphite Terrain Grass";
         Views = factory.CreateTexture(TextureDescription.Texture2D(8, (uint)slots, 1, 1, PixelFormat.R32_G32_B32_A32_Float, TextureUsage.Sampled));
         Types = factory.CreateTexture(TextureDescription.Texture2D(TypeTexels, 64, 1, 1, PixelFormat.R32_G32_B32_A32_Float, TextureUsage.Sampled));
-        _program = renderer.Effects.Compute("Internal/TerrainGrass.glsl");
+        _program = renderer.SharedPrograms.Compute("Internal/TerrainGrass.glsl");
         _point = factory.CreateSampler(SamplerDescription.Point);
         _linear = factory.CreateSampler(SamplerDescription.Linear);
         Current = new Frame(slots);

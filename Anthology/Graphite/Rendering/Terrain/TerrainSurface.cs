@@ -354,7 +354,7 @@ public sealed class TerrainSurface : RenderProvider, IDisposable
         return (viewers, frustums);
     }
 
-    internal override void Attach(object set)
+    protected internal override void Attach(object set)
     {
         base.Attach(set);
         _world = ((ExtensionSet<RenderProvider>)set).World;
@@ -365,7 +365,7 @@ public sealed class TerrainSurface : RenderProvider, IDisposable
             _world?.FrameFeatures.Add(_grassFeature);
     }
 
-    internal override void Detach(object set)
+    protected internal override void Detach(object set)
     {
         _world?.FrameFeatures.Remove(_pages);
         _world?.FrameFeatures.Remove(_cacheFeature);

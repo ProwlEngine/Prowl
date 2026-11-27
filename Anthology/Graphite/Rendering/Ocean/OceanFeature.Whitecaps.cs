@@ -13,7 +13,7 @@ public sealed partial class OceanFeature
         public Float4 Sizes, Depth, Shore, Tile, Moved, Rule;
     }
 
-    private InternalCompute _whitecapProgram = null!;
+    private LazyCompute _whitecapProgram = null!;
     private readonly Texture[] _whitecaps = new Texture[2];
     private WhitecapPush _whitecapBase;
     private Double3 _whitecapViewer;
@@ -25,7 +25,7 @@ public sealed partial class OceanFeature
 
     private void CreateWhitecaps(Renderer renderer)
     {
-        _whitecapProgram = renderer.Effects.Compute("Internal/OceanWhitecaps.glsl");
+        _whitecapProgram = renderer.SharedPrograms.Compute("Internal/OceanWhitecaps.glsl");
         ushort[] empty = new ushort[DepthResolution * DepthResolution];
         for (int i = 0; i < 2; i++)
         {

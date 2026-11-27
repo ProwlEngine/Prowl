@@ -27,17 +27,46 @@ public sealed class DisplacementFeature : RenderFeature
         public void Dispose() => Sets.Dispose();
     }
 
-    private readonly RendererResources _resources;
+    // The fill and depth parts of Graphite/Internal/Displacement.glsl and the grid of DisplacementGrid.glsl, kept once for a renderer
+    private sealed class Programs : IDisposable
+    {
+        public readonly FullscreenProgram Fill, Grid, Depth;
+
+        public Programs(Renderer renderer)
+        {
+            BlendAttachmentDescription written = BlendAttachmentDescription.OverrideBlend;
+            BlendAttachmentDescription unwritten = written with { ColorWriteMask = ColorWriteMask.None };
+            Fill = renderer.CreateFullscreenProgram("#include \"Graphite/Internal/Displacement.glsl\"\n", "Graphite/DisplacementFill", source: false,
+                blend: BlendStateDescription.SingleOverrideBlend with { AttachmentStates = [written, written, written, written] }, variant: "#define DISPLACE_FILL 1\n");
+            Depth = renderer.CreateFullscreenProgram("#include \"Graphite/Internal/Displacement.glsl\"\n", "Graphite/DisplacementDepth", source: false,
+                blend: BlendStateDescription.SingleOverrideBlend with { AttachmentStates = [unwritten] }, variant: "#define DISPLACE_DEPTH 1\n", depth: true);
+            Grid = renderer.CreateProceduralProgram("#include \"Graphite/Internal/DisplacementGrid.glsl\"\n", "Graphite/DisplacementGrid",
+                blend: BlendStateDescription.SingleOverrideBlend with { AttachmentStates = [written, written, written] }, depth: true);
+        }
+
+        public void Dispose()
+        {
+            Fill.Dispose();
+            Grid.Dispose();
+            Depth.Dispose();
+        }
+    }
+
+    private readonly SharedResources _shared;
+    private readonly ResourceFactory _factory;
+    private readonly Programs _programs;
     private readonly PropertySet _properties = new();
 
-    internal DisplacementFeature(RendererResources resources)
+    internal DisplacementFeature(Renderer renderer)
         : base(RenderSlot.GBuffer, 75, FeatureGroup.Displacement)
     {
-        _resources = resources;
+        _shared = renderer.Shared;
+        _factory = renderer.Device.ResourceFactory;
+        _programs = renderer.GetShared(r => new Programs(r));
         Paths = RenderPaths.Deferred;
-        Uses(resources.DisplacementFillProgram);
-        Uses(resources.DisplacementGridProgram);
-        Uses(resources.DisplacementDepthProgram);
+        Uses(_programs.Fill);
+        Uses(_programs.Grid);
+        Uses(_programs.Depth);
     }
 
     public override bool IsActive(in FeatureView view) => view.DisplacementCell > 0;
@@ -57,7 +86,7 @@ public sealed class DisplacementFeature : RenderFeature
             Height = (int)view.Height,
             ColorFormats = [PixelFormat.R16_G16_Float],
             EnableDepth = true,
-            DepthFormat = _resources.SceneDepthFormat,
+            DepthFormat = _shared.SceneDepthFormat,
             ArrayLayers = layers,
         });
         state.Height = builder.Temporary("Height", new GraphTextureDesc
@@ -85,7 +114,7 @@ public sealed class DisplacementFeature : RenderFeature
         Texture offset = displaced.ColorTextures[0], height = context.Get(state.Height).ColorTextures[0];
         Texture sceneNormal = scene.ColorTextures[SceneTarget.Normals], sceneMotion = scene.ColorTextures[SceneTarget.Motion];
         Texture normal = decaled is { Length: > GBufferRead.DecaledNormal } ? decaled[GBufferRead.DecaledNormal] : own[GBufferRead.OwnNormal];
-        Sampler point = _resources.PointClamp;
+        Sampler point = _shared.PointClamp;
         int layers = context.View.LayerCount;
         AttachmentOps cleared = AttachmentOps.Clear(new Color(0f, 0f, 0f, 0f));
 
@@ -95,8 +124,8 @@ public sealed class DisplacementFeature : RenderFeature
         _properties.SetTexture(s_motion, own[GBufferRead.OwnMotion], point);
         _properties.SetTexture(s_depth, scene.DepthTexture!, point);
         _properties.SetFloat4(s_fade, new Float4(Math.Clamp(context.View.DisplacementCreaseBlend, 0, 8), 0, 0, 0));
-        Framebuffer fill = state.Sets.Get(_resources.Factory, layers, null, offset, sceneNormal, sceneMotion, height);
-        context.Fullscreen(_resources.DisplacementFillProgram, fill, _properties,
+        Framebuffer fill = state.Sets.Get(_factory, layers, null, offset, sceneNormal, sceneMotion, height);
+        context.Fullscreen(_programs.Fill, fill, _properties,
             new TargetLoadStoreOps(cleared, AttachmentOps.Loaded).WithColorLoad(1, LoadAction.Load).WithColorLoad(2, LoadAction.Load));
 
         int cell = Math.Clamp(context.View.DisplacementCell, 1, 16);
@@ -104,15 +133,15 @@ public sealed class DisplacementFeature : RenderFeature
         if (across > 0 && down > 0)
         {
             _properties.SetTexture(s_depth, scene.DepthTexture!, point);
-            _properties.SetTexture(s_height, height, _resources.LinearClamp);
+            _properties.SetTexture(s_height, height, _shared.LinearClamp);
             _properties.SetFloat4(s_grid, new Float4(cell, across, 0, 0));
-            Framebuffer grid = state.Sets.Get(_resources.Factory, layers, displaced.DepthTexture, offset, sceneNormal, sceneMotion);
-            context.DrawProcedural(_resources.DisplacementGridProgram, grid, (uint)(across * down * 6), _properties,
+            Framebuffer grid = state.Sets.Get(_factory, layers, displaced.DepthTexture, offset, sceneNormal, sceneMotion);
+            context.DrawProcedural(_programs.Grid, grid, (uint)(across * down * 6), _properties,
                 new TargetLoadStoreOps(AttachmentOps.Loaded, AttachmentOps.Clear(0f)));
         }
 
         _properties.SetTexture(s_gridDepth, displaced.DepthTexture!, point);
-        Framebuffer depth = state.Sets.Get(_resources.Factory, layers, scene.DepthTexture, height);
-        context.Fullscreen(_resources.DisplacementDepthProgram, depth, _properties);
+        Framebuffer depth = state.Sets.Get(_factory, layers, scene.DepthTexture, height);
+        context.Fullscreen(_programs.Depth, depth, _properties);
     }
 }

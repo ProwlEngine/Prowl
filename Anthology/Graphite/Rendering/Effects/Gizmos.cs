@@ -1009,15 +1009,14 @@ public sealed class Gizmos : RenderFeature, IDisposable
     public Gizmos(Renderer renderer, RenderSlot slot = RenderSlot.DisplayPost, int order = 0) : base(slot, order)
     {
         _device = renderer.Device;
-        _point = renderer.Resources.PointClamp;
-        _linear = renderer.Resources.LinearClamp;
+        _point = renderer.Shared.PointClamp;
+        _linear = renderer.Shared.LinearClamp;
         _white = _device.ResourceFactory.CreateTexture(TextureDescription.Texture2D(1, 1, 1, 1, PixelFormat.R8_G8_B8_A8_UNorm, TextureUsage.Sampled));
         _white.Name = "Gizmo white";
         _device.UpdateTexture<byte>(_white, [255, 255, 255, 255], TextureRegion.Whole(_white));
         _copy = renderer.CreateFullscreenProgram("void main() { outColor = Graphite_SampleSource(vUV); }", "Graphite/GizmoCopy");
 
-        ShaderPass pass = new() { State = new PassState(), Source = Source, SourceName = "Graphite/Gizmos" };
-        ShaderDescription description = pass.Variants(renderer.Compiler, _device.BackendType).Require();
+        ShaderDescription description = renderer.CompileGraphicsProgram(Source, "Graphite/Gizmos");
         description.VertexLayouts =
         [
             new VertexLayoutDescription(0, GizmoVertex.SizeInBytes, VertexStepRate.PerInstance,

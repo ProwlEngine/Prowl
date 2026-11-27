@@ -43,7 +43,7 @@ public sealed class VoxelDebug : PostEffect
     public VoxelDebug(Renderer renderer) : base(renderer, RenderSlot.DisplayPost)
     {
         _program = Program("VoxelDebug");
-        _passThrough = renderer.CreateFullscreenProgram(InternalShaders.CopyBack, "VoxelDebug pass through");
+        _passThrough = renderer.CreateFullscreenProgram("void main() { outColor = Graphite_SampleSource(vUV); }", "VoxelDebug pass through");
         Order = 1000;
     }
 
@@ -59,20 +59,19 @@ public sealed class VoxelDebug : PostEffect
 
     public override void Render(FeatureContext context)
     {
-        if (context.GetViewState<State>().Inputs is not { Voxels.Data: { } data } inputs)
+        if (context.GetViewState<State>().Inputs is not { } inputs)
         {
             context.Fullscreen(_passThrough);
             return;
         }
-        WorldVoxels voxels = inputs.Voxels;
-        Float3 extent = voxels.Extent;
-        Double3 min = voxels.Center - new Double3(extent.X, extent.Y, extent.Z) * 0.5 - context.View.Position;
-        _properties.SetBuffer(s_voxels, data);
+        Float3 extent = inputs.Extent;
+        Double3 min = inputs.Center - new Double3(extent.X, extent.Y, extent.Z) * 0.5 - context.View.Position;
+        _properties.SetBuffer(s_voxels, inputs.Voxels);
         _properties.SetBuffer(s_cache, inputs.Cache);
-        _properties.SetBuffer(s_lighting, voxels.Lighting.Buffer);
+        _properties.SetBuffer(s_lighting, inputs.Lighting);
         _properties.SetTexture(s_sunShadow, inputs.SunShadow, inputs.ShadowSampler);
         _properties.SetTexture(s_sky, inputs.Sky, LinearClamp);
-        _properties.SetFloat4(s_boxMin, new Float4((float)min.X, (float)min.Y, (float)min.Z, voxels.Header.VoxelSize));
+        _properties.SetFloat4(s_boxMin, new Float4((float)min.X, (float)min.Y, (float)min.Z, inputs.VoxelSize));
         _properties.SetInt(s_mode, (int)_mode);
         context.Fullscreen(_program, _properties);
     }

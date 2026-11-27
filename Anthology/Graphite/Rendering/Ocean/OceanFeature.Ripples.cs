@@ -33,7 +33,7 @@ public sealed partial class OceanFeature
 
     private readonly record struct Interaction(Float4 Sphere, Float4 Motion);
 
-    private InternalCompute _rippleProgram = null!;
+    private LazyCompute _rippleProgram = null!;
     private readonly Texture[] _ripples = new Texture[2];
     private readonly List<Interaction> _interactions = new();
     private Float2 _rippleSource;
@@ -57,7 +57,7 @@ public sealed partial class OceanFeature
 
     private void CreateRipples(Renderer renderer)
     {
-        _rippleProgram = renderer.Effects.Compute("Internal/OceanRipples.glsl");
+        _rippleProgram = renderer.SharedPrograms.Compute("Internal/OceanRipples.glsl");
         for (int i = 0; i < 2; i++)
         {
             _ripples[i] = renderer.Device.ResourceFactory.CreateTexture(TextureDescription.Texture2D(DepthResolution, DepthResolution, 1, RippleSlices, PixelFormat.R16_G16_B16_A16_Float, TextureUsage.Storage | TextureUsage.Sampled));

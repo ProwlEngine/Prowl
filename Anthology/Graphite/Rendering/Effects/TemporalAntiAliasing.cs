@@ -17,8 +17,8 @@ public sealed class TemporalAntiAliasing : RenderFeature
         s_resolution = "_Resolution", s_historyValid = "_HistoryValid", s_blendFactor = "_BlendFactor", s_motionBlendFactor = "_MotionBlendFactor",
         s_reactiveBlendFactor = "_ReactiveBlendFactor", s_motionScale = "_MotionScale", s_resolved = "_Resolved", s_sharpness = "_Sharpness";
 
-    private readonly EffectResources _resources;
-    private readonly RendererResources _shared;
+    private readonly SharedPrograms _resources;
+    private readonly SharedResources _shared;
     private readonly FullscreenProgram _resolve, _reactiveResolve, _sharpen;
     private readonly PropertySet _properties = new(), _sharpening = new();
     private Settings _settings;
@@ -33,11 +33,11 @@ public sealed class TemporalAntiAliasing : RenderFeature
 
     public TemporalAntiAliasing(Renderer renderer) : base(RenderSlot.Upscale, group: FeatureGroup.AntiAliasing, sceneReads: SceneTargets.Motion | SceneTargets.Reactive)
     {
-        _resources = renderer.Effects;
-        _shared = renderer.Resources;
-        _resolve = _resources.Program(this, "Taa");
-        _reactiveResolve = _resources.Program(this, "Taa", "#define TAA_REACTIVE 1\n");
-        _sharpen = _resources.Program(this, "Taa", "#define TAA_SHARPEN 1\n");
+        _resources = renderer.SharedPrograms;
+        _shared = renderer.Shared;
+        _resolve = _resources.Fullscreen(this, "Graphite/Internal/Taa.glsl");
+        _reactiveResolve = _resources.Fullscreen(this, "Graphite/Internal/Taa.glsl", "#define TAA_REACTIVE 1\n");
+        _sharpen = _resources.Fullscreen(this, "Graphite/Internal/Taa.glsl", "#define TAA_SHARPEN 1\n");
     }
 
     /// <summary>How much history is kept, 0 to 0.99. Higher is smoother and ghosts more.</summary>

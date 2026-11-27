@@ -34,7 +34,7 @@ public sealed class WorldGI : ScreenLightingFeature
 
     private static readonly PropertyID s_hiZ = "_HiZ";
 
-    private readonly RendererResources _shared;
+    private readonly SharedResources _shared;
     private readonly FullscreenProgram _probes, _trace, _probeAO, _temporalReuse, _spatialReuse, _sh, _occlusion, _gather, _gatherOccluded, _splitRows, _splitColumns, _temporal, _filter, _reference, _output, _visibility;
     private readonly PropertySet _properties = new();
     private int _spatialPasses;
@@ -66,24 +66,24 @@ public sealed class WorldGI : ScreenLightingFeature
     /// several frames in a row.</param>
     public WorldGI(Renderer renderer, ViewKinds runsOn = ViewKinds.Cameras) : base(runsOn: runsOn, sceneReads: SceneTargets.Normals | SceneTargets.Motion)
     {
-        _shared = renderer.Resources;
-        EffectResources effects = renderer.Effects;
-        _probes = effects.Program(this, "WorldGI", "#define GI_PROBES 1\n", source: false);
-        _trace = effects.Program(this, "WorldGI", "#define GI_TRACE 1\n", source: false, lit: true);
-        _probeAO = effects.Program(this, "WorldGI", "#define GI_PROBE_AO 1\n", source: false);
-        _temporalReuse = effects.Program(this, "WorldGI", "#define GI_RESTIR_TEMPORAL 1\n", source: false);
-        _spatialReuse = effects.Program(this, "WorldGI", "#define GI_RESTIR_SPATIAL 1\n", source: false);
-        _sh = effects.Program(this, "WorldGI", "#define GI_SH 1\n", source: false);
-        _occlusion = effects.Program(this, "WorldGI", "#define GI_OCCLUSION 1\n", source: false);
-        _gather = effects.Program(this, "WorldGI", "#define GI_GATHER 1\n", source: false);
-        _gatherOccluded = effects.Program(this, "WorldGI", "#define GI_GATHER 1\n#define GI_GATHER_OCCLUSION 1\n", source: false);
-        _splitRows = effects.Program(this, "WorldGI", "#define GI_SPLIT 1\n", source: false);
-        _splitColumns = effects.Program(this, "WorldGI", "#define GI_SPLIT 1\n#define GI_SPLIT_VERTICAL 1\n", source: false);
-        _temporal = effects.Program(this, "WorldGI", "#define GI_TEMPORAL 1\n", source: false);
-        _filter = effects.Program(this, "WorldGI", "#define GI_FILTER 1\n", source: false);
-        _reference = effects.Program(this, "WorldGI", "#define GI_REFERENCE 1\n", source: false, lit: true);
-        _output = effects.Program(this, "WorldGI", "#define GI_OUTPUT 1\n", source: false);
-        _visibility = effects.Program(this, "WorldGI", "#define GI_VISIBILITY 1\n", source: false);
+        _shared = renderer.Shared;
+        SharedPrograms effects = renderer.SharedPrograms;
+        _probes = effects.Fullscreen(this, "Graphite/Internal/WorldGI.glsl", "#define GI_PROBES 1\n", source: false);
+        _trace = effects.Fullscreen(this, "Graphite/Internal/WorldGI.glsl", "#define GI_TRACE 1\n", source: false, lit: true);
+        _probeAO = effects.Fullscreen(this, "Graphite/Internal/WorldGI.glsl", "#define GI_PROBE_AO 1\n", source: false);
+        _temporalReuse = effects.Fullscreen(this, "Graphite/Internal/WorldGI.glsl", "#define GI_RESTIR_TEMPORAL 1\n", source: false);
+        _spatialReuse = effects.Fullscreen(this, "Graphite/Internal/WorldGI.glsl", "#define GI_RESTIR_SPATIAL 1\n", source: false);
+        _sh = effects.Fullscreen(this, "Graphite/Internal/WorldGI.glsl", "#define GI_SH 1\n", source: false);
+        _occlusion = effects.Fullscreen(this, "Graphite/Internal/WorldGI.glsl", "#define GI_OCCLUSION 1\n", source: false);
+        _gather = effects.Fullscreen(this, "Graphite/Internal/WorldGI.glsl", "#define GI_GATHER 1\n", source: false);
+        _gatherOccluded = effects.Fullscreen(this, "Graphite/Internal/WorldGI.glsl", "#define GI_GATHER 1\n#define GI_GATHER_OCCLUSION 1\n", source: false);
+        _splitRows = effects.Fullscreen(this, "Graphite/Internal/WorldGI.glsl", "#define GI_SPLIT 1\n", source: false);
+        _splitColumns = effects.Fullscreen(this, "Graphite/Internal/WorldGI.glsl", "#define GI_SPLIT 1\n#define GI_SPLIT_VERTICAL 1\n", source: false);
+        _temporal = effects.Fullscreen(this, "Graphite/Internal/WorldGI.glsl", "#define GI_TEMPORAL 1\n", source: false);
+        _filter = effects.Fullscreen(this, "Graphite/Internal/WorldGI.glsl", "#define GI_FILTER 1\n", source: false);
+        _reference = effects.Fullscreen(this, "Graphite/Internal/WorldGI.glsl", "#define GI_REFERENCE 1\n", source: false, lit: true);
+        _output = effects.Fullscreen(this, "Graphite/Internal/WorldGI.glsl", "#define GI_OUTPUT 1\n", source: false);
+        _visibility = effects.Fullscreen(this, "Graphite/Internal/WorldGI.glsl", "#define GI_VISIBILITY 1\n", source: false);
     }
 
     /// <summary>
@@ -127,7 +127,7 @@ public sealed class WorldGI : ScreenLightingFeature
 
     public override bool WritesIrradiance => true;
 
-    internal override bool KeepsSceneColor => true;
+    public override bool KeepsSceneColor => true;
 
     public override bool ReadsHiZ => true;
 
@@ -180,7 +180,7 @@ public sealed class WorldGI : ScreenLightingFeature
     {
         ViewState state = context.GetViewState<ViewState>();
         RenderTexture irradiance = context.Get(state.Irradiance);
-        if (state.Inputs is not { Voxels.Data: { } data } inputs)
+        if (state.Inputs is not { } inputs)
         {
             state.Skipped = true;
             Present(context, state, irradiance, null);
@@ -188,23 +188,22 @@ public sealed class WorldGI : ScreenLightingFeature
         }
 
         int frame = state.Frame++;
-        WorldVoxels voxels = inputs.Voxels;
-        Float3 extent = voxels.Extent;
-        Double3 min = voxels.Center - new Double3(extent.X, extent.Y, extent.Z) * 0.5 - context.View.Position;
+        Float3 extent = inputs.Extent;
+        Double3 min = inputs.Center - new Double3(extent.X, extent.Y, extent.Z) * 0.5 - context.View.Position;
         _properties.SetFloat2(s_screenSize, new Float2(context.View.Width, context.View.Height));
         _properties.SetInt(s_probeSize, ProbeSize(context.View.Height));
         Float2 jitter = new(Halton.Of(frame % 4 + 1, 2), Halton.Of(frame % 4 + 1, 3));
         _properties.SetFloat2(s_probeJitter, jitter);
         _properties.SetFloat2(s_previousProbeJitter, state.PreviousJitter);
         _properties.SetInt(s_frame, frame);
-        _properties.SetFloat4(s_boxMin, new Float4((float)min.X, (float)min.Y, (float)min.Z, voxels.Header.VoxelSize));
+        _properties.SetFloat4(s_boxMin, new Float4((float)min.X, (float)min.Y, (float)min.Z, inputs.VoxelSize));
         _properties.SetFloat3(s_boxSize, extent);
         _properties.SetTexture(s_depth, context.Depth!, _shared.PointClamp);
         _properties.SetTexture(s_normals, context.Normals!, _shared.PointClamp);
         _properties.SetTexture(s_motion, context.Motion!, _shared.PointClamp);
-        _properties.SetBuffer(s_voxels, data);
+        _properties.SetBuffer(s_voxels, inputs.Voxels);
         _properties.SetBuffer(s_cache, inputs.Cache);
-        _properties.SetBuffer(s_lighting, voxels.Lighting.Buffer);
+        _properties.SetBuffer(s_lighting, inputs.Lighting);
         _properties.SetTexture(s_sunShadow, inputs.SunShadow, inputs.ShadowSampler);
         _properties.SetTexture(s_sky, inputs.Sky, _shared.LinearClamp);
         Texture? copy = context.SceneColorCopy;

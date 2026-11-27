@@ -77,14 +77,14 @@ public abstract class FrameFeature : RenderExtension
         OrderSnapshot = Order;
     }
 
-    internal override void Attach(object set)
+    protected internal override void Attach(object set)
     {
         if (_owner != null && _owner != set)
             throw new InvalidOperationException($"{GetType().Name} is already added to another set, and its resources are named once.");
         _owner = (ExtensionSet<FrameFeature>)set;
     }
 
-    internal override void Detach(object set) => _owner = null;
+    protected internal override void Detach(object set) => _owner = null;
 }
 
 /// <summary>

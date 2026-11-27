@@ -52,6 +52,12 @@ public static class RendererOutputs
     /// </summary>
     public const string Reflections = "Graphite.Reflections";
 
+    /// <summary>
+    /// A deferred view's screen space mask over the sun's shadow: in r how much of the sun still reaches each pixel
+    /// past what its shadow map says, which the lighting dims the sun by.
+    /// </summary>
+    public const string SunShadowMask = "Graphite.SunShadowMask";
+
     /// <summary>A texture of the view's cascade depth, once its cascades are drawn.</summary>
     public const string Cascades = "Graphite.Cascades";
 

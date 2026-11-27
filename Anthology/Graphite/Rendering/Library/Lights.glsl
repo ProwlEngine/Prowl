@@ -512,12 +512,6 @@ bool graphite_ContributeLocal(Graphite_LightSample L, Graphite_LightFrame f, boo
         shadow = lookUp ? Graphite_LocalLightShadow(L, f.position, graphite_ShadowNormal(f.geomNormal, Lc)) : knownShadow;
         if (shadow <= 0.0)
             return false;
-#ifdef GRAPHITE_CONTACT_SHADOW
-        if (Graphite_LocalLightCastsShadow(L))
-            shadow *= GRAPHITE_CONTACT_SHADOW(f.position, Lc, dist, -1);
-        if (shadow <= 0.0)
-            return false;
-#endif
 
         if (!sphere)
         {
@@ -688,9 +682,8 @@ vec3 graphite_DiskDirection(Graphite_DirectionalLight d, vec3 N, vec3 V)
     return dot(across, across) > 1e-8 ? normalize(d.direction * d.cosRadius + normalize(across) * d.sinRadius) : d.direction;
 }
 
-// A program that has the view's depth may define GRAPHITE_CONTACT_SHADOW(position, toLight, distance, directional), a
-// float function giving how much of a shadow casting light still reaches a point past what the depth shows between
-// them, for the small gaps a shadow map misses. directional is the directional light's index, -1 for a point or spot.
+// A program may define GRAPHITE_SUN_SHADOW_MASK, a float saying how much of the sun still reaches the point being lit
+// past what its shadow map says, which dims the sun where it casts a shadow.
 // What a directional light gives a frame. A model defining GRAPHITE_SUN_DISK has each specular lobe lit from the nearest
 // direction inside the light's disk, else from its centre. A model defining GRAPHITE_LIGHT_FRONT takes nothing from a
 // light behind its base normal, so those pixels skip the shadow. A program lighting several models defines
@@ -708,9 +701,9 @@ bool Graphite_ContributeDirectional(Graphite_DirectionalLight d, uint index, Gra
         return false;
 #endif
     float shadow = Graphite_DirectionalLightShadow(d, index, f.position, graphite_ShadowNormal(f.geomNormal, d.direction));
-#ifdef GRAPHITE_CONTACT_SHADOW
-    if (d.shadow && shadow > 0.0 && Graphite_ReceivesShadows())
-        shadow *= GRAPHITE_CONTACT_SHADOW(f.position, d.direction, 1e30, int(index));
+#ifdef GRAPHITE_SUN_SHADOW_MASK
+    if (index == 0u && d.shadow)
+        shadow *= GRAPHITE_SUN_SHADOW_MASK;
 #endif
     c.radiance = d.color * (Graphite_Exposure() * shadow);
     c.diffuseL = d.direction;

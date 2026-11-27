@@ -487,7 +487,7 @@ internal sealed class WorldProbes
 }
 
 /// <summary>Samples a world's light probes for its requests, after the upload and before any camera reads them.</summary>
-internal sealed class ProbePass(InternalCompute program) : IDisposable
+internal sealed class ProbePass(LazyCompute program) : IDisposable
 {
     private static readonly PropertyID s_probes = "Graphite_Probes", s_probeTets = "Graphite_ProbeTets", s_probeRequests = "Graphite_ProbeRequests",
         s_probeOutput = "Graphite_ProbeOutput";

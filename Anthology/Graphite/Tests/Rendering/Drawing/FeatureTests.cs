@@ -849,6 +849,30 @@ public sealed class FeatureTests : IDisposable
     }
 
     [Fact]
+    public void ASuppressedGroup_IsLeftOutWhileItsTestHolds()
+    {
+        Named sky = new("sky", RenderSlot.Sky, group: FeatureGroup.Sky);
+        sky.Snapshot();
+        bool under = true;
+        Func<Double3, bool> where = _ => under;
+        _world.Suppress(FeatureGroup.Sky, where);
+        List<RenderFeature> selected = new();
+        FeatureView view = new(new ViewDesc { Kind = ViewKind.Game, World = _world }, 1, 1);
+
+        FeatureSelection.Select(selected, _renderer.Frame.BuiltIns, [sky], [], view);
+        Assert.DoesNotContain(selected, feature => feature.Group == FeatureGroup.Sky);
+
+        under = false;
+        FeatureSelection.Select(selected, _renderer.Frame.BuiltIns, [sky], [], view);
+        Assert.Contains(sky, selected);
+
+        under = true;
+        _world.Unsuppress(FeatureGroup.Sky, where);
+        FeatureSelection.Select(selected, _renderer.Frame.BuiltIns, [sky], [], view);
+        Assert.Contains(sky, selected);
+    }
+
+    [Fact]
     public void Selection_ViewBeatsWorldBeatsBuiltIn_ForGroupsAndReplacements()
     {
         Named worldSky = new("world sky", RenderSlot.Sky, group: FeatureGroup.Sky);

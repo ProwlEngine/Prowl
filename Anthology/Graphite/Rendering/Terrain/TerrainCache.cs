@@ -39,7 +39,7 @@ internal sealed class TerrainCache : IDisposable
     }
 
     private readonly Level[][] _levels;
-    private readonly InternalCompute _program;
+    private readonly LazyCompute _program;
     private readonly PropertySet _properties = new();
     private readonly Sampler _point, _linear;
     private readonly Dictionary<SamplerDescription, Sampler> _layerSamplers = new();
@@ -65,7 +65,7 @@ internal sealed class TerrainCache : IDisposable
         Data = factory.CreateTexture(TextureDescription.Texture2D((uint)levels, (uint)slots, 1, 1, PixelFormat.R32_G32_B32_A32_Float, TextureUsage.Sampled));
         Albedo.Name = "Graphite Terrain Cache Albedo";
         Surface.Name = "Graphite Terrain Cache Surface";
-        _program = renderer.Effects.Compute("Internal/TerrainCache.glsl");
+        _program = renderer.SharedPrograms.Compute("Internal/TerrainCache.glsl");
         _point = factory.CreateSampler(SamplerDescription.Point);
         _linear = factory.CreateSampler(SamplerDescription.Linear);
         Current = new Frame(levels, slots);

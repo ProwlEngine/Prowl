@@ -81,7 +81,7 @@ public sealed class OceanQueries : IDisposable
         _points = factory.CreateBuffer(new BufferDescription((uint)(Capacity * 32), BufferUsage.StructuredBufferReadOnly));
         _results = factory.CreateBuffer(new BufferDescription((uint)(Capacity * 32), BufferUsage.StructuredBufferReadWrite));
         _upload = new UploadFeature(this);
-        _dispatch = new DispatchFeature(this, renderer.Effects.Compute("Internal/OceanQuery.glsl"), renderer.Resources.LinearRepeat, renderer.Resources.LinearClamp);
+        _dispatch = new DispatchFeature(this, renderer.SharedPrograms.Compute("Internal/OceanQuery.glsl"), renderer.Resources.LinearRepeat, renderer.Resources.LinearClamp);
         Features = [_upload, _dispatch];
     }
 
@@ -181,7 +181,7 @@ public sealed class OceanQueries : IDisposable
             => context.Command.UpdateBuffer(owner._points, 0, owner._packed.AsSpan(0, owner._count * 2));
     }
 
-    private sealed class DispatchFeature(OceanQueries owner, InternalCompute program, Sampler waves, Sampler slices) : FrameFeature(FrameSlot.BeforeViews, order: 10)
+    private sealed class DispatchFeature(OceanQueries owner, LazyCompute program, Sampler waves, Sampler slices) : FrameFeature(FrameSlot.BeforeViews, order: 10)
     {
         private readonly PropertySet _properties = new();
 

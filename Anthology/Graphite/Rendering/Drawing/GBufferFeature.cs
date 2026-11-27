@@ -34,7 +34,7 @@ public enum GBufferTarget
 /// Framebuffers over targets of more than one texture, such as a GBuffer's beside the scene's, kept while the same
 /// targets come back and let go a few frames after they stop.
 /// </summary>
-internal sealed class TargetSets : IDisposable
+public sealed class TargetSets : IDisposable
 {
     private const int Frames = 8;
 
@@ -177,7 +177,7 @@ public sealed class GBufferFeature : RenderFeature
 /// Surface ones from <see cref="RendererOutputs.GBufferDecals"/> while the world has decals, and the scene's depth,
 /// with its normal and motion where the scene has them.
 /// </summary>
-internal struct GBufferRead
+public struct GBufferRead
 {
     /// <summary>The indices of a GBuffer texture's own normal and motion targets, where it has them.</summary>
     public const int OwnNormal = 5, OwnMotion = 6;

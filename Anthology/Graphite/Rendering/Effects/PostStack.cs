@@ -6,63 +6,6 @@ using Prowl.Vector;
 namespace Prowl.Graphite.Rendering;
 
 /// <summary>
-/// The fullscreen programs of the stock effects, built from the library's Graphite/Internal files and
-/// shared by every effect of a renderer, so a new effect instance compiles nothing already built. The renderer owns
-/// them and frees them when it is disposed.
-/// </summary>
-internal sealed class EffectResources : IDisposable
-{
-    private readonly Renderer _renderer;
-    private readonly Dictionary<string, FullscreenProgram> _programs = new(StringComparer.Ordinal);
-    private readonly Dictionary<string, InternalCompute> _computes = new(StringComparer.Ordinal);
-
-    public void Dispose()
-    {
-        foreach (FullscreenProgram program in _programs.Values)
-            program.Dispose();
-        _programs.Clear();
-        foreach (InternalCompute compute in _computes.Values)
-            compute.Dispose();
-        _computes.Clear();
-    }
-
-    /// <summary>The compute program of a library file, made the first time. Host thread.</summary>
-    public InternalCompute Compute(string file)
-    {
-        lock (_computes)
-        {
-            if (!_computes.TryGetValue(file, out InternalCompute? compute))
-                _computes[file] = compute = _renderer.CreateInternalCompute(file);
-            return compute;
-        }
-    }
-
-    /// <summary>How many programs were built, for tests.</summary>
-    internal int ProgramCount => _programs.Count;
-
-    public EffectResources(Renderer renderer) => _renderer = renderer;
-
-    /// <summary>
-    /// The program of a library file under a set of defines, each line ending in a newline, made the first time, which
-    /// the feature drawing with it waits on. Host thread.
-    /// </summary>
-    public FullscreenProgram Program(RenderFeature user, string file, string defines = "", bool source = true, BlendStateDescription? blend = null, bool lit = false)
-    {
-        string key = file + "\n" + defines + (source ? "\n1" : "\n0") + (lit ? "\n1" : "\n0");
-        lock (_programs)
-        {
-            if (!_programs.TryGetValue(key, out FullscreenProgram? program))
-            {
-                program = _renderer.CreateFullscreenProgram(InternalShaders.PostFragment(file), $"Graphite/{file}", source, blend, lit, defines);
-                _programs[key] = program;
-            }
-            user.Uses(program);
-            return program;
-        }
-    }
-}
-
-/// <summary>
 /// A stock effect: its programs built from the library's Graphite/Internal files
 /// and its settings copied at Extract. Effects of one renderer share their programs, which the renderer owns. An effect
 /// sits out of its views until its programs are compiled, so the colour passes through unchanged meanwhile.
@@ -70,8 +13,8 @@ internal sealed class EffectResources : IDisposable
 public abstract class PostEffect(Renderer renderer, RenderSlot slot, FeatureGroup? group = null, SceneTargets sceneReads = SceneTargets.None)
     : RenderFeature(slot, group: group, sceneReads: sceneReads)
 {
-    private protected EffectResources Resources { get; } = renderer.Effects;
-    private readonly RendererResources _shared = renderer.Resources;
+    private protected SharedPrograms Resources { get; } = renderer.SharedPrograms;
+    private readonly SharedResources _shared = renderer.Shared;
 
     protected Sampler LinearClamp => _shared.LinearClamp;
     protected Sampler PointClamp => _shared.PointClamp;
@@ -80,7 +23,7 @@ public abstract class PostEffect(Renderer renderer, RenderSlot slot, FeatureGrou
 
     /// <summary>The program of a library file under a set of defines, each line ending in a newline, made the first time. Host thread.</summary>
     protected FullscreenProgram Program(string file, string defines = "", bool source = true, BlendStateDescription? blend = null, bool lit = false)
-        => Resources.Program(this, file, defines, source, blend, lit);
+        => Resources.Fullscreen(this, $"Graphite/Internal/{file}.glsl", defines, source, blend, lit);
 
     protected static PixelFormat Hdr => PixelFormat.R16_G16_B16_A16_Float;
 
@@ -237,7 +180,7 @@ public sealed class AutoExposure : PostEffect
     /// <summary>The share of texels up to which the meter averages, leaving out the brightest highlights above it.</summary>
     public float HighPercent { get; set; } = 0.98f;
 
-    internal override bool MeasuresExposure => true;
+    public override bool MeasuresExposure => true;
 
     public override void Extract()
     {
@@ -412,8 +355,8 @@ public sealed class Gtao : ScreenLightingFeature
         s_jitterOffset = "_JitterOffset", s_mainTex = "_MainTex", s_previousBuffer = "_PreviousBuffer", s_tResponse = "_TResponse",
         s_blurRadius = "_BlurRadius", s_screenSize = "_ScreenSize", s_blurDirection = "_BlurDirection";
 
-    private readonly EffectResources _resources;
-    private readonly RendererResources _shared;
+    private readonly SharedPrograms _resources;
+    private readonly SharedResources _shared;
     private readonly FullscreenProgram _depth, _ao, _temporal, _blur, _copy;
     private readonly PropertySet _properties = new();
     private Settings _settings;
@@ -428,13 +371,13 @@ public sealed class Gtao : ScreenLightingFeature
 
     public Gtao(Renderer renderer)
     {
-        _resources = renderer.Effects;
-        _shared = renderer.Resources;
-        _depth = _resources.Program(this, "Gtao", "#define GTAO_DEPTH 1\n", source: false);
-        _ao = _resources.Program(this, "Gtao", "#define GTAO_AO 1\n", source: false);
-        _temporal = _resources.Program(this, "Gtao", "#define GTAO_TEMPORAL 1\n", source: false);
-        _blur = _resources.Program(this, "Gtao", "#define GTAO_BLUR 1\n", source: false);
-        _copy = _resources.Program(this, "Gtao", "", source: false);
+        _resources = renderer.SharedPrograms;
+        _shared = renderer.Shared;
+        _depth = _resources.Fullscreen(this, "Graphite/Internal/Gtao.glsl", "#define GTAO_DEPTH 1\n", source: false);
+        _ao = _resources.Fullscreen(this, "Graphite/Internal/Gtao.glsl", "#define GTAO_AO 1\n", source: false);
+        _temporal = _resources.Fullscreen(this, "Graphite/Internal/Gtao.glsl", "#define GTAO_TEMPORAL 1\n", source: false);
+        _blur = _resources.Fullscreen(this, "Graphite/Internal/Gtao.glsl", "#define GTAO_BLUR 1\n", source: false);
+        _copy = _resources.Fullscreen(this, "Graphite/Internal/Gtao.glsl", "", source: false);
     }
 
     /// <summary>Slices around each pixel.</summary>
@@ -592,7 +535,7 @@ public sealed class ScreenSpaceReflections : PostEffect
 
     public override bool ReadsHiZ => true;
 
-    internal override bool KeepsSceneColor => true;
+    public override bool KeepsSceneColor => true;
 
     /// <summary>The resolution rays are traced at.</summary>
     public EffectResolution RayResolution { get; set; } = EffectResolution.Half;
@@ -1276,8 +1219,40 @@ public sealed class Smaa : PostEffect
         public TextureHandle Edges, Weights;
     }
 
+    // The reference's area and search tables, RGBA8 in its row order, kept once for a renderer: a view of one layer
+    // for views of one layer, and each of six layers for layered views
+    private sealed class Tables : IDisposable
+    {
+        private readonly Texture _area, _search;
+        public readonly TextureView Area, Search, AreaLayered, SearchLayered;
+
+        public Tables(GraphicsDevice device)
+        {
+            ResourceFactory factory = device.ResourceFactory;
+            _area = LibraryData.LoadTexture(device, typeof(Smaa).Assembly, "Graphite/Data/SmaaArea.bin", 160, 560, mipmapped: false, layers: 6);
+            _search = LibraryData.LoadTexture(device, typeof(Smaa).Assembly, "Graphite/Data/SmaaSearch.bin", 64, 16, mipmapped: false, layers: 6);
+            Area = factory.CreateTextureView(new TextureViewDescription(_area, arrayLayers: 1));
+            Search = factory.CreateTextureView(new TextureViewDescription(_search, arrayLayers: 1));
+            AreaLayered = factory.CreateTextureView(new TextureViewDescription(_area));
+            SearchLayered = factory.CreateTextureView(new TextureViewDescription(_search));
+        }
+
+        public void Dispose()
+        {
+            Area.Dispose();
+            Search.Dispose();
+            AreaLayered.Dispose();
+            SearchLayered.Dispose();
+            _area.Dispose();
+            _search.Dispose();
+        }
+    }
+
+    private readonly Tables _tables;
+
     public Smaa(Renderer renderer) : base(renderer, RenderSlot.DisplayPost, FeatureGroup.AntiAliasing)
     {
+        _tables = renderer.GetShared(r => new Tables(r.Device));
         _edges = Program("Smaa", "#define SMAA_EDGES 1\n", source: false);
         _weights = Program("Smaa", "#define SMAA_WEIGHTS 1\n", source: false);
         _blend = Program("Smaa");
@@ -1301,7 +1276,7 @@ public sealed class Smaa : PostEffect
     {
         ViewState state = context.GetViewState<ViewState>();
         RenderTexture edges = context.Get(state.Edges), weights = context.Get(state.Weights);
-        (TextureView area, TextureView search) = context.SmaaTables;
+        (TextureView area, TextureView search) = context.View.LayerCount > 1 ? (_tables.AreaLayered, _tables.SearchLayered) : (_tables.Area, _tables.Search);
         _properties.SetFloat2(s_resolution, new Float2(context.View.Width, context.View.Height));
         _properties.SetFloat(s_edgeThreshold, _threshold);
         _properties.SetTexture(s_mainTex, context.Color!, LinearClamp);

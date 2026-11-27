@@ -101,6 +101,7 @@ public sealed class OceanUnderwater : RenderFeature, IDisposable
     public OceanUnderwater(Renderer renderer, OceanSurface surface) : base(RenderSlot.AfterTransparents, passes: [MaskPass])
     {
         Surface = surface;
+        _below = Below;
         _program = renderer.CreateFullscreenProgram(Fragment, "Graphite/OceanUnderwater", lit: true);
         _point = renderer.Resources.PointClamp;
         _linear = renderer.Resources.LinearRepeat;
@@ -114,21 +115,27 @@ public sealed class OceanUnderwater : RenderFeature, IDisposable
     /// <summary>The world whose sun and sky light the water, set when the feature joins a world's features.</summary>
     public RenderWorld? World { get; set; }
 
-    internal override void Attach(object set)
+    protected internal override void Attach(object set)
     {
+        Detach(set);
         World = ((ExtensionSet<RenderFeature>)set).World ?? World;
-        if (World != null)
-            World.Underwater = this;
+        _fogless = World;
+        _fogless?.Suppress(FeatureGroup.VolumetricFog, _below);
+        _fogless?.Suppress(FeatureGroup.VolumetricFogSky, _below);
     }
 
-    internal override void Detach(object set)
+    protected internal override void Detach(object set)
     {
-        if (World?.Underwater == this)
-            World.Underwater = null;
+        _fogless?.Unsuppress(FeatureGroup.VolumetricFog, _below);
+        _fogless?.Unsuppress(FeatureGroup.VolumetricFogSky, _below);
+        _fogless = null;
     }
 
-    /// <summary>Whether a camera is under the sea, where this pass fogs the view and the volumetric fog stands aside.</summary>
-    internal bool Below(Double3 camera) => camera.Y < _seaLevel;
+    // Under the sea this pass fogs the view, so the volumetric fog stands aside there
+    private readonly Func<Double3, bool> _below;
+    private RenderWorld? _fogless;
+
+    private bool Below(Double3 camera) => camera.Y < _seaLevel;
 
     public override void Extract()
     {
@@ -198,10 +205,4 @@ public sealed class OceanUnderwater : RenderFeature, IDisposable
     }
 
     public void Dispose() => _program.Dispose();
-}
-
-public sealed partial class RenderWorld
-{
-    /// <summary>The ocean's view from under the water, which the volumetric fog stands aside for while a camera is under it.</summary>
-    internal OceanUnderwater? Underwater { get; set; }
 }

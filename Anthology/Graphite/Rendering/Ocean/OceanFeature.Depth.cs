@@ -76,7 +76,7 @@ public sealed partial class OceanFeature
 
     private const float DepthMode = 0f, LevelMode = 1f, FlowMode = 2f;
 
-    private InternalCompute _depthProgram = null!;
+    private LazyCompute _depthProgram = null!;
     private Sampler _heightSampler = null!;
     private Texture _noHeights = null!;
     private TextureHandle _depthHandle;
@@ -141,7 +141,7 @@ public sealed partial class OceanFeature
 
     private void CreateDepth(Renderer renderer)
     {
-        _depthProgram = renderer.Effects.Compute("Internal/OceanDepth.glsl");
+        _depthProgram = renderer.SharedPrograms.Compute("Internal/OceanDepth.glsl");
         _heightSampler = renderer.Resources.LinearClamp;
         _noHeights = renderer.Resources.Noise;
         Depth = renderer.Device.ResourceFactory.CreateTexture(TextureDescription.Texture2D(DepthResolution, DepthResolution, 1, DepthSlices, PixelFormat.R32_Float, TextureUsage.Storage | TextureUsage.Sampled));

@@ -41,7 +41,7 @@ internal sealed class Uploader : IDisposable
     }
 
     private readonly GraphicsDevice _device;
-    private readonly InternalCompute _scatter;
+    private readonly LazyCompute _scatter;
     private readonly Dictionary<DeviceBuffer, Destination> _destinations = new();
     private readonly List<Destination> _order = new();
     private readonly Stack<Destination> _spare = new();
@@ -52,7 +52,7 @@ internal sealed class Uploader : IDisposable
     private int _itemCount;
     private int _epoch;
 
-    public Uploader(GraphicsDevice device, InternalCompute scatter)
+    public Uploader(GraphicsDevice device, LazyCompute scatter)
     {
         _device = device;
         _scatter = scatter;

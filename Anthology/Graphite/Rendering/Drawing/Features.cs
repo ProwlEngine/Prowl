@@ -88,7 +88,6 @@ public readonly struct FeatureView
         Width = width;
         Height = height;
         RenderScale = desc.RenderScale;
-        ContactShadows = desc.ContactShadows;
         DisplacementCell = desc.DisplacementCell;
         DisplacementCreaseBlend = desc.DisplacementCreaseBlend;
         Position = desc.Layers[0].Position;
@@ -115,10 +114,10 @@ public readonly struct FeatureView
     public RenderWorld World { get; }
     public ViewKind Kind { get; }
 
-    internal IReadOnlyDictionary<string, string>? Keywords { get; init; }
+    /// <summary>The world's environment as the render thread has it this frame.</summary>
+    public EnvironmentDesc Environment => World.Lighting.Environment;
 
-    /// <summary>The view's contact shadows.</summary>
-    public ContactShadows ContactShadows { get; }
+    internal IReadOnlyDictionary<string, string>? Keywords { get; init; }
 
     /// <summary>The pixels a cell of the view's screen space displacement spans, 0 for none.</summary>
     public int DisplacementCell { get; }
@@ -270,9 +269,9 @@ public abstract class RenderExtension
     internal virtual void Snapshot() => EnabledSnapshot = Enabled;
 
     /// <summary>Called as the extension joins or leaves a set, for extensions that belong to one.</summary>
-    internal virtual void Attach(object set) { }
+    protected internal virtual void Attach(object set) { }
 
-    internal virtual void Detach(object set) { }
+    protected internal virtual void Detach(object set) { }
 }
 
 /// <summary>Extensions added to a world, a view or the renderer. Host thread.</summary>
@@ -287,7 +286,7 @@ public sealed class ExtensionSet<T> : IEnumerable<T> where T : RenderExtension
     internal ExtensionSet(RenderWorld? world) => World = world;
 
     /// <summary>The world the set belongs to, null for a view's or the renderer's.</summary>
-    internal RenderWorld? World { get; }
+    public RenderWorld? World { get; }
 
     public int Count => _items.Count;
 
@@ -378,7 +377,7 @@ public abstract class RenderFeature : RenderExtension
     public SceneTargets SceneReads { get; }
 
     /// <summary>Whether the view copies its opaque colour every frame for it, read before the copy as last frame's.</summary>
-    internal virtual bool KeepsSceneColor => false;
+    public virtual bool KeepsSceneColor => false;
 
     /// <summary>
     /// Whether the feature reads the view's depth pyramid, published as <see cref="RendererOutputs.HiZ"/>, which the view
@@ -405,7 +404,7 @@ public abstract class RenderFeature : RenderExtension
     public virtual float JitterMipBias => 0;
 
     /// <summary>Whether the feature measures the exposure its views take next frame, through <see cref="FeatureBuilder.WriteExposure"/>.</summary>
-    internal virtual bool MeasuresExposure => false;
+    public virtual bool MeasuresExposure => false;
 
     /// <summary>Whether the feature runs on a view this frame, asked before the view is culled. Render thread.</summary>
     public virtual bool IsActive(in FeatureView view) => true;
@@ -432,7 +431,7 @@ public abstract class RenderFeature : RenderExtension
     private FullscreenProgram[] _programs = [];
 
     /// <summary>Adds a fullscreen program the feature draws with, so it is left out of views until the program is ready.</summary>
-    internal void Uses(FullscreenProgram program)
+    public void Uses(FullscreenProgram program)
     {
         if (Array.IndexOf(_programs, program) < 0)
             _programs = [.. _programs, program];
@@ -486,7 +485,8 @@ public abstract class ScreenLightingFeature : RenderFeature
     /// <summary>Whether the feature writes indirect irradiance as well as visibility.</summary>
     public virtual bool WritesIrradiance => false;
 
-    internal float ScaleSnapshot = 1;
+    /// <summary>The scale as copied at SubmitFrame, which the render thread reads.</summary>
+    protected internal float ScaleSnapshot = 1;
     internal bool IrradianceSnapshot;
 
     internal override void Snapshot()
@@ -786,7 +786,7 @@ public sealed class FeatureBuilder
     /// Draws onto targets of the scene the feature picks, in a framebuffer of its own, and may sample the scene's other
     /// targets in the same pass. Returns the scene to get them from.
     /// </summary>
-    internal TextureHandle WriteSceneTargets()
+    public TextureHandle WriteSceneTargets()
     {
         if (!View.SceneWritten)
             throw new InvalidOperationException($"{_pass.Name} draws onto the scene, which no earlier feature drew.");
@@ -805,11 +805,11 @@ public sealed class FeatureBuilder
     }
 
     /// <summary>How many colour targets the view's scene has.</summary>
-    internal int SceneTargetCount => View.SceneWritten ? View.Graph.ColorTargetCount(View.Scene)
+    public int SceneTargetCount => View.SceneWritten ? View.Graph.ColorTargetCount(View.Scene)
         : throw new InvalidOperationException($"{_pass.Name} asks about the scene, which no earlier feature drew.");
 
     /// <summary>Whether a feature of a group runs on the view this frame.</summary>
-    internal bool Runs(FeatureGroup group) => FeatureSelection.Has(View.Camera.Selected, group);
+    public bool Runs(FeatureGroup group) => FeatureSelection.Has(View.Camera.Selected, group);
 
     /// <summary>Writes a new colour from the current one, which later features read. <see cref="FeatureContext.Fullscreen"/> draws it.</summary>
     public void WriteColor()
@@ -913,7 +913,7 @@ public sealed class FeatureBuilder
     public void MeasureGpuTime(GpuTimer timer) => _graph.MeasureGpuTime(timer);
 
     /// <summary>The texel a feature that measures exposure writes the view's next exposure into, as R32 float.</summary>
-    internal TextureHandle WriteExposure()
+    public TextureHandle WriteExposure()
     {
         if (!_pass.Feature.MeasuresExposure || View.Camera.MeasuredExposure is not { } measured)
             throw new InvalidOperationException($"{_pass.Name} writes the view's exposure without measuring it.");
@@ -925,7 +925,7 @@ public sealed class FeatureBuilder
     /// read, and the integrated volume the view's draws read after this feature. Fresh is true when the grid was made
     /// anew, its history empty.
     /// </summary>
-    internal (TextureHandle Light, TextureHandle History, TextureHandle Volume, bool Fresh) WriteVolumetricFog(uint width, uint height, uint depth)
+    public (TextureHandle Light, TextureHandle History, TextureHandle Volume, bool Fresh) WriteVolumetricFog(uint width, uint height, uint depth)
     {
         CameraFrame camera = View.Camera;
         bool fresh = camera.EnsureVolumetricFog(width, height, depth);
@@ -1031,7 +1031,7 @@ public sealed class FeatureBuilder
     /// Reads the world's voxel volume and what lights it, filled this frame before the views, or null while the world
     /// has no box. See Graphite/VoxelLighting.glsl.
     /// </summary>
-    internal VoxelInputs? ReadVoxels()
+    public VoxelInputs? ReadVoxels()
     {
         WorldFrame world = View.Camera.World;
         WorldVoxels voxels = world.World.Voxels;
@@ -1047,11 +1047,11 @@ public sealed class FeatureBuilder
             _graph.Read(FrameGraph.Import(captured), TextureState.Sampled);
             sky = target.Cube;
         }
-        return new VoxelInputs(voxels, cache, shadow.DepthTexture!, sky, View.Frame.ShadowSampler);
+        return new VoxelInputs(data, cache, voxels.Lighting.Buffer, shadow.DepthTexture!, sky, View.Frame.ShadowSampler, voxels.Center, voxels.Extent, voxels.Header.VoxelSize);
     }
 
     /// <summary>Declares the view's layers, which every fullscreen draw binds, for a feature that neither reads the scene nor writes a colour.</summary>
-    internal void ReadViews() => ReadPostViews();
+    public void ReadViews() => ReadPostViews();
 
     // The views the fullscreen programs of a new colour read
     private void ReadPostViews() => _graph.Read(FrameGraph.Import(View.Camera.ViewBlocks.Buffer), BufferAccess.AllReads);
@@ -1130,13 +1130,13 @@ public sealed class FeatureContext
     private RenderTexture? Scene => _pass.SceneRead is { } scene ? Graph.Get(scene) : null;
 
     /// <summary>The scene the feature reads, null when it reads none.</summary>
-    internal RenderTexture? SceneRead => Scene;
+    public RenderTexture? SceneRead => Scene;
 
     /// <summary>
     /// Copies a colour written since the scene was last drawn into the scene, for a feature that draws onto the
     /// scene's targets through <see cref="FeatureBuilder.WriteSceneTargets"/>.
     /// </summary>
-    internal void CopyBack(RenderTexture scene)
+    public void CopyBack(RenderTexture scene)
     {
         if (_pass.CopyBack is not { } copy)
             return;
@@ -1169,10 +1169,6 @@ public sealed class FeatureContext
 
     /// <summary>The renderer's noise: blue noise in red, white noise in green, voronoi in blue, 256 square, mipmapped.</summary>
     public Texture Noise => _pass.Frame.Resources.Noise;
-
-    /// <summary>The SMAA reference's area and search tables, arrays of as many layers as the view has.</summary>
-    internal (TextureView Area, TextureView Search) SmaaTables => View.LayerCount > 1
-        ? (_pass.Frame.Resources.SmaaAreaLayered, _pass.Frame.Resources.SmaaSearchLayered) : (_pass.Frame.Resources.SmaaArea, _pass.Frame.Resources.SmaaSearch);
 
     /// <summary>The direction the world's sun shines, its chosen sun or else its brightest directional light, or null without one.</summary>
     public Float3? SunDirection
@@ -1287,7 +1283,7 @@ public sealed class FeatureContext
     /// Draws a fullscreen program over a framebuffer of targets the feature declared, keeping what they hold unless
     /// the ops say how each is loaded.
     /// </summary>
-    internal void Fullscreen(FullscreenProgram program, Framebuffer framebuffer, PropertySet? properties = null, TargetLoadStoreOps? ops = null)
+    public void Fullscreen(FullscreenProgram program, Framebuffer framebuffer, PropertySet? properties = null, TargetLoadStoreOps? ops = null)
         => DrawFullscreen(program, framebuffer, properties, View.LayerCount, ops ?? new TargetLoadStoreOps(AttachmentOps.Loaded, AttachmentOps.Loaded), null);
 
     /// <summary>
@@ -1306,7 +1302,7 @@ public sealed class FeatureContext
             new TargetLoadStoreOps(clear ? AttachmentOps.Clear(new Color(0f, 0f, 0f, 0f)) : AttachmentOps.Loaded, AttachmentOps.Loaded));
 
     /// <summary>Draws a procedural program's vertices over a framebuffer of targets the feature declared, each loaded as the ops say.</summary>
-    internal void DrawProcedural(FullscreenProgram program, Framebuffer framebuffer, uint vertexCount, PropertySet? properties, TargetLoadStoreOps ops)
+    public void DrawProcedural(FullscreenProgram program, Framebuffer framebuffer, uint vertexCount, PropertySet? properties, TargetLoadStoreOps ops)
     {
         if (!program.Procedural)
             throw new InvalidOperationException($"{_pass.Name} draws a fullscreen program procedurally; create it with CreateProceduralProgram.");
@@ -1780,18 +1776,18 @@ public sealed class TransmissionDepthFeature : RenderFeature
 internal static class FeatureSelection
 {
     /// <summary>A renderer's own built in features, in the order they run.</summary>
-    public static RenderFeature[] BuiltIns(RendererResources resources)
+    public static RenderFeature[] BuiltIns(RendererResources resources, Renderer renderer)
     {
         RenderFeature[] features =
         [
             new SceneClearFeature(),
             new CascadeFeature(),
-            new VolumetricFogFeature(resources),
-            new VolumetricFogSkyFeature(resources),
+            new VolumetricFogFeature(renderer),
+            new VolumetricFogSkyFeature(renderer),
             new DrawPassFeature(PassType.Prepass, RenderSlot.Prepass, group: FeatureGroup.Prepass, runsOn: ViewKinds.All),
             new GBufferFeature(resources),
             new GBufferDecalsFeature(resources),
-            new DisplacementFeature(resources),
+            new DisplacementFeature(renderer),
             new HiZFeature(resources, afterOpaques: false),
             new DeferredLightingFeature(resources),
             new DrawPassFeature(PassType.Forward, RenderSlot.Opaque, group: FeatureGroup.Opaque, runsOn: ViewKinds.All),
@@ -1877,6 +1873,8 @@ internal static class FeatureSelection
         foreach (RenderFeature feature in features)
         {
             if (!feature.EnabledSnapshot || (feature.RunsOn & kind) == 0 || (feature.Paths & path) == 0 || result.Contains(feature))
+                continue;
+            if (feature.Group is { } group && info.World?.Suppresses(group, info.Position) == true)
                 continue;
             if (feature.IsActive(info) && feature.ProgramsReady(info.LayerCount))
                 result.Add(feature);

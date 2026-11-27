@@ -90,15 +90,15 @@ public sealed class VolumetricCloudsFeature : RenderFeature, IDisposable
         BlendStateDescription two = new(default, BlendAttachmentDescription.OverrideBlend, BlendAttachmentDescription.OverrideBlend);
         _maps = Program(renderer, "MAPS");
         _march = Program(renderer, "MARCH", two, lit: true);
-        _composite = renderer.Effects.Program(this, "Clouds");
+        _composite = renderer.SharedPrograms.Fullscreen(this, "Graphite/Internal/Clouds.glsl");
         _temporal = Program(renderer, "TEMPORAL");
         _shadow = Program(renderer, "SHADOW");
         _shadowBlur = Program(renderer, "SHADOWBLUR");
         _device = renderer.Device;
-        _noise = renderer.Resources.CloudNoise;
-        _linearClamp = renderer.Resources.LinearClamp;
-        _pointClamp = renderer.Resources.PointClamp;
-        _linearRepeat = renderer.Resources.LinearRepeat;
+        _noise = renderer.GetShared(r => new CloudNoise(r.Device));
+        _linearClamp = renderer.Shared.LinearClamp;
+        _pointClamp = renderer.Shared.PointClamp;
+        _linearRepeat = renderer.Shared.LinearRepeat;
         ShadowPass = new ShadowFeature(this);
     }
 
@@ -118,7 +118,7 @@ public sealed class VolumetricCloudsFeature : RenderFeature, IDisposable
     }
 
     private FullscreenProgram Program(Renderer renderer, string pass, BlendStateDescription? blend = null, bool lit = false)
-        => renderer.Effects.Program(this, "Clouds", $"#define CLOUD_{pass} 1\n", source: false, blend: blend, lit: lit);
+        => renderer.SharedPrograms.Fullscreen(this, "Graphite/Internal/Clouds.glsl", $"#define CLOUD_{pass} 1\n", source: false, blend: blend, lit: lit);
 
     /// <summary>Height of the cloud layer's floor above zero, in meters.</summary>
     public float Altitude { get; set; } = 1500f;
@@ -234,7 +234,7 @@ public sealed class VolumetricCloudsFeature : RenderFeature, IDisposable
     /// <summary>The world whose sun and sky light the clouds take, set when the feature joins a world's features.</summary>
     public RenderWorld? World { get; set; }
 
-    internal override void Attach(object set) => World = ((ExtensionSet<RenderFeature>)set).World ?? World;
+    protected internal override void Attach(object set) => World = ((ExtensionSet<RenderFeature>)set).World ?? World;
 
     public override void Extract()
     {
@@ -635,12 +635,13 @@ internal sealed class CloudNoise : IDisposable
 
     public CloudNoise(GraphicsDevice device)
     {
-        Flat = RendererResources.LoadData(device, "CloudNoise.bin", 256, 256, mipmapped: true);
-        byte[] rgba = RendererResources.ReadData("CloudNoise3D.bin", VolumeSize * VolumeSize * VolumeSize * 4);
+        System.Reflection.Assembly assembly = typeof(CloudNoise).Assembly;
+        Flat = LibraryData.LoadTexture(device, assembly, "Graphite/Data/CloudNoise.bin", 256, 256, mipmapped: true);
+        byte[] rgba = LibraryData.Read(assembly, "Graphite/Data/CloudNoise3D.bin", VolumeSize * VolumeSize * VolumeSize * 4);
         Edges = Volume(device, "Cloud Edges", PixelFormat.R8_UNorm, Repack(rgba, 1, (texel, i, _) => texel[i]));
         Slow = Volume(device, "Cloud Slow", PixelFormat.R8_G8_UNorm, Repack(rgba, 2, (texel, i, channel) => texel[i + 2 + channel]));
         Lobes = Volume(device, "Cloud Lobes", PixelFormat.R8_UNorm, Repack(rgba, 1, (texel, i, _) => (byte)((texel[i + 2] + texel[i + 3] + 1) / 2)));
-        Curl = Volume(device, "Cloud Curl", PixelFormat.R8_G8_B8_A8_UNorm, RendererResources.ReadData("CloudCurl.bin", CurlSize * CurlSize * CurlSize * 4), CurlSize);
+        Curl = Volume(device, "Cloud Curl", PixelFormat.R8_G8_B8_A8_UNorm, LibraryData.Read(assembly, "Graphite/Data/CloudCurl.bin", CurlSize * CurlSize * CurlSize * 4), CurlSize);
     }
 
     /// <summary>Tiling 2D noise, broad gradient noise in red, 256 square.</summary>

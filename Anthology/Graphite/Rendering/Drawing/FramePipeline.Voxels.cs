@@ -179,7 +179,7 @@ internal sealed partial class FramePipeline
 /// Fills a world's voxel volume: clears it and writes its header, draws the voxel view's Voxelize passes into it, then
 /// builds the occupancy pyramid a level at a time.
 /// </summary>
-internal sealed class VoxelPass(InternalCompute clear, InternalCompute pyramid, InternalCompute cacheUpdate) : IDisposable
+internal sealed class VoxelPass(LazyCompute clear, LazyCompute pyramid, LazyCompute cacheUpdate) : IDisposable
 {
     private const uint GroupsPerRow = 1024;
     private static readonly PropertyID s_voxels = "Graphite_Voxels", s_cache = "Graphite_VoxelCache", s_lighting = "Graphite_VoxelLighting",

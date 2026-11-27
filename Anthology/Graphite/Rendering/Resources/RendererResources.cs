@@ -17,7 +17,6 @@ internal sealed class RendererResources : IDisposable
     private readonly PassVariants _prefilter;
     private GraphicsProgram? _prefilterProgram;
     private readonly GraphicsDevice _device;
-    private readonly Texture _smaaArea, _smaaSearch;
     private readonly PixelFormat[]?[] _sceneTargets = new PixelFormat[18][];
 
     public RendererResources(GraphicsDevice device, IShaderCompiler? compiler, CompilePolicy policy = CompilePolicy.Sync, Action<RendererError>? report = null)
@@ -37,22 +36,11 @@ internal sealed class RendererResources : IDisposable
             _prefilterProgram = Fullscreen(device, _prefilter);
         SkyAmbientProgram = InternalShaders.Compute(device, compiler, "Internal/SkyAmbient.glsl", policy);
         ExposureProgram = InternalShaders.Compute(device, compiler, "Internal/Exposure.glsl", policy);
-        FogLightProgram = InternalShaders.Compute(device, compiler, "Internal/VolumetricFogLight.glsl", policy, lit: true);
-        FogBlendProgram = InternalShaders.Compute(device, compiler, "Internal/VolumetricFogBlend.glsl", policy, lit: true);
-        FogIntegrateProgram = InternalShaders.Compute(device, compiler, "Internal/VolumetricFogIntegrate.glsl", policy, lit: true);
-        FogSkyProgram = FullscreenProgram.Create(device, compiler, InternalShaders.PostFragment("VolumetricFogSky"), "Graphite/VolumetricFogSky", lit: true, policy: policy);
         BlendAttachmentDescription written = BlendAttachmentDescription.OverrideBlend;
         BlendAttachmentDescription kept = written with { ColorWriteMask = ColorWriteMask.None };
         ShadingModels = new ShadingModels(device, compiler, policy, report);
         GBufferDecalsProgram = FullscreenProgram.Create(device, compiler, InternalShaders.PostFragment("GBufferDecals"), "Graphite/GBufferDecals", source: false,
             blend: BlendStateDescription.SingleOverrideBlend with { AttachmentStates = [written, written, written] }, lit: true, variant: "#define GRAPHITE_DECALS 1\n", policy: policy);
-        BlendAttachmentDescription unwritten = written with { ColorWriteMask = ColorWriteMask.None };
-        DisplacementFillProgram = FullscreenProgram.Create(device, compiler, InternalShaders.PostFragment("Displacement"), "Graphite/DisplacementFill", source: false,
-            blend: BlendStateDescription.SingleOverrideBlend with { AttachmentStates = [written, written, written, written] }, variant: "#define DISPLACE_FILL 1\n", policy: policy);
-        DisplacementDepthProgram = FullscreenProgram.Create(device, compiler, InternalShaders.PostFragment("Displacement"), "Graphite/DisplacementDepth", source: false,
-            blend: BlendStateDescription.SingleOverrideBlend with { AttachmentStates = [unwritten] }, variant: "#define DISPLACE_DEPTH 1\n", depth: true, policy: policy);
-        DisplacementGridProgram = FullscreenProgram.Create(device, compiler, InternalShaders.PostFragment("DisplacementGrid"), "Graphite/DisplacementGrid", source: false,
-            blend: BlendStateDescription.SingleOverrideBlend with { AttachmentStates = [written, written, written] }, procedural: true, depth: true, policy: policy);
         HiZProgram = FullscreenProgram.Create(device, compiler, InternalShaders.PostFragment("HiZBuild"), "Graphite/HiZBuild", source: false, policy: policy);
         HiZPackProgram = FullscreenProgram.Create(device, compiler, InternalShaders.PostFragment("HiZBuild"), "Graphite/HiZBuild", source: false, variant: "#define HIZ_PACK 1\n", policy: policy);
 
@@ -82,12 +70,6 @@ internal sealed class RendererResources : IDisposable
 
         Noise = LoadData(device, "Noise.bin", 256, 256, mipmapped: true);
         Textures.RegisterDefault("noise", Noise);
-        _smaaArea = LoadData(device, "SmaaArea.bin", 160, 560, mipmapped: false, layers: 6);
-        _smaaSearch = LoadData(device, "SmaaSearch.bin", 64, 16, mipmapped: false, layers: 6);
-        SmaaArea = factory.CreateTextureView(new TextureViewDescription(_smaaArea, arrayLayers: 1));
-        SmaaSearch = factory.CreateTextureView(new TextureViewDescription(_smaaSearch, arrayLayers: 1));
-        SmaaAreaLayered = factory.CreateTextureView(new TextureViewDescription(_smaaArea));
-        SmaaSearchLayered = factory.CreateTextureView(new TextureViewDescription(_smaaSearch));
         Dfg = LoadTable(device, "Dfg.bin", PixelFormat.R16_G16_B16_A16_Float, 128, 128, 1);
         DielectricE = LoadTable(device, "DielectricE.bin", PixelFormat.R16_Float, 32, 32, 32);
         AnisotropicDfg = LoadTable(device, "AnisotropicDfg.bin", PixelFormat.R16_G16_B16_A16_Float, 32, 16, 64);
@@ -164,14 +146,6 @@ internal sealed class RendererResources : IDisposable
     /// <summary>The noise texture: blue noise in red, white noise in green, voronoi in blue, 256 square, mipmapped.</summary>
     public Texture Noise { get; }
 
-    /// <summary>The SMAA reference's area and search tables, RGBA8 in its row order, one layer for views of one layer.</summary>
-    public TextureView SmaaArea { get; }
-    public TextureView SmaaSearch { get; }
-
-    /// <summary>The SMAA tables in each of six layers, for layered views.</summary>
-    public TextureView SmaaAreaLayered { get; }
-    public TextureView SmaaSearchLayered { get; }
-
     /// <summary>The GGX energy tables of Graphite/PBR/Energy.glsl, generated and verified by the rendering tests.</summary>
     public Texture Dfg { get; }
     public Texture DielectricE { get; }
@@ -213,14 +187,8 @@ internal sealed class RendererResources : IDisposable
     /// <summary>Filters a captured cube into a roughness mip of a prefiltered one, waiting for its compile the first time. Render thread.</summary>
     public GraphicsProgram PrefilterProgram => _prefilterProgram ??= Fullscreen(_device, _prefilter);
 
-    public InternalCompute SkyAmbientProgram { get; }
-    public InternalCompute ExposureProgram { get; }
-
-    /// <summary>The volumetric fog's lighting and integration, see VolumetricFogFeature.</summary>
-    public InternalCompute FogLightProgram { get; }
-    public InternalCompute FogBlendProgram { get; }
-    public InternalCompute FogIntegrateProgram { get; }
-    public FullscreenProgram FogSkyProgram { get; }
+    public LazyCompute SkyAmbientProgram { get; }
+    public LazyCompute ExposureProgram { get; }
 
     /// <summary>A level of a view's depth pyramid from the one below, and the copy of a level into its packed texture. See <see cref="HiZFeature"/>.</summary>
     public FullscreenProgram HiZProgram { get; }
@@ -230,11 +198,6 @@ internal sealed class RendererResources : IDisposable
 
     /// <summary>Applies the world's decals to a GBuffer, see Graphite/Internal/GBufferDecals.glsl.</summary>
     public FullscreenProgram GBufferDecalsProgram { get; }
-
-    /// <summary>The parts of a view's screen space displacement, see Graphite/Internal/Displacement.glsl and DisplacementGrid.glsl.</summary>
-    public FullscreenProgram DisplacementFillProgram { get; }
-    public FullscreenProgram DisplacementGridProgram { get; }
-    public FullscreenProgram DisplacementDepthProgram { get; }
 
     public ResourceFactory Factory => _device.ResourceFactory;
     public FullscreenProgram HiZPackProgram { get; }
@@ -250,37 +213,13 @@ internal sealed class RendererResources : IDisposable
         return program;
     }
 
-    private CloudNoise? _cloudNoise;
-
-    /// <summary>The noise volumetric clouds are built from, loaded the first time. Host thread.</summary>
-    public CloudNoise CloudNoise => _cloudNoise ??= new CloudNoise(_device);
-
     /// <summary>The first bytes of a file of the library's data.</summary>
-    internal static byte[] ReadData(string file, uint length)
-    {
-        using System.IO.Stream stream = typeof(RendererResources).Assembly.GetManifestResourceStream("Graphite/Data/" + file)
-            ?? throw new InvalidOperationException($"The library has no Data/{file}.");
-        byte[] bytes = new byte[length];
-        stream.ReadExactly(bytes);
-        return bytes;
-    }
+    internal static byte[] ReadData(string file, uint length) => LibraryData.Read(typeof(RendererResources).Assembly, "Graphite/Data/" + file, length);
 
     // An RGBA8 texture from the library's data, in its stored row order, in every layer, mipmapped on the GPU when asked,
     // its colour sRGB encoded when asked, its pixels changed by edit first when given
     internal static Texture LoadData(GraphicsDevice device, string file, uint width, uint height, bool mipmapped, uint layers = 1, bool srgb = false, Action<byte[]>? edit = null)
-    {
-        byte[] pixels = ReadData(file, width * height * 4);
-        edit?.Invoke(pixels);
-        uint mips = mipmapped ? (uint)Math.Log2(Math.Max(width, height)) + 1 : 1;
-        PixelFormat format = srgb ? PixelFormat.R8_G8_B8_A8_UNorm_SRgb : PixelFormat.R8_G8_B8_A8_UNorm;
-        Texture texture = device.ResourceFactory.CreateTexture(TextureDescription.Texture2D(width, height, mips, layers, format, TextureUsage.Sampled));
-        texture.Name = "Graphite " + System.IO.Path.GetFileNameWithoutExtension(file);
-        for (uint layer = 0; layer < layers; layer++)
-            device.UpdateTexture<byte>(texture, pixels, TextureRegion.Whole(texture, 0, layer));
-        if (mipmapped)
-            device.Record(cmd => cmd.GenerateMipmaps(texture)).Wait();
-        return texture;
-    }
+        => LibraryData.LoadTexture(device, typeof(RendererResources).Assembly, "Graphite/Data/" + file, width, height, mipmapped, layers, srgb, edit);
 
     // A half float table from the library's data, x fastest, then y, then z
     private static Texture LoadTable(GraphicsDevice device, string file, PixelFormat format, uint width, uint height, uint depth)
@@ -307,26 +246,12 @@ internal sealed class RendererResources : IDisposable
         _prefilterProgram?.Dispose();
         SkyAmbientProgram.Dispose();
         ExposureProgram.Dispose();
-        FogLightProgram.Dispose();
-        FogBlendProgram.Dispose();
-        FogIntegrateProgram.Dispose();
-        FogSkyProgram.Dispose();
         HiZProgram.Dispose();
         ShadingModels.Dispose();
         GBufferDecalsProgram.Dispose();
-        DisplacementFillProgram.Dispose();
-        DisplacementGridProgram.Dispose();
-        DisplacementDepthProgram.Dispose();
         HiZPackProgram.Dispose();
         Textures.Dispose();
         Noise.Dispose();
-        SmaaArea.Dispose();
-        SmaaSearch.Dispose();
-        SmaaAreaLayered.Dispose();
-        SmaaSearchLayered.Dispose();
-        _smaaArea.Dispose();
-        _smaaSearch.Dispose();
-        _cloudNoise?.Dispose();
         Dfg.Dispose();
         DielectricE.Dispose();
         AnisotropicDfg.Dispose();

@@ -10,7 +10,7 @@ namespace Prowl.Graphite.Rendering;
 /// command's instances and writes them where its record starts them, see Graphite/Internal/Cull.glsl. After the upload
 /// and before the views.
 /// </summary>
-internal sealed class GpuCullPass(InternalCompute program, GeometryPool geometry) : IDisposable
+internal sealed class GpuCullPass(LazyCompute program, GeometryPool geometry) : IDisposable
 {
     private static readonly PropertyID s_objects = "Cull_Objects", s_shapes = "Cull_Shapes", s_bounds = "Cull_Bounds",
         s_transforms = "Cull_Transforms", s_chunks = "Cull_Chunks", s_view = "Cull_View", s_maps = "Cull_Maps", s_commands = "Cull_Commands",

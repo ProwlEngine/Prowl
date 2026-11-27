@@ -12,6 +12,10 @@ layout(location = 1) out vec4 outMaterial;
 uniform GRAPHITE_SCREEN_TEXTURE Graphite_GBufferOffset;
 uniform float Graphite_GBufferDisplaced;
 
+// The view's screen space mask over the sun's shadow, while Graphite_HasSunShadowMask is 1
+uniform GRAPHITE_SCREEN_TEXTURE Graphite_SunShadowMask;
+uniform float Graphite_HasSunShadowMask;
+
 // The view's screen space reflections, in a how far the trace is trusted, while Graphite_HasReflections is 1
 uniform GRAPHITE_SCREEN_TEXTURE Graphite_Reflections;
 uniform float Graphite_HasReflections;
@@ -29,9 +33,8 @@ void main()
     float depth = Graphite_GBufferDepthAt(pixel);
     Graphite_ViewData view = Graphite_View();
     vec3 relative = Graphite_RelativeFromDepth(view, gl_FragCoord.xy * view.screen.zw, depth);
-#ifdef GRAPHITE_CONTACT_SHADOWS
-    graphite_FindSunContact(relative, Graphite_OctDecode(Graphite_Fetch(Graphite_GBufferNormal, pixel, 0).rg), (uint(surface.a * 255.0 + 0.5) & 128u) != 0u);
-#endif
+    if (Graphite_HasSunShadowMask > 0.5)
+        graphite_SunShadowMask = Graphite_Fetch(Graphite_SunShadowMask, pixel, 0).r;
     Graphite_GBuffer g = Graphite_ReadGBuffer(source, surface);
     if (source != pixel)
         g.normal = Graphite_OctDecode(Graphite_Fetch(Graphite_GBufferNormal, pixel, 0).rg);

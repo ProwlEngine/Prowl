@@ -33,6 +33,8 @@ internal sealed class Demo : IDisposable
         Post.Add(Tonemap);
         Gi = new WorldGI(Renderer) { Enabled = false };
         Post.Add(Gi);
+        Contact = new ContactShadows(Renderer) { Enabled = false };
+        Post.Add(Contact);
         Reflections = new ScreenSpaceReflections(Renderer) { Enabled = false };
         Post.Add(Reflections);
         Voxels = new VoxelDebug(Renderer) { Enabled = false };
@@ -57,6 +59,7 @@ internal sealed class Demo : IDisposable
     public GBufferDebug GBuffer { get; }
     public WorldGI Gi { get; }
     public ScreenSpaceReflections Reflections { get; }
+    public ContactShadows Contact { get; }
 
     /// <summary>A Graphite/PBR material, on <see cref="Surface"/> when it shows a grid, or on a surface model with a lobe of its own.</summary>
     public Material CreatePbr(Float3 color, float metallic = 0f, float roughness = 0.6f, Float3 emission = default, float grid = 0f, Shader? model = null)

@@ -97,8 +97,7 @@ internal static class ShadingModelLibrary
 /// The shading models of a renderer, the library's and the ones its host loaded, which only its own shaders build
 /// on, and the lighting program its deferred views draw, written from them: each pixel is lit as its own model says.
 /// It holds every model from the start, so nothing compiles as surfaces come into view. The program has a form for
-/// each PBR tier, with and without contact shadows: FULL without them is made at the start, the others the first
-/// time a view draws with them. Only loading or
+/// each PBR tier: FULL is made at the start, the others the first time a view draws with them. Only loading or
 /// replacing a model writes it anew, compiled as the renderer's <see cref="CompilePolicy"/> says, and views keep the
 /// last one until it is ready. A program that fails to compile is reported and leaves out the models
 /// new to it, whose pixels are lit as Lit until a document that compiles replaces them. The models' code shares one
@@ -116,21 +115,13 @@ public sealed class ShadingModels : IDisposable
     private readonly Dictionary<string, ShadingModelDefinition> _loaded = new(StringComparer.Ordinal);
     private readonly Dictionary<string, uint> _ids = new(StringComparer.Ordinal);
     private readonly Action<RendererError>? _report;
-    private const string Contact = "#define GRAPHITE_CONTACT_SHADOWS 1\n";
-
-    // The three tiers, then the three again with contact shadows
-    private readonly Tier[] _tiers =
-    [
-        new(""), new("#define PBR_TIER_LITE 1\n"), new("#define PBR_TIER_MAX 1\n"),
-        new(Contact), new("#define PBR_TIER_LITE 1\n" + Contact), new("#define PBR_TIER_MAX 1\n" + Contact),
-    ];
+    private readonly Tier[] _tiers = [new(""), new("#define PBR_TIER_LITE 1\n"), new("#define PBR_TIER_MAX 1\n")];
     private ShadingModel[] _lit, _wantedModels;
     private string _wanted;
     private string? _failed;
     private int _version, _built;
 
-    // The program of one PBR tier, with or without contact shadows: the one in use with the source it was written
-    // from, and the one compiling to replace it
+    // The program of one PBR tier: the one in use with the source it was written from, and the one compiling to replace it
     private sealed class Tier(string variant)
     {
         public readonly string Variant = variant;
@@ -169,13 +160,12 @@ public sealed class ShadingModels : IDisposable
     internal FullscreenProgram Program => _tiers[0].Program!;
 
     /// <summary>
-    /// The lighting program for a view's PBR tier, the value of its PBR_TIER keyword, with or without contact shadows,
-    /// made the first time it is asked for. Null while it is not ready for a view of this many layers, or failed.
+    /// The lighting program for a view's PBR tier, the value of its PBR_TIER keyword, made the first time it is asked for. Null while it is not ready for a view of this many layers, or failed.
     /// Render thread.
     /// </summary>
-    internal FullscreenProgram? For(string? tier, bool contactShadows, int layers)
+    internal FullscreenProgram? For(string? tier, int layers)
     {
-        Tier slot = _tiers[tier switch { "LITE" => 1, "MAX" => 2, _ => 0 } + (contactShadows ? 3 : 0)];
+        Tier slot = _tiers[tier switch { "LITE" => 1, "MAX" => 2, _ => 0 }];
         if (slot.Program == null)
         {
             if (_wanted == _failed)

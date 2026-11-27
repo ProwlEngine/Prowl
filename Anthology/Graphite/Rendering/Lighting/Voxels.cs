@@ -91,7 +91,13 @@ internal readonly record struct VoxelRegion(Int3 Min, Int3 Max)
 }
 
 /// <summary>A world's voxel volume as a view's pass reads it, with its radiance cache, which the pass may add entries to, the sun shadow over the box and the sky capture.</summary>
-internal readonly record struct VoxelInputs(WorldVoxels Voxels, DeviceBuffer Cache, Texture SunShadow, Texture Sky, Sampler ShadowSampler);
+/// <param name="Voxels">The voxels, laid out as Graphite/VoxelData.glsl reads them.</param>
+/// <param name="Lighting">What lights the voxels, see Graphite/VoxelLighting.glsl.</param>
+/// <param name="Center">The middle of the box in the world.</param>
+/// <param name="Extent">The box's size in metres.</param>
+/// <param name="VoxelSize">The edge of one voxel in metres.</param>
+public readonly record struct VoxelInputs(DeviceBuffer Voxels, DeviceBuffer Cache, DeviceBuffer Lighting, Texture SunShadow, Texture Sky, Sampler ShadowSampler,
+    Double3 Center, Float3 Extent, float VoxelSize);
 
 /// <summary>What lights the voxels as the shaders read it, 112 bytes, matching Graphite_VoxelLightingData. Light is pre-exposed by the header's emission exposure.</summary>
 [StructLayout(LayoutKind.Sequential)]

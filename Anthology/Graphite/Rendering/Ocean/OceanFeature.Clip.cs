@@ -45,7 +45,7 @@ public sealed partial class OceanFeature
 
     private const float ClipInput = 0f, ClipHeight = 1f, ClipClear = 2f;
 
-    private InternalCompute _clipProgram = null!;
+    private LazyCompute _clipProgram = null!;
     private readonly List<ClipPush> _clipDraws = new();
     private ClipPush _clipBase;
     private bool _clipCleared;
@@ -64,7 +64,7 @@ public sealed partial class OceanFeature
 
     private void CreateClip(Renderer renderer)
     {
-        _clipProgram = renderer.Effects.Compute("Internal/OceanClip.glsl");
+        _clipProgram = renderer.SharedPrograms.Compute("Internal/OceanClip.glsl");
         Clip = renderer.Device.ResourceFactory.CreateTexture(TextureDescription.Texture2D(DepthResolution, DepthResolution, 1, DepthSlices, PixelFormat.R16_G16_Float, TextureUsage.Storage | TextureUsage.Sampled));
         Clip.Name = "Ocean Clip";
         LocalPass = new LocalFeature(this, renderer.Resources.LinearRepeat, renderer.Resources.LinearClamp);

@@ -273,7 +273,7 @@ public sealed class Renderer : IDisposable
         _materials = new MaterialSystem(device, _store, Textures) { Reporter = Report };
         _globals = new GlobalRegistry(device, _store, Textures) { Reporter = Report };
         _programs.Reporter = Report;
-        _frame = new FramePipeline(device, _store, compiler, _uploader, _geometry, _materials, _globals, _programs, Resources, Report, _options.Compile) { ShadowFormat = _options.ShadowFormat };
+        _frame = new FramePipeline(device, _store, compiler, _uploader, _geometry, _materials, _globals, _programs, Resources, this, Report, _options.Compile) { ShadowFormat = _options.ShadowFormat };
         FrameFeatures.Add(new DeformFeature());
         FrameFeatures.Add(new ReadbackFeature());
         _frame.Programs.ShadowBias = (_options.ShadowConstantBias, _options.ShadowSlopeBias);
@@ -326,6 +326,11 @@ public sealed class Renderer : IDisposable
 
     /// <summary>The GPU resources the frames, views and effects share.</summary>
     internal RendererResources Resources { get; }
+
+    private SharedResources? _shared;
+
+    /// <summary>The samplers, noise and formats features share.</summary>
+    public SharedResources Shared => _shared ??= new SharedResources(Resources);
 
     /// <summary>The shading models deferred views light their GBuffer by, which a host may add to.</summary>
     public ShadingModels ShadingModels => Resources.ShadingModels;
@@ -758,8 +763,8 @@ public sealed class Renderer : IDisposable
     /// <see cref="FeatureContext.DrawProcedural"/>. Its code holds both stages, the vertex one under GRAPHITE_VERTEX, and
     /// reads the view through Graphite/Internal/PostView.glsl as fullscreen programs do.
     /// </summary>
-    public FullscreenProgram CreateProceduralProgram(string code, string name = "Procedural", BlendStateDescription? blend = null, bool lit = false)
-        => FullscreenProgram.Create(Device, _compiler, code, name, false, blend, lit, procedural: true, policy: _options.Compile, report: Report);
+    public FullscreenProgram CreateProceduralProgram(string code, string name = "Procedural", BlendStateDescription? blend = null, bool lit = false, bool depth = false)
+        => FullscreenProgram.Create(Device, _compiler, code, name, false, blend, lit, procedural: true, depth: depth, policy: _options.Compile, report: Report);
 
     /// <summary>
     /// Creates a compute program from code holding a Compute block, as the library's compute files do. A lit one binds
@@ -778,7 +783,18 @@ public sealed class Renderer : IDisposable
         return program;
     }
 
-    internal InternalCompute CreateInternalCompute(string file) => InternalShaders.Compute(Device, _compiler, file, _options.Compile);
+    /// <summary>
+    /// Compiles code holding a Vertex and a Fragment block into the stages of a graphics program, for a feature drawing
+    /// geometry of a layout of its own: it sets the description's vertex layouts and states, then makes the program
+    /// from the device.
+    /// </summary>
+    public ShaderDescription CompileGraphicsProgram(string code, string name = "Graphics")
+    {
+        ShaderPass pass = new() { State = new PassState(), Source = code, SourceName = name };
+        return pass.Variants(_compiler, Device.BackendType).Require();
+    }
+
+    internal LazyCompute CreateLazyCompute(string file, bool lit) => InternalShaders.Compute(Device, _compiler, file, _options.Compile, lit);
 
     private int _frameCount;
     private readonly List<Double3> _cameras = new();
@@ -811,15 +827,31 @@ public sealed class Renderer : IDisposable
         _removedWorlds.Clear();
     }
 
-    private EffectResources? _effects;
+    private SharedPrograms? _sharedPrograms;
 
-    /// <summary>The stock effects' programs and samplers, made the first time an effect asks and freed with the renderer.</summary>
-    internal EffectResources Effects
+    /// <summary>The programs features build from shader library files, made the first time one asks and freed with the renderer.</summary>
+    public SharedPrograms SharedPrograms
     {
         get
         {
             lock (this)
-                return _effects ??= new EffectResources(this);
+                return _sharedPrograms ??= new SharedPrograms(this);
+        }
+    }
+
+    private readonly Dictionary<Type, object> _sharedObjects = new();
+
+    /// <summary>
+    /// What a kind of feature keeps once for the renderer, such as its lookup tables, made the first time it is asked
+    /// for and disposed with the renderer where it is disposable.
+    /// </summary>
+    public T GetShared<T>(Func<Renderer, T> create) where T : class
+    {
+        lock (_sharedObjects)
+        {
+            if (!_sharedObjects.TryGetValue(typeof(T), out object? shared))
+                _sharedObjects[typeof(T)] = shared = create(this);
+            return (T)shared;
         }
     }
 
@@ -872,7 +904,10 @@ public sealed class Renderer : IDisposable
         }
         _worlds.Clear();
         _frame.Dispose();
-        _effects?.Dispose();
+        _sharedPrograms?.Dispose();
+        foreach (object shared in _sharedObjects.Values)
+            (shared as IDisposable)?.Dispose();
+        _sharedObjects.Clear();
         _uploader.Dispose();
         _store.Dispose();
         Resources.Dispose();

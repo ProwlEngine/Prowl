@@ -298,7 +298,6 @@ internal sealed class DemoWindow
             keywords.Add(GlobalAxis.PbrTier[_tier]);
         view.Keywords = keywords.Count == 0 ? null : [.. keywords];
         view.Path = _deferred ? RenderPath.Deferred : RenderPath.Forward;
-        view.ContactShadows = _contactShadows ? new ContactShadows(0.05f, LocalLights: true) : default;
         view.DisplacementCell = _displacementCell;
         _demo.GBuffer.Enabled = _gbufferView >= 0;
         _demo.GBuffer.Mode = (GBufferDebugMode)Math.Max(_gbufferView, 0);
@@ -306,6 +305,7 @@ internal sealed class DemoWindow
         _demo.Voxels.Mode = (VoxelDebugMode)Math.Max(_voxelView, 0);
         _demo.Gi.Enabled = _gi;
         _demo.Reflections.Enabled = _reflections;
+        _demo.Contact.Enabled = _contactShadows;
         _demo.Gi.ScreenTrace = _giScreenTrace;
         _demo.Gi.DirectionalOcclusion = _giOcclusion;
         if (_giSpatialPasses >= 0)

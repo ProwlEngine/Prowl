@@ -44,15 +44,15 @@ internal static class InternalShaders
     /// A compute program of a library file, compiled under the policy. A lit one binds the renderer's frame and view
     /// tables whole, as lit fullscreen programs do, and its file declares "#pragma resource_set 3" and GRAPHITE_NO_OBJECT.
     /// </summary>
-    public static InternalCompute Compute(GraphicsDevice device, IShaderCompiler? compiler, string file, CompilePolicy policy = CompilePolicy.Sync, bool lit = false)
+    public static LazyCompute Compute(GraphicsDevice device, IShaderCompiler? compiler, string file, CompilePolicy policy = CompilePolicy.Sync, bool lit = false)
         => new(device, FilePass(file).Variants(compiler, device.BackendType), ShaderLibrary.Prefix + file, policy, lit);
 }
 
 /// <summary>
-/// A compute program of the renderer's library. Async compiles it on a worker at Fallback priority and its first use
+/// A compute program of the shader library. Async compiles it on a worker at Fallback priority and its first use
 /// waits for that, the other policies compile it when made.
 /// </summary>
-internal sealed class InternalCompute : IDisposable
+public sealed class LazyCompute : IDisposable
 {
     private readonly GraphicsDevice _device;
     private readonly PassVariants _variants;
@@ -61,7 +61,7 @@ internal sealed class InternalCompute : IDisposable
 
     private readonly bool _lit;
 
-    public InternalCompute(GraphicsDevice device, PassVariants variants, string name, CompilePolicy policy, bool lit = false)
+    internal LazyCompute(GraphicsDevice device, PassVariants variants, string name, CompilePolicy policy, bool lit = false)
     {
         _device = device;
         _variants = variants;

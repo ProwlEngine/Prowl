@@ -22,15 +22,19 @@ public sealed class VolumetricFogFeature : RenderFeature
         public int Frame;
     }
 
-    private readonly RendererResources _resources;
+    private readonly LazyCompute _light, _blend, _integrate;
+    private readonly Sampler _linearClamp;
     private readonly PropertySet _properties = new();
 
-    internal VolumetricFogFeature(RendererResources resources) : base(RenderSlot.AfterPrepass, 0, FeatureGroup.VolumetricFog, ViewKinds.Cameras)
-        => _resources = resources;
+    internal VolumetricFogFeature(Renderer renderer) : base(RenderSlot.AfterPrepass, 0, FeatureGroup.VolumetricFog, ViewKinds.Cameras)
+    {
+        _light = renderer.SharedPrograms.Compute("Internal/VolumetricFogLight.glsl", lit: true);
+        _blend = renderer.SharedPrograms.Compute("Internal/VolumetricFogBlend.glsl", lit: true);
+        _integrate = renderer.SharedPrograms.Compute("Internal/VolumetricFogIntegrate.glsl", lit: true);
+        _linearClamp = renderer.Shared.LinearClamp;
+    }
 
-    // Under the sea the ocean's underwater pass fogs the view instead
-    public override bool IsActive(in FeatureView view)
-        => view.World is { } world && world.Lighting.Environment.VolumetricFog.Enabled && world.Underwater?.Below(view.Position) != true;
+    public override bool IsActive(in FeatureView view) => view.World != null && view.Environment.VolumetricFog.Enabled;
 
     public override void Setup(FeatureBuilder builder, in FeatureView view)
     {
@@ -38,14 +42,14 @@ public sealed class VolumetricFogFeature : RenderFeature
         State state = builder.GetViewState<State>();
         state.Cells = (view.Width + 7) / 8;
         state.Rows = (view.Height + 7) / 8;
-        state.Slices = (uint)Math.Clamp(view.World!.Lighting.Environment.VolumetricFog.Slices, 16, 256);
+        state.Slices = (uint)Math.Clamp(view.Environment.VolumetricFog.Slices, 16, 256);
         (state.Light, state.History, state.Volume, state.Fresh) = builder.WriteVolumetricFog(state.Cells, state.Rows, state.Slices * (uint)Math.Max(view.LayerCount, 1));
     }
 
     public override void Render(FeatureContext context)
     {
         State state = context.GetViewState<State>();
-        VolumetricFogDesc fog = context.View.World!.Lighting.Environment.VolumetricFog;
+        VolumetricFogDesc fog = context.View.Environment.VolumetricFog;
         Texture light = context.Get(state.Light).ColorTextures[0], history = context.Get(state.History).ColorTextures[0], volume = context.Get(state.Volume).ColorTextures[0];
         CommandBuffer cmd = context.Command;
         int frame = state.Frame++;
@@ -56,7 +60,7 @@ public sealed class VolumetricFogFeature : RenderFeature
         for (int layer = 0; layer < context.View.LayerCount; layer++)
         {
             float first = layer * state.Slices;
-            cmd.SetComputeShader(_resources.FogLightProgram.Program);
+            cmd.SetComputeShader(_light.Program);
             context.BindLighting(layer);
             _properties.Clear();
             _properties.SetTexture("Fog_Raw", volume);
@@ -66,18 +70,18 @@ public sealed class VolumetricFogFeature : RenderFeature
             cmd.Dispatch(groupsX, groupsY, groupsZ);
             cmd.ComputeBarrier();
 
-            cmd.SetComputeShader(_resources.FogBlendProgram.Program);
+            cmd.SetComputeShader(_blend.Program);
             context.BindLighting(layer);
             _properties.Clear();
             _properties.SetTexture("Fog_Raw", volume);
             _properties.SetTexture("Fog_Light", light);
-            _properties.SetTexture("Fog_History", history, _resources.LinearClamp);
+            _properties.SetTexture("Fog_History", history, _linearClamp);
             _properties.SetFloat4("Fog_Grid", new Float4(state.Cells, state.Rows, first, keep));
             cmd.SetProperties(_properties);
             cmd.Dispatch(groupsX, groupsY, groupsZ);
             cmd.ComputeBarrier();
 
-            cmd.SetComputeShader(_resources.FogIntegrateProgram.Program);
+            cmd.SetComputeShader(_integrate.Program);
             context.BindLighting(layer);
             _properties.Clear();
             _properties.SetTexture("Fog_Light", light);
@@ -109,15 +113,17 @@ public sealed class VolumetricFogFeature : RenderFeature
 /// </summary>
 public sealed class VolumetricFogSkyFeature : RenderFeature
 {
-    private readonly RendererResources _resources;
+    private readonly FullscreenProgram _program;
+    private readonly Sampler _pointClamp;
     private readonly PropertySet _properties = new();
 
-    internal VolumetricFogSkyFeature(RendererResources resources) : base(RenderSlot.AfterTransparents, -1000, FeatureGroup.VolumetricFogSky, ViewKinds.Cameras)
-        => _resources = resources;
+    internal VolumetricFogSkyFeature(Renderer renderer) : base(RenderSlot.AfterTransparents, -1000, FeatureGroup.VolumetricFogSky, ViewKinds.Cameras)
+    {
+        _program = renderer.SharedPrograms.Fullscreen(this, "Graphite/Internal/VolumetricFogSky.glsl", lit: true);
+        _pointClamp = renderer.Shared.PointClamp;
+    }
 
-    // Under the sea the ocean's underwater pass fogs the view instead
-    public override bool IsActive(in FeatureView view)
-        => view.World is { } world && world.Lighting.Environment.VolumetricFog.Enabled && world.Underwater?.Below(view.Position) != true;
+    public override bool IsActive(in FeatureView view) => view.World != null && view.Environment.VolumetricFog.Enabled;
 
     public override void Setup(FeatureBuilder builder, in FeatureView view)
     {
@@ -128,7 +134,7 @@ public sealed class VolumetricFogSkyFeature : RenderFeature
 
     public override void Render(FeatureContext context)
     {
-        _properties.SetTexture("_FogSceneDepth", context.Depth!, _resources.PointClamp);
-        context.Fullscreen(_resources.FogSkyProgram, _properties);
+        _properties.SetTexture("_FogSceneDepth", context.Depth!, _pointClamp);
+        context.Fullscreen(_program, _properties);
     }
 }

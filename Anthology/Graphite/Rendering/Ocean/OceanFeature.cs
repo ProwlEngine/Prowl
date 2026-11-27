@@ -40,7 +40,7 @@ public sealed partial class OceanFeature : FrameFeature, IDisposable
         public float DeltaTime, Coverage, Strength, Fade, Pad;
     }
 
-    private readonly InternalCompute _spectrum, _update, _fft;
+    private readonly LazyCompute _spectrum, _update, _fft;
     private readonly Texture _initial, _spectrumA, _spectrumB;
     private readonly TextureView _displacementTop, _slopesTop, _foamTop;
     private float _foamCoverage, _foamStrength, _foamFade;
@@ -58,9 +58,9 @@ public sealed partial class OceanFeature : FrameFeature, IDisposable
         if (resolution is < 16 or > 256 || !int.IsPow2(resolution))
             throw new ArgumentOutOfRangeException(nameof(resolution), "The resolution is a power of two from 16 to 256.");
         Resolution = resolution;
-        _spectrum = renderer.Effects.Compute("Internal/OceanSpectrum.glsl");
-        _update = renderer.Effects.Compute("Internal/OceanUpdate.glsl");
-        _fft = renderer.Effects.Compute("Internal/OceanFft.glsl");
+        _spectrum = renderer.SharedPrograms.Compute("Internal/OceanSpectrum.glsl");
+        _update = renderer.SharedPrograms.Compute("Internal/OceanUpdate.glsl");
+        _fft = renderer.SharedPrograms.Compute("Internal/OceanFft.glsl");
 
         ResourceFactory factory = renderer.Device.ResourceFactory;
         Texture Array(string name, PixelFormat format, TextureUsage usage, uint mips = 1)

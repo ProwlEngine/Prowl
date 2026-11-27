@@ -98,7 +98,7 @@ internal sealed partial class FramePipeline : IDisposable
 
     private readonly Uploader _uploader;
 
-    public FramePipeline(GraphicsDevice device, RenderStore store, IShaderCompiler? compiler, Uploader uploader, GeometryPool geometry, MaterialSystem materials, GlobalRegistry globals, DrawPrograms programs, RendererResources resources, Action<RendererError> report, CompilePolicy policy = CompilePolicy.Async)
+    public FramePipeline(GraphicsDevice device, RenderStore store, IShaderCompiler? compiler, Uploader uploader, GeometryPool geometry, MaterialSystem materials, GlobalRegistry globals, DrawPrograms programs, RendererResources resources, Renderer renderer, Action<RendererError> report, CompilePolicy policy = CompilePolicy.Async)
     {
         Report = report;
         _device = device;
@@ -116,7 +116,7 @@ internal sealed partial class FramePipeline : IDisposable
         resources.ShadingModels.Retire = _retired.Add;
         programs.Freed += Programs.Drop;
         _graph = new FrameGraph(device, "Graphite");
-        BuiltIns = FeatureSelection.BuiltIns(resources);
+        BuiltIns = FeatureSelection.BuiltIns(resources, renderer);
         Buffers = new FrameBuffers();
         _counts = new ProviderCountsPass(this);
         _upload = new UploadPass(uploader, store);
