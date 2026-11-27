@@ -160,13 +160,6 @@ full past of that library.
                 </a>
             </td>
             <td align="center">
-                <a href="https://github.com/BayouBushBaby">
-                    <img src="https://avatars.githubusercontent.com/u/33499280?v=4" width="100;" alt="BayouBushBaby"/>
-                    <br />
-                    <sub><b>BayouBushBaby</b></sub>
-                </a>
-            </td>
-            <td align="center">
                 <a href="https://github.com/Fauxgott">
                     <img src="https://avatars.githubusercontent.com/u/258977954?v=4" width="100;" alt="Fauxgott"/>
                     <br />
@@ -180,8 +173,6 @@ full past of that library.
                     <sub><b>Matt Runion</b></sub>
                 </a>
             </td>
-		</tr>
-		<tr>
             <td align="center">
                 <a href="https://github.com/mberthaud">
                     <img src="https://avatars.githubusercontent.com/u/26536123?v=4" width="100;" alt="mberthaud"/>
