@@ -346,8 +346,8 @@ internal static class BuiltInShortcuts
         ShortcutManager.Register("Scene/ToolTranslate", "Translate Tool", KeyCode.W);
         ShortcutManager.Register("Scene/ToolRotate", "Rotate Tool", KeyCode.E);
         ShortcutManager.Register("Scene/ToolScale", "Scale Tool", KeyCode.R);
-        ShortcutManager.Register("Scene/ToolUniversal", "Universal Tool", KeyCode.T);
-        ShortcutManager.Register("Scene/ToolRect", "Rect Tool", KeyCode.Y);
+        ShortcutManager.Register("Scene/ToolUniversal", "Universal Tool", KeyCode.Y);
+        ShortcutManager.Register("Scene/ToolRect", "Rect Tool", KeyCode.T);
         ShortcutManager.Register("Scene/ToggleMaximize", "Toggle Maximize", KeyCode.F3);
         ShortcutManager.Register("Scene/Rename", "Rename Selected", KeyCode.F2);
         ShortcutManager.Register("Scene/FrameSelected", "Frame Selected", KeyCode.KeypadDecimal);
