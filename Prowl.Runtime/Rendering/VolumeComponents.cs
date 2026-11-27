@@ -189,6 +189,32 @@ public sealed class GlobalIllumination : VolumeComponent<G.WorldGI>
     }
 }
 
+/// <summary>
+/// Short shadows marched through a deferred camera's depth toward the sun, for the small gaps shadow maps miss. Off
+/// at zero length.
+/// </summary>
+[VolumeComponentMenu("Lighting/Contact Shadows")]
+public sealed class ContactShadows : VolumeComponent<G.ContactShadows>
+{
+    /// <summary>How far a ray reaches, as a part of the pixel's distance from the camera.</summary>
+    [Range(0f, 0.2f)] public VolumeParameter<float> Length = new(0f);
+    [Range(1f, 64f)] public VolumeParameter<int> Steps = new(8);
+
+    /// <summary>How thick what the depth shows is taken to be, as a part of the pixel's distance from the camera.</summary>
+    [Range(0f, 0.2f)] public VolumeParameter<float> Thickness = new(0.02f);
+
+    public override bool IsActive => Length.Value > 0f;
+
+    protected override G.ContactShadows CreateFeature(G.Renderer renderer) => new(renderer);
+
+    protected override void Apply(G.ContactShadows feature, Camera camera)
+    {
+        feature.Length = Length;
+        feature.Steps = Steps;
+        feature.Thickness = Thickness;
+    }
+}
+
 /// <summary>Stochastic screen space reflections on a deferred camera's GBuffer surfaces.</summary>
 [VolumeComponentMenu("Lighting/Screen Space Reflections")]
 public sealed class ScreenSpaceReflections : VolumeComponent<G.ScreenSpaceReflections>
