@@ -124,6 +124,25 @@ public enum EarlyDepth : byte
     None,
 }
 
+/// <summary>What transparent items sort back to front by.</summary>
+public enum TransparencySortMode : byte
+{
+    /// <summary>Orthographic for an orthographic view, perspective otherwise.</summary>
+    Default,
+
+    /// <summary>The distance from the camera to the item's centre.</summary>
+    Perspective,
+
+    /// <summary>The depth of the item's centre along the view direction.</summary>
+    Orthographic,
+
+    /// <summary>How far the item's centre is along <see cref="TransparencySort.Axis"/>, furthest drawn first.</summary>
+    CustomAxis,
+}
+
+/// <summary>A view's transparency sort, its axis read by <see cref="TransparencySortMode.CustomAxis"/> alone.</summary>
+public readonly record struct TransparencySort(TransparencySortMode Mode = TransparencySortMode.Default, Float3 Axis = default);
+
 /// <summary>The paths a feature works in.</summary>
 [Flags]
 public enum RenderPaths : byte
@@ -140,6 +159,9 @@ public sealed class RenderView : IDisposable
 
     /// <summary>Which GBuffer surfaces a deferred view's prepass draws first.</summary>
     public EarlyDepth EarlyDepth { get; set; }
+
+    /// <summary>What the view sorts transparent items back to front by.</summary>
+    public TransparencySort TransparencySort { get; set; }
 
     /// <summary>
     /// The pixels a cell of the view's screen space displacement spans, 2 by default, 0 for none: surfaces that keep a
@@ -310,6 +332,7 @@ public sealed class RenderView : IDisposable
             LodTransition = LodTransition,
             Path = Path,
             EarlyDepth = EarlyDepth,
+            TransparencySort = TransparencySort,
             DisplacementCell = DisplacementCell,
             DisplacementCreaseBlend = DisplacementCreaseBlend,
             ClearColor = ClearColor,
@@ -354,6 +377,7 @@ internal struct ViewDesc
     public LodTransition? LodTransition;
     public RenderPath Path;
     public EarlyDepth EarlyDepth;
+    public TransparencySort TransparencySort;
     public int DisplacementCell;
     public int DisplacementCreaseBlend;
     public Float4 ClearColor;

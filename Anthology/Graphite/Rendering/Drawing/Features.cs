@@ -1918,6 +1918,9 @@ public readonly struct ProviderView
     /// <summary>Whether any layer of the view sees a sphere.</summary>
     public bool Sees(Double3 center, float radius) => _frustum.Sphere(center, radius);
 
+    /// <summary>How far back the view's transparency sort puts a point, for <see cref="DrawItem.SortDepth"/>.</summary>
+    public float SortDepth(Double3 point) => _frustum.SortDepth(point);
+
     internal CullFrustum Frustum => _frustum;
 }
 
@@ -1933,8 +1936,11 @@ public struct DrawItem
     public uint ObjectId;
     public RenderableFlags Flags;
 
-    /// <summary>The distance transparent items sort back to front by, NaN for the distance to the transform's position.</summary>
+    /// <summary>How far back a transparent item sorts, larger drawn first, NaN for the view's sort of the transform's position. See <see cref="ProviderView.SortDepth"/>.</summary>
     public float SortDepth;
+
+    /// <summary>Where a transparent item draws among the others, see <see cref="RenderableDesc.Sort"/>.</summary>
+    public TransparentOrder Sort;
 
     /// <summary>Where the item is lit by the world's light probes, none for ambient light only.</summary>
     public ProbeAnchorHandle Probe;
@@ -2089,7 +2095,8 @@ public sealed class DrawItemSink
         uint objectIndex = firstObject ?? _world.World.Render.AddTransientObject(item.Transform, Attributes(item));
         bool mirrored = RenderWorld.RenderSide.Determinant3(item.Transform) < 0;
         Double4x4 m = item.Transform;
-        float depth = float.IsNaN(item.SortDepth) ? Length(_frustum.Relative(new Double3(m.c3.X, m.c3.Y, m.c3.Z))) : item.SortDepth;
+        float depth = float.IsNaN(item.SortDepth) ? _frustum.SortDepth(new Double3(m.c3.X, m.c3.Y, m.c3.Z)) : item.SortDepth;
+        TransparentOrder sort = item.Sort;
 
         BucketSet.ChunkRef[] refs = Chunks(placement, subMesh);
         PrimitiveTopology topology = placement.SubMeshes[subMesh].Topology;
@@ -2112,6 +2119,7 @@ public sealed class DrawItemSink
             entry.SubMesh = (uint)subMesh;
             entry.Chunks = refs;
             entry.Depth = depth;
+            entry.Sort = sort;
             entry.MaterialSlot = material.Slot;
             entry.Shared = shared;
             entry.Consecutive = firstObject.HasValue;
@@ -2160,8 +2168,6 @@ public sealed class DrawItemSink
         }
         return bySubMesh[subMesh] = [.. chunks];
     }
-
-    private static float Length(Float3 v) => MathF.Sqrt(v.X * v.X + v.Y * v.Y + v.Z * v.Z);
 
     private BucketSet.ItemDraw Next()
     {

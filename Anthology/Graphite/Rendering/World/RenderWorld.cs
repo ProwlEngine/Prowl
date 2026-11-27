@@ -107,10 +107,14 @@ public struct TransientDraw
 }
 
 /// <summary>
-/// Where a transparent renderable draws: higher orders draw later, before the render queue and depth decide. Renderables
-/// sharing a nonzero group draw together, ranked as one item at the anchor, then among themselves by inner order and depth.
+/// Where a transparent renderable draws: higher orders draw later, before the render queue and depth decide. With groups,
+/// the outermost first, it ranks as its groups do at each level, then by its own order among the group's other members.
+/// A groups array is shared by every member and never changed once given, a new array for any change.
 /// </summary>
-public readonly record struct TransparentOrder(int Order = 0, uint Group = 0, Double3 Anchor = default, int InnerOrder = 0);
+public readonly record struct TransparentOrder(int Order = 0, SortGroupLevel[]? Groups = null);
+
+/// <summary>A group renderables draw together in, ranked as one item at its anchor by its order. Id tells groups apart.</summary>
+public readonly record struct SortGroupLevel(int Order, uint Id, Double3 Anchor);
 
 public struct RenderableDesc
 {

@@ -962,7 +962,7 @@ internal sealed partial class FramePipeline : IDisposable
         camera.Time = time;
         int layers = view.LayerCount;
         bool shadow = camera.IsShadowView;
-        CullFrustum frustum = shadow ? camera.ShadowCull : new(view.Layers, layers);
+        CullFrustum frustum = shadow ? camera.ShadowCull : new(view.Layers, layers, view.TransparencySort);
         bool drawsPrepass = camera.Selected.Exists(static feature => feature is DrawPassFeature { Type: var type } && type == PassType.Prepass);
         LodView lod = shadow || view.Kind == ViewKind.Voxelization ? camera.OwnLod : LodView.Of(view, world.World.LodSnapshot, camera.LodState, time.Time, drawsPrepass);
         Array.Fill(camera.Roots, SpatialRoots.None);

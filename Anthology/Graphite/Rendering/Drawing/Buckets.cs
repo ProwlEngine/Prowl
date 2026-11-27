@@ -527,7 +527,7 @@ internal readonly struct CullFrustum
         _counts[0] = AddLayer(ref _planes, 0, viewProjection, Float3.Zero, nearPlane);
     }
 
-    public CullFrustum(in ViewLayers layers, int count)
+    public CullFrustum(in ViewLayers layers, int count, TransparencySort sort = default)
     {
         if (count < 1 || count > MaxLayers)
             throw new ArgumentOutOfRangeException(nameof(count));
@@ -538,7 +538,34 @@ internal readonly struct CullFrustum
             ViewLayer layer = layers[l];
             _counts[l] = AddLayer(ref _planes, l * 6, layer.Projection * layer.View, Relative(layer.Position), true);
         }
-        DepthPlane = OrthographicNearPlane(layers[0].Projection * layers[0].View);
+        Float4x4 first = layers[0].Projection * layers[0].View;
+        DepthPlane = OrthographicNearPlane(first);
+        Float3 forward = ViewForward(first);
+        float axisLength = MathF.Sqrt(sort.Axis.X * sort.Axis.X + sort.Axis.Y * sort.Axis.Y + sort.Axis.Z * sort.Axis.Z);
+        _sortAxis = sort.Mode switch
+        {
+            TransparencySortMode.Orthographic => forward,
+            TransparencySortMode.CustomAxis when axisLength > 1e-6f => sort.Axis / axisLength,
+            TransparencySortMode.Default when DepthPlane != null => forward,
+            _ => null,
+        };
+    }
+
+    // The direction the view looks along, the reversed Z near plane's normal
+    private static Float3 ViewForward(in Float4x4 viewProjection)
+    {
+        Float3 normal = new(viewProjection.c0.W - viewProjection.c0.Z, viewProjection.c1.W - viewProjection.c1.Z, viewProjection.c2.W - viewProjection.c2.Z);
+        float length = MathF.Sqrt(normal.X * normal.X + normal.Y * normal.Y + normal.Z * normal.Z);
+        return length <= 1e-6f ? new Float3(0, 0, 1) : normal / length;
+    }
+
+    private readonly Float3? _sortAxis;
+
+    /// <summary>How far back a transparent item centred there sorts, larger drawn first: along the sort axis, else from the camera.</summary>
+    public float SortDepth(Double3 center)
+    {
+        Float3 c = Relative(center);
+        return _sortAxis is { } axis ? c.X * axis.X + c.Y * axis.Y + c.Z * axis.Z : MathF.Sqrt(c.X * c.X + c.Y * c.Y + c.Z * c.Z);
     }
 
     // The reversed Z near plane of an orthographic view, null for perspective
@@ -777,6 +804,7 @@ internal sealed class BucketSet
     {
         public bool Provided;
         public float Depth;
+        public TransparentOrder Sort;
         public uint MaterialSlot;
         public bool Shared;
         public bool Consecutive;
@@ -860,7 +888,9 @@ internal sealed class BucketSet
     private readonly List<(ulong Key, int Bucket, ushort Program, int FirstInstance, int Count)> _prepass = new();
     private readonly List<ItemDraw> _transparent = new();
     private List<ItemDraw>?[] _transparentOf = [];
-    private readonly List<(SortKey Key, ItemDraw Item)> _sorted = new();
+    private readonly List<SortEntry> _sorted = new();
+    private readonly List<ulong> _sortLevels = new();
+    private Comparison<SortEntry>? _compareSort;
     private bool[] _visible = [];
     private byte[] _level = [];
     private byte[] _from = [];
@@ -1161,22 +1191,24 @@ internal sealed class BucketSet
     private void AppendTransparent(in CullFrustum frustum, DrawList list, int pass, IReadOnlyList<ItemDraw>? provided = null)
     {
         _sorted.Clear();
+        _sortLevels.Clear();
         Dictionary<int, int> ranks = RanksWith(provided);
         foreach (ItemDraw item in _transparent)
         {
             if (item.Pass == pass && _visible[item.Object] && item.Level == _level[item.Object])
-                _sorted.Add((TransparentKey(item, frustum, ranks), item));
+                _sorted.Add(SortEntryOf(item, _world.Sort[item.Object], ranks.GetValueOrDefault(item.Queue), frustum.SortDepth(_world.WorldCenter[item.Object]), frustum));
         }
         if (provided != null)
         {
             foreach (ItemDraw item in provided)
-                _sorted.Add((ProvidedKey(item, ranks), item));
+                _sorted.Add(SortEntryOf(item, item.Sort, ranks.GetValueOrDefault(item.Queue), item.Depth, frustum));
         }
-        _sorted.Sort(static (a, b) => a.Key.CompareTo(b.Key));
+        _sorted.Sort(_compareSort ??= CompareSort);
 
         DrawCommandRef previous = new(0, -1, default, false, 0, -1);
-        foreach ((_, ItemDraw item) in _sorted)
+        foreach (SortEntry entry in _sorted)
         {
+            ItemDraw item = entry.Item;
             if (item.Provided)
             {
                 item.FirstCommand = list.CommandCount;
@@ -1229,8 +1261,44 @@ internal sealed class BucketSet
         return _unionRanks;
     }
 
-    private static SortKey ProvidedKey(ItemDraw item, Dictionary<int, int> ranks)
-        => SortKey.Of(default, ranks.GetValueOrDefault(item.Queue), MathF.Max(item.Depth, 0), 0, item);
+    private readonly record struct SortEntry(int Start, int Levels, ulong Tie, ItemDraw Item);
+
+    // Two words a level, outermost group first and the item's own last: order then queue rank, then depth back to front then group id
+    private SortEntry SortEntryOf(ItemDraw item, in TransparentOrder order, int rank, float depth, in CullFrustum frustum)
+    {
+        int start = _sortLevels.Count;
+        foreach (SortGroupLevel group in order.Groups ?? [])
+            AddSortLevel(group.Order, rank, frustum.SortDepth(group.Anchor), group.Id);
+        AddSortLevel(order.Order, rank, depth, 0);
+        return new SortEntry(start, (_sortLevels.Count - start) / 2, (ulong)item.Program << 32 | (uint)item.Object, item);
+    }
+
+    private void AddSortLevel(int order, int rank, float depth, uint id)
+    {
+        _sortLevels.Add((ulong)((uint)order ^ 0x80000000u) << 32 | (uint)rank);
+        _sortLevels.Add(BackToFront(depth) << 32 | id);
+    }
+
+    // Larger depths first, negative ones after every positive one
+    private static ulong BackToFront(float depth)
+    {
+        uint bits = BitConverter.SingleToUInt32Bits(depth);
+        return ~((bits & 0x80000000u) != 0 ? ~bits : bits | 0x80000000u);
+    }
+
+    private int CompareSort(SortEntry a, SortEntry b)
+    {
+        ReadOnlySpan<ulong> levels = System.Runtime.InteropServices.CollectionsMarshal.AsSpan(_sortLevels);
+        int words = Math.Min(a.Levels, b.Levels) * 2;
+        for (int i = 0; i < words; i++)
+        {
+            int c = levels[a.Start + i].CompareTo(levels[b.Start + i]);
+            if (c != 0)
+                return c;
+        }
+        int depth = a.Levels.CompareTo(b.Levels);
+        return depth != 0 ? depth : a.Tie.CompareTo(b.Tie);
+    }
 
     /// <summary>A provider's item into a list: a command per chunk, through its own object or shared by its instances.</summary>
     internal static void EmitProvided(DrawList list, ItemDraw item)
@@ -1262,36 +1330,6 @@ internal sealed class BucketSet
 
     /// <summary>The commands an item adds to a list, before culling of its chunks.</summary>
     internal static int CommandsOf(ItemDraw item) => item.Chunks.Length * (item.BackProgram >= 0 ? 2 : 1);
-
-    private SortKey TransparentKey(ItemDraw item, in CullFrustum frustum, Dictionary<int, int> ranks)
-    {
-        TransparentOrder order = _world.Sort[item.Object];
-        float depth = Distance(frustum, item.Object);
-        float anchor = order.Group == 0 ? depth : Distance(frustum, order.Anchor, 0);
-        return SortKey.Of(order, ranks.GetValueOrDefault(item.Queue), anchor, depth, item);
-    }
-
-    // Order, queue rank, group depth back to front, group, inner order, own depth back to front, program, object
-    private readonly record struct SortKey(ulong Order, ulong Group, ulong Inner, ulong Tie) : IComparable<SortKey>
-    {
-        public static SortKey Of(in TransparentOrder order, int rank, float anchor, float depth, ItemDraw item)
-            => new(Signed(order.Order) << 32 | (uint)rank, Depth(anchor) << 32 | order.Group, Signed(order.InnerOrder) << 32 | Depth(depth),
-                (ulong)item.Program << 32 | (uint)item.Object);
-
-        private static ulong Signed(int value) => (uint)value ^ 0x80000000u;
-
-        private static ulong Depth(float distance) => ~BitConverter.SingleToUInt32Bits(distance) & 0xFFFFFFFFu;
-
-        public int CompareTo(SortKey other)
-        {
-            int c = Order.CompareTo(other.Order);
-            if (c != 0) return c;
-            c = Group.CompareTo(other.Group);
-            if (c != 0) return c;
-            c = Inner.CompareTo(other.Inner);
-            return c != 0 ? c : Tie.CompareTo(other.Tie);
-        }
-    }
 
     // A level with a material of its own reads that material's slot rather than the renderable's slice
     private static DrawRecord Record(uint chunk, uint subMesh, Material? own)
@@ -1535,14 +1573,12 @@ internal sealed class BucketSet
         return _chunkVisible[_chunkStart[index] + chunkInMesh];
     }
 
-    private float Distance(in CullFrustum frustum, int index) => Distance(frustum, _world.WorldCenter[index], _world.WorldRadius[index]);
-
-    private static float Distance(in CullFrustum frustum, Double3 center, float radius)
+    private float Distance(in CullFrustum frustum, int index)
     {
-        Float3 c = frustum.Relative(center);
+        Float3 c = frustum.Relative(_world.WorldCenter[index]);
         if (frustum.DepthPlane is { } plane)
             return MathF.Max(0, plane.X * c.X + plane.Y * c.Y + plane.Z * c.Z + plane.W);
-        return MathF.Max(0, MathF.Sqrt(c.X * c.X + c.Y * c.Y + c.Z * c.Z) - radius);
+        return MathF.Max(0, MathF.Sqrt(c.X * c.X + c.Y * c.Y + c.Z * c.Z) - _world.WorldRadius[index]);
     }
 
     private void AddObject(int index)

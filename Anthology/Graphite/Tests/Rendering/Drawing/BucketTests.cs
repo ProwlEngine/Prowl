@@ -207,30 +207,104 @@ public sealed class BucketTests : IDisposable
         Assert.Equal(_other.Placement!.FirstChunk, Frame(Forward).Records[0].Chunk);
     }
 
+    private static TransparentOrder InGroups(int order, params SortGroupLevel[] groups) => new(order, groups);
+
     [Fact]
     public void SortGroup_DrawsItsMembersTogether_AtItsAnchor()
     {
         Material glass = Glass();
+        SortGroupLevel[] group = [new SortGroupLevel(0, 7, new Double3(0, 0, 8))];
         RenderableHandle groupBack = Add(_triangle, glass, At(0, 0, 9));
         RenderableHandle loose = Add(_other, glass, At(1, 0, 5));
         RenderableHandle groupFront = Add(_triangle, glass, At(2, 0, 2));
-        _world.SetSort(groupBack, new TransparentOrder(0, 7, new Double3(0, 0, 8)));
-        _world.SetSort(groupFront, new TransparentOrder(0, 7, new Double3(0, 0, 8)));
+        _world.SetSort(groupBack, new TransparentOrder(0, group));
+        _world.SetSort(groupFront, new TransparentOrder(0, group));
 
         Assert.Equal(new uint[] { (uint)groupBack.Index, (uint)groupFront.Index, (uint)loose.Index }, Instances(Frame(Transparent)));
         Clear();
 
+        SortGroupLevel[] inner = [new SortGroupLevel(0, 3, new Double3(0, 0, 5))];
         RenderableHandle innerFront = Add(_triangle, glass, At(0, 0, 2));
         RenderableHandle innerBack = Add(_other, glass, At(1, 0, 9));
-        _world.SetSort(innerFront, new TransparentOrder(0, 3, new Double3(0, 0, 5), InnerOrder: -1));
-        _world.SetSort(innerBack, new TransparentOrder(0, 3, new Double3(0, 0, 5), InnerOrder: 1));
+        _world.SetSort(innerFront, new TransparentOrder(-1, inner));
+        _world.SetSort(innerBack, new TransparentOrder(1, inner));
         Assert.Equal(new uint[] { (uint)innerFront.Index, (uint)innerBack.Index }, Instances(Frame(Transparent)));
         Clear();
 
         RenderableHandle member = Add(_triangle, glass, At(0, 0, 1));
         RenderableHandle far = Add(_other, glass, At(1, 0, 9));
-        _world.SetSort(member, new TransparentOrder(-1, 5, new Double3(0, 0, 1)));
+        _world.SetSort(member, InGroups(0, new SortGroupLevel(-1, 5, new Double3(0, 0, 1))));
         Assert.Equal(new uint[] { (uint)member.Index, (uint)far.Index }, Instances(Frame(Transparent)));
+    }
+
+    [Fact]
+    public void NestedSortGroup_SortsAsOneItemInsideItsOuterGroup()
+    {
+        Material glass = Glass();
+        SortGroupLevel outer = new(0, 1, new Double3(0, 0, 5));
+        SortGroupLevel nested = new(0, 2, new Double3(0, 0, 2));
+        RenderableHandle loose = Add(_other, glass, At(0, 0, 6));
+        RenderableHandle direct = Add(_triangle, glass, At(1, 0, 9));
+        RenderableHandle nestedBack = Add(_other, glass, At(2, 0, 8));
+        RenderableHandle nestedFront = Add(_triangle, glass, At(3, 0, 1));
+        _world.SetSort(direct, InGroups(0, outer));
+        _world.SetSort(nestedBack, InGroups(0, outer, nested));
+        _world.SetSort(nestedFront, InGroups(0, outer, nested));
+
+        Assert.Equal(new uint[] { (uint)loose.Index, (uint)direct.Index, (uint)nestedBack.Index, (uint)nestedFront.Index }, Instances(Frame(Transparent)));
+    }
+
+    [Fact]
+    public void ProvidedTransparentItems_SortByTheirOrder()
+    {
+        Material glass = Glass();
+        RenderableHandle far = Add(_triangle, glass, At(0, 0, 9));
+        BucketSet.ItemDraw provided = new()
+        {
+            Provided = true, Pass = 1, Object = 900, Program = 0, Page = 0, Topology = PrimitiveTopology.TriangleList, Mirrored = false,
+            Queue = 3000, SubMesh = 0, Chunks = [new BucketSet.ChunkRef(0, 0, 0, 3)], Depth = 1, Sort = new TransparentOrder(-1),
+        };
+
+        Frame(Transparent);
+        _buckets.BuildTransparent(s_frustum, _list, [provided]);
+        Assert.Equal(new uint[] { 900, (uint)far.Index }, Instances(_list));
+    }
+
+    private static CullFrustum Perspective(TransparencySort sort = default)
+        => new(ViewCamera.Perspective(Double3.Zero, new Float3(0, 0, 1), new Float3(0, 1, 0), MathF.PI / 2, aspect: 1).Layers, 1, sort);
+
+    [Fact]
+    public void PerspectiveTransparentItems_SortByDistanceToTheirCentre()
+    {
+        Material glass = Glass();
+        RenderableHandle background = Add(_triangle, glass, At(0, 0, 8) * Float4x4.CreateScale(20000));
+        RenderableHandle small = Add(_other, glass, At(0, 0, 4));
+
+        Assert.Equal(new uint[] { (uint)background.Index, (uint)small.Index }, Instances(Frame(Transparent, frustum: Perspective())));
+    }
+
+    [Fact]
+    public void OrthographicSortMode_OnAPerspectiveView_SortsByViewDepth()
+    {
+        Material glass = Glass();
+        RenderableHandle side = Add(_triangle, glass, At(2, 0, 3));
+        RenderableHandle centre = Add(_other, glass, At(0, 0, 3.5f));
+
+        Assert.Equal(new uint[] { (uint)side.Index, (uint)centre.Index }, Instances(Frame(Transparent, frustum: Perspective())));
+        Assert.Equal(new uint[] { (uint)centre.Index, (uint)side.Index },
+            Instances(Frame(Transparent, frustum: Perspective(new TransparencySort(TransparencySortMode.Orthographic)))));
+    }
+
+    [Fact]
+    public void CustomAxisSortMode_DrawsItemsFurtherAlongTheAxisFirst()
+    {
+        Material glass = Glass();
+        RenderableHandle low = Add(_triangle, glass, At(0, -5, 5));
+        RenderableHandle high = Add(_other, glass, At(1, 5, 5));
+        CullFrustum frustum = new(ViewCamera.Orthographic(Double3.Zero, new Float3(0, 0, 1), new Float3(0, 1, 0), 20, 0, 10, aspect: 1).Layers, 1,
+            new TransparencySort(TransparencySortMode.CustomAxis, new Float3(0, 1, 0)));
+
+        Assert.Equal(new uint[] { (uint)high.Index, (uint)low.Index }, Instances(Frame(Transparent, frustum: frustum)));
     }
 
     // Looks along +Z from the origin, x and y from -10 to 10, z from 0 to 10
