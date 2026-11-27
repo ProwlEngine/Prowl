@@ -383,9 +383,10 @@ public static class SpriteMeshTracer
     /// Traces + simplifies + triangulates a binary alpha mask. <paramref name="alpha"/> is row-major with a
     /// bottom-left origin (length <c>width*height</c>); a texel counts as opaque when its value is &gt;=
     /// <paramref name="alphaThreshold"/>. <paramref name="simplifyTolerance"/> is the maximum deviation (in
-    /// pixels) allowed when collapsing the staircase outline into straight edges; higher = fewer vertices.
+    /// pixels) allowed when collapsing the staircase outline into straight edges; higher = fewer vertices. Outer loops
+    /// are then pushed out by that tolerance plus <paramref name="extrude"/> pixels, so no opaque pixel is cut.
     /// </summary>
-    public static TracedMesh Generate(byte[] alpha, int width, int height, byte alphaThreshold = 1, float simplifyTolerance = 1.5f)
+    public static TracedMesh Generate(byte[] alpha, int width, int height, byte alphaThreshold = 1, float simplifyTolerance = 1.5f, float extrude = 1f)
     {
         var result = new TracedMesh();
         if (alpha == null || width <= 0 || height <= 0 || alpha.Length < width * height)
@@ -403,9 +404,23 @@ public static class SpriteMeshTracer
             if (simplified.Length < 3)
                 continue;
 
-            tris.Clear();
-            if (!Triangulate(simplified, tris))
+            // Holes stay in the outline, the outer loop around them already draws their area
+            if (SignedArea(simplified) < 0)
+            {
+                result.Contours.Add(simplified);
                 continue;
+            }
+
+            Float2[] outline = Extrude(simplified, Math.Max(simplifyTolerance, 0f) + Math.Max(extrude, 0f), width, height);
+            tris.Clear();
+            if (!Triangulate(outline, tris))
+            {
+                outline = simplified;
+                tris.Clear();
+                if (!Triangulate(outline, tris))
+                    continue;
+            }
+            simplified = outline;
 
             int baseIdx = verts.Count;
             if (baseIdx + simplified.Length > ushort.MaxValue)
@@ -526,6 +541,38 @@ public static class SpriteMeshTracer
             }
             return best;
         }
+    }
+
+    /// <summary>
+    /// Pushes a counter clockwise loop outward by <paramref name="amount"/> pixels, mitred at its corners and kept inside the
+    /// width by height rect, so an outline simplified within that tolerance still covers every pixel it traced.
+    /// </summary>
+    public static Float2[] Extrude(Float2[] points, float amount, int width, int height)
+    {
+        int n = points.Length;
+        if (amount <= 0f || n < 3) return points;
+
+        var result = new Float2[n];
+        for (int i = 0; i < n; i++)
+        {
+            Float2 previous = points[(i + n - 1) % n], current = points[i], next = points[(i + 1) % n];
+            Float2 a = Outward(previous, current), b = Outward(current, next);
+            Float2 sum = a + b;
+            float length = MathF.Sqrt(sum.X * sum.X + sum.Y * sum.Y);
+            Float2 direction = length > 1e-6f ? sum / length : a;
+            float cos = MathF.Max(direction.X * a.X + direction.Y * a.Y, 0.25f);
+            Float2 moved = current + direction * (amount / cos);
+            result[i] = new Float2(Math.Clamp(moved.X, 0f, width), Math.Clamp(moved.Y, 0f, height));
+        }
+        return result;
+    }
+
+    // The unit normal on the right of an edge, outward for a counter clockwise loop
+    private static Float2 Outward(Float2 from, Float2 to)
+    {
+        float dx = to.X - from.X, dy = to.Y - from.Y;
+        float length = MathF.Sqrt(dx * dx + dy * dy);
+        return length > 1e-6f ? new Float2(dy / length, -dx / length) : Float2.Zero;
     }
 
     /// <summary>Douglas-Peucker simplification of a closed polygon, keeping deviation within <paramref name="tolerance"/> pixels.</summary>

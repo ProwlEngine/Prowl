@@ -444,6 +444,8 @@ public class SpriteImportSettings
     public float TightMeshDetail = 1.5f;
     /// <summary> Alpha values below this threshold are treated as transparent when generating a tight mesh. </summary>
     public byte TightMeshAlphaThreshold = 1;
+    /// <summary> Pixels the tight mesh reaches past the sprite's outline, so filtering at its edge is not cut off. </summary>
+    public float TightMeshExtrude = 1f;
 
     /// <summary>Named secondary maps (e.g. "_NormalMap") applied to every sprite in this texture.</summary>
     public Dictionary<string, Texture2D> SecondaryTextures = [];
@@ -1119,7 +1121,7 @@ public static class SpriteBuilder
         {
             byte[] rectAlpha = ExtractRectAlpha(alpha, texW, texH, rect);
             SpriteMeshTracer.TracedMesh traced = SpriteMeshTracer.Generate(rectAlpha, rect.Width, rect.Height,
-                s.TightMeshAlphaThreshold, s.TightMeshDetail);
+                s.TightMeshAlphaThreshold, s.TightMeshDetail, s.TightMeshExtrude);
             sprite.BuildTightGeometry(traced, texW, texH);
         }
         else

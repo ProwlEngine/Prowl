@@ -232,6 +232,12 @@ public class TextureAssetEditor : ImportSettingsEditor
             Origami.Dropdown(paper, $"{id}_mesh_v", s.GenerateTightMesh ? 1 : 0,
                 v => EditSprite(guid, sprite, "Mesh Type", st => st.GenerateTightMesh = v == 1), s_meshTypes).Show());
 
+        if (s.GenerateTightMesh)
+            EditorGUI.Row(paper, $"{id}_extrude", "Extrude Edges", () =>
+                Origami.Slider(paper, $"{id}_extrude_v", s.TightMeshExtrude,
+                    v => EditSprite(guid, sprite, "Extrude Edges", st => st.TightMeshExtrude = MathF.Round(v)), 0f, 32f)
+                    .Format("F0").Step(1f).Show());
+
         Origami.Button(paper, $"{id}_spopen", $"{EditorIcons.PenToSquare}  Open Sprite Editor",
             () => SpriteEditorWindow.OpenFor(entry.Guid)).Width(200).Show();
 
