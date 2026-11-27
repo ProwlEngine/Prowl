@@ -200,7 +200,7 @@ namespace Prowl.Recast.Detour.Crowd
         }
 
         /// Sets the shared avoidance configuration for the specified index.
-        /// @param[in] idx The index. [Limits: 0 <= value <
+        /// @param[in] idx The index. [Limits: 0 &lt;= value &lt;
         /// #DT_CROWD_MAX_OBSTAVOIDANCE_PARAMS]
         /// @param[in] option The new configuration.
         public void SetObstacleAvoidanceParams(int idx, DtObstacleAvoidanceParams option)
@@ -213,7 +213,7 @@ namespace Prowl.Recast.Detour.Crowd
 
         /// Gets the shared avoidance configuration for the specified index.
         /// @param[in] idx The index of the configuration to retreive.
-        /// [Limits: 0 <= value < #DT_CROWD_MAX_OBSTAVOIDANCE_PARAMS]
+        /// [Limits: 0 &lt;= value &lt; #DT_CROWD_MAX_OBSTAVOIDANCE_PARAMS]
         /// @return The requested configuration.
         public DtObstacleAvoidanceParams GetObstacleAvoidanceParams(int idx)
         {
@@ -226,7 +226,7 @@ namespace Prowl.Recast.Detour.Crowd
         }
 
         /// Updates the specified agent's configuration.
-        /// @param[in] idx The agent index. [Limits: 0 <= value < #GetAgentCount()]
+        /// @param[in] idx The agent index. [Limits: 0 &lt;= value &lt; #GetAgentCount()]
         /// @param[in] params The new agent configuration.
         public void UpdateAgentParameters(DtCrowdAgent agent, DtCrowdAgentParams option)
         {
@@ -367,7 +367,7 @@ namespace Prowl.Recast.Detour.Crowd
         }
 
         /// Submits a new move request for the specified agent.
-        /// @param[in] idx The agent index. [Limits: 0 <= value < #GetAgentCount()]
+        /// @param[in] idx The agent index. [Limits: 0 &lt;= value &lt; #GetAgentCount()]
         /// @param[in] ref The position's polygon reference.
         /// @param[in] pos The position within the polygon. [(x, y, z)]
         /// @return True if the request was successfully submitted.
@@ -433,7 +433,7 @@ namespace Prowl.Recast.Detour.Crowd
         }
 
         /// Submits a new move request for the specified agent.
-        /// @param[in] idx The agent index. [Limits: 0 <= value < #GetAgentCount()]
+        /// @param[in] idx The agent index. [Limits: 0 &lt;= value &lt; #GetAgentCount()]
         /// @param[in] vel The movement velocity. [(x, y, z)]
         /// @return True if the request was successfully submitted.
         public bool RequestMoveVelocity(DtCrowdAgent agent, RcVec3f vel)
@@ -449,7 +449,7 @@ namespace Prowl.Recast.Detour.Crowd
         }
 
         /// Resets any request for the specified agent.
-        /// @param[in] idx The agent index. [Limits: 0 <= value < #GetAgentCount()]
+        /// @param[in] idx The agent index. [Limits: 0 &lt;= value &lt; #GetAgentCount()]
         /// @return True if the request was successfully reseted.
         public bool ResetMoveTarget(DtCrowdAgent agent)
         {

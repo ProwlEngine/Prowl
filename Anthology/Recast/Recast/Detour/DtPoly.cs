@@ -53,7 +53,7 @@ namespace Prowl.Recast.Detour
             neis = new int[maxVertsPerPoly];
         }
 
-        /// Sets the user defined area id. [Limit: < #DT_MAX_AREAS]
+        /// Sets the user defined area id. [Limit: &lt; #DT_MAX_AREAS]
         public void SetArea(int a)
         {
             areaAndtype = (areaAndtype & 0xc0) | (a & 0x3f);

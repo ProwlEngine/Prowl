@@ -42,7 +42,7 @@ namespace Prowl.Recast.Detour.Crowd
         public int updateFlags;
 
         /// The index of the avoidance configuration to use for the agent.
-        /// [Limits: 0 <= value < #DT_CROWD_MAX_OBSTAVOIDANCE_PARAMS]
+        /// [Limits: 0 &lt;= value &lt; #DT_CROWD_MAX_OBSTAVOIDANCE_PARAMS]
         public int obstacleAvoidanceType;
 
         /// The index of the query filter used by this agent.

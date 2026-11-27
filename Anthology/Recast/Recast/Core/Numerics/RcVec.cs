@@ -280,7 +280,7 @@ namespace Prowl.Recast.Core.Numerics
         /// @param[out] dest The result vector. [(x, y, x)]
         /// @param[in] v1 The starting vector.
         /// @param[in] v2 The destination vector.
-        /// @param[in] t The interpolation factor. [Limits: 0 <= value <= 1.0]
+        /// @param[in] t The interpolation factor. [Limits: 0 &lt;= value &lt;= 1.0]
         [MethodImpl(MethodImplOptions.AggressiveInlining)]
         public static RcVec3f Lerp(ReadOnlySpan<float> verts, int v1, int v2, float t)
         {

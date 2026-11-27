@@ -106,6 +106,6 @@ namespace Prowl.Recast.Detour
         /// @note The BVTree is not normally needed for layered navigation meshes.
         public bool buildBvTree;
 
-        /// @}
+        // @}
     }
 }

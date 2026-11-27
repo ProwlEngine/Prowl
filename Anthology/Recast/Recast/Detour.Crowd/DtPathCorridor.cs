@@ -125,14 +125,14 @@ namespace Prowl.Recast.Detour.Crowd
         If the target is within range, it will be the last corner and have a polygon reference id of zero.
         */
         /// Finds the corners in the corridor from the position toward the target. (The straightened path.)
-        ///  @param[out]	cornerVerts		The corner vertices. [(x, y, z) * cornerCount] [Size: <= maxCorners]
-        ///  @param[out]	cornerFlags		The flag for each corner. [(flag) * cornerCount] [Size: <= maxCorners]
+        ///  @param[out]	cornerVerts		The corner vertices. [(x, y, z) * cornerCount] [Size: &lt;= maxCorners]
+        ///  @param[out]	cornerFlags		The flag for each corner. [(flag) * cornerCount] [Size: &lt;= maxCorners]
         ///  @param[out]	cornerPolys		The polygon reference for each corner. [(polyRef) * cornerCount] 
-        ///  								[Size: <= @p maxCorners]
+        ///  								[Size: &lt;= @p maxCorners]
         ///  @param[in]		maxCorners		The maximum number of corners the buffers can hold.
         ///  @param[in]		navquery		The query object used to build the corridor.
         ///  @param[in]		filter			The filter to apply to the operation.
-        /// @return The number of corners returned in the corner buffers. [0 <= value <= @p maxCorners]
+        /// @return The number of corners returned in the corner buffers. [0 &lt;= value &lt;= @p maxCorners]
         public int FindCorners(Span<DtStraightPath> corners, int maxCorners, DtNavMeshQuery navquery, IDtQueryFilter filter)
         {
             const float MIN_TARGET_DIST = 0.01f;

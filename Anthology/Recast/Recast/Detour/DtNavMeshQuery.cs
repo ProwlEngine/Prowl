@@ -2286,7 +2286,7 @@ namespace Prowl.Recast.Detour
         /// If the hit parameter is zero, then the start position is on the wall that 
         /// was hit and the value of @p hitNormal is undefined.
         ///
-        /// If 0 < t < 1.0 then the following applies:
+        /// If 0 &lt; t &lt; 1.0 then the following applies:
         ///
         /// @code
         /// distanceToHitBorder = distanceToEndPosition * t
@@ -2342,7 +2342,7 @@ namespace Prowl.Recast.Detour
         /// If the hit parameter is zero, then the start position is on the wall that 
         /// was hit and the value of @p hitNormal is undefined.
         ///
-        /// If 0 < t < 1.0 then the following applies:
+        /// If 0 &lt; t &lt; 1.0 then the following applies:
         ///
         /// @code
         /// distanceToHitBorder = distanceToEndPosition * t
@@ -2885,7 +2885,7 @@ namespace Prowl.Recast.Detour
 
             // Validate input
             if (!m_nav.IsValidPolyRef(startRef) || 
-                null == verts || nverts < 3 || 
+                verts.IsEmpty || nverts < 3 || 
                 null == filter || maxResult < 0)
             {
                 return DtStatus.DT_FAILURE | DtStatus.DT_INVALID_PARAM;
@@ -3345,7 +3345,7 @@ namespace Prowl.Recast.Detour
             Span<DtSegInterval> ints = stackalloc DtSegInterval[MAX_INTERVAL];
             int nints;
 
-            bool storePortals = segmentRefs != null;
+            bool storePortals = !segmentRefs.IsEmpty;
 
             status = DtStatus.DT_SUCCESS;
 
@@ -3400,7 +3400,7 @@ namespace Prowl.Recast.Detour
                         seg.vmin = tile.data.verts.ToVec3(ivj);
                         seg.vmax = tile.data.verts.ToVec3(ivi);
                         segmentVerts[n] = seg;
-                        if (null != segmentRefs)
+                        if (!segmentRefs.IsEmpty)
                         {
                             segmentRefs[n] = neiRef;
                         }
@@ -3437,7 +3437,7 @@ namespace Prowl.Recast.Detour
                             seg.vmax = RcVec.Lerp(tile.data.verts, vj, vi, tmax);
                             segmentVerts[n] = seg;
 
-                            if (null != segmentRefs)
+                            if (!segmentRefs.IsEmpty)
                             {
                                 segmentRefs[n] = ints[k].refs;
                             }
@@ -3465,7 +3465,7 @@ namespace Prowl.Recast.Detour
                             seg.vmax = RcVec.Lerp(tile.data.verts, vj, vi, tmax);
                             segmentVerts[n] = seg;
 
-                            if (null != segmentRefs)
+                            if (!segmentRefs.IsEmpty)
                             {
                                 segmentRefs[n] = 0;
                             }

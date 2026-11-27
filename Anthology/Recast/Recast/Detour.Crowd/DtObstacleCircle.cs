@@ -2,7 +2,7 @@ using Prowl.Recast.Core.Numerics;
 
 namespace Prowl.Recast.Detour.Crowd
 {
-    /// < Max number of adaptive rings.
+    /// &lt; Max number of adaptive rings.
     public class DtObstacleCircle
     {
         /** Position of the obstacle */

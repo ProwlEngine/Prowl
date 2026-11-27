@@ -40,7 +40,7 @@ namespace Prowl.Recast
         /// @ingroup recast
         ///
         /// @param[in,out]	context				The build context to use during the operation.
-        /// @param[in]		erosionRadius		The radius of erosion. [Limits: 0 < value < 255] [Units: vx]
+        /// @param[in]		erosionRadius		The radius of erosion. [Limits: 0 &lt; value &lt; 255] [Units: vx]
         /// @param[in,out]	compactHeightfield	The populated compact heightfield to erode.
         /// @returns True if the operation completed successfully.
         public static void ErodeWalkableArea(RcContext context, int erosionRadius, RcCompactHeightfield compactHeightfield)
@@ -341,7 +341,7 @@ namespace Prowl.Recast
         /// @param[in,out]	context				The build context to use during the operation.
         /// @param[in]		boxMinBounds		The minimum extents of the bounding box. [(x, y, z)] [Units: wu]
         /// @param[in]		boxMaxBounds		The maximum extents of the bounding box. [(x, y, z)] [Units: wu]
-        /// @param[in]		areaId				The area id to apply. [Limit: <= #RC_WALKABLE_AREA]
+        /// @param[in]		areaId				The area id to apply. [Limit: &lt;= #RC_WALKABLE_AREA]
         /// @param[in,out]	compactHeightfield	A populated compact heightfield.
         public static void MarkBoxArea(RcContext context, float[] boxMinBounds, float[] boxMaxBounds, RcAreaModification areaId, RcCompactHeightfield compactHeightfield)
         {
@@ -443,7 +443,7 @@ namespace Prowl.Recast
         /// @param[in]		numVerts			The number of vertices in the polygon.
         /// @param[in]		minY				The height of the base of the polygon. [Units: wu]
         /// @param[in]		maxY				The height of the top of the polygon. [Units: wu]
-        /// @param[in]		areaId				The area id to apply. [Limit: <= #RC_WALKABLE_AREA]
+        /// @param[in]		areaId				The area id to apply. [Limit: &lt;= #RC_WALKABLE_AREA]
         /// @param[in,out]	compactHeightfield	A populated compact heightfield.
         public static void MarkConvexPolyArea(RcContext context, float[] verts,
             float minY, float maxY, RcAreaModification areaId,
@@ -564,7 +564,7 @@ namespace Prowl.Recast
         /// @param[in]		position			The center of the base of the cylinder. [Form: (x, y, z)] [Units: wu] 
         /// @param[in]		radius				The radius of the cylinder. [Units: wu] [Limit: > 0]
         /// @param[in]		height				The height of the cylinder. [Units: wu] [Limit: > 0]
-        /// @param[in]		areaId				The area id to apply. [Limit: <= #RC_WALKABLE_AREA]
+        /// @param[in]		areaId				The area id to apply. [Limit: &lt;= #RC_WALKABLE_AREA]
         /// @param[in,out]	compactHeightfield	A populated compact heightfield.
         public static void MarkCylinderArea(RcContext context, float[] position, float radius, float height,
             RcAreaModification areaId, RcCompactHeightfield compactHeightfield)

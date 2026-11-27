@@ -969,7 +969,7 @@ namespace Prowl.Recast
         /// @par
         ///
         /// @note If the mesh data is to be used to construct a Detour navigation mesh, then the upper
-        /// limit must be restricted to <= #DT_VERTS_PER_POLYGON.
+        /// limit must be restricted to &lt;= #DT_VERTS_PER_POLYGON.
         ///
         /// @see rcAllocPolyMesh, rcContourSet, rcPolyMesh, rcConfig
         public static RcPolyMesh BuildPolyMesh(RcContext ctx, RcContourSet cset, int nvp)

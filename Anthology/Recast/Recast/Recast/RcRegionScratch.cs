@@ -3,7 +3,7 @@ using System.Collections.Generic;
 
 namespace Prowl.Recast
 {
-    /// The working buffers one <see cref="RcRegions.BuildRegions"/> call needs, kept so a caller
+    /// The working buffers one <see cref="RcRegions.BuildRegions(Core.RcContext, RcCompactHeightfield, int, int, RcRegionScratch)"/> call needs, kept so a caller
     /// that partitions heightfield after heightfield — a tile cache carving a tile per frame, a bake
     /// walking a tile grid — stops re-allocating them. Measured at roughly a quarter of a tile
     /// build's total allocation.

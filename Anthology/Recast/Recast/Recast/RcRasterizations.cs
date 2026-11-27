@@ -248,12 +248,12 @@ namespace Prowl.Recast
         /// @param[in,out]	context				The build context to use during the operation.
         /// @param[in,out]	heightfield			An initialized heightfield.
         /// @param[in]		x					The column x index where the span is to be added.
-        /// 									[Limits: 0 <= value < rcHeightfield::width]
+        /// 									[Limits: 0 &lt;= value &lt; rcHeightfield::width]
         /// @param[in]		z					The column z index where the span is to be added.
-        /// 									[Limits: 0 <= value < rcHeightfield::height]
-        /// @param[in]		spanMin				The minimum height of the span. [Limit: < @p spanMax] [Units: vx]
-        /// @param[in]		spanMax				The maximum height of the span. [Limit: <= #RC_SPAN_MAX_HEIGHT] [Units: vx]
-        /// @param[in]		areaID				The area id of the span. [Limit: <= #RC_WALKABLE_AREA)
+        /// 									[Limits: 0 &lt;= value &lt; rcHeightfield::height]
+        /// @param[in]		spanMin				The minimum height of the span. [Limit: &lt; @p spanMax] [Units: vx]
+        /// @param[in]		spanMax				The maximum height of the span. [Limit: &lt;= #RC_SPAN_MAX_HEIGHT] [Units: vx]
+        /// @param[in]		areaID				The area id of the span. [Limit: &lt;= #RC_WALKABLE_AREA)
         /// @param[in]		flagMergeThreshold	The merge threshold. [Limit: >= 0] [Units: vx]
         /// @returns True if the operation completed successfully.
         public static bool AddSpan(RcContext context, RcHeightfield heightfield,
@@ -529,7 +529,7 @@ namespace Prowl.Recast
         /// @param[in]		v0					Triangle vertex 0 [(x, y, z)]
         /// @param[in]		v1					Triangle vertex 1 [(x, y, z)]
         /// @param[in]		v2					Triangle vertex 2 [(x, y, z)]
-        /// @param[in]		areaID				The area id of the triangle. [Limit: <= #RC_WALKABLE_AREA]
+        /// @param[in]		areaID				The area id of the triangle. [Limit: &lt;= #RC_WALKABLE_AREA]
         /// @param[in,out]	heightfield			An initialized heightfield.
         /// @param[in]		flagMergeThreshold	The distance where the walkable flag is favored over the non-walkable flag.
         /// 									[Limit: >= 0] [Units: vx]
@@ -556,7 +556,7 @@ namespace Prowl.Recast
         /// @param[in]		verts				The vertices. [(x, y, z) * @p nv]
         /// @param[in]		numVerts			The number of vertices. (unused) TODO (graham): Remove in next major release
         /// @param[in]		tris				The triangle indices. [(vertA, vertB, vertC) * @p nt]
-        /// @param[in]		triAreaIDs			The area id's of the triangles. [Limit: <= #RC_WALKABLE_AREA] [Size: @p nt]
+        /// @param[in]		triAreaIDs			The area id's of the triangles. [Limit: &lt;= #RC_WALKABLE_AREA] [Size: @p nt]
         /// @param[in]		numTris				The number of triangles.
         /// @param[in,out]	heightfield			An initialized heightfield.
         /// @param[in]		flagMergeThreshold	The distance where the walkable flag is favored over the non-walkable flag. 
@@ -589,7 +589,7 @@ namespace Prowl.Recast
         /// @ingroup recast
         /// @param[in,out]	context				The build context to use during the operation.
         /// @param[in]		verts				The triangle vertices. [(ax, ay, az, bx, by, bz, cx, by, cx) * @p nt]
-        /// @param[in]		triAreaIDs			The area id's of the triangles. [Limit: <= #RC_WALKABLE_AREA] [Size: @p nt]
+        /// @param[in]		triAreaIDs			The area id's of the triangles. [Limit: &lt;= #RC_WALKABLE_AREA] [Size: @p nt]
         /// @param[in]		numTris				The number of triangles.
         /// @param[in,out]	heightfield			An initialized heightfield.
         /// @param[in]		flagMergeThreshold	The distance where the walkable flag is favored over the non-walkable flag. 
@@ -626,7 +626,7 @@ namespace Prowl.Recast
         /// @param[in]		numTris				The number of triangles.
         /// @param[in]		walkableSlopeCos	Cosine of the maximum walkable slope angle.
         /// @param[in]		walkableAreaID		Area id for triangles within the slope limit.
-        ///										[Limit: <= #RcRecast.RC_WALKABLE_AREA]
+        ///										[Limit: &lt;= #RcRecast.RC_WALKABLE_AREA]
         /// @param[in,out]	heightfield			An initialized heightfield.
         /// @param[in]		flagMergeThreshold	The distance where the walkable flag is favored over
         ///										the non-walkable flag. [Limit: >= 0] [Units: vx]

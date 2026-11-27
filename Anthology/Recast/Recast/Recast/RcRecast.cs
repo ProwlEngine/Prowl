@@ -103,7 +103,7 @@ namespace Prowl.Recast
 
         /// Sets the neighbor connection data for the specified direction.
         /// @param[in]		span			The span to update.
-        /// @param[in]		direction		The direction to set. [Limits: 0 <= value < 4]
+        /// @param[in]		direction		The direction to set. [Limits: 0 &lt;= value &lt; 4]
         /// @param[in]		neighborIndex	The index of the neighbor span.
         public static void SetCon(RcCompactSpanBuilder span, int direction, int neighborIndex)
         {
@@ -114,7 +114,7 @@ namespace Prowl.Recast
 
         /// Gets neighbor connection data for the specified direction.
         /// @param[in]		span		The span to check.
-        /// @param[in]		direction	The direction to check. [Limits: 0 <= value < 4]
+        /// @param[in]		direction	The direction to check. [Limits: 0 &lt;= value &lt; 4]
         /// @return The neighbor connection data for the specified direction, or #RC_NOT_CONNECTED if there is no connection.
         public static int GetCon(in RcCompactSpan s, int dir)
         {
@@ -123,7 +123,7 @@ namespace Prowl.Recast
         }
 
         /// Gets the standard width (x-axis) offset for the specified direction.
-        /// @param[in]		direction		The direction. [Limits: 0 <= value < 4]
+        /// @param[in]		direction		The direction. [Limits: 0 &lt;= value &lt; 4]
         /// @return The width offset to apply to the current cell position to move in the direction.
         public static int GetDirOffsetX(int dir)
         {
@@ -132,7 +132,7 @@ namespace Prowl.Recast
 
         // TODO (graham): Rename this to rcGetDirOffsetZ
         /// Gets the standard height (z-axis) offset for the specified direction.
-        /// @param[in]		direction		The direction. [Limits: 0 <= value < 4]
+        /// @param[in]		direction		The direction. [Limits: 0 &lt;= value &lt; 4]
         /// @return The height offset to apply to the current cell position to move in the direction.
         public static int GetDirOffsetY(int dir)
         {
@@ -140,8 +140,8 @@ namespace Prowl.Recast
         }
 
         /// Gets the direction for the specified offset. One of x and y should be 0.
-        /// @param[in]		offsetX		The x offset. [Limits: -1 <= value <= 1]
-        /// @param[in]		offsetZ		The z offset. [Limits: -1 <= value <= 1]
+        /// @param[in]		offsetX		The x offset. [Limits: -1 &lt;= value &lt;= 1]
+        /// @param[in]		offsetZ		The z offset. [Limits: -1 &lt;= value &lt;= 1]
         /// @return The direction that represents the offset.
         public static int GetDirForOffset(int x, int y)
         {

@@ -41,7 +41,7 @@ namespace Prowl.Recast
         /// The y-axis cell size to use for fields. [Limit: > 0] [Units: wu]
         public readonly float Ch;
 
-        /// The maximum slope that is considered walkable. [Limits: 0 <= value < 90] [Units: Degrees] 
+        /// The maximum slope that is considered walkable. [Limits: 0 &lt;= value &lt; 90] [Units: Degrees] 
         public readonly float WalkableSlopeAngle;
 
         /// Minimum floor to 'ceiling' height that will still allow the floor area to 

@@ -34,7 +34,7 @@ namespace Prowl.Recast
         /// This removes small obstacles and rasterization artifacts that the agent would be able to walk over
         /// such as curbs.  It also allows agents to move up terraced structures like stairs.
         /// 
-        /// Obstacle spans are marked walkable if: <tt>obstacleSpan.smax - walkableSpan.smax < walkableClimb</tt>
+        /// Obstacle spans are marked walkable if: <tt>obstacleSpan.smax - walkableSpan.smax &lt; walkableClimb</tt>
         /// 
         /// @warning Will override the effect of #rcFilterLedgeSpans.  If both filters are used, call #rcFilterLedgeSpans only after applying this filter.
         ///
