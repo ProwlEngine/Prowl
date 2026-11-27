@@ -90,10 +90,10 @@ namespace Prowl.Quill
         [ThreadStatic] private static List<Vertex> _vtx;
         [ThreadStatic] private static List<uint> _idx;
 
-        private static Color32 _color;
-        private static float _covCore; // peak coverage of the solid core (1, or < 1 for sub-pixel lines)
-        private static int _base;       // base vertex index of the current sliding window (slot 0)
-        private static float _roundingMinDistance = 2.0f;
+        [ThreadStatic] private static Color32 _color;
+        [ThreadStatic] private static float _covCore; // peak coverage of the solid core (1, or < 1 for sub-pixel lines)
+        [ThreadStatic] private static int _base;       // base vertex index of the current sliding window (slot 0)
+        [ThreadStatic] private static float _roundingMinDistance;
 
         private static List<Float2> Points => _points ??= new List<Float2>();
         private static List<Float2> Normals => _normals ??= new List<Float2>();
