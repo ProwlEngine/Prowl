@@ -70,6 +70,8 @@ public sealed class OceanQueries : IDisposable
     private readonly UploadFeature _upload;
     private readonly DispatchFeature _dispatch;
 
+    /// <param name="renderer">The renderer it runs on.</param>
+    /// <param name="ocean">The waves it samples.</param>
     /// <param name="capacity">The most points answered in a frame.</param>
     public OceanQueries(Renderer renderer, OceanFeature ocean, int capacity = 4096)
     {

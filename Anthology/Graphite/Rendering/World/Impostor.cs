@@ -66,7 +66,12 @@ public sealed class ImpostorAsset : IDisposable
 
     /// <param name="albedo">sRGB base colour and coverage.</param>
     /// <param name="normalDepth">The octahedral object space normal, depth and occlusion.</param>
+    /// <param name="renderer">The renderer it draws with.</param>
     /// <param name="material">Roughness and metalness.</param>
+    /// <param name="layout">Which directions the frames cover.</param>
+    /// <param name="frames">Frames along each side of the atlas.</param>
+    /// <param name="center">The middle of the object space sphere the frames frame.</param>
+    /// <param name="radius">The radius of that sphere.</param>
     public ImpostorAsset(Renderer renderer, Texture albedo, Texture normalDepth, Texture material, ImpostorLayout layout, int frames, Float3 center, float radius)
     {
         ArgumentNullException.ThrowIfNull(renderer);

@@ -1029,7 +1029,7 @@ internal sealed class BucketSet
     }
 
     /// <summary>
-    /// Fills the draw list of a pass from the last <see cref="Cull"/>: visible objects, then their chunk box when the mesh
+    /// Fills the draw list of a pass from the last <see cref="Cull(in CullFrustum, uint, CasterFilter, RenderableFlags)"/>: visible objects, then their chunk box when the mesh
     /// has several chunks. Empty commands are left out. Prepass commands are sorted near to far by their nearest visible
     /// instance.
     /// </summary>
@@ -1178,7 +1178,7 @@ internal sealed class BucketSet
     }
 
     /// <summary>
-    /// Fills the transparent draw list from the last <see cref="Cull"/>: every visible transparent item, sorted by queue,
+    /// Fills the transparent draw list from the last <see cref="Cull(in CullFrustum, uint, CasterFilter, RenderableFlags)"/>: every visible transparent item, sorted by queue,
     /// sort bias, then back to front. Adjacent items of the same program, page, topology, winding and chunk share a command.
     /// </summary>
     public void BuildTransparent(in CullFrustum frustum, DrawList list, IReadOnlyList<ItemDraw>? provided = null)

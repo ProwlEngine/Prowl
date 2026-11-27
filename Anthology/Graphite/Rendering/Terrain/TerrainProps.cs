@@ -32,6 +32,8 @@ public sealed class TerrainProps : IDisposable
     private readonly Dictionary<(int, int), List<Placed>> _placed = new();
     private readonly Dictionary<(int, int), Task<IReadOnlyList<TerrainInstance>>> _building = new();
 
+    /// <param name="world">The world the props draw in.</param>
+    /// <param name="source">Where the placed instances come from.</param>
     /// <param name="kinds">One per prototype by index, null for one drawn some other way.</param>
     public TerrainProps(RenderWorld world, ITerrainInstances source, IReadOnlyList<TerrainPropKind?> kinds)
     {

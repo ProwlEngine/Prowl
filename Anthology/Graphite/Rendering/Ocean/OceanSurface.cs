@@ -69,6 +69,7 @@ public sealed class OceanSurface : RenderProvider, IDisposable
         set("_CausticsDistortionScale", MathF.Max(CausticsDistortionScale, 1e-3f));
     }
 
+    /// <param name="renderer">The renderer it draws with.</param>
     /// <param name="ocean">The waves the surface takes.</param>
     /// <param name="quadsPerTile">Quads along each side of a tile, even.</param>
     public OceanSurface(Renderer renderer, OceanFeature ocean, int quadsPerTile = 32) : base(ViewKinds.Cameras | ViewKinds.Captures)

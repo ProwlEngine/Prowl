@@ -851,7 +851,7 @@ internal sealed class ShadowPlanner
 /// <summary>A world's local light shadows on the render thread: its pages, every shadowed light's cache, the grid finding them.</summary>
 internal sealed class WorldShadows(TableHost tables, int worldId)
 {
-    public int WorldId { get; } = worldId;
+    public int WorldId => worldId;
 
     public const int FacesPerLight = 6;
 

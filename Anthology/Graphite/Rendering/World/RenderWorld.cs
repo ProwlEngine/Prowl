@@ -1097,7 +1097,8 @@ public sealed partial class RenderWorld : IDisposable
             ForcedLod[index] = host._forcedLod[index];
             Span<uint> cull = CullObjects.Edit((uint)index);
             cull[1] = BitConverter.SingleToUInt32Bits(LodBias[index]);
-            cull[2] = (ushort)ForcedLod[index] | (uint)Flags[index] << 16;
+            ushort forcedLod = (ushort)ForcedLod[index];
+            cull[2] = forcedLod | (uint)Flags[index] << 16;
             cull[3] = LayerMask[index];
             BoundsOverride[index] = host._hasBoundsOverride[index] ? host._boundsOverride[index] : null;
 

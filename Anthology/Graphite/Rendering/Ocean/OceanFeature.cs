@@ -52,6 +52,7 @@ public sealed partial class OceanFeature : FrameFeature, IDisposable
     private readonly float[] _sizes = new float[Cascades];
     private TextureHandle _initialHandle, _aHandle, _bHandle, _displacementHandle, _slopesHandle, _foamHandle;
 
+    /// <param name="renderer">The renderer it draws with.</param>
     /// <param name="resolution">Texels along each side of a cascade, a power of two from 16 to 256.</param>
     public OceanFeature(Renderer renderer, int resolution = 128) : base(FrameSlot.BeforeViews)
     {

@@ -92,7 +92,11 @@ internal readonly record struct VoxelRegion(Int3 Min, Int3 Max)
 
 /// <summary>A world's voxel volume as a view's pass reads it, with its radiance cache, which the pass may add entries to, the sun shadow over the box and the sky capture.</summary>
 /// <param name="Voxels">The voxels, laid out as Graphite/VoxelData.glsl reads them.</param>
+/// <param name="Cache">The radiance cache, see Graphite/VoxelCache.glsl.</param>
 /// <param name="Lighting">What lights the voxels, see Graphite/VoxelLighting.glsl.</param>
+/// <param name="SunShadow">The sun's shadow map over the box.</param>
+/// <param name="Sky">The sky capture.</param>
+/// <param name="ShadowSampler">Samples <paramref name="SunShadow"/>.</param>
 /// <param name="Center">The middle of the box in the world.</param>
 /// <param name="Extent">The box's size in metres.</param>
 /// <param name="VoxelSize">The edge of one voxel in metres.</param>

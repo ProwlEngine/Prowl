@@ -16,7 +16,7 @@ internal sealed class PersistentBuffer(RenderResourceID id, BufferUsage usage, b
         if (Buffer != null && Buffer.SizeInBytes == sizeInBytes)
             return Buffer;
         DeviceBuffer created = device.ResourceFactory.CreateBuffer(new BufferDescription(sizeInBytes, usage));
-        created.Name = RenderResourceID.ToString(Id);
+        created.Name = RenderResourceID.ToString(Id) ?? string.Empty;
         if (Buffer != null && keepContents)
             store.Resized(Buffer, created);
         else if (Buffer != null)

@@ -62,6 +62,7 @@ public sealed class WorldGI : ScreenLightingFeature
         public Texture? Copied;
     }
 
+    /// <param name="renderer">The renderer it draws with.</param>
     /// <param name="runsOn">The views it lights. A reflection probe's GI settles over frames, so it should capture
     /// several frames in a row.</param>
     public WorldGI(Renderer renderer, ViewKinds runsOn = ViewKinds.Cameras) : base(runsOn: runsOn, sceneReads: SceneTargets.Normals | SceneTargets.Motion)

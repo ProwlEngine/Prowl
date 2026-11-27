@@ -760,7 +760,7 @@ public sealed class Renderer : IDisposable
 
     /// <summary>
     /// Creates a program making its own geometry from gl_VertexIndex, drawn by features through
-    /// <see cref="FeatureContext.DrawProcedural"/>. Its code holds both stages, the vertex one under GRAPHITE_VERTEX, and
+    /// <see cref="FeatureContext.DrawProcedural(FullscreenProgram, RenderTexture, uint, PropertySet?, bool)"/>. Its code holds both stages, the vertex one under GRAPHITE_VERTEX, and
     /// reads the view through Graphite/Internal/PostView.glsl as fullscreen programs do.
     /// </summary>
     public FullscreenProgram CreateProceduralProgram(string code, string name = "Procedural", BlendStateDescription? blend = null, bool lit = false, bool depth = false)
@@ -770,7 +770,7 @@ public sealed class Renderer : IDisposable
     /// Creates a compute program from code holding a Compute block, as the library's compute files do. A lit one binds
     /// the renderer's frame and view tables whole, so it can read Graphite_View and the world's lights and shadows: its
     /// code declares "#pragma resource_set 3" and GRAPHITE_NO_OBJECT, and its feature declares
-    /// <see cref="FeatureBuilder.DrawsRenderables"/> and calls <see cref="FeatureContext.BindLighting"/> after setting it.
+    /// <see cref="FeatureBuilder.DrawsRenderables"/> and calls <see cref="FeatureContext.BindLighting(int)"/> after setting it.
     /// </summary>
     public ComputeProgram CreateComputeProgram(string code, string name = "Compute", bool lit = false)
     {

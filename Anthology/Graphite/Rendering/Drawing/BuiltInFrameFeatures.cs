@@ -115,7 +115,7 @@ public sealed class LocalShadowFeature : FrameFeature
     internal override void AddBuiltIn(FramePipeline frame, WorldFrame? world)
     {
         ShadowPasses.Add(frame, frame.Graph, world!);
-        frame.Exports.Provide(RendererOutputs.ShadowPages, world.World);
+        frame.Exports.Provide(RendererOutputs.ShadowPages, world!.World);
         frame.Exports.Provide(RendererOutputs.ShadowFaces, world.World);
     }
 }
@@ -152,7 +152,7 @@ public sealed class CaptureFillFeature : FrameFeature
     internal override void AddBuiltIn(FramePipeline frame, WorldFrame? world)
     {
         frame.AddFills(world!);
-        frame.Exports.Provide(RendererOutputs.CaptureCubes, world.World);
+        frame.Exports.Provide(RendererOutputs.CaptureCubes, world!.World);
         frame.Exports.Provide(RendererOutputs.SkyAmbient, world.World);
     }
 }

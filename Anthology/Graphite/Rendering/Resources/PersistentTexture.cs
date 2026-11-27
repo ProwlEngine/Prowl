@@ -26,7 +26,7 @@ internal sealed class PersistentTexture(RenderResourceID id, GraphTextureDesc de
         if (changed)
         {
             Texture = new RenderTexture(device, Describe(description));
-            Texture.Name = RenderResourceID.ToString(id);
+            Texture.Name = RenderResourceID.ToString(Id) ?? string.Empty;
             Slot = slotOf(Texture);
         }
         return Texture!;

@@ -472,6 +472,8 @@ public abstract class RenderFeature : RenderExtension
 /// </summary>
 public abstract class ScreenLightingFeature : RenderFeature
 {
+    /// <param name="order">Order among the features in its slot.</param>
+    /// <param name="runsOn">The views it runs on.</param>
     /// <param name="sceneReads">Targets it reads, which the view's GBuffer fills for it.</param>
     protected ScreenLightingFeature(int order = 0, ViewKinds runsOn = ViewKinds.Cameras, SceneTargets sceneReads = SceneTargets.None)
         : base(RenderSlot.AfterPrepass, order, FeatureGroup.ScreenLighting, runsOn, sceneReads)
@@ -546,7 +548,7 @@ public sealed class FullscreenProgram : IDisposable
     /// <summary>Whether the program reads the world's lights, shadows and textures through Graphite's library.</summary>
     public bool Lit { get; }
 
-    /// <summary>Whether the program writes its own vertex stage, drawn through <see cref="FeatureContext.DrawProcedural"/>.</summary>
+    /// <summary>Whether the program writes its own vertex stage, drawn through <see cref="FeatureContext.DrawProcedural(FullscreenProgram, RenderTexture, uint, PropertySet?, bool)"/>.</summary>
     public bool Procedural { get; }
 
     /// <summary>Whether the program tests and writes the scene's depth as opaque geometry does, its fragments giving gl_FragDepth.</summary>
@@ -811,7 +813,7 @@ public sealed class FeatureBuilder
     /// <summary>Whether a feature of a group runs on the view this frame.</summary>
     public bool Runs(FeatureGroup group) => FeatureSelection.Has(View.Camera.Selected, group);
 
-    /// <summary>Writes a new colour from the current one, which later features read. <see cref="FeatureContext.Fullscreen"/> draws it.</summary>
+    /// <summary>Writes a new colour from the current one, which later features read. <see cref="FeatureContext.Fullscreen(FullscreenProgram, PropertySet?)"/> draws it.</summary>
     public void WriteColor()
     {
         ReadColor();

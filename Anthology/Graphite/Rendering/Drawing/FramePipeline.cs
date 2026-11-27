@@ -34,12 +34,12 @@ internal sealed partial class FramePipeline : IDisposable
         public uint Flags;
     }
 
+    [StructLayout(LayoutKind.Sequential, Size = 16)]
     private struct ExposurePush
     {
         public float Host;
         public uint Flags;
         public uint Layers;
-        private uint _pad;
     }
 
     private static readonly List<RenderResourceID> s_bufferIds = new();
