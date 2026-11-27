@@ -1,10 +1,12 @@
 using System;
 using System.Collections.Generic;
 using System.IO;
+using System.Linq;
 
 using Prowl.Echo;
 using Prowl.Editor.Core;
 using Prowl.Editor.GUI;
+using Prowl.Editor.GUI.PropertyEditors;
 using Prowl.Editor.Importers;
 using Prowl.Editor.Projects;
 using Prowl.Editor.Theming;
@@ -232,6 +234,53 @@ public class TextureAssetEditor : ImportSettingsEditor
 
         Origami.Button(paper, $"{id}_spopen", $"{EditorIcons.PenToSquare}  Open Sprite Editor",
             () => SpriteEditorWindow.OpenFor(entry.Guid)).Width(200).Show();
+
+        SecondaryTextureRows(paper, id, guid, sprite);
+    }
+
+    /// <summary>Extra textures every sprite of the sheet binds by shader property name, such as a normal map.</summary>
+    private static void SecondaryTextureRows(Paper paper, string id, Guid guid, SpriteEditTarget sprite)
+    {
+        Origami.Header(paper, $"{id}_sec_hdr", "Secondary Textures").Show();
+
+        int i = 0;
+        foreach ((string name, Texture2D texture) in sprite.Settings.SecondaryTextures.ToArray())
+        {
+            int row = i++;
+            using (paper.Row($"{id}_sec_{row}").Height(24).Gap(4).PaddingLeft(8).PaddingRight(4).Enter())
+            {
+                using (paper.Box($"{id}_sec_name_{row}").Width(140).Height(22).Enter())
+                    Origami.TextField(paper, $"{id}_sec_name_tf_{row}", name, v =>
+                        {
+                            string trimmed = v.Trim();
+                            if (trimmed.Length == 0 || sprite.Settings.SecondaryTextures.ContainsKey(trimmed)) return;
+                            EditSprite(guid, sprite, "Rename Secondary Texture", st =>
+                            {
+                                st.SecondaryTextures.Remove(name);
+                                st.SecondaryTextures[trimmed] = texture;
+                            });
+                        }).CommitOnEnter().Show();
+
+                using (paper.Box($"{id}_sec_tex_{row}").Width(UnitValue.Stretch()).Height(22).Enter())
+                {
+                    EngineObjectPropertyEditor.SetFieldType(typeof(Texture2D));
+                    new EngineObjectPropertyEditor().OnGUI(paper, $"{id}_sec_tex_f_{row}", "", texture,
+                        picked => EditSprite(guid, sprite, "Set Secondary Texture", st => st.SecondaryTextures[name] = (picked as Texture2D)!), 0);
+                }
+
+                Origami.IconButton(paper, $"{id}_sec_del_{row}", EditorIcons.Xmark_I,
+                        () => EditSprite(guid, sprite, "Remove Secondary Texture", st => st.SecondaryTextures.Remove(name)))
+                    .Small().Width(20).Height(22).Ghost().Show();
+            }
+        }
+
+        Origami.Button(paper, $"{id}_sec_add", $"{EditorIcons.Plus}  Add Secondary Texture", () =>
+        {
+            string name = "_NormalMap";
+            for (int n = 1; sprite.Settings.SecondaryTextures.ContainsKey(name); n++)
+                name = $"_Texture{n}";
+            EditSprite(guid, sprite, "Add Secondary Texture", st => st.SecondaryTextures[name] = null!);
+        }).Show();
     }
 
     /// <summary>Slices whose edges fall inside a compression block of the format the sheet will be stored in.</summary>

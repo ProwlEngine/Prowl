@@ -61,6 +61,8 @@ public class SpriteRenderer : Component, IMaterialRenderer, IColorTint, IRenderS
     [System.NonSerialized, NotHeld] private readonly RenderableState _renderable = new();
     [System.NonSerialized, NotHeld] private readonly OwnedMaterial _material = new();
     [System.NonSerialized, NotHeld] private readonly GMaterial[] _gpuMaterials = new GMaterial[1];
+    [System.NonSerialized, NotHeld] private readonly HashSet<string> _secondaryBound = [];
+    [System.NonSerialized, NotHeld] private readonly List<string> _secondaryStale = [];
     [System.NonSerialized] private uint _worldVersion, _transformVersion;
 
     // Snapshot of the inputs the baked mesh was built from, so we only rebuild when something changes.
@@ -110,8 +112,7 @@ public class SpriteRenderer : Component, IMaterialRenderer, IColorTint, IRenderS
             return false;
         }
         _material.SetTexture("_MainTex", tex);
-        foreach (KeyValuePair<string, Texture2D> secondary in sprite.SecondaryTextures)
-            if (secondary.Value.IsValid()) _material.SetTexture(secondary.Key, secondary.Value);
+        BindSecondaryTextures(sprite);
         _gpuMaterials[0] = gpu;
 
         if (_worldVersion != Transform.WorldVersion)
@@ -142,6 +143,27 @@ public class SpriteRenderer : Component, IMaterialRenderer, IColorTint, IRenderS
     {
         _renderable.Detach(world);
         _material.Release();
+        _secondaryBound.Clear();
+    }
+
+    // Binds the sprite's secondary textures and unbinds the ones it no longer has
+    private void BindSecondaryTextures(Sprite sprite)
+    {
+        _secondaryStale.Clear();
+        foreach (string name in _secondaryBound)
+            if (!sprite.SecondaryTextures.TryGetValue(name, out Texture2D? texture) || texture.IsNotValid())
+                _secondaryStale.Add(name);
+        foreach (string name in _secondaryStale)
+        {
+            _material.ClearTexture(name);
+            _secondaryBound.Remove(name);
+        }
+        foreach (KeyValuePair<string, Texture2D> secondary in sprite.SecondaryTextures)
+        {
+            if (secondary.Value.IsNotValid()) continue;
+            _material.SetTexture(secondary.Key, secondary.Value);
+            _secondaryBound.Add(secondary.Key);
+        }
     }
 
     private void EnsureMesh(Sprite sprite)
@@ -356,6 +378,13 @@ internal sealed class OwnedMaterial
         if (_textures.TryGetValue(name, out var bound) && bound.Texture == gpu && bound.Sampler.Equals(sampler)) return;
         _textures[name] = (gpu, sampler);
         if (_child.Shader.FindProperty(name) >= 0) _child.SetTexture(name, gpu, sampler);
+    }
+
+    /// <summary>Drops the child's texture, so the parent's or the shader default draws.</summary>
+    public void ClearTexture(string name)
+    {
+        if (_child == null || !_textures.Remove(name)) return;
+        _child.ClearOverride(name);
     }
 
     /// <summary>Gives the child a colour when its shader has the property and the colour changed.</summary>
