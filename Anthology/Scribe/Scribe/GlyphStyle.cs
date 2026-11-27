@@ -24,7 +24,7 @@ public struct GlyphStyle
     public int Codepoint;
 
     /// <summary>Null falls back to the layout's own font, which then searches the fallbacks.</summary>
-    public FontFile Font;
+    public FontFile? Font;
 
     /// <summary>Zero or less falls back to the layout's pixel size.</summary>
     public float PixelSize;
@@ -43,7 +43,7 @@ public struct GlyphStyle
     /// <summary>Draw a line through this character.</summary>
     public bool Strikethrough;
 
-    public GlyphStyle(int charIndex, int codepoint, FontFile font, float pixelSize,
+    public GlyphStyle(int charIndex, int codepoint, FontFile? font, float pixelSize,
                       float letterSpacing, float wordSpacing, FontQuality quality)
     {
         CharIndex = charIndex;

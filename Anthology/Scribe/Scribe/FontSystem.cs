@@ -322,7 +322,7 @@ namespace Prowl.Scribe
                     yield return f;
         }
 
-        public AtlasGlyph GetOrCreateGlyph(int codepoint, FontFile font, FontQuality quality)
+        public AtlasGlyph? GetOrCreateGlyph(int codepoint, FontFile font, FontQuality quality)
         {
             if(font == null) throw new ArgumentNullException(nameof(font));
 
@@ -337,11 +337,11 @@ namespace Prowl.Scribe
             // Fallbacks, preferring one drawn in the same style. A second pass takes any font that
             // has the character at all: emoji and symbol fonts ship in one style only, so insisting
             // on a match would drop them from every bold or italic run.
-            AtlasGlyph match = FindInFallbacks(codepoint, font, quality, font.Style);
+            AtlasGlyph? match = FindInFallbacks(codepoint, font, quality, font.Style);
             return match ?? FindInFallbacks(codepoint, font, quality, null);
         }
 
-        private AtlasGlyph FindInFallbacks(int codepoint, FontFile requested, FontQuality quality, FontStyle? style)
+        private AtlasGlyph? FindInFallbacks(int codepoint, FontFile requested, FontQuality quality, FontStyle? style)
         {
             foreach (var f in fallbackFonts)
             {
@@ -360,7 +360,7 @@ namespace Prowl.Scribe
         /// Returns the atlas glyph for a specific glyph index in a specific font (no codepoint
         /// lookup, no fallback). Used by the shaper for substituted glyphs such as ligatures.
         /// </summary>
-        public AtlasGlyph GetOrCreateGlyphByIndex(int glyphIndex, FontFile font, FontQuality quality)
+        public AtlasGlyph? GetOrCreateGlyphByIndex(int glyphIndex, FontFile font, FontQuality quality)
         {
             if (font == null) throw new ArgumentNullException(nameof(font));
             if ((int)quality <= 0) quality = FontQuality.Normal;
@@ -485,7 +485,7 @@ namespace Prowl.Scribe
         /// for itself. Fonts disagree considerably about how tall a pixel size is: at 16px Arial's em
         /// is 14.3 and Segoe UI Emoji's is 17.0, so a borrowed glyph is otherwise a fifth too big.
         /// </summary>
-        public float GetScale(FontFile font, FontFile primary, float pixelSize)
+        public float GetScale(FontFile font, FontFile? primary, float pixelSize)
         {
             if (font == null) return 0f;
             if (primary == null || ReferenceEquals(font, primary) || font.UnitsPerEm <= 0)
@@ -503,7 +503,7 @@ namespace Prowl.Scribe
 
         /// <summary>Per-glyph horizontal metrics by glyph index (used by the shaper / substituted glyphs).</summary>
         public GlyphMetrics? GetGlyphMetricsByIndex(FontFile fontInfo, int glyphIndex, float pixelSize,
-                                                    FontFile primary = null)
+                                                    FontFile? primary = null)
         {
             if (glyphIndex <= 0) return null;
 
@@ -552,7 +552,7 @@ namespace Prowl.Scribe
         }
 
         // Reusable GSUB shaping buffer (single-threaded, like the other caches).
-        private List<GsubGlyph> _shapeBuf;
+        private List<GsubGlyph>? _shapeBuf;
 
         /// <summary>
         /// Shapes a character range [<paramref name="start"/>, <paramref name="end"/>) into a
@@ -650,15 +650,15 @@ namespace Prowl.Scribe
         private sealed class ShapedWord
         {
             public readonly ShapedGlyph[] Glyphs; // clusters relative to the word start
-            public readonly ShapedWord Next;
+            public readonly ShapedWord? Next;
 
             private readonly string _text;
-            private readonly FontFile _font;
+            private readonly FontFile? _font;
             private readonly float _pixelSize, _letterSpacing;
             private readonly FontQuality _quality;
             private readonly bool _noLigatures;
 
-            public ShapedWord(string text, in TextLayoutSettings settings, ShapedGlyph[] glyphs, ShapedWord next)
+            public ShapedWord(string text, in TextLayoutSettings settings, ShapedGlyph[] glyphs, ShapedWord? next)
             {
                 _text = text;
                 _font = settings.Font;
@@ -682,12 +682,12 @@ namespace Prowl.Scribe
             var buf = _shapeBuf ??= new List<GsubGlyph>();
             buf.Clear();
 
-            FontFile primary = settings.Font;
+            FontFile? primary = settings.Font;
             bool customized = styles.Count > 0;
             var uniform = new GlyphStyle(0, 0, primary, settings.PixelSize,
                                          settings.LetterSpacing, settings.WordSpacing, settings.Quality);
 
-            FontFile runFont = null;
+            FontFile? runFont = null;
             var runStyle = uniform;
 
             int i = start;
@@ -739,8 +739,8 @@ namespace Prowl.Scribe
             buf.Clear();
         }
 
-        private void FlushSubRun(FontFile font, List<GsubGlyph> buf, in GlyphStyle style,
-                                 List<ShapedGlyph> output, FontFile primary, bool noLigatures)
+        private void FlushSubRun(FontFile? font, List<GsubGlyph> buf, in GlyphStyle style,
+                                 List<ShapedGlyph> output, FontFile? primary, bool noLigatures)
         {
             if (font == null || buf.Count == 0)
                 return;
@@ -827,7 +827,7 @@ namespace Prowl.Scribe
 
         LayoutCacheKey GenerateLayoutCacheKey(string text, TextLayoutSettings s)
             => new LayoutCacheKey(text, s.PixelSize, s.LetterSpacing, s.WordSpacing, s.LineHeight,
-                   s.TabSize, s.WrapMode, s.Alignment, s.MaxWidth, s.Font.GetHashCode(),
+                   s.TabSize, s.WrapMode, s.Alignment, s.MaxWidth, s.Font?.GetHashCode() ?? 0,
                    s.Quality, s.Customizer, s.NoLigatures);
 
         #endregion
@@ -1003,8 +1003,8 @@ namespace Prowl.Scribe
             var quads = layout._drawQuads;
             quads.Clear();
 
-            FontFile primary = layout.Settings.Font;
-            FontFile scaleFont = null;
+            FontFile? primary = layout.Settings.Font;
+            FontFile? scaleFont = null;
             float scaleSize = 0f, sc = 0f;
 
             foreach (var line in layout.Lines)
@@ -1090,7 +1090,7 @@ namespace Prowl.Scribe
         private void AddDecorationQuads(TextLayout layout, List<TextLayout.DrawQuad> quads, TextDecoration decoration,
                                         int firstChar, float x0, float x1, float baselineY, float pixelSize)
         {
-            FontFile font = layout.Settings.Font;
+            FontFile? font = layout.Settings.Font;
             if (font == null || x1 <= x0) return;
             if (!TryGetDecorationBand(out float u0, out float v0, out float u1, out float v1, out float marginRatio))
                 return;

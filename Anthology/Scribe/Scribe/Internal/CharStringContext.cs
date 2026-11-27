@@ -12,7 +12,7 @@ namespace Prowl.Scribe.Internal
 		public int min_x;
 		public int min_y;
 		public int num_vertices;
-		public GlyphVertex[] pvertices;
+		public GlyphVertex[] pvertices = null!;
 		public int started;
 		public float x;
 		public float y;

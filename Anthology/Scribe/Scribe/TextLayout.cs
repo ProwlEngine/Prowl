@@ -9,18 +9,18 @@ namespace Prowl.Scribe
         public List<Line> Lines { get; private set; }
         public Float2 Size { get; private set; }
         public TextLayoutSettings Settings { get; private set; }
-        public string Text { get; private set; }
+        public string Text { get; private set; } = string.Empty;
 
         // The font whose metrics set the current line's box, and the largest size placed on it.
         // Glyphs from a fallback font share the primary font's baseline rather than each sitting on
         // their own, which is what keeps mixed-font text on one line straight. A line is not
         // measured until it closes, since a glyph later on it can be taller than anything before it.
-        private FontFile _lineFont;
+        private FontFile? _lineFont;
         private float _lineMaxSize;
 
         // Last glyph placed on the current line, so the pair it forms with a following space can be
         // kerned. Cleared at every line start, where there is nothing to its left.
-        private FontFile _prevFont;
+        private FontFile? _prevFont;
         private int _prevGlyph;
         private float _prevSize;
 
@@ -45,7 +45,7 @@ namespace Prowl.Scribe
 
         // Kerning between two glyphs of the same font. Different fonts have no pair to look up, and
         // glyph 0 is .notdef, which never kerns.
-        private static float PairKern(FontSystem fontSystem, FontFile a, int ga, FontFile b, int gb, float pixelSize)
+        private static float PairKern(FontSystem fontSystem, FontFile? a, int ga, FontFile? b, int gb, float pixelSize)
         {
             if (a == null || b == null || ga <= 0 || gb <= 0 || !ReferenceEquals(a, b)) return 0f;
             return fontSystem.GetKerningByGlyph(a, ga, gb, pixelSize);
@@ -53,7 +53,7 @@ namespace Prowl.Scribe
 
         // The font system this layout was last built against. Hit-testing methods need it to fetch
         // per-glyph metrics (offsets) at draw time, since AtlasGlyph is now size-independent.
-        private FontSystem _fontSystem;
+        private FontSystem? _fontSystem;
 
         /// <summary>
         /// Snapshot of <see cref="FontSystem.AtlasVersion"/> taken when the layout was built.
@@ -153,8 +153,8 @@ namespace Prowl.Scribe
             // Words are shaped one at a time, so the pairs that straddle a space are not covered by
             // that shaping and have to be kerned here. Without this every space in a line is a
             // fraction of a pixel too wide, and the error accumulates across the line.
-            var spaceGlyph = fontSystem.GetOrCreateGlyph(' ', Settings.Font, Settings.Quality);
-            FontFile spaceFont = spaceGlyph?.Font;
+            var spaceGlyph = fontSystem.GetOrCreateGlyph(' ', Settings.Font!, Settings.Quality);
+            FontFile? spaceFont = spaceGlyph?.Font;
             int spaceIndex = spaceGlyph?.GlyphIndex ?? 0;
             bool afterSpace = false;
             float tabWidth = spaceWidth * Settings.TabSize;
@@ -272,7 +272,7 @@ namespace Prowl.Scribe
                 // run was split at a dash the two glyphs simply touch. Dropped if the run wraps,
                 // since there is then nothing to its left.
                 var firstGlyph = wordGlyphs[0].Glyph;
-                FontFile leftFont = afterSpace ? spaceFont : _prevFont;
+                FontFile? leftFont = afterSpace ? spaceFont : _prevFont;
                 int leftGlyph = afterSpace ? spaceIndex : _prevGlyph;
                 float leadKern = PairKern(fontSystem, leftFont, leftGlyph,
                                           firstGlyph?.Font, firstGlyph?.GlyphIndex ?? 0, wordGlyphs[0].PixelSize);
@@ -317,14 +317,14 @@ namespace Prowl.Scribe
                 FinalizeLine(fontSystem, ref line, currentY, i, currentX);
 
             _open.Clear();
-            _open = null;
+            _open = null!;
         }
 
         // Glyphs of the line being built. They move into the line's own list, sized to fit, when it closes.
-        private List<GlyphInstance> _open;
+        private List<GlyphInstance> _open = null!;
 
         // Glyph lists of the previous layout, kept so rebuilding in place allocates nothing.
-        private List<List<GlyphInstance>> _spare;
+        private List<List<GlyphInstance>>? _spare;
 
         private void RecycleLines()
         {
@@ -364,7 +364,7 @@ namespace Prowl.Scribe
         }
 
         // Pixel scale of the font and size the last glyph was placed with, which rarely changes.
-        private FontFile _scaleFont;
+        private FontFile? _scaleFont;
         private float _scaleSize;
         private float _scale;
 
@@ -381,7 +381,7 @@ namespace Prowl.Scribe
         }
 
         // Reusable shaped-glyph buffer for the current content word.
-        private List<ShapedGlyph> _wordGlyphs;
+        private List<ShapedGlyph>? _wordGlyphs;
 
         // Places an already-shaped word that is too wide for one line, breaking at cluster boundaries
         // (never inside a ligature).
@@ -409,7 +409,7 @@ namespace Prowl.Scribe
         // Draws the hyphen a soft hyphen turns into once a line breaks at it.
         private void EmitHyphen(FontSystem fontSystem, ref float currentX, float pixelSize, int charIndex)
         {
-            var glyph = fontSystem.GetOrCreateGlyph('-', Settings.Font, Settings.Quality);
+            var glyph = fontSystem.GetOrCreateGlyph('-', Settings.Font!, Settings.Quality);
             if (glyph == null) return;
 
             var gm = fontSystem.GetGlyphMetricsByIndex(glyph.Font, glyph.GlyphIndex, pixelSize, Settings.Font) ?? default;
@@ -475,8 +475,9 @@ namespace Prowl.Scribe
 
         // Natural line height of the primary font at the current size (ascent + |descent| + lineGap).
         // Falls back to the pixel size when there is no font.
-        private float GetSpaceWidth(FontSystem fontSystem, FontFile font, float pixelSize, FontQuality quality)
+        private float GetSpaceWidth(FontSystem fontSystem, FontFile? font, float pixelSize, FontQuality quality)
         {
+            if (font == null) return pixelSize * 0.25f;
             var spaceGlyph = fontSystem.GetOrCreateGlyph(' ', font, quality);
             if (spaceGlyph == null) return pixelSize * 0.25f;
             var gm = fontSystem.GetGlyphMetricsByIndex(spaceGlyph.Font, spaceGlyph.GlyphIndex, pixelSize, Settings.Font);
@@ -560,7 +561,7 @@ namespace Prowl.Scribe
 
         private float _spaceSize;
         private float _spaceWidth;
-        private FontFile _spaceFont;
+        private FontFile? _spaceFont;
         private FontQuality _spaceQuality;
 
         // Opens a line. Nothing to its left, and no glyph on it yet to set its box.

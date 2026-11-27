@@ -215,7 +215,7 @@ namespace Prowl.PaperUI
         readonly float PixelSize, LetterSpacing, WordSpacing, LineHeight, FbScale, Width;
         readonly int TabSize;
         readonly FontQuality Quality;
-        readonly FontFile Font;
+        readonly FontFile? Font;
         readonly GlyphCustomizer? Customizer;
         readonly bool NoLigatures, Truncated;
         readonly TextWrapMode Wrap;

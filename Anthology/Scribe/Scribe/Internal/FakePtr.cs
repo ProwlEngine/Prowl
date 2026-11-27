@@ -4,7 +4,7 @@ namespace Prowl.Scribe.Internal
 {
     public struct FakePtr<T> where T : new()
 	{
-		public static readonly FakePtr<T> Null = new FakePtr<T>(null);
+		public static readonly FakePtr<T> Null = new FakePtr<T>(null!);
 
 		private readonly T[] _array;
 

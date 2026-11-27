@@ -19,7 +19,7 @@ readonly struct LayoutCacheKey : IEquatable<LayoutCacheKey>
     // match when it is the very same one. It is contracted to answer the same for the same
     // character; one that closes over state which changes must use FontSystem.UpdateLayout instead,
     // which never touches this cache.
-    public readonly GlyphCustomizer Customizer;
+    public readonly GlyphCustomizer? Customizer;
     public readonly bool NoLigatures;
 
     static int Q(float v, float stepTimes) => (int)MathF.Round(v * stepTimes);
@@ -27,7 +27,7 @@ readonly struct LayoutCacheKey : IEquatable<LayoutCacheKey>
     public LayoutCacheKey(
         string text, float pixelSize, float letterSpacing, float wordSpacing, float lineHeight,
         int tabSize, TextWrapMode wrap, TextAlignment align, float maxWidth, int fontHash,
-        FontQuality quality, GlyphCustomizer customizer, bool noLigatures)
+        FontQuality quality, GlyphCustomizer? customizer, bool noLigatures)
     {
         Text = text ?? string.Empty;
         PxQ = Q(pixelSize, 8f);  // ~1/8 px
@@ -45,7 +45,7 @@ readonly struct LayoutCacheKey : IEquatable<LayoutCacheKey>
         && TabSize == o.TabSize && Wrap == o.Wrap && Align == o.Align && FontHash == o.FontHash
         && Quality == o.Quality && ReferenceEquals(Customizer, o.Customizer) && NoLigatures == o.NoLigatures;
 
-    public override bool Equals(object obj) => obj is LayoutCacheKey o && Equals(o);
+    public override bool Equals(object? obj) => obj is LayoutCacheKey o && Equals(o);
 
     public override int GetHashCode()
     {

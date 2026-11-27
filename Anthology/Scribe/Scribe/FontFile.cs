@@ -10,18 +10,18 @@ namespace Prowl.Scribe
 {
     public partial class FontFile
     {
-        private Buf cff = null;
-        private Buf charstrings = null;
+        private Buf cff = null!;
+        private Buf charstrings = null!;
         private FakePtr<byte> data;
-        private Buf fdselect = null;
-        private Buf fontdicts = null;
+        private Buf fdselect = null!;
+        private Buf fontdicts = null!;
         private int fontstart;
         private int glyf;
         private int gpos;
         private int gsub;
         private int gdef;
         private int os2;
-        private Buf gsubrs = null;
+        private Buf gsubrs = null!;
         private int head;
         private int hhea;
         private int hmtx;
@@ -32,11 +32,11 @@ namespace Prowl.Scribe
         private int loca;
         private int numGlyphs;
         private int post;
-        private Buf subrs = null;
+        private Buf subrs = null!;
 
         // Lookup-list indices of the GPOS 'kern' feature (latn/DFLT), resolved lazily. Empty when the
         // font has no GPOS kerning (the legacy 'kern' table is used instead).
-        private List<int> _kernLookups;
+        private List<int>? _kernLookups;
 
         private readonly Dictionary<int, int> unicodeMapCache = new Dictionary<int, int>();
         private readonly Dictionary<(int, int), int> kerningMapCache = new Dictionary<(int, int), int>();
@@ -177,9 +177,9 @@ namespace Prowl.Scribe
 			}
 			else
 			{
-				Buf b = null;
-				Buf topdict = null;
-				Buf topdictidx = null;
+				Buf? b = null;
+				Buf? topdict = null;
+				Buf? topdictidx = null;
 				var cstype = (uint)2;
 				var charstrings = (uint)0;
 				var fdarrayoff = (uint)0;
@@ -454,7 +454,7 @@ namespace Prowl.Scribe
 			return numberOfContours == 0 ? 1 : 0;
 		}
 
-		public int GetGlyphShape(int glyph_index, out GlyphVertex[] pvertices)
+		public int GetGlyphShape(int glyph_index, out GlyphVertex[]? pvertices)
 		{
 			if (this.cff.size == 0)
 				return GetGlyphShapeTT(glyph_index, out pvertices);
@@ -469,9 +469,8 @@ namespace Prowl.Scribe
 
             // Precedence: GPOS 'kern' feature (pair adjustment) if the font has one, else the legacy
             // 'kern' table. A GPOS table without a 'kern' feature must not suppress a real kern table.
-            EnsureKernLookups();
             var xAdvance = 0;
-			if (_kernLookups.Count > 0)
+			if (EnsureKernLookups().Count > 0)
 				xAdvance = GetGlyphGPOSInfoAdvance(g1, g2);
 			else if (this.kern != 0)
 				xAdvance = GetGlyphKernInfoAdvance(g1, g2);
@@ -481,16 +480,17 @@ namespace Prowl.Scribe
 
 		// Resolves (once) the GPOS 'kern' feature lookups for the default script. Tries 'latn' first,
 		// then 'DFLT'; leaves the list empty when there is no GPOS kerning.
-		private void EnsureKernLookups()
+		private List<int> EnsureKernLookups()
 		{
 			if (_kernLookups != null)
-				return;
+				return _kernLookups;
 			_kernLookups = new List<int>();
 			if (this.gpos == 0)
-				return;
+				return _kernLookups;
 			var table = this.data + this.gpos;
 			if (!GetFeatureLookups(table, "latn", null, "kern", _kernLookups))
 				GetFeatureLookups(table, "DFLT", null, "kern", _kernLookups);
+			return _kernLookups;
 		}
 
         public void GetGlyphHorizontalMetrics(int glyph_index, ref int advanceWidth, ref int leftSideBearing)
@@ -687,12 +687,12 @@ namespace Prowl.Scribe
             return g1 == g2 ? -1 : g1;
         }
 
-        private int GetGlyphShapeTT(int glyph_index, out GlyphVertex[] pvertices)
+        private int GetGlyphShapeTT(int glyph_index, out GlyphVertex[]? pvertices)
         {
             short numberOfContours = 0;
             FakePtr<byte> endPtsOfContours;
             var data = this.data;
-            GlyphVertex[] vertices = null;
+            GlyphVertex[]? vertices = null;
             var num_vertices = 0;
             var g = GetGlyfOffset(glyph_index);
             pvertices = null;
@@ -873,7 +873,7 @@ namespace Prowl.Scribe
                     ushort gidx = 0;
                     var comp_num_verts = 0;
                     var i = 0;
-                    GlyphVertex[] comp_verts;
+                    GlyphVertex[]? comp_verts;
                     GlyphVertex[] tmp;
                     var mtx = new float[6];
                     mtx[0] = 1;
@@ -941,7 +941,7 @@ namespace Prowl.Scribe
                         {
                             short x = 0;
                             short y = 0;
-                            x = comp_verts[i].x;
+                            x = comp_verts![i].x;
                             y = comp_verts[i].y;
                             comp_verts[i].x = (short)(mtx[0] * x + mtx[2] * y + mtx[4] * m);
                             comp_verts[i].y = (short)(mtx[1] * x + mtx[3] * y + mtx[5] * n);
@@ -959,9 +959,9 @@ namespace Prowl.Scribe
 
                         tmp = new GlyphVertex[num_vertices + comp_num_verts];
                         if (num_vertices > 0)
-                            Array.Copy(vertices, tmp, num_vertices);
+                            Array.Copy(vertices!, tmp, num_vertices);
 
-                        Array.Copy(comp_verts, 0, tmp, num_vertices, comp_num_verts);
+                        Array.Copy(comp_verts!, 0, tmp, num_vertices, comp_num_verts);
                         vertices = tmp;
                         num_vertices += comp_num_verts;
                     }
@@ -1010,7 +1010,7 @@ namespace Prowl.Scribe
             }
 
             if (fdselector == -1)
-                new Buf(FakePtr<byte>.Null, 0);
+                return new Buf(FakePtr<byte>.Null, 0);
             return Buf.stbtt__get_subrs(this.cff, fontdicts.stbtt__cff_index_get(fdselector));
         }
 
@@ -1027,8 +1027,6 @@ namespace Prowl.Scribe
             var clear_stack = 0;
             var s = new float[48];
             var subr_stack = new Buf[10];
-            for (i = 0; i < subr_stack.Length; ++i)
-                subr_stack[i] = null;
 
             var subrs = this.subrs;
             float f = 0;
@@ -1321,7 +1319,7 @@ namespace Prowl.Scribe
             return 0;
         }
 
-        private int GetGlyphShapeT2(int glyph_index, out GlyphVertex[] pvertices)
+        private int GetGlyphShapeT2(int glyph_index, out GlyphVertex[]? pvertices)
         {
             var count_ctx = new CharStringContext();
             count_ctx.bounds = 1;
@@ -1382,12 +1380,12 @@ namespace Prowl.Scribe
         // formats, any valueFormat). Returns the first non-zero adjustment found, in font units.
         private int GetGlyphGPOSInfoAdvance(int glyph1, int glyph2)
         {
-            EnsureKernLookups();
-            if (_kernLookups.Count == 0)
+            var kernLookups = EnsureKernLookups();
+            if (kernLookups.Count == 0)
                 return 0;
 
             var table = this.data + this.gpos;
-            foreach (int lookupIndex in _kernLookups)
+            foreach (int lookupIndex in kernLookups)
             {
                 var lookup = GetLookup(table, lookupIndex, out int lookupType, out int subtableCount);
                 if (lookup.IsNull || (lookupType != 2 && lookupType != 9))

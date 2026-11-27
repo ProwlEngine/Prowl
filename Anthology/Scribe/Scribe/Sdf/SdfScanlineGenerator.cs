@@ -41,7 +41,7 @@ internal static class SdfScanlineGenerator
         if (glyphIndex <= 0)
             return false;
 
-        Shape shape = BuildShape(font, glyphIndex);
+        Shape? shape = BuildShape(font, glyphIndex);
         if (shape == null)
             return false;
 
@@ -226,14 +226,14 @@ internal static class SdfScanlineGenerator
         return false;
     }
 
-    internal static Shape BuildShape(FontFile font, int glyphIndex)
+    internal static Shape? BuildShape(FontFile font, int glyphIndex)
     {
-        int count = font.GetGlyphShape(glyphIndex, out GlyphVertex[] verts);
+        int count = font.GetGlyphShape(glyphIndex, out GlyphVertex[]? verts);
         if (count <= 0 || verts == null)
             return null;
 
         var shape = new Shape();
-        Contour contour = null;
+        Contour? contour = null;
         Double2 cur = new Double2(0, 0);
 
         for (int i = 0; i < count; ++i)

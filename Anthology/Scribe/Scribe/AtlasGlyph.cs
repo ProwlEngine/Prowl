@@ -124,7 +124,7 @@ namespace Prowl.Scribe
                        ReferenceEquals(fontFace, other.fontFace);
             }
 
-            public override bool Equals(object obj) => obj is CacheKey other && Equals(other);
+            public override bool Equals(object? obj) => obj is CacheKey other && Equals(other);
 
             public override int GetHashCode()
             {

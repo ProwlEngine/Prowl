@@ -86,7 +86,7 @@ namespace Prowl.Scribe
     public struct TextLayoutSettings
     {
         public float PixelSize;
-        public FontFile Font;
+        public FontFile? Font;
         public float LetterSpacing;
         public float WordSpacing;
         public float LineHeight; // multiplier (1.0 = normal, 1.2 = 20% larger)

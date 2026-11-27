@@ -26,7 +26,7 @@ namespace Prowl.Scribe
     /// <summary>A fully shaped, positioned glyph ready for the layout engine to place.</summary>
     internal struct ShapedGlyph
     {
-        public AtlasGlyph Glyph;
+        public AtlasGlyph? Glyph;
         public float Advance;   // scaled pixels, including kerning to the next glyph in the run
         public int Cluster;     // source char index where the cluster starts
         public int CharCount;   // number of source chars in this cluster
@@ -39,7 +39,7 @@ namespace Prowl.Scribe
     // the GPOS kerning in FontFile.cs.
     public partial class FontFile
     {
-        private Dictionary<string, List<int>> _gsubLookupCache;
+        private Dictionary<string, List<int>>? _gsubLookupCache;
 
         // Lookup-list indices of a GSUB feature for the default script (latn/DFLT), resolved once.
         // Returns null when the font has no GSUB table.
@@ -104,7 +104,7 @@ namespace Prowl.Scribe
         // Per lookup, the glyphs that can start a match, as a bitset. Fonts with heavy contextual
         // alternates have hundreds of lookups, and nearly every glyph misses nearly every one of them,
         // so one bit test replaces walking the subtables and their coverage tables.
-        private ulong[][] _gsubFirstGlyphs;
+        private ulong[]?[]? _gsubFirstGlyphs;
 
         private static bool HasGlyph(ulong[] bits, int glyph)
             => (uint)(glyph >> 6) < (uint)bits.Length && (bits[glyph >> 6] & (1UL << (glyph & 63))) != 0;
