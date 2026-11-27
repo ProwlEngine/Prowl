@@ -1,6 +1,8 @@
 // This file is part of the Prowl Game Engine
 // Licensed under the MIT License. See the LICENSE file in the project root for details.
 
+using System.Numerics;
+
 using Prowl.Aperture.Decoders.Dds;
 
 namespace Prowl.Aperture.Decoders;
@@ -12,7 +14,6 @@ namespace Prowl.Aperture.Decoders;
 public sealed class DdsDecoder : DecoderBase
 {
     private const uint HeaderSize = 124;
-    private const uint PixelFormatSize = 32;
 
     private const uint PixelFormatFourCc = 0x4;
     private const uint PixelFormatRgb = 0x40;
@@ -48,23 +49,13 @@ public sealed class DdsDecoder : DecoderBase
         }
 
         // For the newer headers this is the component count, not a mask they do not set.
-        PixelFormat natural = surface.HasAlphaChannel ? PixelFormat.Rgba8 : PixelFormat.Rgb8;
+        PixelFormat natural = surface.NearestFormat;
         PixelFormat target = options.TargetPixelFormat ?? natural;
-        if (!PixelConverter.CanConvert(natural, target))
+        if (target != natural && !PixelConverter.CanConvert(natural, target))
         {
             error = ApertureError.UnsupportedFeature;
             return false;
         }
-
-        int channels = target switch
-        {
-            PixelFormat.Rgb8 => 3,
-            PixelFormat.Rgba8 => 4,
-            _ => 0,
-        };
-
-        bool direct = channels != 0;
-        int naturalChannels = natural.BytesPerPixel();
 
         // A stack rather than a picture: faces or array slices, each with its own chain of
         // smaller copies. The two options decide which of them the caller wants.
@@ -93,9 +84,8 @@ public sealed class DdsDecoder : DecoderBase
                 one.Width = plane.Width;
                 one.Height = plane.Height;
 
-                if (!TryReadPlane(data, one, options, natural, target, channels, naturalChannels,
-                                  direct, plane.MipLevel, plane.Slice, ref scratch,
-                                  out ImageFrame? frame, out error))
+                if (!TryReadPlane(data, one, options, natural, target, plane.MipLevel, plane.Slice,
+                                  ref scratch, out ImageFrame? frame, out error))
                     return false;
 
                 frames.Add(frame!);
@@ -133,8 +123,7 @@ public sealed class DdsDecoder : DecoderBase
 
     /// <summary>Decodes one level of one slice into a frame of its own.</summary>
     private static bool TryReadPlane(ReadOnlySpan<byte> data, in DdsSurface plane, DecodeOptions options,
-                                     PixelFormat natural, PixelFormat target, int channels,
-                                     int naturalChannels, bool direct, int level, int slice,
+                                     PixelFormat natural, PixelFormat target, int level, int slice,
                                      ref byte[]? scratch, out ImageFrame? frame, out ApertureError error)
     {
         frame = null;
@@ -157,28 +146,37 @@ public sealed class DdsDecoder : DecoderBase
 
             Span<byte> surfacePixels = pixels;
             int surfaceStride = stride;
-            int surfaceChannels = channels;
+            bool direct = target == natural;
 
             if (!direct)
             {
-                int naturalStride = plane.Width * naturalChannels;
-                int needed = naturalStride * plane.Height;
+                long naturalStride = (long)plane.Width * natural.BytesPerPixel();
+                long needed = naturalStride * plane.Height;
+
+                // The intermediate can be far larger than the output (RgbaF32 to L8 is 16x).
+                if (needed > options.MaxAllocationBytes || needed > int.MaxValue)
+                {
+                    error = ApertureError.LimitExceeded;
+                    return false;
+                }
 
                 if (scratch is null || scratch.Length < needed)
                 {
                     if (scratch is not null)
+                    {
                         BufferPool.Bytes.Return(scratch);
+                        scratch = null; // avoid a double return if Rent throws
+                    }
 
-                    scratch = BufferPool.Bytes.Rent(needed);
+                    scratch = BufferPool.Bytes.Rent((int)needed);
                 }
 
-                surfacePixels = scratch.AsSpan(0, needed);
+                surfacePixels = scratch.AsSpan(0, (int)needed);
                 surfacePixels.Clear();
-                surfaceStride = naturalStride;
-                surfaceChannels = naturalChannels;
+                surfaceStride = (int)naturalStride;
             }
 
-            if (!DdsImageReader.TryDecode(data, plane, surfaceChannels, surfacePixels, surfaceStride,
+            if (!DdsImageReader.TryDecode(data, plane, natural, surfacePixels, surfaceStride,
                                           options.FlipVertically, out error))
             {
                 if (error == ApertureError.None)
@@ -238,7 +236,8 @@ public sealed class DdsDecoder : DecoderBase
         reader.TryReadBytes(4, out ReadOnlySpan<byte> fourCc);
         reader.TryReadUInt32(out uint rgbBitCount);
         reader.TryReadUInt32(out uint rMask);
-        reader.Skip(8); // green and blue masks
+        reader.TryReadUInt32(out uint gMask);
+        reader.TryReadUInt32(out uint bMask);
         reader.TryReadUInt32(out uint aMask);
         reader.Skip(4); // caps
         reader.TryReadUInt32(out uint caps2);
@@ -280,9 +279,14 @@ public sealed class DdsDecoder : DecoderBase
         for (int level = 0; level < mipLevels; level++)
             planes += (int)Math.Max(1, Math.Min(depth, 65536) >> level);
 
+        // Calculate the number of bits in the widest channel.
+        int widest = Math.Max(
+            Math.Max(BitOperations.PopCount(rMask), BitOperations.PopCount(gMask)),
+            Math.Max(BitOperations.PopCount(bMask), BitOperations.PopCount(aMask)));
+
         SurfaceDescription surface = hasDx10
             ? DescribeDxgi(dxgiFormat)
-            : DescribeLegacy(pfFlags, fourCcText, rgbBitCount, rMask, aMask);
+            : DescribeLegacy(pfFlags, fourCcText, rgbBitCount, rMask, aMask, widest);
 
         if (surface.Name is null)
         {
@@ -291,9 +295,9 @@ public sealed class DdsDecoder : DecoderBase
         }
 
         // The reader decides this, so it is asked rather than guessed at a second time.
-        bool alpha = DdsSurface.TryRead(data, out DdsSurface full, out _)
-            ? full.HasAlphaChannel
-            : surface.HasAlpha;
+        PixelFormat preferred = DdsSurface.TryRead(data, out DdsSurface full, out _)
+            ? full.NearestFormat
+            : surface.HasAlpha ? PixelFormat.Rgba8 : PixelFormat.Rgb8;
 
         info = new ImageInfo
         {
@@ -302,11 +306,10 @@ public sealed class DdsDecoder : DecoderBase
             Height = (int)height,
             BitsPerChannel = surface.BitsPerChannel,
             Channels = surface.Channels,
-            HasAlpha = alpha,
+            HasAlpha = preferred.HasAlpha(),
             IsHdr = surface.IsFloat,
-            ColorModel = surface.Channels == 1 ? ColorModel.Grayscale : ColorModel.Rgb,
-            // What a decode hands back, which here is eight bit colour whatever is stored.
-            PreferredPixelFormat = alpha ? PixelFormat.Rgba8 : PixelFormat.Rgb8,
+            ColorModel = preferred.ChannelCount() <= 2 ? ColorModel.Grayscale : ColorModel.Rgb,
+            PreferredPixelFormat = preferred,
             FrameCount = planes * slices,
             MipmapCount = mipLevels,
             Compression = surface.Name,
@@ -321,7 +324,7 @@ public sealed class DdsDecoder : DecoderBase
 
     private readonly record struct SurfaceDescription(string? Name, int Channels, int BitsPerChannel, bool HasAlpha, bool IsFloat);
 
-    private static SurfaceDescription DescribeLegacy(uint pfFlags, string fourCc, uint rgbBitCount, uint rMask, uint aMask)
+    private static SurfaceDescription DescribeLegacy(uint pfFlags, string fourCc, uint rgbBitCount, uint rMask, uint aMask, int widest)
     {
         if ((pfFlags & PixelFormatFourCc) != 0)
         {
@@ -342,22 +345,22 @@ public sealed class DdsDecoder : DecoderBase
         }
 
         bool hasAlpha = (pfFlags & (PixelFormatAlphaPixels | PixelFormatAlpha)) != 0 && aMask != 0;
+        int bits = widest > 0 ? widest : 8;
         if ((pfFlags & PixelFormatRgb) != 0)
         {
             int channels = hasAlpha ? 4 : 3;
-            int bits = rgbBitCount >= 32 && hasAlpha ? 8 : 8;
             return new($"Uncompressed {rgbBitCount} bit", channels, bits, hasAlpha, false);
         }
 
         if ((pfFlags & PixelFormatLuminance) != 0)
-            return new($"Uncompressed luminance {rgbBitCount} bit", hasAlpha ? 2 : 1, 8, hasAlpha, false);
+            return new($"Uncompressed luminance {rgbBitCount} bit", hasAlpha ? 2 : 1, bits, hasAlpha, false);
 
         if ((pfFlags & PixelFormatAlpha) != 0)
             return new("Alpha only", 1, 8, true, false);
 
         // Some writers leave the flags empty but still fill in the masks.
         if (rgbBitCount > 0 && rMask != 0)
-            return new($"Uncompressed {rgbBitCount} bit", hasAlpha ? 4 : 3, 8, hasAlpha, false);
+            return new($"Uncompressed {rgbBitCount} bit", hasAlpha ? 4 : 3, bits, hasAlpha, false);
 
         return new(null, 0, 0, false, false);
     }
