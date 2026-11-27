@@ -28,7 +28,15 @@ public sealed class AnimationPoseNode : AnimationGraphNode
     public override string Description => "Samples one clip at a time a value node picks, with no clock of its own.";
 
     public override int Build(GraphCompileContext ctx, GraphNodeRecord r)
-        => ctx.Clip(r, _clip) is { } resolved ? ctx.Graph.AddAnimationPose(resolved, ctx.Input(r, _time)) : ctx.Graph.AddReferencePose();
+    {
+        AnimationClip? asset = ctx.ClipAsset(r, _clip);
+        if (ctx.Clip(r, _clip) is not { } resolved)
+            return ctx.Graph.AddReferencePose();
+
+        int node = ctx.Graph.AddAnimationPose(resolved, ctx.Input(r, _time));
+        ctx.RegisterClipNode(node, asset);
+        return node;
+    }
 }
 
 public sealed class ClipNode : AnimationGraphNode
@@ -57,7 +65,7 @@ public sealed class ClipNode : AnimationGraphNode
         AnimationClipBase? resolved = ctx.Clip(r, _clip);
         if (resolved == null) return ctx.Graph.AddReferencePose();
 
-        return ctx.Graph.AddNode(new ClipNodeDefinition(resolved)
+        int node = ctx.Graph.AddNode(new ClipNodeDefinition(resolved)
         {
             // What the clip was imported as, unless the node says otherwise.
             Loop = r.Get(_looping) switch { ClipLooping.Loop => true, ClipLooping.Once => false, _ => !asset.IsValid() || asset!.Loop },
@@ -68,6 +76,8 @@ public sealed class ClipNode : AnimationGraphNode
             PlayInReverseNodeIndex = ctx.Input(r, _reverse),
             ResetTimeNodeIndex = ctx.Input(r, _restart),
         });
+        ctx.RegisterClipNode(node, asset);
+        return node;
     }
 }
 

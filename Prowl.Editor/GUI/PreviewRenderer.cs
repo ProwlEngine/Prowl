@@ -143,8 +143,8 @@ public class PreviewRenderer : IDisposable
         return true;
     }
 
-    /// <summary>True when the subject carries a rig this preview can pose.</summary>
-    public bool CanAnimate => _binding != null && _pose != null;
+    /// <summary>True when the subject carries an animator with clips or a rig this preview can pose.</summary>
+    public bool CanAnimate => (_binding != null && _pose != null) || (_subjectGo.IsValid() && _clips.Count > 0);
 
     /// <summary>
     /// Poses the subject at a point through a clip, from 0 at its first frame to 1 at its last. Sampling
@@ -153,22 +153,31 @@ public class PreviewRenderer : IDisposable
     /// </summary>
     public void PoseAt(AnimationClip? clip, float normalizedTime)
     {
-        if (_binding == null || _pose == null) return;
+        float clampedNorm = Math.Clamp(normalizedTime, 0f, 1f);
 
-        MotionClip? runtime = clip.IsValid() ? clip!.GetClip(_avatar) : null;
-        if (runtime == null)
+        if (_binding != null && _pose != null)
         {
-            _pose.SetToReferencePose(false);
-        }
-        else
-        {
-            runtime.GetPose(Math.Clamp(normalizedTime, 0f, 1f), _pose);
+            MotionClip? runtime = clip.IsValid() ? clip!.GetClip(_avatar) : null;
+            if (runtime == null)
+            {
+                _pose.SetToReferencePose(false);
+            }
+            else
+            {
+                runtime.GetPose(clampedNorm, _pose);
+            }
+
+            for (int b = 0; b < _pose.BoneCount; b++)
+                _binding.ApplyBone(b, _pose.GetTransform(b));
+            for (int c = 0; c < _pose.FloatChannelCount; c++)
+                _binding.ApplyChannel(c, _pose.GetFloat(c));
         }
 
-        for (int b = 0; b < _pose.BoneCount; b++)
-            _binding.ApplyBone(b, _pose.GetTransform(b));
-        for (int c = 0; c < _pose.FloatChannelCount; c++)
-            _binding.ApplyChannel(c, _pose.GetFloat(c));
+        if (_subjectGo.IsValid() && clip.IsValid() && clip!.HasPropertyTracks)
+        {
+            var propBinding = new AnimationClipBinding(_subjectGo!, clip);
+            propBinding.Sample(clampedNorm * clip.Duration);
+        }
     }
 
     /// <summary>Set up the preview to show a Prefab's serialized GameObject hierarchy.</summary>
@@ -201,15 +210,15 @@ public class PreviewRenderer : IDisposable
         Animator? animator = FindAnimator(root);
         if (animator.IsNotValid()) return;
 
-        Avatar? avatar = animator!.Avatar;
+        foreach (AnimationClip clip in animator!.Clips)
+            if (clip.IsValid()) _clips.Add(clip);
+
+        Avatar? avatar = animator.Avatar;
         if (avatar.IsNotValid() || avatar!.Skeleton == null) return;
 
         _avatar = avatar.Runtime;
         _pose = new MotionPose(avatar.Skeleton);
         _binding = new AnimatorBinding(animator.Transform, avatar.Skeleton);
-
-        foreach (AnimationClip clip in animator.Clips)
-            if (clip.IsValid()) _clips.Add(clip);
     }
 
     private static Animator? FindAnimator(GameObject go)

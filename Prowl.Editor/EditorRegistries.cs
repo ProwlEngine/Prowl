@@ -795,6 +795,7 @@ public static class EditorRegistries
         RegisterFileIcons(EditorIcons.FileVideo, ".mp4", ".avi", ".mkv", ".mov");
         RegisterFileIcons(EditorIcons.VectorSquare, ".fbx", ".obj", ".gltf", ".glb", ".dae", ".mesh");
         RegisterFileIcons(EditorIcons.Cubes, ".scene", ".prefab");
+        RegisterFileIcons(EditorIcons.Film, ".animclip");
         RegisterFileIcons(EditorIcons.Palette, ".mat", ".material");
         RegisterFileIcons(EditorIcons.Gamepad, ".inputactions");
         RegisterFileIcons(EditorIcons.FilePdf, ".pdf");

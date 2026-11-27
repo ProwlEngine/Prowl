@@ -149,6 +149,7 @@ public sealed class GraphCompileContext
     {
         Parameters = parent.Parameters;
         _machines = parent._machines;
+        ClipBindings = parent.ClipBindings;
     }
 
     public MotionGraph Graph { get; }
@@ -263,6 +264,16 @@ public sealed class GraphCompileContext
 
     /// <summary>The Motion state index of each of a machine's states, in the record's own order.</summary>
     internal Dictionary<string, int[]> States { get; } = [];
+
+    /// <summary>Every compiled Motion node index that plays an <see cref="AnimationClip"/> asset, so the host animator can evaluate its property tracks and events.</summary>
+    internal List<(int NodeIndex, AnimationClip Clip)> ClipBindings { get; } = [];
+
+    /// <summary>Records that the compiled Motion node at <paramref name="nodeIndex"/> plays <paramref name="clip"/>.</summary>
+    public void RegisterClipNode(int nodeIndex, AnimationClip? clip)
+    {
+        if (nodeIndex >= 0 && clip.IsValid())
+            ClipBindings.Add((nodeIndex, clip!));
+    }
 
     /// <summary>Makes a node findable while it is still being built, so its own children can refer to it.</summary>
     public void Publish(GraphNodeRecord record, int index) => _compiled[record.Id] = index;
@@ -482,7 +493,7 @@ public sealed class GraphCompileContext
         AnimationClip? asset = ClipAsset(record, setting);
         if (asset.IsNotValid()) return null;
 
-        Motion.AnimationClipBase? clip = asset.GetClip(Avatar);
+        Motion.AnimationClipBase? clip = asset.GetClip(Avatar, Skeleton);
         if (clip == null)
             Debug.LogWarning($"[AnimationGraph] '{_asset.Name}' could not resolve the clip '{asset.Name}' onto this rig.");
         return clip;

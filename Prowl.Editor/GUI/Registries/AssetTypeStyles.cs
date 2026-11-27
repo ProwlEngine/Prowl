@@ -113,6 +113,9 @@ public static class AssetTypeStyles
             // Scenes / prefabs.
             [".scene"] = new() { Icon = EditorIcons.Shapes_I, Color = Amber },
             [".prefab"] = new() { Icon = EditorIcons.Cube_I, Color = Blue },
+            // Animation.
+            [".animclip"] = new() { Icon = EditorIcons.Film_I, Color = Cyan },
+            [".animgraph"] = new() { Icon = EditorIcons.DiagramProject_I, Color = Cyan },
             // Audio.
             [".mp3"] = new() { Icon = EditorIcons.Music_I, Color = Cyan },
             [".wav"] = new() { Icon = EditorIcons.Music_I, Color = Cyan },

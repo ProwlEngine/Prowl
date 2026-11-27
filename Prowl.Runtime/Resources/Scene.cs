@@ -1845,6 +1845,10 @@ public class Scene : EngineObject, ISerializable
 
         _dispatcher.RunFixedUpdate();
 
+        if (IsPlaying)
+            using (FrameStats.Animation.Scope())
+                _animation.FixedUpdate(Time.FixedDeltaTime);
+
         Physics.TrackCollisions(_dispatcher.CollisionListeners > 0);
         // A solver blow up (NaN or Inf transforms, degenerate collider) must not crash the frame.
         using (FrameStats.Physics.Scope())

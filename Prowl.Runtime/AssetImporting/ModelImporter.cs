@@ -1,4 +1,4 @@
-﻿// This file is part of the Prowl Game Engine
+// This file is part of the Prowl Game Engine
 // Licensed under the MIT License. See the LICENSE file in the project root for details.
 
 using System;
@@ -166,6 +166,12 @@ public struct ModelClipSettings
     public List<ClipEvent>? Events;
 
     /// <summary>
+    /// Component method invocation events authored on this clip, timed in seconds of the take (before trimming)
+    /// so changing trim bounds leaves events anchored to the moment they mark. Re-applied on every reimport.
+    /// </summary>
+    public List<AnimationClipEvent>? PropertyEvents;
+
+    /// <summary>
     /// Whether the body's rise and fall moves the character, or null for the default, which is off: a
     /// jump usually wants its height in the pose, over a controller that stays on the ground.
     /// </summary>
@@ -213,6 +219,8 @@ public enum ModelRigType
     Generic,
     /// <summary>Bones mapped to the human body, so clips retarget across rigs.</summary>
     Humanoid,
+    /// <summary>No skeleton rig; node and blend-shape animations import directly as editable property curve tracks on AnimationClips.</summary>
+    Property,
 }
 
 /// <summary>

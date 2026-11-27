@@ -1488,12 +1488,99 @@ public class EditorAssetBackend : AssetBackend
     {
         if (!obj.IsFromDatabase) return false;
 
+        if (obj is AnimationClip importedClip && IsImportedAnimationSubAsset(importedClip.AssetID, out AssetEntry? modelEntry) && modelEntry != null)
+            return SaveImportedAnimationSubAsset(importedClip, modelEntry);
+
         Asset owner = TryGetParentGuid(obj.AssetID, out Guid parentGuid) && AssetDatabase.Get(parentGuid) is { } parent ? parent : obj;
         return SerializeForSave(owner) is { } serialized && SaveAsset(owner.AssetID, serialized);
     }
 
-    /// <summary>Whether edits to this asset can be saved: its source file, or its parent's, is the asset written by Echo.</summary>
-    public bool CanSave(Guid assetId) => SourceOf(OwningEntry(assetId)) != EchoSource.None;
+    /// <summary>Whether edits to this asset can be saved: its source file, or its parent's, is written by Echo, or it is an imported animation sub-asset.</summary>
+    public bool CanSave(Guid assetId)
+        => SourceOf(OwningEntry(assetId)) != EchoSource.None || IsImportedAnimationSubAsset(assetId, out _);
+
+    /// <summary>
+    /// True when <paramref name="assetId"/> is an <see cref="AnimationClip"/> sub-asset produced by an importer
+    /// whose source file is non-Echo (e.g. <c>.glb</c>, <c>.gltf</c>, <c>.fbx</c>).
+    /// </summary>
+    public bool IsImportedAnimationSubAsset(Guid assetId, out AssetEntry? parentEntry)
+    {
+        if (_subAssetIndex.TryGetValue(assetId, out (Guid parentGuid, int index) sub)
+            && _guidToEntry.TryGetValue(sub.parentGuid, out AssetEntry? parent)
+            && sub.index < parent.SubAssets.Length
+            && parent.SubAssets[sub.index].Type != null
+            && typeof(AnimationClip).IsAssignableFrom(parent.SubAssets[sub.index].Type)
+            && SourceOf(parent) == EchoSource.None)
+        {
+            parentEntry = parent;
+            return true;
+        }
+        parentEntry = null;
+        return false;
+    }
+
+    /// <summary>
+    /// Saves an edited imported <see cref="AnimationClip"/> sub-asset:
+    /// 1. Writes its <see cref="AnimationClip.PropertyEvents"/> (and <see cref="AnimationClip.Loop"/>) into the parent model's <c>.meta</c>
+    ///    so events survive future model reimports;
+    /// 2. Updates the sub-asset's <c>Library/</c> cache in place so curve/track modifications apply immediately and persist across restarts
+    ///    until the next model reimport overrides the animation poses/curves from the source file.
+    /// </summary>
+    private bool SaveImportedAnimationSubAsset(AnimationClip clip, AssetEntry modelEntry)
+    {
+        string absoluteModelPath = Path.Combine(_project.AssetsPath, modelEntry.Path);
+        string metaPath = MetaFile.GetMetaPath(absoluteModelPath);
+
+        string sourceName = !string.IsNullOrEmpty(clip.SourceName) ? clip.SourceName : clip.Name;
+        var takeEvents = new List<AnimationClipEvent>(clip.PropertyEvents.Count);
+        for (int i = 0; i < clip.PropertyEvents.Count; i++)
+        {
+            AnimationClipEvent copy = clip.PropertyEvents[i].Clone();
+            copy.Time = MathF.Max(0f, copy.Time + clip.TakeStart);
+            copy.EndTime = copy.IsRange ? MathF.Max(copy.Time + 1e-4f, copy.EndTime + clip.TakeStart) : copy.Time;
+            takeEvents.Add(copy);
+        }
+
+        bool loop = clip.Loop;
+        void ApplyClipPatch(EchoObject settings)
+        {
+            Importers.ModelImportOverrides.WritePropertyEvents(settings, sourceName, takeEvents);
+            Importers.ModelImportOverrides.ClipBlock(settings, sourceName)[Importers.ModelImportKeys.ClipLoop] = new EchoObject(loop);
+        }
+
+        if (File.Exists(metaPath))
+        {
+            try
+            {
+                MetaFileData meta = MetaFile.Read(metaPath);
+                meta.Settings ??= EchoObject.NewCompound();
+                ApplyClipPatch(meta.Settings);
+                MetaFile.Write(metaPath, meta);
+                Inspector.ImportSettingsEditor.PatchIfLoaded(modelEntry.Guid, ApplyClipPatch);
+                Inspector.AssetImporterEditor.PatchBaseline(modelEntry.Guid, ApplyClipPatch);
+            }
+            catch (Exception ex)
+            {
+                Runtime.Debug.LogError($"Failed to save animation events to '{metaPath}': {ex.Message}");
+                return false;
+            }
+        }
+
+        var subCtx = new DependencySerializationContext();
+        if (!SerializeToCache(clip.AssetID, clip, subCtx))
+            return false;
+
+        _dependencies.SetDependencies(clip.AssetID, ShippedEdges(subCtx));
+        if (_subAssetIndex.TryGetValue(clip.AssetID, out (Guid parentGuid, int index) subInfo) && subInfo.index >= 0 && subInfo.index < modelEntry.SubAssets.Length)
+        {
+            modelEntry.SubAssets[subInfo.index].Dependencies = [.. subCtx.Dependencies];
+            modelEntry.SubAssets[subInfo.index].SoftDependencies = [.. subCtx.SoftDependencies];
+        }
+
+        MetadataCache.Save(_project.MetadataDbPath, _guidToEntry.Values);
+        AssetDatabase.Refill(clip, ReloadReason.Save);
+        return true;
+    }
 
     private static EchoSource SourceOf(AssetEntry? entry) => entry != null && ImporterOf(entry) is { } importer ? importer.Source : EchoSource.None;
 
