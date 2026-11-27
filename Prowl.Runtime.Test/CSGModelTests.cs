@@ -845,6 +845,33 @@ public class CSGModelTests : RuntimeTestBase
     }
 
     [Fact]
+    public void MovingABrushRedoesOnlyThePartOfTheMeshAroundIt()
+    {
+        CreateModel();
+        AddBrush(Float3.One * 2f, new Float3(1f, 1f, 1f));
+        CSGBrush far = AddBrush(Float3.One * 2f, new Float3(101f, 1f, 1f));
+        Update(_scene);
+
+        far.Transform.Position += new Float3(0.5f, 0f, 0f);
+        Update(_scene);
+
+        Assert.Equal(1, _model.MeshCache.LastRebuilt);
+        Assert.Equal(16f, VolumeOf(_model.GeneratedMesh!), 2);
+    }
+
+    [Fact]
+    public void ABrushAcrossManyChunksBuildsWhole()
+    {
+        CreateModel();
+        AddBrush(new Float3(40f, 2f, 40f), Float3.Zero);
+        AddBrush(new Float3(10f, 4f, 10f), new Float3(15f, 0f, 15f), Operation.Subtractive);
+        Update(_scene);
+
+        Assert.True(_model.MeshCache.LastRebuilt > 1);
+        Assert.Equal(40f * 2f * 40f - 10f * 2f * 10f, VolumeOf(_model.GeneratedMesh!), 1);
+    }
+
+    [Fact]
     public void WhileEditingTheColliderWaitsUntilItIsNeeded()
     {
         bool wasEditor = Application.IsEditor, wasPlaying = Application.IsPlaying;

@@ -609,6 +609,12 @@ public class Mesh : Asset, ISerializable
         if (indices == null || indices.Length < 3) return;
         if (uv == null) return;
 
+        Tangents = ComputeTangents(vertices, normals, uv, indices);
+    }
+
+    /// <summary>Per vertex tangents from positions, texture coordinates and triangles, the handedness in W.</summary>
+    public static Float4[] ComputeTangents(Float3[] vertices, Float3[]? normals, Float2[] uv, uint[] indices)
+    {
         var tan1 = new Float3[vertices.Length]; // tangent accumulator
         var tan2 = new Float3[vertices.Length]; // bitangent accumulator (for handedness)
 
@@ -666,7 +672,7 @@ public class Mesh : Asset, ISerializable
             result[i] = new Float4(orthoT.X, orthoT.Y, orthoT.Z, w);
         }
 
-        Tangents = result;
+        return result;
     }
 
     #region Raytracing

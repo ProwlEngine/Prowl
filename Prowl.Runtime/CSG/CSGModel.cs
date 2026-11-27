@@ -81,6 +81,7 @@ public sealed class CSGModel : Component
     [SerializeIgnore] private readonly Dictionary<CSGGroup, int> _childCounter = new();
     [SerializeIgnore] private int _rootChildCount;
 
+    [SerializeIgnore] private readonly CSGMeshCache _meshCache = new();
     [SerializeIgnore] private GeometryData? _geometry;
     [SerializeIgnore] private int _geometryVersion;
     [SerializeIgnore] private float _builtTexelScale = float.NaN;
@@ -94,6 +95,9 @@ public sealed class CSGModel : Component
     public int VertexCount { get; private set; }
     public int TriangleCount { get; private set; }
     public int BrushCount { get; private set; }
+
+    /// <summary>The cached pieces of the visible mesh, for tests.</summary>
+    internal CSGMeshCache MeshCache => _meshCache;
 
     /// <summary>How many times meshes were generated, for tests.</summary>
     internal int BuildCount { get; private set; }
@@ -298,7 +302,7 @@ public sealed class CSGModel : Component
         _geometryVersion = geometry.Version;
 
         BuildCount++;
-        CSGMeshes meshes = CSGMeshBuilder.Build(geometry, ResolveSurface, GameObject.Name);
+        CSGMeshes meshes = CSGMeshBuilder.Build(geometry, ResolveSurface, GameObject.Name, _meshCache, collision: !DefersCollider);
         ProcessMeshes(meshes);
         ApplyMeshes(meshes);
         TrackLightmapUVs();
@@ -716,7 +720,7 @@ public sealed class CSGModel : Component
 
         // A new mesh carries no unwrap, even when its geometry matches the one that was unwrapped
         if (!ReferenceEquals(previous, _visible)) lightmapUVHash = 0;
-        _collision = KeepOrReplace(_collision, meshes.Collision, ref _collisionKey);
+        if (!DefersCollider) _collision = KeepOrReplace(_collision, meshes.Collision, ref _collisionKey);
         visibleHash = _visibleKey;
         collisionHash = _collisionKey;
         _preview = BuildPreview(_geometry!, out _hidesAll);
@@ -729,8 +733,8 @@ public sealed class CSGModel : Component
 
         ApplyRenderer();
 
-        // While editing, the collider is baked once the edits pause, since nothing collides until play
-        if (Application.IsEditor && !Application.IsPlaying)
+        // While editing, the collider is built and baked once the edits pause, since nothing collides until play
+        if (DefersCollider)
         {
             _colliderStale = true;
             _colliderChangedAt = Time.UnscaledTotalTime;
@@ -743,10 +747,15 @@ public sealed class CSGModel : Component
     [SerializeIgnore] private bool _colliderStale;
     [SerializeIgnore] private double _colliderChangedAt;
 
+    private static bool DefersCollider => Application.IsEditor && !Application.IsPlaying;
+
     private void FlushCollider()
     {
         if (!_colliderStale) return;
         _colliderStale = false;
+        if (_geometry != null)
+            _collision = KeepOrReplace(_collision, CSGMeshBuilder.BuildCollision(_geometry, ResolveSurface, GameObject.Name), ref _collisionKey);
+        collisionHash = _collisionKey;
         ApplyCollider();
     }
 
