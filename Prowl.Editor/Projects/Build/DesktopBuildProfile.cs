@@ -126,7 +126,7 @@ public class DesktopBuildProfile : PlatformBuildProfile
         WindowWidth = overrides.GetArg("width", WindowWidth);
         WindowHeight = overrides.GetArg("height", WindowHeight);
 
-        overrides.LogUnknown();
+        overrides.ThrowIfUnknown();
     }
 }
 

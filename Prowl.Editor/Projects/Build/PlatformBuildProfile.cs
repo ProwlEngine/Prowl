@@ -100,7 +100,7 @@ public sealed class PlatformOverrides
     }
 
 
-    public void LogUnknown()
+    public void ThrowIfUnknown()
     {
         if (_args.Count > 0)
             throw new ArgumentException($"Unknown keys: {string.Join(", ", _args.Keys)}");
