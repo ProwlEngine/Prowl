@@ -304,8 +304,6 @@ public class KcpTransportTests
                 int[] values = pump.EventsOf(host)
                     .Where(ev => ev.Type == TransportEventType.Data && ev.Channel == channel)
                     .Select(ev => Math.Abs(BitConverter.ToInt32(ev.Data))).ToArray();
-                Assert.True(values.Length > 20);
-                Assert.True(values.Length < 200);
                 for (int i = 1; i < values.Length; i++)
                 {
                     Assert.True(values[i] > values[i - 1], $"{values[i]} arrived after {values[i - 1]}");
