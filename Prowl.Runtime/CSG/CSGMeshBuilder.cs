@@ -108,9 +108,12 @@ public static class CSGMeshBuilder
                 result.Materials.Add(info.Material);
             }
 
-            face.Material = Math.Max(material, 0);
-            face.Hide = !info.Render;
-            face.IsSmooth = info.SmoothingGroup != 0;
+            // Written only when they change, since the scene hands back the same faces build after build
+            int slot = Math.Max(material, 0);
+            if (face.Material != slot) face.Material = slot;
+            if (face.Hide == info.Render) face.Hide = !info.Render;
+            bool smooth = info.SmoothingGroup != 0;
+            if (face.IsSmooth != smooth) face.IsSmooth = smooth;
 
             anyRender |= info.Render;
             anyCollide |= info.Collide;

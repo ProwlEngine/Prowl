@@ -639,7 +639,7 @@ public sealed class CSGModel : Component
     {
         var info = new CSGSurfaceInfo
         {
-            Material = DefaultMaterial.IsValid() ? DefaultMaterial : AssetDatabase.Get<Material>(BuiltInAssets.GuidFor(Resources.DefaultMaterial.Grid)),
+            Material = DefaultMaterial.IsValid() ? DefaultMaterial : GridMaterial(),
             Render = !Flags.HasFlag(CSGModelFlags.DoNotRender),
             Collide = !Flags.HasFlag(CSGModelFlags.NoCollider),
         };
@@ -657,6 +657,15 @@ public sealed class CSGModel : Component
         if (surface.Material.IsValid()) info.Material = surface.Material;
 
         return info;
+    }
+
+    private static readonly Guid s_gridGuid = BuiltInAssets.GuidFor(Resources.DefaultMaterial.Grid);
+    [SerializeIgnore] private Material? _grid;
+
+    private Material? GridMaterial()
+    {
+        if (_grid.IsNotValid()) _grid = AssetDatabase.Get<Material>(s_gridGuid);
+        return _grid;
     }
 
     /// <summary>Generates a face's UVs by planar projection, in brush space unless <see cref="CSGSurfaceFlags.WorldSpaceTexture"/> is set.</summary>
