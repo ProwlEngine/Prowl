@@ -130,25 +130,16 @@ public partial class GeometryData
     /// </summary>
     public RenderMesh ToRenderMesh(RenderMeshOptions options = default)
     {
-        var faceNormals = new Float3[Faces.Count];
-        var faceSmooth = new bool[Faces.Count];
-        var faceDrawn = new bool[Faces.Count];
-        for (int i = 0; i < Faces.Count; i++)
-        {
-            Face face = Faces[i];
-            faceNormals[i] = face.Normal();
-            faceSmooth[i] = options.ForceSmooth || face.IsSmooth;
-            faceDrawn[i] = face.VertCount >= 3 && !(options.SkipHidden && face.Hide);
-        }
-
+        var shading = new FaceShading(this, options);
         bool hasUv = HasLoopAttribute(UvAttribute);
         bool hasMaterial = HasFaceAttribute(MaterialAttribute);
 
-        var positions = new List<Float3>(Loops.Count);
-        var normals = new List<Float3>(Loops.Count);
-        var uvs = hasUv ? new List<Float2>(Loops.Count) : null;
-        var sources = new List<int>(Loops.Count);
-        var vertexFaces = new List<int>(Loops.Count);
+        int capacity = options.Emit == null ? Loops.Count : 0;
+        var positions = new List<Float3>(capacity);
+        var normals = new List<Float3>(capacity);
+        var uvs = hasUv ? new List<Float2>(capacity) : null;
+        var sources = new List<int>(capacity);
+        var vertexFaces = new List<int>(capacity);
         var shared = new Dictionary<(int Vertex, int Fan, Float2 Uv), int>();
         var fanNormals = new Dictionary<(int Vertex, int Fan), Float3>();
         var byMaterial = new SortedDictionary<int, (List<uint> Indices, List<int> Faces)>();
@@ -157,9 +148,9 @@ public partial class GeometryData
 
         for (int f = 0; f < Faces.Count; f++)
         {
-            if (!faceDrawn[f]) continue;
             Face face = Faces[f];
             if (options.Emit != null && !options.Emit(face)) continue;
+            if (!shading.Drawn(f)) continue;
             int material = hasMaterial ? face.Material : 0;
             if (!byMaterial.TryGetValue(material, out var target))
                 byMaterial[material] = target = (new List<uint>(), new List<int>());
@@ -169,13 +160,13 @@ public partial class GeometryData
             do
             {
                 int v = loop.Vert.Slot;
-                Float3 normal = faceNormals[f];
+                Float3 normal = shading.Normal(f);
                 int fan = -1 - f;
-                if (faceSmooth[f])
+                if (shading.Smooth(f))
                 {
-                    fan = SmoothFan(loop, faceSmooth, faceDrawn);
+                    fan = SmoothFan(loop, shading);
                     if (!fanNormals.TryGetValue((v, fan), out normal))
-                        fanNormals[(v, fan)] = normal = FanNormal(loop, faceNormals, faceSmooth, faceDrawn);
+                        fanNormals[(v, fan)] = normal = FanNormal(loop, shading);
                 }
                 Float2 uv = default;
                 if (hasUv && loop.TryGetAttribute(UvAttribute, out AttributeValue? value) && value is FloatAttributeValue { Data.Length: >= 2 } data)
@@ -211,7 +202,7 @@ public partial class GeometryData
             }
 
             // Larger faces may be concave, so they are cut in their own plane
-            var frame = new PlaneFrame(faceNormals[f], positions[corners[0]]);
+            var frame = new PlaneFrame(shading.Normal(f), positions[corners[0]]);
             polygon.Clear();
             foreach (int corner in corners) polygon.Add(frame.To2D(positions[corner]));
             List<int> cut = Polygon2D.Triangulate(polygon);
@@ -268,7 +259,47 @@ public partial class GeometryData
         return Float3.Dot(Float3.Cross(b - a, diagonal), Float3.Cross(d - a, diagonal)) > 0;
     }
 
-    private static void WalkFan(Loop corner, bool[] faceSmooth, bool[] faceDrawn, Action<Loop> visit)
+    // What shading reads of each face, worked out the first time the face is reached so a piece only pays for its own faces
+    private sealed class FaceShading
+    {
+        private readonly GeometryData _mesh;
+        private readonly RenderMeshOptions _options;
+        private readonly Float3[] _normals;
+        private readonly byte[] _state;
+
+        public FaceShading(GeometryData mesh, RenderMeshOptions options)
+        {
+            _mesh = mesh;
+            _options = options;
+            _normals = new Float3[mesh.Faces.Count];
+            _state = new byte[mesh.Faces.Count];
+        }
+
+        public Float3 Normal(int face)
+        {
+            Read(face);
+            return _normals[face];
+        }
+
+        public bool Smooth(int face) => (Read(face) & 2) != 0;
+
+        public bool Drawn(int face) => (Read(face) & 4) != 0;
+
+        private byte Read(int index)
+        {
+            byte state = _state[index];
+            if (state != 0) return state;
+
+            Face face = _mesh.Faces[index];
+            _normals[index] = face.Normal();
+            state = 1;
+            if (_options.ForceSmooth || face.IsSmooth) state |= 2;
+            if (face.VertCount >= 3 && !(_options.SkipHidden && face.Hide)) state |= 4;
+            return _state[index] = state;
+        }
+    }
+
+    private static void WalkFan(Loop corner, FaceShading shading, Action<Loop> visit)
     {
         visit(corner);
         for (int direction = 0; direction < 2; direction++)
@@ -285,7 +316,7 @@ public partial class GeometryData
                 if (next.Vert != corner.Vert) break;
                 if (next == corner) return;
                 int face = next.Face.Slot;
-                if (!faceSmooth[face] || !faceDrawn[face]) break;
+                if (!shading.Smooth(face) || !shading.Drawn(face)) break;
                 visit(next);
                 edge = next.Edge == edge ? next.Prev!.Edge : next.Edge;
                 at = next;
@@ -303,24 +334,24 @@ public partial class GeometryData
     }
 
     // Fans are named by the lowest face in them, so every corner of a fan agrees
-    private static int SmoothFan(Loop corner, bool[] faceSmooth, bool[] faceDrawn)
+    private static int SmoothFan(Loop corner, FaceShading shading)
     {
         int lowest = int.MaxValue;
-        WalkFan(corner, faceSmooth, faceDrawn, l => lowest = Math.Min(lowest, l.Face.Slot));
+        WalkFan(corner, shading, l => lowest = Math.Min(lowest, l.Face.Slot));
         return lowest;
     }
 
-    private static Float3 FanNormal(Loop corner, Float3[] faceNormals, bool[] faceSmooth, bool[] faceDrawn)
+    private static Float3 FanNormal(Loop corner, FaceShading shading)
     {
         Float3 sum = Float3.Zero;
-        WalkFan(corner, faceSmooth, faceDrawn, l =>
+        WalkFan(corner, shading, l =>
         {
             // Weighted by the corner's angle, so how a face is cut into triangles does not tilt the normal
             Float3 a = Float3.Normalize(l.Next!.Vert.Point - l.Vert.Point);
             Float3 b = Float3.Normalize(l.Prev!.Vert.Point - l.Vert.Point);
             float angle = MathF.Acos(Math.Clamp(Float3.Dot(a, b), -1f, 1f));
-            sum += faceNormals[l.Face.Slot] * angle;
+            sum += shading.Normal(l.Face.Slot) * angle;
         });
-        return Float3.Dot(sum, sum) > 1e-12f ? Float3.Normalize(sum) : faceNormals[corner.Face.Slot];
+        return Float3.Dot(sum, sum) > 1e-12f ? Float3.Normalize(sum) : shading.Normal(corner.Face.Slot);
     }
 }
