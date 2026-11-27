@@ -20,7 +20,7 @@ internal sealed class PrimitiveFormat : ISerializationFormat
             TypeCode.Single => new((float)value),
             TypeCode.Int32 => new((int)value),
             TypeCode.Boolean => new((bool)value),
-            TypeCode.String => new(value as string),
+            TypeCode.String => new((value as string)!),
             TypeCode.Int64 => new((long)value),
             TypeCode.Byte => new((byte)value),
             TypeCode.Char => new((ushort)(char)value),

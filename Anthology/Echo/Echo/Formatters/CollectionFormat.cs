@@ -43,7 +43,7 @@ internal sealed class CollectionFormat : ISerializationFormat
             foreach (var tag in CollectionReferences.ListItems(value))
             {
                 var item = Serializer.Deserialize(tag, elementType, context);
-                collection.Add((dynamic)item);
+                collection.Add((dynamic?)item);
             }
             return collection;
         }

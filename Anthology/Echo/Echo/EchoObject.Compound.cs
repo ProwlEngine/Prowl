@@ -2,6 +2,7 @@
 // Licensed under the MIT License. See the LICENSE file in the project root for details.
 
 using System.Collections;
+using System.Diagnostics.CodeAnalysis;
 
 namespace Prowl.Echo;
 
@@ -96,7 +97,7 @@ public sealed partial class EchoObject
     /// <exception cref="ArgumentNullException">Thrown if the name is null or empty or the value that is being set is null</exception>
     public EchoObject this[string tagName]
     {
-        get { return Get(tagName); }
+        get { return Get(tagName)!; }
         set
         {
             if (TagType != EchoType.Compound)
@@ -170,7 +171,7 @@ public sealed partial class EchoObject
     /// <returns>True if the tag was found, otherwise false</returns>
     /// <exception cref="InvalidOperationException">Thrown if this tag is not a compound tag</exception>
     /// <exception cref="ArgumentNullException">Thrown if the name is null or empty</exception>
-    public bool TryGet(string tagName, out EchoObject? result)
+    public bool TryGet(string tagName, [NotNullWhen(true)] out EchoObject? result)
     {
         if (TagType != EchoType.Compound)
             throw new InvalidOperationException("Cannot get tag from non-compound tag");
@@ -184,7 +185,7 @@ public sealed partial class EchoObject
     }
 
     // Checks the entry at hint first, which hits when tags are read in the order they were written.
-    internal bool TryGet(string tagName, int hint, out EchoObject? result)
+    internal bool TryGet(string tagName, int hint, [NotNullWhen(true)] out EchoObject? result)
     {
         var storage = Compound;
         if ((uint)hint < (uint)storage.Count && string.Equals(storage.Entries[hint].Key, tagName))

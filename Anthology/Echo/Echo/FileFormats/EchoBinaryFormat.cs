@@ -466,7 +466,7 @@ public sealed class EchoBinaryFormat : IFileFormat
     }
 
     /// <summary>
-    /// Reads a bare tag written by <see cref="WriteTo"/> using the encoding in <paramref name="options"/>.
+    /// Reads a bare tag written by <see cref="WriteTo(EchoObject, BinaryWriter, BinarySerializationOptions?)"/> using the encoding in <paramref name="options"/>.
     /// </summary>
     public static EchoObject ReadFrom(BinaryReader reader, BinarySerializationOptions? options = null)
         => ReadTag(reader, options ?? BinarySerializationOptions.Default);

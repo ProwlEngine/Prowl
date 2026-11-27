@@ -39,7 +39,7 @@ internal sealed class QueueFormat : ISerializationFormat
         foreach (var tag in CollectionReferences.ListItems(value))
         {
             var item = Serializer.Deserialize(tag, elementType, context);
-            queue.Enqueue((dynamic)item);
+            queue.Enqueue((dynamic?)item);
         }
 
         return queue;

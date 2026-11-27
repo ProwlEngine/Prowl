@@ -9,14 +9,6 @@ using Prowl.Echo.Formatters;
 
 namespace Prowl.Echo;
 
-// Core type envelope that wraps all serialized data
-public class TypeEnvelope
-{
-    public string? TypeInfo { get; set; }
-    public EchoObject Data { get; set; }
-    public bool IsTypePreserved => TypeInfo != null;
-}
-
 public static class Serializer
 {
     public static IEchoLogger Logger { get; set; } = new NullEchoLogger();

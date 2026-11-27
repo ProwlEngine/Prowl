@@ -45,7 +45,7 @@ internal sealed class StackFormat : ISerializationFormat
         foreach (var tag in CollectionReferences.ListItems(value))
         {
             var item = Serializer.Deserialize(tag, elementType, context);
-            stack.Push((dynamic)item);
+            stack.Push((dynamic?)item);
         }
 
         return stack;

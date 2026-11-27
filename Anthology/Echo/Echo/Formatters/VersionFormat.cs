@@ -45,11 +45,11 @@ internal sealed class VersionFormat : ISerializationFormat
 
                 if (hasRevision && hasBuild)
                 {
-                    return new Version(major, minor, buildTag.IntValue, revisionTag.IntValue);
+                    return new Version(major, minor, buildTag!.IntValue, revisionTag!.IntValue);
                 }
                 else if (hasBuild)
                 {
-                    return new Version(major, minor, buildTag.IntValue);
+                    return new Version(major, minor, buildTag!.IntValue);
                 }
                 else
                 {

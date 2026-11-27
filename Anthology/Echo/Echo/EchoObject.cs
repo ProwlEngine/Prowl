@@ -306,8 +306,8 @@ public sealed partial class EchoObject : IEquatable<EchoObject>
 
         return hash;
     }
-    public static bool operator ==(EchoObject left, EchoObject right) => left is null ? right is null : left.Equals(right);
-    public static bool operator !=(EchoObject left, EchoObject right) => !(left == right);
+    public static bool operator ==(EchoObject? left, EchoObject? right) => left is null ? right is null : left.Equals(right);
+    public static bool operator !=(EchoObject? left, EchoObject? right) => !(left == right);
 
     #endregion
 
@@ -402,7 +402,7 @@ public sealed partial class EchoObject : IEquatable<EchoObject>
         catch (Exception ex)
         {
             throw new InvalidOperationException(
-                $"Failed to set value of type {TagType} to {value} ({value.GetType().Name})", ex);
+                $"Failed to set value of type {TagType} to {value} ({value?.GetType().Name})", ex);
         }
     }
 
@@ -524,7 +524,7 @@ public sealed partial class EchoObject : IEquatable<EchoObject>
 
     /// <summary> Returns the value of this tag, cast as a byte array. </summary>
     /// <exception cref="InvalidCastException"> Can throw when used on a tag other than ByteArrayTag. </exception>
-    public byte[] ByteArrayValue { get => (byte[])Value; set => SetValue(value); }
+    public byte[] ByteArrayValue { get => (byte[])Value!; set => SetValue(value); }
 
     /// <summary> Returns the value of this tag, cast as a string.
     /// Returns exact value for StringTag, and ToString(InvariantCulture) value for Byte, SByte, Double, Float, Int, UInt, Long, uLong, Short, UShort, Decimal, Bool.

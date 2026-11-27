@@ -188,9 +188,9 @@ public sealed partial class EchoObject
         while (current.Parent != null)
         {
             if (current.Parent.TagType == EchoType.List)
-                segments.Add(current.ListIndex.ToString());
+                segments.Add(current.ListIndex?.ToString() ?? "");
             else if (current.Parent.TagType == EchoType.Compound)
-                segments.Add(current.CompoundKey);
+                segments.Add(current.CompoundKey!);
 
             current = current.Parent;
         }

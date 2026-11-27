@@ -43,7 +43,7 @@ internal sealed class HashSetFormat : ISerializationFormat
         foreach (var tag in CollectionReferences.ListItems(value))
         {
             var item = Serializer.Deserialize(tag, elementType, context);
-            hashSet.Add((dynamic)item);
+            hashSet.Add((dynamic?)item);
         }
         return hashSet;
     }
