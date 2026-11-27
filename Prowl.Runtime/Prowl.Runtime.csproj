@@ -9,6 +9,13 @@
     <NoWarn>8600;8601;8618;8602;8603;8604;8625;1591</NoWarn>
     <IsAotCompatible>true</IsAotCompatible>
     <GenerateDocumentationFile>true</GenerateDocumentationFile>
+
+    <PackageId>Prowl.Runtime</PackageId>
+    <Title>Prowl.Runtime</Title>
+    <Description>The runtime of the Prowl game engine: scenes, GameObjects and components, rendering, physics, audio, animation, navigation, input and VR, usable from any .NET application without the editor.</Description>
+    <PackageTags>game engine;gamedev;3D;rendering;vulkan;physics;audio;animation;navigation;VR;OpenXR;scene graph;C#;.NET;prowl</PackageTags>
+    <!-- Packed by the publish workflow, not on every Release build of the editor. -->
+    <PackOnBuild>false</PackOnBuild>
   </PropertyGroup>
 
   <!-- Allow test project to access internal members -->
@@ -27,37 +34,20 @@
     <OutputPath>../Build/Runtime/Release/</OutputPath>
   </PropertyGroup>
 
-  <ItemGroup Condition="'$(ProwlLocalAnthology)' == 'true'">
-    <ProjectReference Include="$(AnthologyDir)Aperture\Aperture\Aperture.csproj" />
-    <ProjectReference Include="$(AnthologyDir)Clay\Clay\Clay.csproj" />
-    <ProjectReference Include="$(AnthologyDir)Echo\Echo\Echo.csproj" />
-    <ProjectReference Include="$(AnthologyDir)Paper\Paper\Paper.csproj" />
-    <ProjectReference Include="$(AnthologyDir)Recast\Recast\Prowl.Recast.csproj" />
-    <ProjectReference Include="$(AnthologyDir)Motion\Motion\Motion.csproj" />
-    <ProjectReference Include="$(AnthologyDir)Unwrapper\Unwrapper\Unwrapper.csproj" />
-    <ProjectReference Include="$(AnthologyDir)Ember\Contracts\Prowl.Ember.Contracts.csproj" />
-    <ProjectReference Include="$(AnthologyDir)Ember\Analyzers\Prowl.Ember.Analyzers.csproj" OutputItemType="Analyzer" ReferenceOutputAssembly="false" />
-    <ProjectReference Include="$(AnthologyDir)Graphite\Graphite\Prowl.Graphite.csproj" />
-    <ProjectReference Include="$(AnthologyDir)Graphite\ShaderDef\Core\Prowl.Graphite.ShaderDef.csproj" />
-    <ProjectReference Include="$(AnthologyDir)Graphite\ShaderDef\Compiler\Prowl.Graphite.ShaderDef.Compiler.csproj" />
-    <ProjectReference Include="$(AnthologyDir)Graphite\Rendering\Prowl.Graphite.Rendering.csproj" />
-  </ItemGroup>
-
-  <ItemGroup Condition="'$(ProwlLocalAnthology)' != 'true'">
-
-    <PackageReference Include="Prowl.Aperture" Version="$(ProwlPackageVersion)" />
-    <PackageReference Include="Prowl.Clay" Version="$(ProwlPackageVersion)" />
-    <PackageReference Include="Prowl.Echo" Version="$(ProwlPackageVersion)" />
-    <PackageReference Include="Prowl.Paper" Version="$(ProwlPackageVersion)" />
-    <PackageReference Include="Prowl.Recast" Version="$(ProwlPackageVersion)" />
-    <PackageReference Include="Prowl.Motion" Version="$(ProwlPackageVersion)" />
-    <PackageReference Include="Prowl.Unwrapper" Version="$(ProwlPackageVersion)" />
-    <PackageReference Include="Prowl.Ember.Contracts" Version="$(ProwlPackageVersion)" />
-    <PackageReference Include="Prowl.Ember.Analyzers" Version="$(ProwlPackageVersion)" PrivateAssets="all" />
-    <PackageReference Include="Prowl.Graphite" Version="$(ProwlPackageVersion)" />
-    <PackageReference Include="Prowl.Graphite.ShaderDef" Version="$(ProwlPackageVersion)" />
-    <PackageReference Include="Prowl.Graphite.ShaderDef.Compiler" Version="$(ProwlPackageVersion)" />
-    <PackageReference Include="Prowl.Graphite.Rendering" Version="$(ProwlPackageVersion)" />
+  <ItemGroup>
+    <ProjectReference Include="..\Anthology\Aperture\Aperture\Aperture.csproj" />
+    <ProjectReference Include="..\Anthology\Clay\Clay\Clay.csproj" />
+    <ProjectReference Include="..\Anthology\Echo\Echo\Echo.csproj" />
+    <ProjectReference Include="..\Anthology\Paper\Paper\Paper.csproj" />
+    <ProjectReference Include="..\Anthology\Recast\Recast\Prowl.Recast.csproj" />
+    <ProjectReference Include="..\Anthology\Motion\Motion\Motion.csproj" />
+    <ProjectReference Include="..\Anthology\Unwrapper\Unwrapper\Unwrapper.csproj" />
+    <ProjectReference Include="..\Anthology\Ember\Contracts\Prowl.Ember.Contracts.csproj" />
+    <ProjectReference Include="..\Anthology\Ember\Analyzers\Prowl.Ember.Analyzers.csproj" OutputItemType="Analyzer" ReferenceOutputAssembly="false" PrivateAssets="all" />
+    <ProjectReference Include="..\Anthology\Graphite\Graphite\Prowl.Graphite.csproj" />
+    <ProjectReference Include="..\Anthology\Graphite\ShaderDef\Core\Prowl.Graphite.ShaderDef.csproj" />
+    <ProjectReference Include="..\Anthology\Graphite\ShaderDef\Compiler\Prowl.Graphite.ShaderDef.Compiler.csproj" />
+    <ProjectReference Include="..\Anthology\Graphite\Rendering\Prowl.Graphite.Rendering.csproj" />
   </ItemGroup>
 
   <ItemGroup>
@@ -68,7 +58,12 @@
     <PackageReference Include="Silk.NET.OpenXR.Extensions.KHR" Version="2.23.0" />
     <PackageReference Include="Silk.NET.OpenXR.Extensions.EXT" Version="2.23.0" />
     <!-- EngineObject null-safety analyzer (?./??/??= on EngineObject). Analyzes this project's own source. -->
-    <ProjectReference Include="..\Prowl.Analyzers\Prowl.Analyzers.csproj" OutputItemType="Analyzer" ReferenceOutputAssembly="false" />
+    <ProjectReference Include="..\Prowl.Analyzers\Prowl.Analyzers.csproj" OutputItemType="Analyzer" ReferenceOutputAssembly="false" PrivateAssets="all" />
+  </ItemGroup>
+
+  <!-- The package carries the analyzer, so code that references the runtime gets the same checks. -->
+  <ItemGroup>
+    <None Include="..\Prowl.Analyzers\bin\$(Configuration)\netstandard2.0\Prowl.Analyzers.dll" Pack="true" PackagePath="analyzers\dotnet\cs" Visible="false" />
   </ItemGroup>
 
   <ItemGroup>
@@ -105,6 +100,8 @@
       <Link>runtimes\%(RecursiveDir)%(Filename)%(Extension)</Link>
       <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
       <Visible>false</Visible>
+      <Pack>true</Pack>
+      <PackagePath>runtimes</PackagePath>
     </None>
   </ItemGroup>
 
