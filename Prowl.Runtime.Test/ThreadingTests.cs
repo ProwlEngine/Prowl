@@ -821,7 +821,7 @@ public class ThreadingTests : RuntimeTestBase
     [Fact]
     public void BindingMainFromAnotherThreadIsRefused()
     {
-        Scene world = Scene.Create("Other");
+        Scene world = Scene.CreateScene("Other");
         using var loop = new LoopScope();
 
         Assert.Throws<InvalidOperationException>(() => OffThread(() => Scene.Main = world));
@@ -1032,7 +1032,7 @@ public class ThreadingTests : RuntimeTestBase
     public void ReadingTimeFromAnotherThreadWhileTheLoopSwapsItNeverThrows()
     {
         Scene first = Scene.Main;
-        Scene second = Scene.Create("Swapped");
+        Scene second = Scene.CreateScene("Swapped");
         second.Clock.Advance(0.5f);
         using var stop = new CancellationTokenSource();
 

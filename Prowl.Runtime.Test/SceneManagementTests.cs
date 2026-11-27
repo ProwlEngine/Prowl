@@ -290,7 +290,7 @@ public class SceneManagementTests : RuntimeTestBase
     [Fact]
     public void ANewWorld_HasPersistentThenOneActiveSection()
     {
-        Scene world = Scene.Create("Level");
+        Scene world = Scene.CreateScene("Level");
         try
         {
             Assert.Equal(2, world.Sections.Count);
@@ -449,7 +449,7 @@ public class SceneManagementTests : RuntimeTestBase
     [Fact]
     public void DestroyingMain_RaisesMainChangedToNothing()
     {
-        Scene world = Scene.Create("Bound");
+        Scene world = Scene.CreateScene("Bound");
         Scene.Main = world;
         (Scene? From, Scene? To)? changed = null;
         void Handler(Scene? from, Scene? to) => changed = (from, to);

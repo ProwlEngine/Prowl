@@ -97,7 +97,7 @@ public partial class EditorApplication : Game
     /// <summary>The edit world, empty until a project's scene opens, so panels always have a world to show.</summary>
     protected override Scene CreateMainWorld()
     {
-        Scene edit = Scene.Create("Untitled", SceneMode.Edit);
+        Scene edit = Scene.CreateScene("Untitled", SceneMode.Edit);
         edit.Activate();
         EditorSceneManager.EditWorld = edit;
         return edit;

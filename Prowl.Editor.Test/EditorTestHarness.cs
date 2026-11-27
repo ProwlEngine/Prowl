@@ -65,7 +65,7 @@ public abstract class EditorTestHarness : IDisposable
         Assets.Initialize(); // registers itself as AssetDatabase.Backend
 
         // After the database, since a new world loads its default sky.
-        BindEditWorld(Scene.Create("Untitled", SceneMode.Edit));
+        BindEditWorld(Scene.CreateScene("Untitled", SceneMode.Edit));
         Core.Undo.ClearAll();
     }
 

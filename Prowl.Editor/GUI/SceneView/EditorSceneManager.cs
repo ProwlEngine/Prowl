@@ -60,7 +60,7 @@ public static class EditorSceneManager
     private static Scene BuildPlayWorld(List<(SceneSection Section, EchoObject Tree)> captured)
     {
         Scene edit = EditWorld;
-        Scene play = Scene.Create(edit.Name, SceneMode.Game);
+        Scene play = Scene.CreateScene(edit.Name, SceneMode.Game);
         s_playCopies.Clear();
         try
         {

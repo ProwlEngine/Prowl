@@ -35,7 +35,7 @@ public abstract class RuntimeTestBase : IDisposable
         Application.IsPlaying = true;
         Application.IsEditor = false;
 
-        Scene main = Scene.Create("Test");
+        Scene main = Scene.CreateScene("Test");
         main.Clock.Advance(FrameDelta);
         main.Activate();
         Scene.Main = main;

@@ -125,7 +125,7 @@ public static class ModelEditingMode
         EditorSceneManager.ApplyPendingNow();
 
         string name = session.Name;
-        Scene world = Scene.Create($"Editing: {name}", SceneMode.Edit);
+        Scene world = Scene.CreateScene($"Editing: {name}", SceneMode.Edit);
         try
         {
             Build(world, document);

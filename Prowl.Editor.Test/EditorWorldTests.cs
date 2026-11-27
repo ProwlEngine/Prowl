@@ -86,13 +86,13 @@ public class EditorWorldTests : EditorTestHarness
     [Fact]
     public void StoppingPlay_DestroysEveryWorldPlayOpened()
     {
-        Scene before = Scene.Create("Before", SceneMode.Game);
+        Scene before = Scene.CreateScene("Before", SceneMode.Game);
         Scene play = EditorSceneManager.BuildPlayWorld();
         Scene opened;
         using (EnterPlayMode())
         {
             EditorSceneManager.EnterPlayWorld(play);
-            opened = Scene.Create("Overlay", SceneMode.Game);
+            opened = Scene.CreateScene("Overlay", SceneMode.Game);
             opened.Activate();
             EditorSceneManager.DestroyPlayWorld();
         }
@@ -134,7 +134,7 @@ public class EditorWorldTests : EditorTestHarness
         using (EnterPlayMode())
         {
             EditorSceneManager.EnterPlayWorld(play);
-            Scene overlay = Scene.Create("Overlay", SceneMode.Game);
+            Scene overlay = Scene.CreateScene("Overlay", SceneMode.Game);
             overlay.Present = true;
             overlay.RenderOrder = 10;
             overlay.Activate();

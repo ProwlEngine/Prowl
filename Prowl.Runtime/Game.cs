@@ -445,7 +445,7 @@ public abstract class Game
     /// </summary>
     protected virtual Scene CreateMainWorld()
     {
-        Scene main = Scene.Create("Main");
+        Scene main = Scene.CreateScene("Main");
         main.Present = true;
         main.Activate();
         return main;

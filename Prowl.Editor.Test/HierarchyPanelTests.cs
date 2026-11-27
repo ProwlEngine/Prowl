@@ -102,7 +102,7 @@ public class HierarchyPanelTests : EditorTestHarness
     [Fact]
     public void ARowsId_FollowsASectionsName_InAWorldWithNoOpenScenes()
     {
-        Scene play = Scene.Create("Play");
+        Scene play = Scene.CreateScene("Play");
         try
         {
             SceneSection level = play.CreateSection("Level");

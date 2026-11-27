@@ -89,7 +89,7 @@ public static class PrefabEditingMode
         EditorSceneManager.ApplyPendingNow();
         PrefabUtility.ReconcileOpenScene();
 
-        Scene editScene = Scene.Create($"Editing: {prefab.Name}", SceneMode.Edit);
+        Scene editScene = Scene.CreateScene($"Editing: {prefab.Name}", SceneMode.Edit);
         try
         {
             Build(editScene, go, edit, prefabGuid);

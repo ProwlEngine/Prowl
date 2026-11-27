@@ -35,7 +35,7 @@ public class SceneGizmoVisibilityTests : IDisposable
         Application.IsEditor = true;
         Application.IsPlaying = false;
         Selection.Clear();
-        Scene edited = Scene.Create("Untitled", SceneMode.Edit);
+        Scene edited = Scene.CreateScene("Untitled", SceneMode.Edit);
         edited.Activate();
         Scene.Main = edited;
     }
