@@ -241,13 +241,18 @@ public sealed class CSGModel : Component
         bool live = RebuildAtRuntime || (Application.IsEditor && !Application.IsPlaying);
         if (!live)
         {
-            if (_built) return;
+            if (_built)
+            {
+                FlushCollider();
+                return;
+            }
             AdoptSerialisedMeshes();
             if (_visible.IsValid() || _collision.IsValid()) { _built = true; return; }
         }
 
         if (!_dirty && !AnyComponentChanged())
         {
+            if (_colliderStale && Time.UnscaledTotalTime - _colliderChangedAt >= ColliderQuietSeconds) FlushCollider();
             TickLightmapUVs();
             return;
         }
@@ -723,8 +728,30 @@ public sealed class CSGModel : Component
         TriangleCount = _visible.IsValid() ? _visible.Indices.Length / 3 : 0;
 
         ApplyRenderer();
+
+        // While editing, the collider is baked once the edits pause, since nothing collides until play
+        if (Application.IsEditor && !Application.IsPlaying)
+        {
+            _colliderStale = true;
+            _colliderChangedAt = Time.UnscaledTotalTime;
+        }
+        else ApplyCollider();
+    }
+
+    // A collision mesh waiting for edits to pause, and when it last changed
+    private const double ColliderQuietSeconds = 0.5;
+    [SerializeIgnore] private bool _colliderStale;
+    [SerializeIgnore] private double _colliderChangedAt;
+
+    private void FlushCollider()
+    {
+        if (!_colliderStale) return;
+        _colliderStale = false;
         ApplyCollider();
     }
+
+    // Saving, entering play or copying the model takes the collider as it should be
+    public override void OnBeforeSerialize() => FlushCollider();
 
     /// <summary>
     /// Keeps <paramref name="existing"/> when the rebuild produced the same geometry. A replaced mesh is dropped, never

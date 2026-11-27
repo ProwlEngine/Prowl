@@ -844,6 +844,30 @@ public class CSGModelTests : RuntimeTestBase
         Assert.Equal(64f, VolumeOf(_model.GeneratedMesh!), 2);
     }
 
+    [Fact]
+    public void WhileEditingTheColliderWaitsUntilItIsNeeded()
+    {
+        bool wasEditor = Application.IsEditor, wasPlaying = Application.IsPlaying;
+        Application.IsEditor = true;
+        Application.IsPlaying = false;
+        try
+        {
+            CreateModel();
+            AddBrush(Float3.One * 2f, Float3.Zero);
+            Update(_scene);
+            Assert.True(_model.GameObject.GetComponent<MeshCollider>().IsNotValid());
+
+            _model.OnBeforeSerialize();
+
+            Assert.Same(_model.GeneratedCollisionMesh, _model.GameObject.GetComponent<MeshCollider>().Mesh);
+        }
+        finally
+        {
+            Application.IsEditor = wasEditor;
+            Application.IsPlaying = wasPlaying;
+        }
+    }
+
     /// <summary>A brush that encloses nothing even when repaired is left out of the model.</summary>
     [Fact]
     public void ABrushThatCannotBeRepairedIsLeftOut()
