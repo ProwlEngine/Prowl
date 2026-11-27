@@ -1,6 +1,7 @@
 <Project Sdk="Microsoft.NET.Sdk">
 
   <PropertyGroup>
+    <IsPackable>false</IsPackable>
     <OutputType>Exe</OutputType>
     <TargetFramework>net11.0</TargetFramework>
     <RootNamespace>Prowl.Clay.DiffDebugger</RootNamespace>
