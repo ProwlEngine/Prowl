@@ -181,7 +181,7 @@ public class MaterialTests
     {
         Shader lit = Shader.LoadDefault(DefaultShader.Lit);
 
-        Assert.Contains(lit.Keywords, axis => axis.Name == "PBR_COAT");
+        Assert.Contains(lit.Keywords, axis => axis.Name == "PBR_THIN_WALLED");
     }
 
     [Fact]
