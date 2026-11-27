@@ -41,7 +41,7 @@ public static class ShadowCastingExtensions
 /// </summary>
 [AddComponentMenu("Rendering/Mesh Renderer")]
 [ComponentIcon("")] // Cube
-public class MeshRenderer : Component, IMaterialRenderer, IRenderSync
+public class MeshRenderer : Component, IMaterialRenderer, IRenderSync, IRaycastRenderer
 {
     int IMaterialRenderer.MaterialSlotCount => materials.Count;
     Material? IMaterialRenderer.GetMaterial(int slot) => MaterialSlots.Get(materials, slot);
@@ -169,13 +169,15 @@ public class MeshRenderer : Component, IMaterialRenderer, IRenderSync
     /// <summary>
     /// Raycast against this renderer's mesh in world space.
     /// </summary>
-    public bool Raycast(Ray worldRay, out float distance)
+    public bool Raycast(Ray worldRay, out float distance) => RaycastMesh(Transform, Mesh, worldRay, out distance);
+
+    /// <summary>Casts a world ray at a mesh drawn at a transform, the distance in world units.</summary>
+    internal static bool RaycastMesh(Transform transform, Mesh? mesh, Ray worldRay, out float distance)
     {
         distance = float.MaxValue;
-        Mesh? mesh = Mesh;
         if (mesh is not { IsLoaded: true }) return false;
 
-        Float4x4 worldToLocal = Transform.WorldToLocalMatrix;
+        Float4x4 worldToLocal = transform.WorldToLocalMatrix;
         Float3 localOrigin = Float4x4.TransformPoint(worldRay.Origin, worldToLocal);
         Float3 localDirRaw = Float4x4.TransformPoint(worldRay.Origin + worldRay.Direction, worldToLocal) - localOrigin;
         Float3 localDir = Float3.Normalize(localDirRaw);
@@ -187,7 +189,7 @@ public class MeshRenderer : Component, IMaterialRenderer, IRenderSync
         if (mesh.Raycast(localRay, out float localDist))
         {
             Float3 localHit = localOrigin + localDir * localDist;
-            Float3 worldHit = Float4x4.TransformPoint(localHit, Transform.LocalToWorldMatrix);
+            Float3 worldHit = Float4x4.TransformPoint(localHit, transform.LocalToWorldMatrix);
             distance = Float3.Distance(worldRay.Origin, worldHit);
             return true;
         }

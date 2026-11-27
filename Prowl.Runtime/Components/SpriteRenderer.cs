@@ -1,8 +1,10 @@
 // This file is part of the Prowl Game Engine
 // Licensed under the MIT License. See the LICENSE file in the project root for details.
 
-using Prowl.Echo;
+using System;
 using System.Collections.Generic;
+
+using Prowl.Echo;
 
 using Prowl.Graphite.Rendering;
 using Prowl.Runtime.Rendering;
@@ -23,7 +25,7 @@ namespace Prowl.Runtime;
 /// </summary>
 [AddComponentMenu("Rendering/Sprite Renderer")]
 [ComponentIcon("")] // Image
-public class SpriteRenderer : Component, IMaterialRenderer, IColorTint, IRenderSync
+public class SpriteRenderer : Component, IMaterialRenderer, IColorTint, IRenderSync, IRaycastRenderer
 {
     int IMaterialRenderer.MaterialSlotCount => 1;
     Material? IMaterialRenderer.GetMaterial(int slot) { MaterialSlots.CheckSingle(slot); return Material; }
@@ -81,6 +83,42 @@ public class SpriteRenderer : Component, IMaterialRenderer, IColorTint, IRenderS
 
     // Syncs it again next frame, for a setting that changed
     internal void Wake() => SceneRendering.Wake(this, GameObject);
+
+    /// <summary>Casts a world ray at the sprite's shape, its quad or tight mesh as flipped, the distance in world units.</summary>
+    public bool Raycast(Ray worldRay, out float distance)
+    {
+        distance = float.MaxValue;
+        Sprite? sprite = Sprite;
+        if (sprite.IsNotValid()) return false;
+        Float2[] vertices = sprite.Vertices;
+        ushort[] indices = sprite.Indices;
+        if (vertices.Length < 3 || indices.Length < 3) return false;
+
+        Float4x4 worldToLocal = Transform.WorldToLocalMatrix;
+        Float3 origin = Float4x4.TransformPoint(worldRay.Origin, worldToLocal);
+        Float3 direction = Float4x4.TransformPoint(worldRay.Origin + worldRay.Direction, worldToLocal) - origin;
+        if (MathF.Abs(direction.Z) < 1e-8f) return false;
+        float t = -origin.Z / direction.Z;
+        if (t < 0) return false;
+
+        Float3 local = origin + direction * t;
+        Float2 point = new(FlipX ? -local.X : local.X, FlipY ? -local.Y : local.Y);
+        for (int i = 0; i + 2 < indices.Length; i += 3)
+        {
+            if (!InTriangle(point, vertices[indices[i]], vertices[indices[i + 1]], vertices[indices[i + 2]])) continue;
+            distance = Float3.Distance(worldRay.Origin, Float4x4.TransformPoint(local, Transform.LocalToWorldMatrix));
+            return true;
+        }
+        return false;
+    }
+
+    private static bool InTriangle(Float2 p, Float2 a, Float2 b, Float2 c)
+    {
+        float d1 = (b.X - a.X) * (p.Y - a.Y) - (b.Y - a.Y) * (p.X - a.X);
+        float d2 = (c.X - b.X) * (p.Y - b.Y) - (c.Y - b.Y) * (p.X - b.X);
+        float d3 = (a.X - c.X) * (p.Y - c.Y) - (a.Y - c.Y) * (p.X - c.X);
+        return !((d1 < 0 || d2 < 0 || d3 < 0) && (d1 > 0 || d2 > 0 || d3 > 0));
+    }
 
     internal TransparentOrder SortOrder() => SortingGroup.OrderOf(GameObject, SortingLayer, SortingOrder);
 

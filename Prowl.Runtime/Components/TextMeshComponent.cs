@@ -31,7 +31,7 @@ namespace Prowl.Runtime;
 /// </summary>
 [AddComponentMenu("Rendering/Text Mesh")]
 [ComponentIcon("T")] // Text
-public class TextMeshComponent : Component, IMaterialRenderer, IColorTint, IRenderSync
+public class TextMeshComponent : Component, IMaterialRenderer, IColorTint, IRenderSync, IRaycastRenderer
 {
     int IMaterialRenderer.MaterialSlotCount => 1;
     Material? IMaterialRenderer.GetMaterial(int slot) { MaterialSlots.CheckSingle(slot); return Material; }
@@ -87,6 +87,9 @@ public class TextMeshComponent : Component, IMaterialRenderer, IColorTint, IRend
 
     [SerializeField] private ShadowCasting _shadowCasting = ShadowCasting.Off;
     public ShadowCasting ShadowCasting { get => _shadowCasting; set => SetField(ref _shadowCasting, value); }
+
+    /// <summary>Casts a world ray at the text's glyph quads, the distance in world units.</summary>
+    public bool Raycast(Ray worldRay, out float distance) => MeshRenderer.RaycastMesh(Transform, _mesh, worldRay, out distance);
 
     [SerializeField] private SortingLayer _sortingLayer;
     /// <summary>The layer it draws in. Later layers draw in front, whatever the render queue or depth.</summary>

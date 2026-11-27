@@ -24,7 +24,7 @@ namespace Prowl.Runtime;
 /// </summary>
 [AddComponentMenu("Rendering/Skinned Mesh Renderer")]
 [ComponentIcon("\uf1b3")] // Cubes
-public class SkinnedMeshRenderer : Component, IMaterialRenderer, IColorTint, IRenderSync
+public class SkinnedMeshRenderer : Component, IMaterialRenderer, IColorTint, IRenderSync, IRaycastRenderer
 {
     int IMaterialRenderer.MaterialSlotCount => Materials.Count;
     Material? IMaterialRenderer.GetMaterial(int slot) => MaterialSlots.Get(Materials, slot);
@@ -50,6 +50,9 @@ public class SkinnedMeshRenderer : Component, IMaterialRenderer, IColorTint, IRe
 
     /// <summary>Tint every material draws with in place of its own base_color, or _MainColor in Prowl's own shaders.</summary>
     public Color MainColor = Color.White;
+
+    /// <summary>Casts a world ray at the mesh in its bind pose, the distance in world units.</summary>
+    public bool Raycast(Ray worldRay, out float distance) => MeshRenderer.RaycastMesh(Transform, SharedMesh, worldRay, out distance);
 
     public ShadowCasting ShadowCasting = ShadowCasting.On;
     public bool ReceiveShadows = true;

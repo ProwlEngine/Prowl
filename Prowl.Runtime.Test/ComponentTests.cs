@@ -635,4 +635,42 @@ public class ComponentTests : RuntimeTestBase
             [typeof(LateComponent), typeof(EarlyComponent), typeof(PlainComponent)],
             types);
     }
+
+    private static Sprite QuadSprite()
+    {
+        Sprite sprite = new() { Rect = new SpriteRect { X = 0, Y = 0, Width = 200, Height = 100 }, PixelsPerUnit = 100, Pivot = new Float2(0, 0) };
+        sprite.BuildQuadGeometry(200, 100);
+        return sprite;
+    }
+
+    [Fact]
+    public void SpriteRenderer_Raycast_HitsItsShape_AndFollowsFlip()
+    {
+        GameObject go = CreateGameObject();
+        go.Transform.Position = new Float3(0, 0, 3);
+        SpriteRenderer sprite = go.AddComponent<SpriteRenderer>();
+        sprite.Sprite = QuadSprite();
+
+        Assert.True(sprite.Raycast(new Ray(new Float3(1.5f, 0.5f, 0), Float3.UnitZ), out float distance));
+        Assert.Equal(3f, distance, 3);
+        Assert.False(sprite.Raycast(new Ray(new Float3(-0.5f, 0.5f, 0), Float3.UnitZ), out _));
+
+        sprite.FlipX = true;
+        Assert.True(sprite.Raycast(new Ray(new Float3(-0.5f, 0.5f, 0), Float3.UnitZ), out _));
+        Assert.False(sprite.Raycast(new Ray(new Float3(1.5f, 0.5f, 0), Float3.UnitZ), out _));
+    }
+
+    [Fact]
+    public void LineRenderer_Raycast_HitsWithinItsWidth()
+    {
+        GameObject go = CreateGameObject();
+        LineRenderer line = go.AddComponent<LineRenderer>();
+        line.Points = [new Float3(0, 0, 0), new Float3(4, 0, 0)];
+        line.StartWidth = line.EndWidth = 0.5f;
+
+        Assert.True(line.Raycast(new Ray(new Float3(2, 0.2f, -5), Float3.UnitZ), out float distance));
+        Assert.Equal(5f, distance, 2);
+        Assert.False(line.Raycast(new Ray(new Float3(2, 0.4f, -5), Float3.UnitZ), out _));
+        Assert.False(line.Raycast(new Ray(new Float3(5, 0, -5), Float3.UnitZ), out _));
+    }
 }

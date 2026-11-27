@@ -34,6 +34,12 @@ public interface IRenderSync
     void Detach(RenderWorld world);
 }
 
+/// <summary>A renderer a ray can hit, such as the scene view's click, the distance along the ray in world units.</summary>
+public interface IRaycastRenderer
+{
+    bool Raycast(Ray worldRay, out float distance);
+}
+
 /// <summary>
 /// A scene's link to Graphite: its <see cref="RenderWorld"/>, made when a renderer exists, the components that keep
 /// state in it, and the environment (ambient, fog, sky, sun) taken from the scene's settings.

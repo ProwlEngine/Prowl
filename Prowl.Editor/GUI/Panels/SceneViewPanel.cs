@@ -815,10 +815,10 @@ public class SceneViewPanel : DockPanel
         {
             if (go.HideFlags.HasFlag(HideFlags.Hide)) continue;
 
-            MeshRenderer? meshRenderer = go.GetComponent<MeshRenderer>();
-            if (meshRenderer.IsValid() && meshRenderer.EnabledInHierarchy && meshRenderer.Raycast(ray, out float dist))
+            foreach (Component component in go.GetComponents())
             {
-                if (dist < bestDist) { bestDist = dist; bestHit = go; }
+                if (component is not Runtime.Rendering.IRaycastRenderer renderer || !component.EnabledInHierarchy) continue;
+                if (renderer.Raycast(ray, out float dist) && dist < bestDist) { bestDist = dist; bestHit = go; }
             }
         }
 
@@ -829,7 +829,7 @@ public class SceneViewPanel : DockPanel
             bestDist = gizmo.Distance;
         }
 
-        // UI elements aren't visible to MeshRenderer raycasts but should still be selectable from the
+        // UI elements aren't visible to renderer raycasts but should still be selectable from the
         // scene view. The scene view lays UI out in world space (ReferenceResolution + transform), so
         // pick with the same world-space override or the design-space hit test would disagree with
         // what's drawn.

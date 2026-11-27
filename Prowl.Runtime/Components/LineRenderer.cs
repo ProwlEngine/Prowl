@@ -21,7 +21,7 @@ namespace Prowl.Runtime;
 /// </summary>
 [AddComponentMenu("Rendering/Line Renderer")]
 [ComponentIcon("\uf4d7")] // Route
-public class LineRenderer : Component, IMaterialRenderer, IRenderSync
+public class LineRenderer : Component, IMaterialRenderer, IRenderSync, IRaycastRenderer
 {
     int IMaterialRenderer.MaterialSlotCount => 1;
     Material? IMaterialRenderer.GetMaterial(int slot) { MaterialSlots.CheckSingle(slot); return Material; }
@@ -109,6 +109,44 @@ public class LineRenderer : Component, IMaterialRenderer, IRenderSync
     }
 
     void IRenderSync.Detach(RenderWorld world) => _renderable.Detach(world);
+
+    /// <summary>Casts a world ray at the line, a hit passing within half its width of a segment, the distance in world units.</summary>
+    public bool Raycast(Ray worldRay, out float distance)
+    {
+        distance = float.MaxValue;
+        int count = Points.Count;
+        if (count < 2) return false;
+
+        Float4x4 toWorld = Transform.LocalToWorldMatrix;
+        int segments = Loop ? count : count - 1;
+        bool hit = false;
+        for (int i = 0; i < segments; i++)
+        {
+            Float3 a = Float4x4.TransformPoint(Points[i], toWorld);
+            Float3 b = Float4x4.TransformPoint(Points[(i + 1) % count], toWorld);
+            (float along, float onSegment, float gap) = Closest(worldRay, a, b);
+            float halfWidth = Maths.Lerp(StartWidth, EndWidth, (i + onSegment) / segments) * 0.5f;
+            if (along < 0 || gap > halfWidth || along >= distance) continue;
+            distance = along;
+            hit = true;
+        }
+        return hit;
+    }
+
+    // How far along the ray it passes closest to the segment, where on the segment from 0 to 1, and the gap between them
+    private static (float Along, float OnSegment, float Gap) Closest(Ray ray, Float3 a, Float3 b)
+    {
+        Float3 d = Float3.Normalize(ray.Direction);
+        Float3 e = b - a;
+        Float3 w = ray.Origin - a;
+        float ee = Float3.Dot(e, e), de = Float3.Dot(d, e), dw = Float3.Dot(d, w), ew = Float3.Dot(e, w);
+        float denominator = ee - de * de;
+        float s = ee > 1e-8f && denominator > 1e-8f ? Math.Clamp((ew - de * dw) / denominator, 0f, 1f) : 0f;
+        Float3 onSegment = a + e * s;
+        float along = Float3.Dot(onSegment - ray.Origin, d);
+        float gap = Float3.Distance(ray.Origin + d * along, onSegment);
+        return (along, s, gap);
+    }
 
     // The points' bounds grown by the widest width, which is in world units, so it grows by more on a shrunk object
     private AABB WidenedBounds()
