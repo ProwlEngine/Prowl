@@ -1105,7 +1105,7 @@ public class CliApiCommandTests : EditorTestHarness
         JsonNode type = Ok("--type", "AssetRef");
         Assert.Equal("Prowl.Runtime.AssetRef<T>", type["name"]!.GetValue<string>());
         Assert.Contains("asset", type["summary"]!.GetValue<string>());
-        Assert.Contains(type["members"]!.AsArray(), m => m!["signature"]!.GetValue<string>() == "public T Load()");
+        Assert.Contains(type["members"]!.AsArray(), m => m!["signature"]!.GetValue<string>() == "public T LoadImmediate()");
 
         JsonNode member = Ok("--type", "Prowl.Runtime.Debug", "--member", "EnsureMainThread")["members"]![0]!;
         Assert.Contains(member["parameters"]!.AsArray(), p => p!.GetValue<string>().StartsWith("member: Defaults to the calling member"));
