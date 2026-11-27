@@ -279,6 +279,7 @@
   "scene.navmesh_show_vertices": "Show NavMesh Vertices",
   "scene.camera": "Camera",
   "scene.camera_orthographic": "Orthographic",
+  "scene.mode_2d": "2D mode: look straight at the XY plane, pan and zoom only",
   "scene.camera_fov": "Field of View",
   "scene.camera_ortho_size": "Size",
   "scene.camera_near": "Near Clip",

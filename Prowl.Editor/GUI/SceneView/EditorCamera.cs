@@ -88,6 +88,67 @@ public class EditorCamera
 
     public bool IsOrthographic => _camera.IsOrthographic;
 
+    /// <summary>Looking straight down +Z with an orthographic lens at the XY plane, where navigation pans and zooms but never turns.</summary>
+    public bool Is2D { get; private set; }
+
+    /// <summary>The 3D view to go back to when 2D mode ends.</summary>
+    public readonly record struct View3D(Float3 Position, float Yaw, float Pitch, bool Orthographic, float OrthographicSize, float Distance);
+
+    /// <summary>The view 2D mode returns to, null outside 2D mode.</summary>
+    public View3D? Before2D { get; private set; }
+
+    /// <summary>Enters or leaves 2D mode. Entering keeps the point in view, leaving puts back the 3D view exactly as it was.</summary>
+    public void Set2D(bool on, View3D? returnTo = null)
+    {
+        if (on == Is2D) return;
+        ClearMovementSmoothing();
+        if (on)
+        {
+            Float3 focus = ViewFocusPoint;
+            Before2D = returnTo ?? new View3D(_position, _yaw, _pitch, _camera.IsOrthographic, _camera.OrthographicSize, _orbitDistance);
+            Is2D = true;
+            _yaw = 0f;
+            _pitch = 0f;
+            UpdateTransform();
+            _position = new Float3(focus.X, focus.Y, 0f) - _cameraObject.Transform.Forward * _orbitDistance;
+            UpdateTransform();
+            if (_camera.IsOrthographic) SyncOrthographicDepth();
+            else SwapProjection();
+            return;
+        }
+
+        Is2D = false;
+        View3D view = Before2D ?? new View3D(_position, _yaw, _pitch, false, _camera.OrthographicSize, _orbitDistance);
+        Before2D = null;
+        if (_camera.IsOrthographic != view.Orthographic) SwapProjection();
+        if (view.Orthographic) _camera.OrthographicSize = view.OrthographicSize;
+        SetPose(view.Position, view.Yaw, view.Pitch);
+        _orbitDistance = view.Distance;
+    }
+
+    // World units one pixel of the view covers, orthographic only
+    private float WorldPerPixel(Float2 panelSize) => 2f * _camera.OrthographicSize / MathF.Max(1f, panelSize.Y);
+
+    // Moves the view by a pointer delta in pixels, so the world under the pointer follows it exactly
+    private void Pan2D(Float2 delta, Float2 panelSize)
+    {
+        float scale = WorldPerPixel(panelSize);
+        _position -= _cameraObject.Transform.Right * delta.X * scale;
+        _position += _cameraObject.Transform.Up * delta.Y * scale;
+        UpdateTransform();
+    }
+
+    // Resizes the view about the point under the pointer, which stays where it is on screen
+    private void Zoom2D(float factor, Float2 pointer, Float2 panelSize)
+    {
+        Float2 offset = pointer - panelSize * 0.5f;
+        float before = WorldPerPixel(panelSize);
+        SetOrthographicSize(_camera.OrthographicSize * factor);
+        float shift = before - WorldPerPixel(panelSize);
+        _position += (_cameraObject.Transform.Right * offset.X - _cameraObject.Transform.Up * offset.Y) * shift;
+        UpdateTransform();
+    }
+
     /// <summary>
     /// Swaps between perspective and orthographic without changing what is on screen.
     /// </summary>
@@ -97,6 +158,11 @@ public class EditorCamera
     /// so the switch reads as a change of projection rather than a jump to somewhere else.
     /// </remarks>
     public void ToggleProjection()
+    {
+        if (!Is2D) SwapProjection();
+    }
+
+    private void SwapProjection()
     {
         ClearMovementSmoothing();
         Float3 focus = ViewFocusPoint;
@@ -212,6 +278,7 @@ public class EditorCamera
     /// <summary>Restores the lens to the defaults a fresh editor camera starts with.</summary>
     public void ResetLens()
     {
+        Set2D(false);
         if (_camera.IsOrthographic) ToggleProjection();
         _camera.FieldOfView = 60f;
         _camera.NearClipPlane = 0.01f;
@@ -398,6 +465,9 @@ public class EditorCamera
         bool consumed = false;
         float scroll = Input.MouseWheelDelta;
 
+        if (Is2D)
+            return Process2DInput(scroll, mousePos, panelOrigin, panelSize, dt);
+
         // Scroll to dolly forward/back (also adjusts orbit distance)
         if (scroll != 0 && !Input.GetMouseButton(1))
         {
@@ -570,6 +640,54 @@ public class EditorCamera
         return consumed;
     }
 
+    // 2D navigation: right, middle or Alt and left drag pans, the wheel zooms toward the pointer, Alt and right drag zooms
+    private bool Process2DInput(float scroll, Float2 mousePos, Float2 panelOrigin, Float2 panelSize, float dt)
+    {
+        bool consumed = false;
+        Float2 pointer = mousePos - panelOrigin;
+
+        if (scroll != 0)
+        {
+            ClearMovementSmoothing();
+            Zoom2D(MathF.Pow(0.9f, scroll), pointer, panelSize);
+            consumed = true;
+        }
+
+        if (Input.IsAltPressed && Input.GetMouseButton(1))
+        {
+            Float2 delta = Input.MouseDelta;
+            Zoom2D(1f - (delta.X + delta.Y) * 0.01f, panelSize * 0.5f, panelSize);
+            consumed = true;
+        }
+        else if (Input.GetMouseButton(2) || (Input.IsAltPressed && Input.GetMouseButton(0)) || Input.GetMouseButton(1))
+        {
+            Float2 delta = Input.MouseDelta;
+            if (Input.GetMouseButton(1)) _rightTravel += Float2.Length(delta);
+            ClearMovementSmoothing();
+            Pan2D(delta, panelSize);
+            consumed = true;
+        }
+
+        // A quick right press that went nowhere is a click, which opens the scene view's menu
+        if (Input.GetMouseButtonDown(1))
+        {
+            _rightDownAt = Runtime.Time.UnscaledTotalTime;
+            RightClickPointer = mousePos;
+            _rightTravel = 0f;
+        }
+        if (Input.GetMouseButtonUp(1) && _rightTravel < 4f && Runtime.Time.UnscaledTotalTime - _rightDownAt < 0.3)
+            _rightClicked = true;
+
+        if (ShortcutManager.IsPressed("Scene/Focus") && !System.Linq.Enumerable.Any(SceneToolManager.Live, t => t.TakesShortcut("Scene/Focus")))
+        {
+            FocusSelection();
+            consumed = true;
+        }
+
+        ApplyMovementSmoothing(dt);
+        return consumed;
+    }
+
     /// <summary>Moves the camera toward the WASD flight target.</summary>
     private void ApplyMovementSmoothing(float dt)
     {
@@ -670,7 +788,7 @@ public class EditorCamera
 
         // A UI-only selection is a flat rect, so the view swings around to face it from whichever side
         // the camera is already on. Anything with geometry keeps the angle it was viewed from.
-        if (anyUI && !anyRenderer && Float3.LengthSquared(uiNormal) > 1e-8f)
+        if (!Is2D && anyUI && !anyRenderer && Float3.LengthSquared(uiNormal) > 1e-8f)
         {
             Float3 facing = Float3.Normalize(uiNormal);
             if (Float3.Dot(facing, _position - target) < 0f) facing = -facing;
@@ -683,6 +801,17 @@ public class EditorCamera
     /// <summary>Moves the camera back along its view to fit a sphere, keeping the angle it looks from.</summary>
     public void Frame(Float3 target, float radius)
     {
+        if (_camera.IsOrthographic)
+        {
+            ClearMovementSmoothing();
+            if (Is2D) target = new Float3(target.X, target.Y, 0f);
+            _camera.OrthographicSize = Math.Clamp(radius * 1.1f, MinOrthographicSize, MaxOrthographicSize);
+            _position = target - GetForwardFromAngles() * _orbitDistance;
+            UpdateTransform();
+            SyncOrthographicDepth();
+            return;
+        }
+
         // Distance that fits the object in the vertical FOV, with a little padding.
         float fovRad = _camera.FieldOfView * MathF.PI / 180f;
         float dist = radius / MathF.Tan(fovRad * 0.5f) + radius;
@@ -776,6 +905,7 @@ public class EditorCamera
     /// <summary> Sets the camera's yaw and pitch without changing its position. Pitch is clamped to +/-89 degrees. </summary>
     public void SetOrientation(float yaw, float pitch)
     {
+        if (Is2D) return;
         _yaw = yaw;
         _pitch = MathF.Max(-89f, MathF.Min(89f, pitch));
         UpdateTransform();

@@ -84,6 +84,9 @@ public class SceneViewPanel : DockPanel
     private bool _hasPendingPose;
     private Float3 _pendingPos;
     private float _pendingYaw, _pendingPitch;
+    private bool _pending2D;
+    private float? _pendingOrthoSize;
+    private EditorCamera.View3D? _pendingBefore2D;
 
     public override void OnGUI(Paper paper, float width, float height)
     {
@@ -99,6 +102,12 @@ public class SceneViewPanel : DockPanel
                 _hasPendingPose = false;
             }
             if (_pendingGrid is bool pg) { _editorCamera.ShowGrid = pg; _pendingGrid = null; }
+            if (_pending2D)
+            {
+                _editorCamera.Set2D(true, _pendingBefore2D);
+                if (_pendingOrthoSize is float size) _editorCamera.OrthographicSize = size;
+                _pending2D = false;
+            }
             if (_pendingLens is { } lens)
             {
                 if (lens.Fov is float fov) _editorCamera.FieldOfView = fov;
@@ -785,8 +794,10 @@ public class SceneViewPanel : DockPanel
             // Speed indicator (shows briefly when scroll changes fly speed)
             DrawSpeedIndicator(paper, font, width, height);
 
-            // View manipulator (orientation cube) drawn as 2D overlay on top-right
-            DrawViewManipulator(paper, font, width, height);
+            // View manipulator (orientation cube) drawn as 2D overlay on top-right, hidden in 2D mode
+            if (!_editorCamera!.Is2D) DrawViewManipulator(paper, font, width, height);
+            else _viewCubeRadius = 0f;
+            Draw2DToggle(paper, width);
 
             // What the selected camera sees, bottom-right
             _cameraPreview.Draw(paper, font, width, height, _editorCamera!);
@@ -1080,6 +1091,14 @@ public class SceneViewPanel : DockPanel
         state["yaw"] = _editorCamera.Yaw;
         state["pitch"] = _editorCamera.Pitch;
         state["grid"] = _editorCamera.ShowGrid;
+        state["2d"] = _editorCamera.Is2D;
+        if (_editorCamera.Before2D is { } before)
+        {
+            state["b2dx"] = before.Position.X; state["b2dy"] = before.Position.Y; state["b2dz"] = before.Position.Z;
+            state["b2dyaw"] = before.Yaw; state["b2dpitch"] = before.Pitch;
+            state["b2dortho"] = before.Orthographic; state["b2dsize"] = before.OrthographicSize; state["b2ddist"] = before.Distance;
+        }
+        if (_editorCamera.IsOrthographic) state["orthoSize"] = _editorCamera.OrthographicSize;
         state["fov"] = _editorCamera.FieldOfView;
         state["near"] = _editorCamera.NearClip;
         state["far"] = _editorCamera.FarClip;
@@ -1112,6 +1131,12 @@ public class SceneViewPanel : DockPanel
 
         // Camera is created lazily in OnGUI; stash toggles and apply when it exists.
         _pendingGrid = state["grid"]?.GetValue<bool>();
+        _pending2D = state["2d"]?.GetValue<bool>() == true;
+        _pendingOrthoSize = state["orthoSize"]?.GetValue<float>();
+        _pendingBefore2D = state["b2dx"] is null ? null : new EditorCamera.View3D(
+            new Float3(state["b2dx"]!.GetValue<float>(), state["b2dy"]?.GetValue<float>() ?? 0f, state["b2dz"]?.GetValue<float>() ?? 0f),
+            state["b2dyaw"]?.GetValue<float>() ?? 0f, state["b2dpitch"]?.GetValue<float>() ?? 15f,
+            state["b2dortho"]?.GetValue<bool>() ?? false, state["b2dsize"]?.GetValue<float>() ?? 5f, state["b2ddist"]?.GetValue<float>() ?? 10f);
         _pendingLens = (state["fov"]?.GetValue<float>(), state["near"]?.GetValue<float>(),
                         state["far"]?.GetValue<float>(), state["speed"]?.GetValue<float>(),
                         state["smoothing"]?.GetValue<float>());
@@ -1794,6 +1819,23 @@ public class SceneViewPanel : DockPanel
             .TextColor(Color.FromArgb(ta, EditorTheme.Ink500))
             .FontSize(18f)
             .Alignment(TextAlignment.MiddleCenter);
+    }
+
+    // The 2D mode switch, under the view cube, or in its place while in 2D
+    private void Draw2DToggle(Paper paper, float width)
+    {
+        EditorCamera camera = _editorCamera!;
+        using (paper.Row("sv_2d_toggle")
+            .PositionType(PositionType.SelfDirected)
+            .Position(width - 52, camera.Is2D ? 12 : 120)
+            .Size(44, 26)
+            .Enter())
+        {
+            ButtonBuilder button = Origami.Button(paper, "sv_2d_btn", "2D", () => camera.Set2D(!camera.Is2D))
+                .Small().Width(UnitValue.StretchOne).Height(26).Tooltip(Loc.Get("scene.mode_2d"));
+            if (camera.Is2D) button.Primary(); else button.Ghost();
+            button.Show();
+        }
     }
 
     private void DrawViewManipulator(Paper paper, Scribe.FontFile font, float width, float height)

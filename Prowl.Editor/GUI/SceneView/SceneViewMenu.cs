@@ -266,6 +266,9 @@ public static class SceneViewMenu
     [MenuItem("SceneView/View/Toggle Perspective", priority: 67, Separator = true, SelectionWide = true)]
     internal static void TogglePerspective() => Camera?.ToggleProjection();
 
+    [MenuItem("SceneView/View/2D Mode", priority: 67, SelectionWide = true)]
+    internal static void Toggle2D() => Camera?.Set2D(!Camera.Is2D);
+
     [MenuItem("SceneView/View/Show Grid", priority: 68, SelectionWide = true)]
     private static void ToggleGrid()
     {
