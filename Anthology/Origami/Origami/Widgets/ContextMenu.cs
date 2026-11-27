@@ -533,14 +533,6 @@ public static class ContextMenu
                 .IsNotInteractable().Enter())
             {
                 // Draw the icon, if any.
-                if (IconDraw != null)
-                    paper.Box("tii", index).Width(IconSize).Height(RowHeight).IsNotInteractable()
-                        .Icon(paper, IconDraw, theme.Primary.C700);
-                else if (!string.IsNullOrEmpty(Icon))
-                    paper.Box("tii", index).Width(IconSize).Height(RowHeight)
-                        .Text(Icon, font).TextColor(theme.Primary.C700).FontSize(RowFontSize).Alignment(TextAlignment.MiddleCenter);
-
-                // Draw the icon, if any.
                 DrawLeadingIcon(paper, index, font, theme, color: theme.Primary.C700, iconDraw: IconDraw, iconSymbol: Icon);
 
                 // Draw the label.
