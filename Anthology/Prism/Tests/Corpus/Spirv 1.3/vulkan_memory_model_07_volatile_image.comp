@@ -1,0 +1,7 @@
+#version 450
+#pragma use_vulkan_memory_model
+layout(local_size_x = 1) in;
+layout(set = 0, binding = 0, r32ui) uniform volatile uimage2D a;
+layout(set = 0, binding = 1, r32f) uniform coherent image2D b;
+layout(set = 0, binding = 2, r32f) uniform image2D c;
+void main() { imageStore(a, ivec2(0), imageLoad(a, ivec2(1))); imageStore(b, ivec2(0), imageLoad(c, ivec2(1)) + imageLoad(b, ivec2(2))); }

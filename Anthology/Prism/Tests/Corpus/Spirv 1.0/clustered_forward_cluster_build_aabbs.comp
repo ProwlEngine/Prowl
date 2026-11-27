@@ -1,0 +1,76 @@
+#version 460 core
+
+// Builds a view-space AABB for every cluster in the 16x9x24 froxel grid.
+// Dispatch with group count = (gridDim.x, gridDim.y, gridDim.z), local size 1x1x1,
+// so gl_GlobalInvocationID.xyz maps directly to the cluster xyz index.
+layout(local_size_x = 1, local_size_y = 1, local_size_z = 1) in;
+
+layout(set = 0, binding = 0) uniform ClusterBuildData {
+    mat4 invProjection;
+    vec2 screenDimensions;
+    float nearZ;
+    float farZ;
+    ivec4 gridDim; // xyz = cluster grid dimensions (16, 9, 24), w unused
+} uBuildData;
+
+struct ClusterAABB {
+    vec4 minPoint;
+    vec4 maxPoint;
+};
+
+layout(std430, set = 0, binding = 1) writeonly buffer ClusterAABBs {
+    ClusterAABB aabbs[];
+} bClusterAABBs;
+
+// Unprojects a screen-space pixel to the view-space point where the eye ray
+// through that pixel crosses the plane z = viewZ (line-plane intersection,
+// since the eye sits at the view-space origin for a standard perspective matrix).
+vec3 screenToViewAtZ(vec2 screenPixel, float viewZ) {
+    vec2 ndc = (screenPixel / uBuildData.screenDimensions) * 2.0 - 1.0;
+    vec4 clip = vec4(ndc, 1.0, 1.0);
+    vec4 view = uBuildData.invProjection * clip;
+    view.xyz /= view.w;
+    float t = viewZ / view.z;
+    return view.xyz * t;
+}
+
+void main() {
+    ivec3 gridDim = uBuildData.gridDim.xyz;
+    ivec3 clusterID = ivec3(gl_GlobalInvocationID.xyz);
+    if (clusterID.x >= gridDim.x || clusterID.y >= gridDim.y || clusterID.z >= gridDim.z) {
+        return;
+    }
+
+    vec2 tileSize = uBuildData.screenDimensions / vec2(gridDim.xy);
+    vec2 minPointSS = vec2(clusterID.xy) * tileSize;
+    vec2 maxPointSS = vec2(clusterID.xy + ivec2(1)) * tileSize;
+
+    float nearZ = uBuildData.nearZ;
+    float farZ = uBuildData.farZ;
+    // exponential Z slicing, view space looks down -Z so slice distances are negated
+    float sliceNear = -nearZ * pow(farZ / nearZ, float(clusterID.z) / float(gridDim.z));
+    float sliceFar = -nearZ * pow(farZ / nearZ, float(clusterID.z + 1) / float(gridDim.z));
+
+    vec2 cornersSS[4];
+    cornersSS[0] = vec2(minPointSS.x, minPointSS.y);
+    cornersSS[1] = vec2(maxPointSS.x, minPointSS.y);
+    cornersSS[2] = vec2(minPointSS.x, maxPointSS.y);
+    cornersSS[3] = vec2(maxPointSS.x, maxPointSS.y);
+
+    vec3 minPoint = vec3(3.402823466e+38);
+    vec3 maxPoint = vec3(-3.402823466e+38);
+
+    for (int i = 0; i < 4; i++) {
+        vec3 pNear = screenToViewAtZ(cornersSS[i], sliceNear);
+        vec3 pFar = screenToViewAtZ(cornersSS[i], sliceFar);
+        minPoint = min(minPoint, min(pNear, pFar));
+        maxPoint = max(maxPoint, max(pNear, pFar));
+    }
+
+    uint clusterIndex = uint(clusterID.z) * uint(gridDim.x * gridDim.y)
+        + uint(clusterID.y) * uint(gridDim.x)
+        + uint(clusterID.x);
+
+    bClusterAABBs.aabbs[clusterIndex].minPoint = vec4(minPoint, 1.0);
+    bClusterAABBs.aabbs[clusterIndex].maxPoint = vec4(maxPoint, 1.0);
+}

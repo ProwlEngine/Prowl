@@ -1,0 +1,5 @@
+<shader>
+ERROR: <shader>:3: '' : boolean expression expected 
+ERROR: 1 compilation errors.  No code generated.
+
+

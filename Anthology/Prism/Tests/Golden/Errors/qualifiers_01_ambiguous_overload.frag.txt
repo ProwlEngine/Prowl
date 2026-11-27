@@ -1,0 +1,6 @@
+<shader>
+ERROR: <shader>:4: 'f' : no matching overloaded function found 
+ERROR: <shader>:4: '' : compilation terminated 
+ERROR: 2 compilation errors.  No code generated.
+
+

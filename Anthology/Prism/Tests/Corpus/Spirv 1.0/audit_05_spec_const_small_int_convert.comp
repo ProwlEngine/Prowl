@@ -1,0 +1,13 @@
+#version 460
+#extension GL_EXT_shader_explicit_arithmetic_types : require
+layout(local_size_x=1) in;
+layout(constant_id=0) const int16_t S = 2s;
+layout(constant_id=1) const uint16_t U = 3us;
+const int I = int(S);
+const bool B = bool(S);
+const uint16_t US = uint16_t(S);
+const int64_t L = int64_t(S);
+const uint UI = uint(U);
+const int8_t C = int8_t(S);
+layout(std430,set=0,binding=0) buffer O { int o; };
+void main() { o = I + int(B) + int(US) + int(L) + int(UI) + int(C); }

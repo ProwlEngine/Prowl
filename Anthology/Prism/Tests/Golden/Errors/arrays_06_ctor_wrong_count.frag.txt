@@ -1,0 +1,6 @@
+<shader>
+ERROR: <shader>:3: '=' :  cannot convert from ' const 3-element array of float' to ' temp 2-element array of highp float'
+ERROR: <shader>:3: '' : compilation terminated 
+ERROR: 2 compilation errors.  No code generated.
+
+

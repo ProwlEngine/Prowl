@@ -1,0 +1,14 @@
+#version 450
+layout(local_size_x=1) in;
+struct S { vec4 v; float arr[3]; mat2 m; };
+layout(std430,set=0,binding=0) buffer B { float o; };
+void fillArr(out float a[4]) { for (int i=0;i<4;++i) a[i] = float(i); }
+void fillMat(out mat3 m) { m = mat3(2.0); }
+void fillStruct(out S s) { s.v = vec4(1.0); s.arr[0]=1.0; s.arr[1]=2.0; s.arr[2]=3.0; s.m = mat2(4.0); }
+void bump(inout S s) { s.v.x += 1.0; s.arr[1] += 1.0; s.m[0][0] += 1.0; }
+void main() {
+  float a[4]; fillArr(a);
+  mat3 m; fillMat(m);
+  S s; fillStruct(s); bump(s);
+  o = a[3] + m[1][1] + s.v.x + s.arr[1] + s.m[0][0];
+}

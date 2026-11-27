@@ -1,0 +1,56 @@
+using System;
+
+
+namespace Prowl.Graphite.Debugging;
+
+/// <summary>Which attachment of a graph resource a backing image is.</summary>
+public enum BackingRole : byte
+{
+    Color,
+    Depth,
+    Buffer,
+}
+
+/// <summary>One actual image or buffer behind a graph resource for one execution, with its version when the instance began.</summary>
+public readonly record struct GraphBacking(ResourceId Id, ResourceVersion EntryVersion, BackingRole Role, uint Index);
+
+/// <summary>Where a graph resource comes from.</summary>
+public enum GraphResourceOrigin : byte
+{
+    Transient,
+    Imported,
+    Target,
+    Persistent,
+}
+
+/// <summary>
+/// A graph resource as one instance saw it. A buffer has one backing, a texture one per color attachment plus depth.
+/// </summary>
+/// <remarks>HistorySlot is the ring slot this execution resolved, or -1 without history. HistoryValid is false on a fresh ring.</remarks>
+public readonly record struct GraphResourceInfo(
+    RenderResourceID Id,
+    string Name,
+    GraphResourceKind Kind,
+    ReadOnlyMemory<GraphBacking> Backings,
+    GraphResourceOrigin Origin,
+    GraphTextureDesc? Texture,
+    GraphBufferDesc? Buffer,
+    int HistoryDepth,
+    int HistorySlot,
+    bool HistoryValid);
+
+/// <summary>The resources and passes added directly in one group, matched to its <see cref="GroupInfo"/> by index. Index -1 holds passes outside any group.</summary>
+public readonly record struct GroupCaptureInfo(
+    int GroupIndex,
+    ReadOnlyMemory<GraphResourceInfo> Resources,
+    ReadOnlyMemory<PassInfo> Passes);
+
+/// <summary>One resource a pass touched: version at first reference, version after the pass, and its descriptor.</summary>
+/// <remarks>NeedsContents is false when the pass never touched it or its first touch overwrote all of it.</remarks>
+public readonly record struct PassReference(
+    ResourceVersion First,
+    uint LastVersion,
+    string Name,
+    TextureDescription? Texture,
+    BufferDescription? Buffer,
+    bool NeedsContents);

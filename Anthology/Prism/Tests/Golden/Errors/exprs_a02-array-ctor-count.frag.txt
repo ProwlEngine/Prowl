@@ -1,0 +1,8 @@
+<shader>
+ERROR: <shader>:5: 'constructor' : array constructor needs one argument per array element 
+ERROR: <shader>:5: '=' :  cannot convert from ' const float' to ' temp 3-element array of highp float'
+ERROR: <shader>:5: '' : compilation terminated 
+ERROR: 3 compilation errors.  No code generated.
+
+
+SPIR-V is not generated for failed compile or link

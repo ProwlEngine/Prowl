@@ -1,0 +1,11 @@
+#version 450
+layout(local_size_x=1) in;
+layout(std430,set=0,binding=0) buffer B { double o; };
+void main() {
+  dmat3 a = dmat3(1.0LF);
+  dmat3 b = inverse(a);
+  dmat3 c = matrixCompMult(a, b);
+  dmat3 t = transpose(c);
+  dmat2x3 op = outerProduct(dvec3(1.0LF), dvec2(2.0LF));
+  o = t[0][0] + op[1][2] + determinant(a);
+}

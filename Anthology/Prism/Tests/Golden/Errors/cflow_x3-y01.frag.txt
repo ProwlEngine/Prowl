@@ -1,0 +1,9 @@
+<shader>
+ERROR: <shader>:3: '' : hexadecimal literal too big 
+ERROR: <shader>:3: '' : missing #endif 
+ERROR: 2 compilation errors.  No code generated.
+
+
+ERROR: Linking fragment stage: Missing entry point: Each stage requires one entry point
+
+SPIR-V is not generated for failed compile or link

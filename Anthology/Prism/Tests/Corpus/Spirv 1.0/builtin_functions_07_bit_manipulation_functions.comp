@@ -1,0 +1,49 @@
+#version 460 core
+
+layout(local_size_x=1, local_size_y=1, local_size_z=1) in;
+
+layout(std430, binding=0) buffer ResultBuffer {
+    int results[12];
+};
+
+void main() {
+    int ival = 0x0F0F0F0F;
+    uint uval = 0x0F0F0F0Fu;
+
+    // bitfieldExtract on int and uint
+    int r_bfe_i = bitfieldExtract(ival, 4, 8);
+    uint r_bfe_u = bitfieldExtract(uval, 4, 8);
+
+    // bitfieldInsert on int and uint
+    int r_bfi_i = bitfieldInsert(ival, 0xFF, 0, 8);
+    uint r_bfi_u = bitfieldInsert(uval, 0xFFu, 0, 8);
+
+    // bitfieldReverse on int and uint
+    int r_bfr_i = bitfieldReverse(ival);
+    uint r_bfr_u = bitfieldReverse(uval);
+
+    // bitCount on int and uint
+    int r_bc_i = bitCount(ival);
+    int r_bc_u = bitCount(uval);
+
+    // findLSB on int and uint
+    int r_lsb_i = findLSB(ival);
+    int r_lsb_u = findLSB(uval);
+
+    // findMSB on int and uint
+    int r_msb_i = findMSB(ival);
+    int r_msb_u = findMSB(uval);
+
+    results[0] = r_bfe_i;
+    results[1] = int(r_bfe_u);
+    results[2] = r_bfi_i;
+    results[3] = int(r_bfi_u);
+    results[4] = r_bfr_i;
+    results[5] = int(r_bfr_u);
+    results[6] = r_bc_i;
+    results[7] = r_bc_u;
+    results[8] = r_lsb_i;
+    results[9] = r_lsb_u;
+    results[10] = r_msb_i;
+    results[11] = r_msb_u;
+}

@@ -1,0 +1,7 @@
+#version 450
+#extension GL_EXT_buffer_reference : require
+#extension GL_EXT_buffer_reference_uvec2 : require
+layout(local_size_x = 1) in;
+layout(buffer_reference, std430) buffer Data { float v; };
+layout(push_constant) uniform P { uvec2 addr; } pc;
+void main() { Data d = Data(pc.addr); d.v = 2.0; }

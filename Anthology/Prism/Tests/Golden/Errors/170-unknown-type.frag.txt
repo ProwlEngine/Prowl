@@ -1,0 +1,6 @@
+<shader>
+ERROR: <shader>:2: 'frobnicate' : undeclared identifier 
+ERROR: <shader>:2: '' : compilation terminated 
+ERROR: 2 compilation errors.  No code generated.
+
+

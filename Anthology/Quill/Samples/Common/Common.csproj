@@ -1,0 +1,17 @@
+<Project Sdk="Microsoft.NET.Sdk">
+  <PropertyGroup>
+    <TargetFramework>$(ProwlSampleTargetFramework)</TargetFramework>
+    <OutputType>Library</OutputType>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <ProjectReference Include="..\..\Quill\Quill.csproj" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <!-- Common carries demo assets only. Shaders live with the backend that uses them, generated
+         from Quill/Shaders by Quill.ShaderGen. -->
+    <Content Include="Fonts\**;Textures\**;SVGs\**" CopyToOutputDirectory="Always" />
+  </ItemGroup>
+
+</Project>

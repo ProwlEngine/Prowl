@@ -1,0 +1,5 @@
+<shader>
+ERROR: Linking fragment stage: Recursion detected:
+    a( calling b(
+
+SPIR-V is not generated for failed compile or link

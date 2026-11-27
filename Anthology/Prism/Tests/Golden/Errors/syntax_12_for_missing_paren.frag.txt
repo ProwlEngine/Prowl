@@ -1,0 +1,5 @@
+<shader>
+ERROR: <shader>:7: '' :  syntax error, unexpected LEFT_BRACE, expecting RIGHT_PAREN
+ERROR: 1 compilation errors.  No code generated.
+
+

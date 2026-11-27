@@ -1,0 +1,5 @@
+#version 450
+layout(local_size_x=1) in;
+layout(std430,set=0,binding=0) buffer B { float o; };
+float f(float s, float t, float p, float q){ return s+t+p+q; }
+void main(){ o = f(1.0,2.0,3.0,4.0); }

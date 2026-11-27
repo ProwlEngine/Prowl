@@ -1,0 +1,6 @@
+<shader>
+ERROR: <shader>:4: 'textureQueryLod' : no matching overloaded function found 
+ERROR: <shader>:4: '' : compilation terminated 
+ERROR: 2 compilation errors.  No code generated.
+
+

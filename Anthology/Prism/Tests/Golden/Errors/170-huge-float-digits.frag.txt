@@ -1,0 +1,7 @@
+<shader>
+ERROR: <shader>:2: '' : numeric literal too long 
+ERROR: <shader>:2: '' : numeric literal too big 
+ERROR: <shader>:2: '' : compilation terminated 
+ERROR: 3 compilation errors.  No code generated.
+
+

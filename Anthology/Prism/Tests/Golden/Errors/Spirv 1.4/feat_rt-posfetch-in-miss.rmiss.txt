@@ -1,0 +1,6 @@
+<shader>
+ERROR: <shader>:6: 'gl_HitTriangleVertexPositionsEXT' : undeclared identifier 
+ERROR: <shader>:6: 'gl_HitTriangleVertexPositionsEXT' :  left of '[' is not of type array, matrix, or vector  
+ERROR: <shader>:6: 'assign' :  cannot convert from ' const float' to 'layout( location=0) rayPayloadInNV highp 3-component vector of float'
+ERROR: <shader>:6: '' : compilation terminated 
+ERROR: 4 compilation errors.  No code generated.

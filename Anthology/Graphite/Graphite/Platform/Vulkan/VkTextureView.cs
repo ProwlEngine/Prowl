@@ -1,0 +1,82 @@
+using Silk.NET.Vulkan;
+
+
+namespace Prowl.Graphite.Vk;
+
+internal unsafe partial class VkTextureView : TextureView
+{
+    private readonly VkGraphicsDevice _gd;
+    private readonly ImageView _imageView;
+    internal readonly ulong DescriptorId = VkDescriptorSetCache.NextResourceId();
+
+    public ImageView ImageView => _imageView;
+
+    public new VkTexture Target => (VkTexture)base.Target;
+
+
+    public VkTextureView(VkGraphicsDevice gd, in TextureViewDescription description)
+        : base(description)
+    {
+        _gd = gd;
+        ImageViewCreateInfo imageViewCI = new()
+        {
+            SType = StructureType.ImageViewCreateInfo
+        };
+        VkTexture tex = Util.AssertSubtype<Texture, VkTexture>(description.Target);
+        imageViewCI.Image = tex.OptimalDeviceImage;
+        imageViewCI.Format = VkFormats.ToVkPixelFormat(Format, (Target.Usage & TextureUsage.DepthStencil) != 0);
+
+        ImageAspectFlags aspectFlags = (description.Target.Usage & TextureUsage.DepthStencil) == TextureUsage.DepthStencil
+            ? ImageAspectFlags.DepthBit
+            : ImageAspectFlags.ColorBit;
+
+        imageViewCI.SubresourceRange = new ImageSubresourceRange(
+            aspectFlags,
+            description.BaseMipLevel,
+            description.MipLevels,
+            description.BaseArrayLayer,
+            description.ArrayLayers);
+
+        if (tex.Type == TextureType.TextureCube)
+        {
+            imageViewCI.ViewType = description.ArrayLayers == 1 ? ImageViewType.TypeCube : ImageViewType.TypeCubeArray;
+            imageViewCI.SubresourceRange.LayerCount *= 6;
+        }
+        else
+        {
+            switch (tex.Type)
+            {
+                case TextureType.Texture1D:
+                    imageViewCI.ViewType = description.ArrayLayers == 1
+                        ? ImageViewType.Type1D
+                        : ImageViewType.Type1DArray;
+                    break;
+                case TextureType.Texture2D:
+                    imageViewCI.ViewType = description.ArrayLayers == 1 && !description.Arrayed
+                        ? ImageViewType.Type2D
+                        : ImageViewType.Type2DArray;
+                    break;
+                case TextureType.Texture3D:
+                    imageViewCI.ViewType = ImageViewType.Type3D;
+                    break;
+            }
+        }
+
+        _gd.Vk.CreateImageView(_gd.Device, in imageViewCI, null, out _imageView);
+
+        _gd.Counters.Allocate(AllocBin.TextureView);
+    }
+
+    private protected override void NameChanged(string name) => _gd.SetResourceName(this, name);
+
+    private protected override void DisposeCore()
+    {
+        _gd.DisposeWhenRetired(DestroyNative);
+    }
+
+    private void DestroyNative()
+    {
+        _gd.Vk.DestroyImageView(_gd.Device, ImageView, null);
+        _gd.Counters.Free(AllocBin.TextureView);
+    }
+}

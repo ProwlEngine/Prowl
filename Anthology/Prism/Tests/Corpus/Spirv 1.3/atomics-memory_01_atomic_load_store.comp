@@ -1,0 +1,15 @@
+#version 460
+#extension GL_KHR_memory_scope_semantics : require
+layout(local_size_x = 64) in;
+layout(std430, set = 0, binding = 0) buffer UData { uint uvals[]; };
+layout(std430, set = 0, binding = 1) buffer IData { int ivals[]; };
+void main()
+{
+    uint i = gl_GlobalInvocationID.x;
+    uint u = atomicLoad(uvals[0], gl_ScopeDevice, gl_StorageSemanticsBuffer, gl_SemanticsAcquire);
+    atomicStore(uvals[1], u + i, gl_ScopeDevice, gl_StorageSemanticsBuffer, gl_SemanticsRelease);
+    int s = atomicLoad(ivals[0], gl_ScopeDevice, gl_StorageSemanticsBuffer, gl_SemanticsAcquire);
+    atomicStore(ivals[1], s + int(i), gl_ScopeDevice, gl_StorageSemanticsBuffer, gl_SemanticsRelease);
+    uvals[i] = u;
+    ivals[i] = s;
+}

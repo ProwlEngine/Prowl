@@ -1,0 +1,9 @@
+#version 450
+layout(local_size_x=1) in;
+layout(std430,set=0,binding=0) buffer B { float o; };
+void main() {
+  float a = 0.5;
+  o = sin(a)+cos(a)+tan(a)+asin(a)+acos(a)+atan(a)+atan(a,a)
+    + sinh(a)+cosh(a)+tanh(a)+asinh(a)+acosh(1.5)+atanh(a)
+    + radians(a)+degrees(a)+exp2(a)+log2(a)+exp(a)+log(a);
+}

@@ -1,0 +1,9 @@
+<shader>
+ERROR: <shader>:3: 'constant_id' : specialization-constant id already used 
+ERROR: <shader>:3: '' : compilation terminated 
+ERROR: 2 compilation errors.  No code generated.
+
+
+ERROR: Linking fragment stage: Missing entry point: Each stage requires one entry point
+
+SPIR-V is not generated for failed compile or link

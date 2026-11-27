@@ -1,0 +1,3 @@
+<shader>
+ERROR: Linking fragment stage: Only one push_constant block is allowed per stage
+

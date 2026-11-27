@@ -1,0 +1,8 @@
+#version 450
+#extension GL_KHR_memory_scope_semantics : require
+#pragma use_vulkan_memory_model
+layout(local_size_x=1) in;
+layout(std430, binding=0) buffer B { uint c; } b;
+shared uint s;
+layout(binding=1, r32ui) uniform uimage2D img;
+void main(){ atomicAdd(b.c, 1u); atomicAdd(s, 1u); imageAtomicAdd(img, ivec2(0), 1u); memoryBarrierBuffer(); groupMemoryBarrier(); barrier(); }

@@ -1,0 +1,14 @@
+#version 450
+layout(local_size_x = 64) in;
+layout(set = 0, binding = 0, std430) buffer Particles {
+    vec4 positions[];
+} particles;
+layout(push_constant) uniform Push {
+    float deltaTime;
+    uint count;
+} pc;
+void main() {
+    uint i = gl_GlobalInvocationID.x;
+    if (i >= pc.count) return;
+    particles.positions[i].xyz += vec3(0.0, -9.81 * pc.deltaTime, 0.0);
+}

@@ -1,0 +1,33 @@
+#version 460 core
+
+layout(local_size_x = 1) in;
+
+// Only timeValue and enableFeature are read in main(). The rest are declared
+// because a single push_constant layout is shared across multiple shader
+// variants that each only need a subset of the fields.
+layout(push_constant) uniform PushConstants
+{
+    float timeValue;
+    float unusedFactorA;
+    vec4 unusedColor;
+    int enableFeature;
+    ivec2 unusedResolution;
+} pc;
+
+layout(set = 0, binding = 0) buffer OutputBuffer
+{
+    float results[];
+} outputBuffer;
+
+void main()
+{
+    uint idx = gl_GlobalInvocationID.x;
+
+    float value = pc.timeValue;
+    if (pc.enableFeature != 0)
+    {
+        value *= 2.0;
+    }
+
+    outputBuffer.results[idx] = value;
+}

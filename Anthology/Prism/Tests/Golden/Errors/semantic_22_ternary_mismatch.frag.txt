@@ -1,0 +1,7 @@
+<shader>
+ERROR: <shader>:5: ':' :  wrong operand types: no operation ':' exists that takes a left-hand operand of type ' const 3-component vector of float' and a right operand of type ' const 2X2 matrix of float' (or there is no acceptable conversion)
+ERROR: <shader>:5: '=' :  cannot convert from ' const 2X2 matrix of float' to ' temp highp 3-component vector of float'
+ERROR: <shader>:5: '' : compilation terminated 
+ERROR: 3 compilation errors.  No code generated.
+
+

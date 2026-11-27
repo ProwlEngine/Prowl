@@ -1,0 +1,59 @@
+﻿using Prowl.Graphite;
+using Silk.NET.Maths;
+using Silk.NET.Windowing;
+
+namespace GraphiteExample;
+
+public static class Program
+{
+    private static GraphicsBackend backend = GraphicsBackend.Vulkan;
+
+    static GraphicsAPI SilkAPI => backend switch
+    {
+        GraphicsBackend.Vulkan => new GraphicsAPI(ContextAPI.Vulkan, ContextProfile.Core, ContextFlags.ForwardCompatible, new APIVersion(2, 1)),
+        _ => GraphicsAPI.None
+    };
+
+
+    public static void Main(string[] args)
+    {
+        if (args.Length > 0)
+        {
+            backend = args[0] switch
+            {
+                "vulkan" => GraphicsBackend.Vulkan,
+                _ => throw new Exception("Unknown backend. Must be one of: [vulkan]")
+            };
+        }
+
+        WindowOptions windowOptions = new()
+        {
+            IsVisible = true,
+            Title = $"Graphite Quill Demo ({backend})",
+            Position = new Vector2D<int>(50, 50),
+            Size = new Vector2D<int>(1280, 720),
+            WindowState = WindowState.Normal,
+            WindowBorder = WindowBorder.Resizable,
+            VideoMode = VideoMode.Default,
+            API = SilkAPI,
+            VSync = false,
+            ShouldSwapAutomatically = false
+        };
+
+        GraphicsDeviceOptions deviceOptions = new()
+        {
+            VulkanValidationLayers = false,
+            PreferDepthRangeZeroToOne = true,
+        };
+
+        SwapchainDescription swapchain = new()
+        {
+            VSync = VSyncMode.Mailbox
+        };
+
+        // Create and run the window
+        using var window = new SilkWindow(windowOptions, deviceOptions, swapchain, backend);
+
+        window.Run();
+    }
+}

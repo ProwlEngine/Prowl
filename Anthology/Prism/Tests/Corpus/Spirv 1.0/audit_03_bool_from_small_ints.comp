@@ -1,0 +1,5 @@
+#version 460
+#extension GL_EXT_shader_explicit_arithmetic_types : require
+layout(local_size_x=1) in;
+layout(std430,set=0,binding=0) buffer B { int16_t s; uint8_t c; int64_t l; i64vec2 lv; u16vec3 sv; uint o; };
+void main() { bool a = bool(s); bool b = bool(c); bool d = bool(l); bvec2 e = bvec2(lv); bvec3 f = bvec3(sv); o = uint(a) + uint(b) + uint(d) + uint(e.x) + uint(f.y); }

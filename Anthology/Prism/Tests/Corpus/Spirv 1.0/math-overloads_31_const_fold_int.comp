@@ -1,0 +1,13 @@
+#version 460
+layout(local_size_x = 64) in;
+layout(std430, set = 0, binding = 0) buffer Data { int values[]; };
+void main()
+{
+    uint i = gl_GlobalInvocationID.x;
+    int arrAbs[abs(-5)];
+    int arrMin[min(3, 7)];
+    int arrMax[max(-2, 4)];
+    int arrClamp[clamp(9, 0, 5)];
+    const int s = sign(-3);
+    values[i] = arrAbs.length() + arrMin.length() + arrMax.length() + arrClamp.length() + s;
+}

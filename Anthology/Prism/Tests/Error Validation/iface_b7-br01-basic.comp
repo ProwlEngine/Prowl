@@ -1,0 +1,6 @@
+#version 450
+#extension GL_EXT_buffer_reference : require
+layout(local_size_x=1) in;
+layout(buffer_reference, std430, buffer_reference_align=16) buffer Node { vec4 v; Node next; float f[]; };
+layout(push_constant) uniform PC { Node head; } pc;
+void main(){ Node n = pc.head; n.next.v = n.v * 2.0; n.f[3] = n.next.next.v.x; }

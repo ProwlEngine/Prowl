@@ -1,0 +1,8 @@
+<Project>
+
+    <!-- Blocks auto-import of the repo-root Directory.Build.targets for the whole Graphite tree.
+         Graphite's own packages already manage GeneratePackageOnBuild/SourceLink/README via
+         Directory.Build.props; importing the root targets on top would duplicate the README
+         None item and re-enable GeneratePackageOnBuild during ordinary builds. -->
+
+</Project>

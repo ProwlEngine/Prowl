@@ -1,0 +1,21 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+    <PropertyGroup>
+        <TargetFramework>$(ProwlTestTargetFramework)</TargetFramework>
+            <RootNamespace>Prowl.Graphite.Debugger.Tests</RootNamespace>
+    </PropertyGroup>
+
+    <ItemGroup>
+        <ProjectReference Include="..\..\Graphite\Prowl.Graphite.csproj" />
+        <ProjectReference Include="..\..\Debugger\Prowl.Graphite.Debugger.csproj" />
+        <ProjectReference Include="..\..\Debugger\Viewer\Prowl.Graphite.Debugger.Viewer.csproj" />
+        <ProjectReference Include="..\..\ShaderDef\Core\Prowl.Graphite.ShaderDef.csproj" />
+        <ProjectReference Include="..\..\ShaderDef\Compiler\Prowl.Graphite.ShaderDef.Compiler.csproj" />
+    </ItemGroup>
+
+    <ItemGroup>
+        <Content Include="..\Graphite\Shaders\FullScreenTriSampleTexture2D.glsl" Link="Shaders\FullScreenTriSampleTexture2D.glsl" CopyToOutputDirectory="PreserveNewest" />
+        <Content Include="..\Graphite\Shaders\ComputeTextureGenerator.glsl" Link="Shaders\ComputeTextureGenerator.glsl" CopyToOutputDirectory="PreserveNewest" />
+    </ItemGroup>
+
+</Project>

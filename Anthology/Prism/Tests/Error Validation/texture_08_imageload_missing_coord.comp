@@ -1,0 +1,7 @@
+// imageLoad is missing the required coordinate argument so it is called with too few arguments
+#version 450
+layout(local_size_x=1) in;
+layout(binding=0, rgba8) uniform image2D img;
+void main() {
+    vec4 c = imageLoad(img);
+}

@@ -1,0 +1,8 @@
+#version 450
+#extension GL_EXT_buffer_reference : require
+layout(local_size_x = 1) in;
+layout(buffer_reference) buffer Node;
+layout(buffer_reference, std430, buffer_reference_align = 8) buffer Node { Node next; uint value; };
+layout(std430, set = 0, binding = 0) buffer Out { uint sum; };
+layout(push_constant) uniform P { Node head; } pc;
+void main() { Node n = pc.head; uint s = 0u; for (int i = 0; i < 4; i++) { s += n.value; n = n.next; } sum = s; }

@@ -1,0 +1,6 @@
+#version 450
+#extension GL_EXT_buffer_reference : require
+layout(local_size_x=1) in;
+layout(buffer_reference, std430) buffer R { float v[]; };
+layout(push_constant) uniform PC { R r; int i; } pc;
+void main(){ pc.r.v[pc.i] = pc.r.v[0]; R q = pc.r; q.v[pc.i+1] = 2.0; }

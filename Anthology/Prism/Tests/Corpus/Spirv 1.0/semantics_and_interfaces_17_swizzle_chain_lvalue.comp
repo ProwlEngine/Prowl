@@ -1,0 +1,12 @@
+#version 450
+layout(local_size_x=1) in;
+struct S { vec4 v; };
+layout(std430,set=0,binding=0) buffer B { S s[2]; int k; float o; };
+void main() {
+  s[1].v.xy = vec2(1.0, 2.0);
+  s[k].v.zw = vec2(3.0, 4.0);
+  s[0].v[k] = 5.0;
+  vec4 local = s[1].v;
+  local.wzyx = local.xyzw;
+  o = s[1].v.x + s[0].v.z + local.w;
+}

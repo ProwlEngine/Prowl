@@ -1,0 +1,18 @@
+#version 460
+#extension GL_EXT_ray_query : require
+#extension GL_EXT_ray_tracing_position_fetch : require
+layout(local_size_x=1) in;
+layout(binding=0) uniform accelerationStructureEXT tlas;
+layout(std430, binding=1) buffer B { vec3 v; int i; uvec2 addr; } b;
+bool step(rayQueryEXT q, inout int n){ n++; return rayQueryProceedEXT(q); }
+void main(){
+    rayQueryEXT qs[3];
+    for (int k = 0; k < 3; k++) rayQueryInitializeEXT(qs[k], accelerationStructureEXT(b.addr), 0u, 0xFFu, vec3(0), 0.0, vec3(1), 1.0);
+    rayQueryEXT q;
+    rayQueryInitializeEXT(q, tlas, 0u, 0xFFu, vec3(0), 0.0, vec3(1), 1.0);
+    int n = 0;
+    while (step(q, n) && rayQueryProceedEXT(qs[b.i])) {}
+    vec3 tri[3];
+    rayQueryGetIntersectionTriangleVertexPositionsEXT(qs[2], false, tri);
+    b.v = tri[b.i] + rayQueryGetIntersectionWorldToObjectEXT(qs[0], true)[b.i];
+}

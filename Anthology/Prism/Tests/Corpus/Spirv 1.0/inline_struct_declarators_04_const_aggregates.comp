@@ -1,0 +1,8 @@
+#version 450
+layout(local_size_x=1) in;
+const int N = 4;
+const float TABLE[N] = float[N](1.0, 2.0, 3.0, 4.0);
+const mat2 M = mat2(1.0, 2.0, 3.0, 4.0);
+const struct SC { float a; int b; } SCV = SC(1.5, 2);
+layout(std430,set=0,binding=0) buffer B { float o; };
+void main() { o = TABLE[N-1] + M[1][0] + SCV.a + float(SCV.b); }

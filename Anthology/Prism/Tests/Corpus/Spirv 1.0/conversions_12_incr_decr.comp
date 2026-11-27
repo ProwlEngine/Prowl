@@ -1,0 +1,22 @@
+#version 460
+
+layout(local_size_x = 64) in;
+
+layout(std430, binding = 0) buffer B {
+    int i;
+    uint u;
+    float f;
+    vec3 v;
+    float o[];
+};
+
+void main() {
+    uint idx = gl_GlobalInvocationID.x;
+    int a = i++;
+    int b = ++i;
+    uint c = u--;
+    uint d = --u;
+    float e = f++;
+    vec3 w = ++v;
+    o[idx] = float(a + b) + float(c + d) + e + w.x;
+}

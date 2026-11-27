@@ -1,0 +1,6 @@
+#version 450
+layout(local_size_x=1) in;
+layout(std430,set=0,binding=0) buffer B { float o; };
+struct S{float v;};
+float dot(S a, S b){ return a.v*b.v; }
+void main(){ S x; x.v=2.0; o = dot(x,x) + dot(vec2(1.0),vec2(1.0)); }

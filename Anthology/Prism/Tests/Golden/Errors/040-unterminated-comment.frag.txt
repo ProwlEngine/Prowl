@@ -1,0 +1,6 @@
+<shader>
+ERROR: <shader>:2: 'comment' : End of input in comment 
+ERROR: <shader>:2: '' : compilation terminated 
+ERROR: 2 compilation errors.  No code generated.
+
+

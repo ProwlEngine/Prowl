@@ -1,0 +1,16 @@
+// S3.2 version gating gap: mesh shaders require SPIR-V 1.4 / SPV_EXT_mesh_shader.
+// Compiled at target SPIR-V 1.0 -> emitted anyway -> spirv-val: "SPV_EXT_mesh_shader
+// extension requires SPIR-V version 1.4 or later". 172 fuzz modules hit this.
+// Expected today (at target 1.0): compiles + INVALID module (BUG).
+#version 460
+#extension GL_EXT_mesh_shader : require
+layout(local_size_x = 1) in;
+layout(points, max_vertices = 2, max_primitives = 1) out;
+layout(location = 0) out vec3 vPos[];
+void main() {
+  gl_MeshVerticesEXT[0].gl_Position = vec4(0.0, 0.0, 0.0, 1.0);
+  gl_MeshVerticesEXT[1].gl_Position = vec4(1.0, 0.0, 0.0, 1.0);
+  vPos[0] = vec3(1.0);
+  vPos[1] = vec3(1.0);
+  SetMeshOutputsEXT(2u, 1u);
+}

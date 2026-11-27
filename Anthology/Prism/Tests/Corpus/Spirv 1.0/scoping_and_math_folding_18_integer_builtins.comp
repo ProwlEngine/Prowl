@@ -1,0 +1,9 @@
+#version 450
+layout(local_size_x=1) in;
+layout(std430,set=0,binding=0) buffer B { int o; };
+void main() {
+  ivec3 a = ivec3(5), b = ivec3(3);
+  o = (abs(a) + sign(a) + min(a,b) + max(a,b) + clamp(a,b,a)).x
+    + bitCount(a).y + findLSB(a).z + findMSB(a).x
+    + bitfieldExtract(a, 1, 2).y + bitfieldInsert(a, b, 1, 2).z + bitfieldReverse(a).x;
+}

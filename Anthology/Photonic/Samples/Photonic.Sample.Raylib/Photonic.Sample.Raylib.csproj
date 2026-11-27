@@ -1,0 +1,41 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+  <PropertyGroup>
+    <OutputType>Exe</OutputType>
+    <TargetFramework>$(ProwlSampleTargetFramework)</TargetFramework>
+    <Nullable>enable</Nullable>
+    <LangVersion>15</LangVersion>
+    <RootNamespace>Photonic.Sample.Raylib</RootNamespace>
+    <AssemblyName>Photonic.Sample.Raylib</AssemblyName>
+    <AllowUnsafeBlocks>true</AllowUnsafeBlocks>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <PackageReference Include="Raylib-cs" Version="6.1.1" />
+    <PackageReference Include="StbImageSharp" Version="2.30.15" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <ProjectReference Include="..\..\Photonic\Photonic.csproj" />
+    <ProjectReference Include="..\..\..\Vector\Vector\Vector.csproj" />
+    <ProjectReference Include="..\..\..\Clay\Clay\Clay.csproj" />
+    <ProjectReference Include="..\..\..\Unwrapper\Unwrapper\Unwrapper.csproj" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <Compile Include="..\Photonic.Demo\CombinedSponza.cs">
+      <Link>CombinedSponza.cs</Link>
+    </Compile>
+    <Compile Include="..\Photonic.Demo\TrianglePacker.cs">
+      <Link>TrianglePacker.cs</Link>
+    </Compile>
+  </ItemGroup>
+
+  <ItemGroup>
+    <Content Include="..\Assets\Sponza\glTF\**\*.*">
+      <Link>Assets\Sponza\glTF\%(RecursiveDir)%(Filename)%(Extension)</Link>
+      <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
+    </Content>
+  </ItemGroup>
+
+</Project>

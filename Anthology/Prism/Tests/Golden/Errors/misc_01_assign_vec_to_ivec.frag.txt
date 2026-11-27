@@ -1,0 +1,6 @@
+<shader>
+ERROR: <shader>:3: 'assign' :  cannot convert from ' temp highp 3-component vector of float' to ' temp highp 3-component vector of int'
+ERROR: <shader>:3: '' : compilation terminated 
+ERROR: 2 compilation errors.  No code generated.
+
+

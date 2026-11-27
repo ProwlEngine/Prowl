@@ -1,0 +1,8 @@
+#version 450
+layout(constant_id=0) const int A = 2;
+layout(constant_id=1) const int B = 3;
+const int C = A * B + 1;
+const int D = C > 4 ? C : 0;
+layout(local_size_x=1) in;
+layout(std430,set=0,binding=0) buffer Buf { float o; };
+void main() { float arr[D]; arr[0] = float(C); o = arr[0]; }

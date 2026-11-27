@@ -1,0 +1,6 @@
+<shader>
+ERROR: <shader>:7: 'return' : void function cannot return a value 
+ERROR: <shader>:7: '' : compilation terminated 
+ERROR: 2 compilation errors.  No code generated.
+
+

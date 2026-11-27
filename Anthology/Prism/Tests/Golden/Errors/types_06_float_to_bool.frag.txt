@@ -1,0 +1,6 @@
+<shader>
+ERROR: <shader>:3: '=' :  cannot convert from ' temp highp float' to ' temp bool'
+ERROR: <shader>:3: '' : compilation terminated 
+ERROR: 2 compilation errors.  No code generated.
+
+

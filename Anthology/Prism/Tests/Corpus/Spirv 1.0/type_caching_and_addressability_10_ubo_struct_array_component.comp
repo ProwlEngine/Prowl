@@ -1,0 +1,6 @@
+#version 450
+layout(local_size_x=1) in;
+struct S{float a; vec2 bb;};
+layout(std140,set=0,binding=1) uniform U { S arr[2]; } q;
+layout(std430,set=0,binding=2) buffer B { float o; };
+void main(){ o = q.arr[1].bb.y; }

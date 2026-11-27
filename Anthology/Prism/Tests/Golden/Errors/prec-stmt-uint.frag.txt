@@ -1,0 +1,6 @@
+<shader>
+ERROR: <shader>:2: 'uint' : cannot apply precision statement to this type; use 'float', 'int' or a sampler type 
+ERROR: 1 compilation errors.  No code generated.
+
+
+ERROR: Linking fragment stage: Missing entry point: Each stage requires one entry point

@@ -1,0 +1,9 @@
+#version 460
+layout(local_size_x = 64) in;
+layout(std430, set = 0, binding = 0) buffer Data { int values[]; };
+void main()
+{
+    uint i = gl_GlobalInvocationID.x;
+    int x = values[i];
+    values[i] = min(x, 7) + max(x, -3) + clamp(x, 0, 5);
+}

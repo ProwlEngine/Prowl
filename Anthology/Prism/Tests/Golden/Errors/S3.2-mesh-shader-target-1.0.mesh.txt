@@ -1,0 +1,12 @@
+<shader>
+ERROR: <shader>:6: 'GL_EXT_mesh_shader' : not supported for current targeted SPIR-V version 
+ERROR: <shader>:6: '#extension' : extra tokens -- expected newline 
+ERROR: <shader>:6: '' : compilation terminated 
+ERROR: 3 compilation errors.  No code generated.
+
+
+ERROR: Linking mesh stage: Missing entry point: Each stage requires one entry point
+ERROR: Linking mesh stage: At least one shader must specify an output layout primitive
+ERROR: Linking mesh stage: At least one shader must specify a layout(max_vertices = value)
+ERROR: Linking mesh stage: At least one shader must specify a layout(max_primitives = value)
+

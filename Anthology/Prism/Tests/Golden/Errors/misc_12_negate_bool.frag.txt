@@ -1,0 +1,7 @@
+<shader>
+ERROR: <shader>:3: '-' :  wrong operand type no operation '-' exists that takes an operand of type  const bool (or there is no acceptable conversion)
+ERROR: <shader>:3: '=' :  cannot convert from ' const bool' to ' temp highp float'
+ERROR: <shader>:3: '' : compilation terminated 
+ERROR: 3 compilation errors.  No code generated.
+
+

@@ -1,0 +1,518 @@
+﻿// This file is part of the Prowl Game Engine
+// Licensed under the MIT License. See the LICENSE file in the project root for details.
+
+using System.Collections.Concurrent;
+
+using Echo.Logging;
+
+using Prowl.Echo.Formatters;
+
+namespace Prowl.Echo;
+
+// Core type envelope that wraps all serialized data
+public class TypeEnvelope
+{
+    public string? TypeInfo { get; set; }
+    public EchoObject Data { get; set; }
+    public bool IsTypePreserved => TypeInfo != null;
+}
+
+public static class Serializer
+{
+    public static IEchoLogger Logger { get; set; } = new NullEchoLogger();
+
+    // Reserved key marking an external-reference stub (see IExternalReferenceResolver).
+    private const string ExternalRefKey = "$extern";
+
+    /// <summary>Consulted by every context. Null writes every object by value.</summary>
+    public static IReferenceRule? ReferenceRule { get; set; }
+
+    private static readonly ConcurrentDictionary<Type, ISerializationFormat> _formatCache = new();
+
+    // CLR type each primitive EchoType stores, indexed by EchoType.
+    internal static readonly Type?[] PrimitiveTypes =
+    {
+        null, typeof(byte), typeof(sbyte), typeof(short), typeof(int), typeof(long), typeof(ushort), typeof(uint),
+        typeof(ulong), typeof(float), typeof(double), typeof(decimal), typeof(string), typeof(byte[]), typeof(bool)
+    };
+    private static IReadOnlyList<ISerializationFormat> _formats;
+
+    static Serializer()
+    {
+        // Register built-in formats in order of precedence
+        var formatsList = new List<ISerializationFormat>
+        {
+            new PrimitiveFormat(),
+            new NullableFormat(),
+            new DateTimeFormat(),
+            new DateTimeOffsetFormat(),
+            new TimeSpanFormat(),
+            new GuidFormat(),
+            new Formatters.UriFormat(),
+            new VersionFormat(),
+            new EnumFormat(),
+            new TupleFormat(),
+            new AnonymousTypeFormat(),
+            new HashSetFormat(),
+            new ArrayFormat(),
+            new ListFormat(),
+            new QueueFormat(),
+            new StackFormat(),
+            new LinkedListFormat(),
+            new CollectionFormat(),
+            new DictionaryFormat(),
+            new FixedStructureFormat(),
+            new AnyObjectFormat() // Fallback format - must be last
+        };
+        _formats = formatsList.AsReadOnly();
+    }
+
+    /// <summary>
+    /// Clears all reflection caches. Call this when you need to reload assemblies or refresh type information.
+    /// </summary>
+    public static void ClearCache()
+    {
+        _formatCache.Clear();
+        ReflectionUtils.ClearCache();
+        TypeNameRegistry.ClearCache();
+    }
+
+    public static void RegisterFormat(ISerializationFormat format)
+    {
+        // Clear the cache when registering new formats
+        _formatCache.Clear();
+
+        // Create a new list with the new format
+        var newFormats = new List<ISerializationFormat> { format };
+        newFormats.AddRange(_formats.Where(f => !(f is AnyObjectFormat)));
+        newFormats.Add(_formats.Last()); // Add AnyObjectFormat back at the end
+        _formats = newFormats.AsReadOnly();
+    }
+
+    /// <summary>
+    /// Removes a previously registered format. Has no effect if it was not registered.
+    /// </summary>
+    public static void UnregisterFormat(ISerializationFormat format)
+    {
+        _formatCache.Clear();
+        _formats = _formats.Where(f => !ReferenceEquals(f, format)).ToList().AsReadOnly();
+    }
+
+    #region Public API
+
+    public static EchoObject Serialize(object? value, TypeMode typeMode = TypeMode.Auto)
+        => Serialize(value, new SerializationContext(typeMode));
+
+    public static EchoObject Serialize(Type? targetType, object? value, TypeMode typeMode = TypeMode.Auto)
+        => Serialize(targetType, value, new SerializationContext(typeMode));
+
+    public static EchoObject Serialize(object? value, SerializationContext context)
+    {
+        var result = Serialize(value?.GetType(), value, context);
+
+        // No targetType was provided by the caller — in Auto mode, ensure the
+        // root object includes its type so deserialization can work without
+        // the caller needing to know the type upfront.
+        if (value != null && context.TypeMode == TypeMode.Auto)
+            result = WrapWithTypeEnvelope(result, value.GetType(), context);
+
+        return result;
+    }
+
+    public static EchoObject Serialize(Type? targetType, object? value, SerializationContext context)
+    {
+        if (value == null) return new EchoObject(EchoType.Null, null);
+
+        // EchoObject fields are already serialized data. One still attached to another tree (e.g. kept from
+        // a loaded file) is copied, since a tag can only have one parent.
+        if (value is EchoObject echo) return echo.Parent == null ? echo : echo.Clone();
+
+        // Fast path: primitives, string, enum — skip entire pipeline
+        if (targetType != null)
+        {
+            if (targetType.IsEnum)
+                return Formatters.EnumFormat.SerializeEnum((Enum)value);
+
+            if (targetType.IsValueType || targetType == typeof(string) || targetType == typeof(byte[]))
+            {
+                var result = SerializeFast(targetType, value);
+                if (result != null) return result;
+            }
+        }
+
+        var actualType = value.GetType();
+        context.EnterSerialize(value);
+        try
+        {
+            return actualType.IsValueType
+                ? SerializeValue(targetType, actualType, value, context)
+                : SerializeReference(targetType, actualType, value, context);
+        }
+        finally
+        {
+            context.ExitSerialize();
+        }
+    }
+
+    private static EchoObject SerializeReference(Type? targetType, Type actualType, object value, SerializationContext context)
+    {
+        // Link out-of-graph references by key instead of inlining/deep-copying them.
+        if (context.ExternalReferences != null)
+        {
+            object? key = context.ExternalReferences.GetReferenceKey(value);
+            if (ReferenceEquals(key, ExternalReference.Null))
+                return new EchoObject(EchoType.Null, null);
+            if (key != null)
+            {
+                var stub = EchoObject.NewCompound();
+                stub[ExternalRefKey] = SerializeExternalKey(key, context);
+                bool needsType = ShouldPreserveType(targetType, actualType, context);
+                return WrapWithTypeEnvelope(stub, needsType ? actualType : null, context);
+            }
+        }
+
+        IReferenceRule? rule = ReferenceRule;
+        if (rule != null && !context.IgnoreReferenceRule && (context.RootByReference || !context.IsOutermostSerialize) &&
+            rule.TryGetReference(value, context, out string reference))
+        {
+            var stub = EchoObject.NewCompound();
+            stub[rule.Key] = new EchoObject(reference);
+            bool needsType = ShouldPreserveType(targetType, actualType, context);
+            return WrapWithTypeEnvelope(stub, needsType ? actualType : null, context);
+        }
+
+        return SerializeValue(targetType, actualType, value, context);
+    }
+
+    private static EchoObject SerializeValue(Type? targetType, Type actualType, object value, SerializationContext context)
+    {
+        // Check for serialization override (e.g. external asset references)
+        if (context.OnSerialize != null)
+        {
+            var overrideResult = context.OnSerialize(value, context);
+            if (overrideResult != null)
+            {
+                bool needsType = ShouldPreserveType(targetType, actualType, context);
+                return WrapWithTypeEnvelope(overrideResult, needsType ? actualType : null, context);
+            }
+        }
+
+        // STEP 1: Determine if we need type preservation (centralized logic)
+        bool needsTypeInfo = ShouldPreserveType(targetType, actualType, context);
+
+        // STEP 2: Serialize the actual data (formatters don't worry about types)
+        var format = GetFormatForType(actualType);
+        var serializedData = format.Serialize(actualType, value, context);
+
+        // STEP 3: Wrap with type envelope if needed (centralized)
+        return WrapWithTypeEnvelope(serializedData, needsTypeInfo ? actualType : null, context);
+    }
+
+    private static EchoObject? SerializeFast(Type type, object value)
+    {
+        return Type.GetTypeCode(type) switch
+        {
+            TypeCode.Int32 => new EchoObject((int)value),
+            TypeCode.Single => new EchoObject((float)value),
+            TypeCode.Double => new EchoObject((double)value),
+            TypeCode.Boolean => new EchoObject((bool)value),
+            TypeCode.String => new EchoObject((string)value),
+            TypeCode.Int64 => new EchoObject((long)value),
+            TypeCode.Byte => new EchoObject((byte)value),
+            TypeCode.Char => new EchoObject((ushort)(char)value),
+            TypeCode.UInt32 => new EchoObject((uint)value),
+            TypeCode.Int16 => new EchoObject((short)value),
+            TypeCode.UInt64 => new EchoObject((ulong)value),
+            TypeCode.UInt16 => new EchoObject((ushort)value),
+            TypeCode.SByte => new EchoObject((sbyte)value),
+            TypeCode.Decimal => new EchoObject((decimal)value),
+            TypeCode.Object when type == typeof(byte[]) => new EchoObject((byte[])value),
+            _ => null // DateTime, Guid, TimeSpan etc. — use normal path
+        };
+    }
+
+    /// <summary>
+    /// Deserialize EchoObject data into an existing object instance, overwriting serializable
+    /// fields without creating a new instance. Preserves non-serialized internal state
+    /// (history buffers, GPU resources, caches, etc.).
+    /// Only works for compound/object types (not primitives, arrays, etc.).
+    /// </summary>
+    public static void DeserializeInto(EchoObject? value, object target)
+        => DeserializeInto(value, target, new SerializationContext());
+
+    /// <inheritdoc cref="DeserializeInto(EchoObject?, object)"/>
+    public static void DeserializeInto(EchoObject? value, object target, SerializationContext context)
+    {
+        if (value is null || value.TagType == EchoType.Null || target is null) return;
+
+        // Hold deserialize depth across the whole populate so its per-field deserializes don't fire the
+        // context's deferred actions prematurely (and so deferred actions can themselves call DeserializeInto).
+        context.EnterDeserialize();
+        try
+        {
+            var data = ExtractTypeEnvelope(value, target.GetType(), out _, out _);
+            var format = GetFormatForType(target.GetType());
+            if (format is Formatters.AnyObjectFormat anyFormat)
+                anyFormat.DeserializeInto(data, target, context);
+        }
+        finally
+        {
+            context.ExitDeserialize();
+        }
+    }
+
+    public static T? Deserialize<T>(EchoObject? value) => (T?)Deserialize(value, typeof(T));
+    public static object? Deserialize(EchoObject? value, Type targetType) => Deserialize(value, targetType, new SerializationContext());
+    public static T? Deserialize<T>(EchoObject? value, SerializationContext context) => (T?)Deserialize(value, typeof(T), context);
+
+    public static object? Deserialize(EchoObject? value, Type targetType, SerializationContext context)
+    {
+        // Every deserialize call (top-level or nested field) funnels through here, so depth tracking lets
+        // the context fire its deferred back-patches exactly when the OUTERMOST call unwinds - regardless of
+        // which entry overload or context (e.g. the editor's asset-dependency-tracking context) was used.
+        context.EnterDeserialize();
+        try
+        {
+            return DeserializeCore(value, targetType, context);
+        }
+        finally
+        {
+            context.ExitDeserialize();
+        }
+    }
+
+    private static object? DeserializeCore(EchoObject? value, Type targetType, SerializationContext context)
+    {
+        if (value?.TagType == EchoType.Null || value is null) return null;
+
+        if (value.GetType() == targetType) return value;
+
+        if (context.OnDeserialize == null && value.TagType < EchoType.List && PrimitiveTypes[(int)value.TagType] == targetType)
+            return value.Value;
+
+        // STEP 1: Extract type information and data (centralized)
+        var data = ExtractTypeEnvelope(value, targetType, out Type? envelopeType, out bool typeUnresolved);
+
+        if (typeUnresolved)
+            RecordUnresolvedDefinition(data, context);
+
+        // STEP 2: Determine actual type to deserialize to
+        var actualType = envelopeType ?? targetType;
+
+        // Resolve an external reference stub back to its live instance.
+        if (context.ExternalReferences != null &&
+            data.TagType == EchoType.Compound &&
+            data.TryGet(ExternalRefKey, out var keyData))
+        {
+            object? key = Deserialize(keyData, typeof(object), context);
+            return key == null ? null : context.ExternalReferences.ResolveReference(key, actualType);
+        }
+
+        IReferenceRule? rule = ReferenceRule;
+        if (rule != null && data.TagType == EchoType.Compound && data.TryGet(rule.Key, out var reference))
+            return rule.Resolve(reference.StringValue ?? "", actualType, context);
+
+        // Check for deserialization override (e.g. external asset references)
+        if (context.OnDeserialize != null)
+        {
+            var (handled, result) = context.OnDeserialize(data, actualType, context);
+            if (handled) return result;
+        }
+
+        // STEP 3: Get formatter and deserialize data (no type logic in formatter)
+        var format = GetFormatForType(actualType);
+        return format.Deserialize(data, actualType, context);
+    }
+
+    // Kept out of DeserializeCore so its stack frame stays small for deeply nested graphs.
+    [System.Runtime.CompilerServices.MethodImpl(System.Runtime.CompilerServices.MethodImplOptions.NoInlining)]
+    private static void RecordUnresolvedDefinition(EchoObject data, SerializationContext context)
+    {
+        if (data.TagType != EchoType.Compound || !data.TryGet("$id", out var id)) return;
+
+        foreach (string name in data.GetNames())
+        {
+            if (name == "$id" || name == "$type") continue;
+            context.unresolvedDefinitions[id.IntValue] = data;
+            return;
+        }
+    }
+
+    #endregion
+
+    #region Type Preservation Logic
+
+    private static bool ShouldPreserveType(Type? targetType, Type actualType, SerializationContext context)
+    {
+        return context.TypeMode switch
+        {
+            TypeMode.Aggressive => true,
+            TypeMode.None => false,
+            TypeMode.Auto => IsTypePreservationNeeded(targetType, actualType, context),
+            _ => true
+        };
+    }
+
+    private static bool IsTypePreservationNeeded(Type? targetType, Type actualType, SerializationContext context)
+    {
+        // Never preserve type for exact matches
+        if (targetType == actualType) return false;
+
+        if (targetType != null && Nullable.GetUnderlyingType(targetType) == actualType) return false;
+
+        return true;
+
+        //// Always preserve for these cases:
+        //if (targetType == null ||                           // Unknown target
+        //    targetType == typeof(object) ||                 // Boxed objects
+        //    targetType.IsInterface ||                       // Interface implementations
+        //    targetType.IsAbstract)                          // Abstract class implementations
+        //    return true;
+        //
+        //// Check if actual type is assignable to target (polymorphism)
+        //if (!targetType.IsAssignableFrom(actualType))
+        //    return true;
+        //
+        //// Preserve type for derived classes
+        //if (targetType != actualType)
+        //    return true;
+        //
+        //return false;
+    }
+
+    private static EchoObject WrapWithTypeEnvelope(EchoObject data, Type? typeToPreserve, SerializationContext context)
+    {
+        if (typeToPreserve == null)
+            return data; // No wrapping needed
+
+        // For primitives and simple types, use compact representation
+        if (IsSimpleType(typeToPreserve))
+            return CreateCompactTypeWrapper(data, typeToPreserve);
+
+        // For complex types, use full representation
+        return CreateFullTypeWrapper(data, typeToPreserve);
+    }
+
+    // Serialize an external-reference key self-describingly so it round-trips without the resolver
+    // needing to know the key's type up front, regardless of the context's TypeMode.
+    private static EchoObject SerializeExternalKey(object key, SerializationContext context)
+    {
+        var keyType = key.GetType();
+        var data = Serialize(keyType, key, context);
+        return WrapWithTypeEnvelope(data, keyType, context);
+    }
+
+    private static bool IsSimpleType(Type type)
+    {
+        return type.IsPrimitive ||
+               type == typeof(string) ||
+               type == typeof(decimal) ||
+               type == typeof(DateTime) ||
+               type == typeof(Guid) ||
+               type.IsEnum;
+    }
+
+    private static EchoObject CreateCompactTypeWrapper(EchoObject data, Type type)
+    {
+        // For primitives, embed type in the tag itself using a special format
+        var compound = EchoObject.NewCompound(2);
+        compound["$t"] = new EchoObject(TypeNameRegistry.GetCompactTypeName(type)); // Compact type name
+        compound["$v"] = data; // Value
+        return compound;
+    }
+
+    private static EchoObject CreateFullTypeWrapper(EchoObject data, Type type)
+    {
+        if (data.TagType == EchoType.Compound)
+        {
+            // Only add type wrapper if the data isn't already a compound with type info
+            if (data.Contains("$type"))
+                return data; // Already has type info
+            else
+            {
+                // Merge with existing compound
+                data["$type"] = new EchoObject(TypeNameRegistry.GetFullTypeName(type));
+                return data; // Already has type info
+            }
+        }
+
+        var compound = EchoObject.NewCompound(2);
+        compound["$type"] = new EchoObject(TypeNameRegistry.GetFullTypeName(type));
+        compound["$value"] = data;
+        return compound;
+    }
+
+    #endregion
+
+    #region Type Extraction Logic
+
+    private static EchoObject ExtractTypeEnvelope(EchoObject value, Type targetType, out Type? actualType, out bool typeUnresolved)
+    {
+        typeUnresolved = false;
+        // Handle compact type wrapper (for primitives)
+        if (value.TagType == EchoType.Compound &&
+            value.TryGet("$t", out var compactType) &&
+            value.TryGet("$v", out var compactValue))
+        {
+            var type = TypeNameRegistry.ResolveCompactTypeName(compactType.StringValue);
+            actualType = ReconcileType(type, targetType);
+            return compactValue!;
+        }
+
+        // Handle full type wrapper
+        if (value.TagType == EchoType.Compound && value.TryGet("$type", out var typeTag))
+        {
+            Type? resolved = TypeNameRegistry.ResolveFullTypeName(typeTag.StringValue);
+            actualType = ReconcileType(resolved, targetType) ?? targetType;
+            typeUnresolved = resolved == null;
+
+            // If there's a $value, use that as data
+            return value.TryGet("$value", out var dataValue) ? dataValue! : value;
+        }
+
+        // No type wrapper - use as-is
+        actualType = null;
+        return value;
+    }
+
+
+    private static Type? ReconcileType(Type? resolved, Type targetType)
+    {
+        if (resolved == null)
+            return null;
+
+        Type effectiveTarget = Nullable.GetUnderlyingType(targetType) ?? targetType;
+        if (effectiveTarget.IsAssignableFrom(resolved))
+            return resolved;
+
+        return effectiveTarget;
+    }
+
+    #endregion
+
+    #region Format Management
+
+    internal static ISerializationFormat GetFormatForType(Type type)
+    {
+        if (_formatCache.TryGetValue(type, out var cached))
+            return cached;
+
+        ISerializationFormat? format = null;
+        foreach (var f in _formats)
+        {
+            if (f.CanHandle(type))
+            {
+                format = f;
+                break;
+            }
+        }
+
+        if (format == null)
+            throw new NotSupportedException($"No format handler found for type {type}");
+
+        _formatCache.TryAdd(type, format);
+        return format;
+    }
+
+    #endregion
+}

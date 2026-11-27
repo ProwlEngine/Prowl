@@ -1,0 +1,23 @@
+#version 460
+
+layout(local_size_x = 64) in;
+
+layout(std430, binding = 0) buffer B {
+    ivec4 sv;
+    uvec4 uv;
+    int sScalar;
+    uint uScalar;
+    ivec4 rMinScalar;
+    ivec4 rMaxScalar;
+    ivec4 rClampScalar;
+    uvec4 rUMinScalar;
+    uvec4 rUClampScalar;
+};
+
+void main() {
+    rMinScalar = min(sv, sScalar);
+    rMaxScalar = max(sv, sScalar);
+    rClampScalar = clamp(sv, sScalar, sScalar + 10);
+    rUMinScalar = min(uv, uScalar);
+    rUClampScalar = clamp(uv, uScalar, uScalar + 10u);
+}

@@ -1,0 +1,6 @@
+#version 460
+#extension GL_EXT_shader_explicit_arithmetic_types : require
+layout(local_size_x=1) in;
+layout(std430,set=0,binding=0) buffer B { int16_t s; int8_t c; uint16_t us; i16vec2 sv; int64_t l; float f; int i; double d; };
+int g(int x) { return x; }
+void main() { int a = s; float b = s; int e = c + 1; ivec2 w = sv; uint u = us; int64_t big = s; double dd = l; i = a + e + w.x + int(u) + g(s) + int(big); f = b; d = dd; }

@@ -1,0 +1,15 @@
+#version 460 core
+#extension GL_EXT_shader_atomic_float : require
+
+// Float image atomics on an r32f image2D: imageAtomicExchange and imageAtomicAdd.
+// imageAtomicLoad/imageAtomicStore only have GLSL builtins for atomic-float images and are omitted here.
+layout(local_size_x = 8, local_size_y = 8) in;
+
+layout(set = 0, binding = 0, r32f) uniform image2D img;
+
+void main() {
+    ivec2 coord = ivec2(gl_GlobalInvocationID.xy);
+    float added = imageAtomicAdd(img, coord, 1.5);
+    float prev = imageAtomicExchange(img, coord, added);
+    imageStore(img, coord, vec4(prev, 0.0, 0.0, 0.0));
+}

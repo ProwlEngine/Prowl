@@ -1,0 +1,6 @@
+<shader>
+ERROR: <shader>:11: 'gl_PointSize' : required extension not requested: Possible extensions include:
+GL_EXT_tessellation_point_size
+GL_OES_tessellation_point_size
+ERROR: <shader>:11: '' : compilation terminated 
+ERROR: 2 compilation errors.  No code generated.

@@ -1,0 +1,14 @@
+#version 460
+#extension GL_KHR_shader_subgroup_arithmetic : require
+#extension GL_KHR_shader_subgroup_ballot : require
+#extension GL_KHR_shader_subgroup_shuffle : require
+layout(local_size_x = 64) in;
+layout(std430, set = 0, binding = 0) buffer Data { vec4 values[]; };
+void main()
+{
+    uint i = gl_GlobalInvocationID.x;
+    vec4 v = values[i];
+    vec4 s = subgroupAdd(v) + subgroupMax(v) + subgroupInclusiveAdd(v)
+           + subgroupBroadcastFirst(v) + subgroupBroadcast(v, 0u) + subgroupShuffle(v, 1u);
+    values[i] = s;
+}

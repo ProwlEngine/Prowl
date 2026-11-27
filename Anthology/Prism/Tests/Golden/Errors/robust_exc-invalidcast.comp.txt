@@ -1,0 +1,11 @@
+<shader>
+ERROR: <shader>:10: 'void' : coopmat invalid basic type 
+ERROR: <shader>:10: '' : coopmat incorrect number of type parameters 
+ERROR: <shader>:10: 'matB' : unexpected number type parameters 
+ERROR: <shader>:10: 'matB' : expected 8, 16, 32, or 64 bit signed or unsigned integer or 16, 32, or 64 bit float type 
+ERROR: <shader>:10: 'matB' : illegal use of type 'void' 
+ERROR: <shader>:10: '' : compilation terminated 
+ERROR: 6 compilation errors.  No code generated.
+
+
+SPIR-V is not generated for failed compile or link

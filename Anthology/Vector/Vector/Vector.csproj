@@ -1,0 +1,24 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+  <PropertyGroup>
+    <TargetFrameworks>$(ProwlTargetFrameworksCompat)</TargetFrameworks>
+    <OutputType>Library</OutputType>
+    <Nullable>enable</Nullable>
+    <AllowUnsafeBlocks>true</AllowUnsafeBlocks>
+
+    <PackageId>Prowl.$(AssemblyName)</PackageId>
+    <RootNamespace>Prowl.$(MSBuildProjectName.Replace(" ", "_"))</RootNamespace>
+
+    <Description>A 32-bit and 64-bit Vector Mathematics Library. Built for the Prowl game engine.</Description>
+    <PackageTags>mathematics;3d;3d-math;linear-algebra;vector;matrix;quaternion;geometry;transformation;double-precision;numerical;math-library;spatial;rotation;interpolation</PackageTags>
+
+    <GenerateDocumentationFile>true</GenerateDocumentationFile>
+    <EmbedAllSources>true</EmbedAllSources>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <Folder Include="Matrices\" />
+    <Folder Include="Noise\" />
+  </ItemGroup>
+
+</Project>

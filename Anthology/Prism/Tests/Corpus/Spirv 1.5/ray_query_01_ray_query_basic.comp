@@ -1,0 +1,13 @@
+#version 460
+#extension GL_EXT_ray_query : require
+layout(local_size_x = 1) in;
+layout(set = 0, binding = 0) uniform accelerationStructureEXT tlas;
+layout(set = 0, binding = 1) buffer Result { float d; } result;
+void main() {
+    rayQueryEXT rq;
+    rayQueryInitializeEXT(rq, tlas, gl_RayFlagsOpaqueEXT, 0xFF, vec3(0.0), 0.001, vec3(0.0, 0.0, 1.0), 1000.0);
+    while (rayQueryProceedEXT(rq)) { }
+    if (rayQueryGetIntersectionTypeEXT(rq, true) == 1u) {
+        result.d = rayQueryGetIntersectionTEXT(rq, true);
+    }
+}

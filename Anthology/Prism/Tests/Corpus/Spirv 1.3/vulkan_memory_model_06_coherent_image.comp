@@ -1,0 +1,6 @@
+#version 450
+#pragma use_vulkan_memory_model
+layout(local_size_x = 1) in;
+layout(std430, set = 0, binding = 0) coherent buffer B { uint v[]; } b;
+layout(set = 0, binding = 1, r32ui) uniform coherent uimage2D img;
+void main() { b.v[0] = b.v[1]; imageStore(img, ivec2(0), imageLoad(img, ivec2(1))); }

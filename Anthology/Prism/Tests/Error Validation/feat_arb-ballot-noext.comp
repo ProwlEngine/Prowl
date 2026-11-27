@@ -1,0 +1,6 @@
+#version 450
+layout(local_size_x=1) in;
+layout(std430, binding=0) buffer B { uint s; } b;
+void main(){
+    b.s = gl_SubGroupSizeARB;
+}

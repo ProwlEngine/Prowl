@@ -1,0 +1,148 @@
+#version 460 core
+
+// Froxel scattering pass: fills a 3D grid with per-cell in-scattered light and extinction.
+layout(local_size_x = 8, local_size_y = 8, local_size_z = 4) in;
+
+layout(set = 0, binding = 0, rgba16f) uniform writeonly image3D uOutScatterExtinction;
+
+layout(set = 0, binding = 1) uniform sampler3D uNoiseTex;
+layout(set = 0, binding = 2) uniform sampler2D uShadowMap;
+
+layout(set = 0, binding = 3) uniform FroxelParams
+{
+    mat4 invProj;
+    mat4 invView;
+    mat4 lightViewProj;
+    vec4 cameraPosNear;        // xyz = camera world pos, w = near plane
+    vec4 farNumSlicesPad;      // x = far plane, y = numSlices, z/w unused
+    ivec4 gridSize;            // xyz = froxel grid dimensions, w unused
+    vec4 dirLightDirection;    // xyz = direction from surface toward the light, w unused
+    vec4 dirLightColor;        // rgb = radiance, a = unused
+    vec4 fogParams0;           // x = baseDensity, y = heightFalloff, z = fogBaseHeight, w = scatteringCoefficient
+    vec4 fogParams1;           // x = absorptionCoefficient, y = phaseG, z = shadowBias, w = unused
+    vec4 noiseParams;          // x = noiseScale, y = noiseInfluence, z/w = noise scroll offset xy
+} uParams;
+
+#define MAX_POINT_LIGHTS 16
+
+struct PointLight
+{
+    vec4 posRadius;      // xyz = world position, w = radius
+    vec4 colorIntensity;  // rgb = color, a = intensity
+};
+
+layout(set = 0, binding = 4) uniform PointLights
+{
+    ivec4 count;          // x = active point light count
+    PointLight lights[MAX_POINT_LIGHTS];
+} uPointLights;
+
+const float PI = 3.14159265359;
+
+float henyeyGreenstein(float g, float cosTheta)
+{
+    float g2 = g * g;
+    float denom = 1.0 + g2 - 2.0 * g * cosTheta;
+    return (1.0 - g2) / (4.0 * PI * pow(max(denom, 1e-4), 1.5));
+}
+
+float sampleShadow(vec3 worldPos)
+{
+    vec4 lightClip = uParams.lightViewProj * vec4(worldPos, 1.0);
+    if (lightClip.w <= 0.0)
+    {
+        return 1.0;
+    }
+    vec3 lightNDC = lightClip.xyz / lightClip.w;
+    vec2 shadowUV = lightNDC.xy * 0.5 + 0.5;
+    if (shadowUV.x < 0.0 || shadowUV.x > 1.0 || shadowUV.y < 0.0 || shadowUV.y > 1.0)
+    {
+        return 1.0;
+    }
+    float storedDepth = texture(uShadowMap, shadowUV).r;
+    float bias = uParams.fogParams1.z;
+    return (lightNDC.z - bias <= storedDepth) ? 1.0 : 0.0;
+}
+
+void main()
+{
+    ivec3 froxelCoord = ivec3(gl_GlobalInvocationID);
+    ivec3 gridSize = uParams.gridSize.xyz;
+    if (any(greaterThanEqual(froxelCoord, gridSize)))
+    {
+        return;
+    }
+
+    float near = uParams.cameraPosNear.w;
+    float far = uParams.farNumSlicesPad.x;
+    int numSlices = int(uParams.farNumSlicesPad.y);
+
+    // Exponential Z slicing, matching clustered-forward froxel placement.
+    float sliceZ = near * pow(far / near, (float(froxelCoord.z) + 0.5) / float(numSlices));
+
+    vec2 uv = (vec2(froxelCoord.xy) + 0.5) / vec2(gridSize.xy);
+    vec2 ndcXY = uv * 2.0 - 1.0;
+
+    // Unproject a ray direction through the pixel then scale it to land on sliceZ.
+    vec4 clipRay = vec4(ndcXY, 1.0, 1.0);
+    vec4 viewRay4 = uParams.invProj * clipRay;
+    vec3 viewRay = viewRay4.xyz / viewRay4.w;
+    vec3 viewDir = viewRay / viewRay.z;
+    vec3 viewPos = viewDir * sliceZ;
+
+    vec4 worldPos4 = uParams.invView * vec4(viewPos, 1.0);
+    vec3 worldPos = worldPos4.xyz;
+
+    // Height based exponential fog density, modulated by a low frequency 3D noise field.
+    float baseDensity = uParams.fogParams0.x;
+    float heightFalloff = uParams.fogParams0.y;
+    float fogBaseHeight = uParams.fogParams0.z;
+    float scatteringCoefficient = uParams.fogParams0.w;
+    float absorptionCoefficient = uParams.fogParams1.x;
+
+    float density = baseDensity * exp(-heightFalloff * max(0.0, worldPos.y - fogBaseHeight));
+
+    vec3 noiseUVW = worldPos * uParams.noiseParams.x + vec3(uParams.noiseParams.zw, 0.0);
+    float noiseSample = texture(uNoiseTex, noiseUVW).r;
+    density *= mix(1.0, noiseSample, clamp(uParams.noiseParams.y, 0.0, 1.0));
+    density = max(density, 0.0);
+
+    vec3 cameraPos = uParams.cameraPosNear.xyz;
+    vec3 rayDir = normalize(worldPos - cameraPos);
+    float g = uParams.fogParams1.y;
+
+    vec3 scattering = vec3(0.0);
+
+    // Directional light contribution.
+    {
+        float visibility = sampleShadow(worldPos);
+        float cosTheta = dot(rayDir, uParams.dirLightDirection.xyz);
+        float phase = henyeyGreenstein(g, cosTheta);
+        scattering += uParams.dirLightColor.rgb * visibility * phase;
+    }
+
+    // Small set of local point lights, no shadowing.
+    int pointCount = min(uPointLights.count.x, MAX_POINT_LIGHTS);
+    for (int i = 0; i < pointCount; ++i)
+    {
+        PointLight light = uPointLights.lights[i];
+        vec3 toLight = light.posRadius.xyz - worldPos;
+        float dist2 = max(dot(toLight, toLight), 1e-6);
+        float dist = sqrt(dist2);
+        vec3 lightDir = toLight / dist;
+
+        float radius = max(light.posRadius.w, 1e-4);
+        float atten = clamp(1.0 - pow(dist / radius, 4.0), 0.0, 1.0);
+        atten = (atten * atten) / (dist2 + 1.0);
+
+        float cosThetaP = dot(rayDir, lightDir);
+        float phaseP = henyeyGreenstein(g, cosThetaP);
+
+        scattering += light.colorIntensity.rgb * light.colorIntensity.a * atten * phaseP;
+    }
+
+    scattering *= density * scatteringCoefficient;
+    float extinction = density * (scatteringCoefficient + absorptionCoefficient);
+
+    imageStore(uOutScatterExtinction, froxelCoord, vec4(scattering, extinction));
+}

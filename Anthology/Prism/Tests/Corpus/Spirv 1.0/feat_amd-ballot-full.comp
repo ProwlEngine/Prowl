@@ -1,0 +1,14 @@
+#version 450
+#extension GL_AMD_shader_ballot : require
+#extension GL_ARB_gpu_shader_int64 : require
+#extension GL_ARB_shader_ballot : require
+layout(local_size_x=64) in;
+layout(std430, binding=0) buffer B { vec3 v; ivec2 i; uvec4 u; double d; int64_t l; uint c; } b;
+void main(){
+    b.v = maxInvocationsInclusiveScanAMD(b.v) + addInvocationsExclusiveScanNonUniformAMD(b.v);
+    b.i = minInvocationsNonUniformAMD(b.i) + swizzleInvocationsMaskedAMD(b.i, uvec3(1, 0, 31));
+    b.u = maxInvocationsAMD(b.u) + writeInvocationAMD(b.u, uvec4(7), 3u) + minInvocationsExclusiveScanAMD(b.u);
+    b.d = addInvocationsAMD(b.d) + minInvocationsInclusiveScanNonUniformAMD(b.d);
+    b.l = maxInvocationsExclusiveScanNonUniformAMD(b.l);
+    b.c = mbcntAMD(ballotARB(b.c > 2u));
+}

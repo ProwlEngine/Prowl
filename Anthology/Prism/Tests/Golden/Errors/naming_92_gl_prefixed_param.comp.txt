@@ -1,0 +1,8 @@
+<shader>
+ERROR: <shader>:5: 'gl_arg' : identifiers starting with "gl_" are reserved 
+ERROR: <shader>:5: '' : compilation terminated 
+ERROR: 2 compilation errors.  No code generated.
+
+
+ERROR: Linking compute stage: Missing entry point: Each stage requires one entry point
+

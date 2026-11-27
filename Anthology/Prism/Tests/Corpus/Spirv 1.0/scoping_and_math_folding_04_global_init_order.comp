@@ -1,0 +1,7 @@
+#version 450
+layout(local_size_x=1) in;
+layout(std430,set=0,binding=0) buffer B { float o; };
+float a = 1.0;
+float b = a + 2.0;
+float c = b * 3.0;
+void main() { o = a + b + c; }

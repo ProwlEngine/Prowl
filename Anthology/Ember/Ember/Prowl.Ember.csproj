@@ -1,0 +1,27 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+  <PropertyGroup>
+    <TargetFrameworks>$(ProwlTargetFrameworks)</TargetFrameworks>
+    <ImplicitUsings>disable</ImplicitUsings>
+    <Nullable>enable</Nullable>
+    <GenerateDocumentationFile>true</GenerateDocumentationFile>
+    <NoWarn>$(NoWarn);CS1591</NoWarn>
+
+    <!-- Package metadata -->
+    <PackageId>Prowl.Ember</PackageId>
+    <Title>Prowl.Ember</Title>
+    <Description>In-place assembly state migration for hot reload. Both assemblies stay loaded, so correctness never depends on the previous one unloading.</Description>
+    <PackageTags>hot-reload;assembly;migration;state-migration;reflection;mono-cecil;gamedev;game-engine;prowl;dotnet;csharp</PackageTags>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <PackageReference Include="Mono.Cecil" Version="0.11.5" />
+    <!-- The attributes + lifecycle interfaces live in the AOT-safe contracts package. -->
+    <ProjectReference Include="..\Contracts\Prowl.Ember.Contracts.csproj" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <InternalsVisibleTo Include="Prowl.Ember.Tests" />
+  </ItemGroup>
+
+</Project>

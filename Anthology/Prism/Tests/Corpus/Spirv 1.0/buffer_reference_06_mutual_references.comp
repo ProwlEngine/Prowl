@@ -1,0 +1,9 @@
+#version 450
+#extension GL_EXT_buffer_reference : require
+layout(local_size_x = 1) in;
+layout(buffer_reference) buffer A;
+layout(buffer_reference) buffer B;
+layout(buffer_reference, std430) buffer A { B b; float x; };
+layout(buffer_reference, std430) buffer B { A a; float y; };
+layout(push_constant) uniform P { A a; } pc;
+void main() { pc.a.b.a.x = pc.a.b.y; }

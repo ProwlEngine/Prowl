@@ -1,0 +1,8 @@
+<shader>
+ERROR: <shader>:3: 'set' : cannot be used with push_constant 
+ERROR: <shader>:3: 'binding' : cannot be used with push_constant 
+ERROR: 2 compilation errors.  No code generated.
+
+
+ERROR: Linking fragment stage: Missing entry point: Each stage requires one entry point
+

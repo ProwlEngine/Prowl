@@ -1,0 +1,249 @@
+#version 460 core
+layout(local_size_x = 8, local_size_y = 8, local_size_z = 1) in;
+
+#define BVH_STACK_SIZE 32
+#define PI 3.14159265359
+#define RAY_EPSILON 0.001
+#define RAY_MAX_T 100000.0
+
+struct BVHNode
+{
+    vec3 aabbMin;
+    int leftChildOrFirstTriangle;
+    vec3 aabbMax;
+    int triangleCountOrRightChild;
+};
+
+struct Material
+{
+    vec4 albedo;
+    vec4 emissive;
+    float roughness;
+    float metallic;
+    float ior;
+    float matPad0;
+};
+
+layout(std430, set = 0, binding = 0) readonly buffer BVHNodeBuffer
+{
+    BVHNode nodes[];
+} bvhBuffer;
+
+layout(std430, set = 0, binding = 1) readonly buffer TriangleIndexBuffer
+{
+    int indices[];
+} triIndexBuffer;
+
+layout(std430, set = 0, binding = 2) readonly buffer TriangleVertexBuffer
+{
+    vec4 positions[];
+} triVertexBuffer;
+
+layout(std430, set = 0, binding = 3) readonly buffer TriangleAttribBuffer
+{
+    vec4 normalAndMaterial[];
+} triAttribBuffer;
+
+layout(std430, set = 0, binding = 4) readonly buffer MaterialBuffer
+{
+    Material materials[];
+} materialBuffer;
+
+layout(set = 0, binding = 5, rgba32f) uniform image2D accumImage;
+
+layout(push_constant) uniform PushConstants
+{
+    mat4 invViewProj;
+    vec3 cameraPos;
+    int frameIndex;
+    vec3 lightVector;
+    int lightType;
+    vec3 lightColor;
+    float lightIntensity;
+    ivec2 imageSize;
+    vec2 pad0;
+} pc;
+
+bool intersectAABB(vec3 origin, vec3 invDir, vec3 aabbMin, vec3 aabbMax, float tMax, out float tNear)
+{
+    vec3 t0 = (aabbMin - origin) * invDir;
+    vec3 t1 = (aabbMax - origin) * invDir;
+    vec3 tSmall = min(t0, t1);
+    vec3 tBig = max(t0, t1);
+    float tMinVal = max(max(tSmall.x, tSmall.y), tSmall.z);
+    float tMaxVal = min(min(tBig.x, tBig.y), tBig.z);
+    tNear = max(tMinVal, 0.0);
+    return tMaxVal >= tNear && tMinVal <= tMax;
+}
+
+bool intersectTriangle(vec3 origin, vec3 dir, vec3 v0, vec3 v1, vec3 v2, out float t, out float u, out float v)
+{
+    const float EPSILON = 1e-7;
+    vec3 edge1 = v1 - v0;
+    vec3 edge2 = v2 - v0;
+    vec3 pvec = cross(dir, edge2);
+    float det = dot(edge1, pvec);
+    if (abs(det) < EPSILON)
+    {
+        return false;
+    }
+    float invDet = 1.0 / det;
+    vec3 tvec = origin - v0;
+    u = dot(tvec, pvec) * invDet;
+    if (u < 0.0 || u > 1.0)
+    {
+        return false;
+    }
+    vec3 qvec = cross(tvec, edge1);
+    v = dot(dir, qvec) * invDet;
+    if (v < 0.0 || u + v > 1.0)
+    {
+        return false;
+    }
+    t = dot(edge2, qvec) * invDet;
+    return t > EPSILON;
+}
+
+// Iterative BVH traversal, manual stack. Interior nodes: triangleCountOrRightChild == 0,
+// right child is stored contiguously as leftChildOrFirstTriangle + 1.
+bool traverseBVH(vec3 origin, vec3 dir, float maxDist, bool anyHit, out float hitT, out int hitTriIndex, out vec2 hitBary)
+{
+    hitT = maxDist;
+    hitTriIndex = -1;
+    hitBary = vec2(0.0);
+    vec3 invDir = 1.0 / dir;
+
+    int stack[BVH_STACK_SIZE];
+    int stackPtr = 0;
+    stack[stackPtr] = 0;
+    stackPtr++;
+
+    while (stackPtr > 0)
+    {
+        stackPtr--;
+        int nodeIndex = stack[stackPtr];
+        BVHNode node = bvhBuffer.nodes[nodeIndex];
+
+        float tNear;
+        if (!intersectAABB(origin, invDir, node.aabbMin, node.aabbMax, hitT, tNear))
+        {
+            continue;
+        }
+
+        if (node.triangleCountOrRightChild == 0)
+        {
+            int leftChild = node.leftChildOrFirstTriangle;
+            int rightChild = leftChild + 1;
+            if (stackPtr < BVH_STACK_SIZE - 1)
+            {
+                stack[stackPtr] = leftChild;
+                stackPtr++;
+                stack[stackPtr] = rightChild;
+                stackPtr++;
+            }
+        }
+        else
+        {
+            int firstTri = node.leftChildOrFirstTriangle;
+            int triCount = node.triangleCountOrRightChild;
+            for (int i = 0; i < triCount; i++)
+            {
+                int triIndex = triIndexBuffer.indices[firstTri + i];
+                vec3 v0 = triVertexBuffer.positions[triIndex * 3 + 0].xyz;
+                vec3 v1 = triVertexBuffer.positions[triIndex * 3 + 1].xyz;
+                vec3 v2 = triVertexBuffer.positions[triIndex * 3 + 2].xyz;
+
+                float t, u, v;
+                if (intersectTriangle(origin, dir, v0, v1, v2, t, u, v))
+                {
+                    if (t < hitT)
+                    {
+                        hitT = t;
+                        hitTriIndex = triIndex;
+                        hitBary = vec2(u, v);
+                        if (anyHit)
+                        {
+                            return true;
+                        }
+                    }
+                }
+            }
+        }
+    }
+
+    return hitTriIndex >= 0;
+}
+
+void main()
+{
+    ivec2 pixelCoord = ivec2(gl_GlobalInvocationID.xy);
+    if (pixelCoord.x >= pc.imageSize.x || pixelCoord.y >= pc.imageSize.y)
+    {
+        return;
+    }
+
+    vec2 pixelCenter = vec2(pixelCoord) + vec2(0.5);
+    vec2 ndc = (pixelCenter / vec2(pc.imageSize)) * 2.0 - 1.0;
+
+    vec4 farWorld = pc.invViewProj * vec4(ndc.x, ndc.y, 1.0, 1.0);
+    farWorld /= farWorld.w;
+
+    vec3 rayOrigin = pc.cameraPos;
+    vec3 rayDir = normalize(farWorld.xyz - rayOrigin);
+
+    float hitT;
+    int hitTriIndex;
+    vec2 hitBary;
+    bool hit = traverseBVH(rayOrigin, rayDir, RAY_MAX_T, false, hitT, hitTriIndex, hitBary);
+
+    vec3 thisFrameColor;
+
+    if (!hit)
+    {
+        thisFrameColor = mix(vec3(1.0), vec3(0.5, 0.7, 1.0), 0.5 * (rayDir.y + 1.0));
+    }
+    else
+    {
+        vec4 na = triAttribBuffer.normalAndMaterial[hitTriIndex];
+        vec3 normal = normalize(na.xyz);
+        int materialId = floatBitsToInt(na.w);
+        Material mat = materialBuffer.materials[materialId];
+
+        vec3 hitPos = rayOrigin + rayDir * hitT;
+
+        vec3 toLight;
+        float lightDist;
+        if (pc.lightType == 0)
+        {
+            toLight = normalize(-pc.lightVector);
+            lightDist = RAY_MAX_T;
+        }
+        else
+        {
+            vec3 delta = pc.lightVector - hitPos;
+            lightDist = length(delta);
+            toLight = delta / max(lightDist, 0.0001);
+        }
+
+        vec3 shadowOrigin = hitPos + normal * RAY_EPSILON;
+        float shadowHitT;
+        int shadowTriIndex;
+        vec2 shadowBary;
+        bool occluded = traverseBVH(shadowOrigin, toLight, lightDist - RAY_EPSILON * 2.0, true, shadowHitT, shadowTriIndex, shadowBary);
+
+        float ndotl = max(dot(normal, toLight), 0.0);
+        vec3 lightContribution = vec3(0.0);
+        if (ndotl > 0.0 && !occluded)
+        {
+            float attenuation = (pc.lightType == 1) ? 1.0 / max(lightDist * lightDist, 0.01) : 1.0;
+            vec3 diffuseAlbedo = mat.albedo.rgb * (1.0 - mat.metallic);
+            lightContribution = diffuseAlbedo * (1.0 / PI) * ndotl * pc.lightColor * pc.lightIntensity * attenuation;
+        }
+
+        thisFrameColor = mat.emissive.rgb + lightContribution;
+    }
+
+    vec4 oldColor = imageLoad(accumImage, pixelCoord);
+    vec3 blended = mix(oldColor.rgb, thisFrameColor, 1.0 / float(pc.frameIndex + 1));
+    imageStore(accumImage, pixelCoord, vec4(blended, 1.0));
+}

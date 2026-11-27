@@ -1,0 +1,5 @@
+#version 450
+layout(local_size_x=1) in;
+layout(std430,set=0,binding=0) buffer B { float o; int k; };
+#define F(a,b) (1.0 a 2.0 b)
+void main(){ o = F(+,); }

@@ -1,0 +1,21 @@
+#version 460 core
+
+layout(local_size_x=1) in;
+
+layout(std430, binding=0) buffer Data
+{
+    float values[];
+};
+
+void main()
+{
+    float local_array[5] = float[](1.0, 2.0, 3.0, 4.0, 5.0);
+    int local_length = local_array.length();
+    int ssbo_length = values.length();
+
+    uint index = gl_GlobalInvocationID.x;
+    if (index < uint(ssbo_length))
+    {
+        values[index] = float(local_length) + float(ssbo_length);
+    }
+}

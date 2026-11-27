@@ -1,0 +1,12 @@
+#version 450
+#extension GL_ARB_gpu_shader_int64 : require
+layout(local_size_x=1) in;
+layout(std430,set=0,binding=0) buffer B {
+  int a;
+  int64_t b;
+  i64vec2 c;
+  uint d;
+  uint64_t e[2];
+  int64_t o;
+} s;
+void main() { s.o = int64_t(s.a) + s.b + s.c.y + int64_t(s.d) + int64_t(s.e[1]); }

@@ -1,0 +1,6 @@
+<shader>
+ERROR: <shader>:3: 'xr' : vector swizzle selectors not from the same set 
+ERROR: <shader>:3: '' : compilation terminated 
+ERROR: 2 compilation errors.  No code generated.
+
+

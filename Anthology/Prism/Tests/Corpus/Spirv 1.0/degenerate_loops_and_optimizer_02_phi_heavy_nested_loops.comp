@@ -1,0 +1,18 @@
+#version 450
+layout(local_size_x=1) in;
+layout(std430,set=0,binding=0) buffer B { int k; float o; };
+void main() {
+  float acc = 0.0; int count = 0; vec3 v = vec3(0.0);
+  for (int i = 0; i < 8; ++i) {
+    if (i == k) { acc += 1.0; continue; }
+    for (int j = 0; j < 4; ++j) {
+      if (j > i) break;
+      if ((i + j) == k) { acc += 2.0; continue; }
+      v += vec3(float(i), float(j), acc);
+      ++count;
+    }
+    if (acc > 100.0) break;
+    acc += float(count);
+  }
+  o = acc + v.x + v.y + v.z + float(count);
+}

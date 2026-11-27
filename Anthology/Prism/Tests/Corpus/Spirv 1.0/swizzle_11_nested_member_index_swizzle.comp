@@ -1,0 +1,11 @@
+#version 460
+layout(local_size_x=64) in;
+
+struct Item { vec4 field; };
+layout(std430, binding=0) buffer B { Item arr[]; } buf;
+
+void main() {
+    uint i = gl_GlobalInvocationID.x;
+    vec2 a = buf.arr[i].field.xy;
+    buf.arr[i].field = vec4(a, 0.0, 0.0);
+}

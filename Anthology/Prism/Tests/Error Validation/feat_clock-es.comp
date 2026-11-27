@@ -1,0 +1,5 @@
+#version 310 es
+#extension GL_ARB_shader_clock : require
+layout(local_size_x=1) in;
+layout(std430, binding=0) buffer B { uvec2 a; } b;
+void main(){ b.a = clock2x32ARB(); }

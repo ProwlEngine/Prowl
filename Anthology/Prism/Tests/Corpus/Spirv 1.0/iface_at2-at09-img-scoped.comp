@@ -1,0 +1,5 @@
+#version 450
+#extension GL_KHR_memory_scope_semantics : require
+layout(local_size_x=1) in;
+layout(binding=1, r32ui) uniform uimage2D img;
+void main(){ imageAtomicAdd(img, ivec2(0), 1u, gl_ScopeWorkgroup, gl_StorageSemanticsImage, gl_SemanticsRelease); }

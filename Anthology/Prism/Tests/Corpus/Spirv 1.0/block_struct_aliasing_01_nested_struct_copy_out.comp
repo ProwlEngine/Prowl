@@ -1,0 +1,47 @@
+#version 460 core
+
+// The same GLSL struct lives inside a block (carrying its Offsets) and as a local (carrying none), so
+// they are two distinct SPIR-V types and copying between them goes member by member. Nesting one struct
+// inside another exercises the recursion.
+
+layout(local_size_x = 8) in;
+
+struct Inner
+{
+    vec3 axis;
+    float angle;
+};
+
+struct Outer
+{
+    Inner rotation;
+    vec4 offset;
+    float weight;
+};
+
+layout(std430, set = 0, binding = 0) readonly buffer InBuffer
+{
+    Outer items[];
+};
+
+layout(std430, set = 0, binding = 1) buffer OutBuffer
+{
+    Outer results[];
+};
+
+void main()
+{
+    uint i = gl_GlobalInvocationID.x;
+
+    // block -> local: a member-by-member copy in both directions.
+    Outer local = items[i];
+    Inner nested = local.rotation;
+
+    nested.angle += 0.5;
+    local.rotation = nested;
+    local.weight *= 2.0;
+
+    // local -> block.
+    results[i] = local;
+    results[i].rotation = nested;
+}

@@ -1,0 +1,80 @@
+#version 460 core
+#extension GL_ARB_gpu_shader_int64 : require
+
+layout(local_size_x = 1) in;
+
+layout(set = 0, binding = 0, std430) buffer ResultBuffer {
+    int64_t signedResults[8];
+    uint64_t unsignedResults[8];
+} results;
+
+void main() {
+    int64_t a = 123456789012l;
+    int64_t b = -987654321098L;
+    uint64_t ua = 100000000000ul;
+    uint64_t ub = 42UL;
+
+    int64_t sum = a + b;
+    int64_t diff = a - b;
+    int64_t prod = a * int64_t(2);
+    int64_t quot = a / int64_t(1000);
+    int64_t rem = a % int64_t(1000);
+
+    int64_t bitAnd = a & b;
+    int64_t bitOr = a | b;
+    int64_t bitXor = a ^ b;
+    int64_t bitNot = ~a;
+    int64_t shiftLeft = a << 2;
+    int64_t shiftRight = a >> 2;
+
+    bool isLess = a < b;
+    bool isGreaterEq = a >= b;
+    bool isEqual = (a == a);
+    bool isNotEqual = (a != b);
+
+    uint64_t usum = ua + ub;
+    uint64_t udiff = ua - ub;
+    uint64_t uprod = ua * uint64_t(2);
+    uint64_t uquot = ua / uint64_t(1000);
+    uint64_t urem = ua % uint64_t(1000);
+
+    uint64_t ubitAnd = ua & ub;
+    uint64_t ubitOr = ua | ub;
+    uint64_t ubitXor = ua ^ ub;
+    uint64_t ubitNot = ~ua;
+    uint64_t ushiftLeft = ua << 2ul;
+    uint64_t ushiftRight = ua >> 2ul;
+
+    int convertedInt = int(a);
+    uint convertedUint = uint(ua);
+    int64_t fromInt = int64_t(convertedInt);
+    uint64_t fromUint = uint64_t(convertedUint);
+
+    int64_t signedExtra = shiftLeft + shiftRight + fromInt + bitNot;
+    uint64_t unsignedExtra = ushiftLeft + ushiftRight + fromUint + ubitNot;
+
+    if (isLess && !isGreaterEq) {
+        signedExtra += int64_t(1);
+    }
+    if (isEqual && isNotEqual) {
+        unsignedExtra += uint64_t(1);
+    }
+
+    results.signedResults[0] = sum;
+    results.signedResults[1] = diff;
+    results.signedResults[2] = prod;
+    results.signedResults[3] = quot;
+    results.signedResults[4] = rem;
+    results.signedResults[5] = bitAnd;
+    results.signedResults[6] = bitOr;
+    results.signedResults[7] = bitXor + signedExtra;
+
+    results.unsignedResults[0] = usum;
+    results.unsignedResults[1] = udiff;
+    results.unsignedResults[2] = uprod;
+    results.unsignedResults[3] = uquot;
+    results.unsignedResults[4] = urem;
+    results.unsignedResults[5] = ubitAnd;
+    results.unsignedResults[6] = ubitOr;
+    results.unsignedResults[7] = ubitXor + unsignedExtra;
+}

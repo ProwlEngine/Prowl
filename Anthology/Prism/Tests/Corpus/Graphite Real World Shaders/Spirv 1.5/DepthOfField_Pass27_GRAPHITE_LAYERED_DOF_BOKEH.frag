@@ -1,0 +1,338 @@
+#version 460
+#extension GL_GOOGLE_include_directive : enable
+#line 1 "Graphite/DepthOfField"
+
+#extension GL_GOOGLE_cpp_style_line_directive : require
+#line 7 "Graphite/DepthOfField"
+
+#line 1 "Graphite/Fullscreen.glsl"
+
+
+#pragma variantGRAPHITE_LAYERED
+#pragma variantGRAPHITE_NO_SOURCE
+
+#extension GL_EXT_multiview : require
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+layout(location = 0) in vec2 vUV;
+
+layout(location = 0) out vec4 outColor;
+
+
+layout(set = 0, binding = 0) uniform sampler2DArray Graphite_Source;
+vec4 Graphite_SampleSource(vec2 uv) { return texture(Graphite_Source, vec3(uv, float(gl_ViewIndex))); }
+
+
+#line 9 "Graphite/DepthOfField"
+#line 1 "Graphite/Internal/DepthOfField.glsl"
+#pragma variantDOFCOMBINECOCPREFILTERBOKEHPOSTFILTERFOCUS
+#pragma variantDOF_LAYERED_SOURCE
+
+
+
+
+
+
+
+#line 1 "Graphite/Internal/PostView.glsl"
+
+
+
+#line 1 "Graphite/ViewData.glsl"
+
+
+
+struct Graphite_ViewData
+{
+    mat4 view;
+    mat4 projection;
+    mat4 viewProjection;
+    mat4 inverseViewProjection;
+    mat4 previousViewProjection;
+    vec4 cameraHigh;
+    vec4 cameraLow;
+    vec4 previousCameraHigh;
+    vec4 previousCameraLow;
+    vec4 screen;
+    vec4 jitter;
+    vec4 time;
+    vec4 depth;
+    vec4 treeOffset;
+};
+#line 5 "Graphite/Internal/PostView.glsl"
+#line 1 "Graphite/Octahedral.glsl"
+
+
+
+vec2 Graphite_OctWrap(vec2 v)
+{
+    return(1.0 - abs(v.yx)) * vec2(v.x >= 0.0 ? 1.0 : - 1.0, v.y >= 0.0 ? 1.0 : - 1.0);
+}
+
+
+vec2 Graphite_OctEncode(vec3 n)
+{
+    n /= abs(n.x) + abs(n.y) + abs(n.z);
+    return n.z >= 0.0 ? n.xy : Graphite_OctWrap(n.xy);
+}
+
+vec3 Graphite_OctDecode(vec2 e)
+{
+    vec3 n = vec3(e, 1.0 - abs(e.x) - abs(e.y));
+    if (n.z < 0.0)
+        n.xy = Graphite_OctWrap(n.xy);
+    return normalize(n);
+}
+#line 6 "Graphite/Internal/PostView.glsl"
+
+layout(std430, set = 0, binding = 1) readonly buffer Graphite_PostViews { Graphite_ViewData graphite_PostViews[]; };
+
+
+Graphite_ViewData Graphite_PostView() { return graphite_PostViews[int(gl_ViewIndex)]; }
+
+
+bool Graphite_PostOrthographic(Graphite_ViewData view) { return abs(view.projection[2][3]) < 0.5; }
+
+
+vec3 Graphite_PostViewPosition(Graphite_ViewData view, vec2 uv, float depth)
+{
+    vec4 p = view.inverseViewProjection * vec4(uv.x * 2.0 - 1.0, 1.0 - uv.y * 2.0, depth, 1.0);
+    return mat3(view.view) * (p.xyz / p.w);
+}
+
+
+vec3 Graphite_PostRelativePosition(Graphite_ViewData view, vec2 uv, float depth)
+{
+    vec4 p = view.inverseViewProjection * vec4(uv.x * 2.0 - 1.0, 1.0 - uv.y * 2.0, depth, 1.0);
+    return p.xyz / p.w;
+}
+
+
+vec2 Graphite_PostPreviousUV(Graphite_ViewData view, vec3 relative)
+{
+    vec3 moved = relative + (view.cameraHigh.xyz - view.previousCameraHigh.xyz) + (view.cameraLow.xyz - view.previousCameraLow.xyz);
+    vec4 clip = view.previousViewProjection * vec4(moved, 1.0);
+    vec2 ndc = clip.xy / clip.w;
+    return vec2(ndc.x * 0.5 + 0.5, 0.5 - ndc.y * 0.5);
+}
+#line 11 "Graphite/Internal/DepthOfField.glsl"
+
+float LinearDepth(Graphite_ViewData view, vec2 uv, float depth)
+{
+    return abs(Graphite_PostViewPosition(view, uv, max(depth, 1e-7)).z);
+}
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+layout(location = 1) out vec4 outNear;
+
+layout(set = 0, binding = 2) uniform sampler2DArray _MainTex;
+layout(set = 0, binding = 3, std140) uniform _GraphiteGlobal { int _Rings; float _MaxCoC; };
+
+
+void main()
+{
+    vec2 texel = 1.0 / vec2(textureSize(_MainTex, 0).xy);
+    vec4 center = texture(_MainTex, vec3(vUV, float(gl_ViewIndex)));
+    int count = 1 + 7 * _Rings * (_Rings + 1) / 2;
+    const float margin = 1.0;
+
+
+    vec4 far = vec4(center.rgb, 1.0);
+    float farRadius = max(center.a, 0.0);
+    if (farRadius >= 1.0)
+    {
+        for (int ring = 1; ring <= _Rings; ring ++)
+        {
+            int points = ring * 7;
+            float radius = float(ring) / float(_Rings);
+            for (int j = 0; j < points; j ++)
+            {
+                float angle = 6.28318530718 * float(j) / float(points);
+                vec2 disp = vec2(cos(angle), sin(angle)) * radius * farRadius;
+                vec4 s = texture(_MainTex, vec3(vUV + disp * texel, float(gl_ViewIndex)));
+                far += vec4(s.rgb, 1.0) * clamp( (s.a - length(disp) + margin) / margin, 0.0, 1.0);
+            }
+        }
+    }
+    far.rgb /= far.a;
+
+
+    float area = _MaxCoC * _MaxCoC / float(count);
+    vec4 near = vec4(0.0);
+    for (int ring = 0; ring <= _Rings; ring ++)
+    {
+        int points = ring == 0 ? 1 : ring * 7;
+        float radius = float(ring) / float(max(_Rings, 1));
+        for (int j = 0; j < points; j ++)
+        {
+            float angle = 6.28318530718 * float(j) / float(points);
+            vec2 disp = vec2(cos(angle), sin(angle)) * radius * _MaxCoC;
+            vec4 s = texture(_MainTex, vec3(vUV + disp * texel, float(gl_ViewIndex)));
+            float c = - s.a;
+            float reach = clamp( (c - length(disp) + margin) / margin, 0.0, 1.0);
+            float blurred = smoothstep(0.5, 2.0, c);
+            near += vec4(s.rgb, 1.0) * (reach * blurred * area / max(c * c, 1.0));
+        }
+    }
+    near.rgb /= near.a + (near.a == 0.0 ? 1.0 : 0.0);
+    outColor = vec4(far.rgb, 1.0);
+    outNear = vec4(near.rgb, clamp(near.a, 0.0, 1.0));
+}
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+#line 10 "Graphite/DepthOfField"
+

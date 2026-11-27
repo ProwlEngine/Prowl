@@ -1,0 +1,4 @@
+#version 450
+layout(local_size_x=1) in;
+layout(std430,set=0,binding=0) buffer B { float o; int k; vec4 v; mat4 m; };
+void main(){ vec3 a = vec3(1, 2u, 3.0); ivec2 b = ivec2(1.5, 2.9); o = a.y + float(b.y); }

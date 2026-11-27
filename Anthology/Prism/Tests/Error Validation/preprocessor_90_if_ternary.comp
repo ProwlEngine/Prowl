@@ -1,0 +1,10 @@
+// glslang rejects this shader (no conditional operator in #if); our compiler must reject it too.
+#version 450
+layout(local_size_x=1) in;
+layout(std430,set=0,binding=0) buffer B { float o; };
+#if 1 ? 2 : 3
+#define R 1.0
+#else
+#define R 2.0
+#endif
+void main(){ o = R; }

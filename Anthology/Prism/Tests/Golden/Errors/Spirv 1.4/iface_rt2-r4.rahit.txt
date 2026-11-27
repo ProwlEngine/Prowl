@@ -1,0 +1,7 @@
+<shader>
+ERROR: <shader>:6: 'variable index' : required extension not requested: GL_EXT_nonuniform_qualifier
+ERROR: <shader>:6: '' : compilation terminated 
+ERROR: 2 compilation errors.  No code generated.
+
+
+SPIR-V is not generated for failed compile or link

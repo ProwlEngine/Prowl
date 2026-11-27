@@ -1,0 +1,6 @@
+<shader>
+ERROR: <shader>:7: '[]' : scalar integer expression required 
+ERROR: <shader>:7: '' : compilation terminated 
+ERROR: 2 compilation errors.  No code generated.
+
+

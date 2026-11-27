@@ -1,0 +1,6 @@
+<shader>
+ERROR: <shader>:3: '[' :  array index out of range '5'
+ERROR: <shader>:3: '' : compilation terminated 
+ERROR: 2 compilation errors.  No code generated.
+
+

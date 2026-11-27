@@ -1,0 +1,21 @@
+#version 460
+
+layout(local_size_x = 64) in;
+
+layout(std430, binding = 0) buffer B {
+    uint a;
+    uint b;
+    uint rAdd;
+    uint rCarry;
+    uint rSub;
+    uint rBorrow;
+};
+
+void main() {
+    uint carry;
+    rAdd = uaddCarry(a, b, carry);
+    rCarry = carry;
+    uint borrow;
+    rSub = usubBorrow(a, b, borrow);
+    rBorrow = borrow;
+}

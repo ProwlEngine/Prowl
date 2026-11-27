@@ -1,0 +1,28 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+  <PropertyGroup>
+    <TargetFrameworks>$(ProwlTargetFrameworks)</TargetFrameworks>
+    <Nullable>enable</Nullable>
+    <PackageId>Prowl.Origami.CSharp</PackageId>
+    <Title>Prowl.Origami.CSharp</Title>
+    <Description>Roslyn backed C# language services for the Origami CodeEditor: completion, quick info, signature help, diagnostics, semantic colouring, navigation, code actions, formatting and rename.</Description>
+    <RootNamespace>Prowl.OrigamiUI.CSharp</RootNamespace>
+    <PackageTags>Roslyn;C#;code editor;intellisense;completion;Prowl;Origami</PackageTags>
+    <GenerateDocumentationFile>true</GenerateDocumentationFile>
+    <NoWarn>$(NoWarn);CS1591</NoWarn>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <InternalsVisibleTo Include="Prowl.Origami.CSharp.Tests" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <PackageReference Include="Microsoft.CodeAnalysis.CSharp.Features" Version="5.6.0" />
+    <PackageReference Include="Microsoft.CodeAnalysis.CSharp.Workspaces" Version="5.6.0" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <ProjectReference Include="..\Origami\Origami.csproj" />
+  </ItemGroup>
+
+</Project>

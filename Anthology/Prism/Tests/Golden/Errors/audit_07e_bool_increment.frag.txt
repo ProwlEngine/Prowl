@@ -1,0 +1,6 @@
+<shader>
+ERROR: <shader>:3: '++' :  wrong operand type no operation '++' exists that takes an operand of type  temp bool (or there is no acceptable conversion)
+ERROR: <shader>:3: '' : compilation terminated 
+ERROR: 2 compilation errors.  No code generated.
+
+

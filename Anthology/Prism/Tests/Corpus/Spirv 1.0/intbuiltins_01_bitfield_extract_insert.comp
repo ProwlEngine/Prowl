@@ -1,0 +1,21 @@
+#version 460
+
+layout(local_size_x = 64) in;
+
+layout(std430, binding = 0) buffer B {
+    int si;
+    uint ui;
+    int offset;
+    int bits;
+    int rSExtract;
+    uint rUExtract;
+    int rSInsert;
+    uint rUInsert;
+};
+
+void main() {
+    rSExtract = bitfieldExtract(si, offset, bits);
+    rUExtract = bitfieldExtract(ui, offset, bits);
+    rSInsert = bitfieldInsert(si, 0x5A5A5A5A, offset, bits);
+    rUInsert = bitfieldInsert(ui, 0xA5A5A5A5u, offset, bits);
+}

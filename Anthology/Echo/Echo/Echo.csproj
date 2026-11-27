@@ -1,0 +1,33 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+  <PropertyGroup>
+    <TargetFrameworks>$(ProwlTargetFrameworksCompat)</TargetFrameworks>
+    <RootNamespace>Prowl.Echo</RootNamespace>
+    <ImplicitUsings>enable</ImplicitUsings>
+    <Nullable>enable</Nullable>
+
+    <!-- Package metadata -->
+    <PackageId>Prowl.Echo</PackageId>
+    <Title>Prowl.Echo</Title>
+    <Description>A high-performance .NET serializer with source generation. Supports complex object graphs, circular references, polymorphism, collections, and 470+ tests. Serializes to an in-memory graph that can be inspected, modified, and converted to binary or text.</Description>
+    <PackageTags>serialization;serializer;source-generator;high-performance;gamedev;game-engine;prowl;dotnet;csharp;binary-serialization;text-serialization;object-graph</PackageTags>
+    <GenerateDocumentationFile>true</GenerateDocumentationFile>
+    <NoWarn>$(NoWarn);CS1591</NoWarn>
+  </PropertyGroup>
+
+  <!-- 'dynamic' needs Microsoft.CSharp on netstandard2.1; it is in-box on net8+. -->
+  <ItemGroup Condition="'$(TargetFramework)' == 'netstandard2.1'">
+    <PackageReference Include="Microsoft.CSharp" Version="4.7.0" />
+  </ItemGroup>
+
+  <!-- Build the generator first (build-only, not a runtime reference) so its DLL exists to pack below. -->
+  <ItemGroup>
+    <ProjectReference Include="..\Echo.SourceGenerator\Echo.SourceGenerator.csproj" ReferenceOutputAssembly="false" PrivateAssets="all" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <!-- Include the source generator in the NuGet package -->
+    <None Include="..\Echo.SourceGenerator\bin\$(Configuration)\netstandard2.0\Echo.SourceGenerator.dll" Pack="true" PackagePath="analyzers/dotnet/cs" Visible="false" Condition="Exists('..\Echo.SourceGenerator\bin\$(Configuration)\netstandard2.0\Echo.SourceGenerator.dll')" />
+  </ItemGroup>
+
+</Project>

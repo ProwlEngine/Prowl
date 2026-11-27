@@ -1,0 +1,236 @@
+﻿// This file is part of the Prowl Game Engine
+// Licensed under the MIT License. See the LICENSE file in the project root for details.
+
+using System;
+using System.Globalization;
+using System.Runtime.CompilerServices;
+
+namespace Prowl.Vector
+{
+    /// <summary>
+    /// Represents a 3D plane defined by a normal vector and distance from origin.
+    /// The plane equation is: Normal � Point = D
+    /// </summary>
+    public struct Plane : IEquatable<Plane>, IFormattable
+    {
+        /// <summary>The normalized normal vector of the plane.</summary>
+        public Float3 Normal;
+
+        /// <summary>The distance from the origin to the plane along the normal.</summary>
+        public float D;
+
+        /// <summary>
+        /// Initializes a new plane from a normal vector and distance.
+        /// Both the normal and distance will be normalized together to maintain the plane equation.
+        /// If the normal has length L, the resulting plane will have Normal = normal/L and D = d/L.
+        /// </summary>
+        /// <param name="normal">The normal vector (will be normalized).</param>
+        /// <param name="d">The distance from origin (will be scaled by the normalization factor).</param>
+        [MethodImpl(MethodImplOptions.AggressiveInlining)]
+        public Plane(Float3 normal, float d)
+        {
+            float length = Float3.Length(normal);
+            if (length > float.Epsilon)
+            {
+                Normal = normal / length;
+                D = d / length;
+            }
+            else
+            {
+                Normal = Float3.UnitZ;
+                D = 0;
+            }
+        }
+
+        /// <summary>
+        /// Initializes a new plane from three points.
+        /// Points should be in counter-clockwise order for outward-facing normal.
+        /// </summary>
+        /// <param name="point1">First point on the plane.</param>
+        /// <param name="point2">Second point on the plane.</param>
+        /// <param name="point3">Third point on the plane.</param>
+        [MethodImpl(MethodImplOptions.AggressiveInlining)]
+        public Plane(Float3 point1, Float3 point2, Float3 point3)
+        {
+            Float3 edge1 = point2 - point1;
+            Float3 edge2 = point3 - point1;
+            Normal = Float3.Normalize(Float3.Cross(edge1, edge2));
+            D = Float3.Dot(Normal, point1);
+        }
+
+        /// <summary>
+        /// Internal constructor for creating a plane from already-normalized values.
+        /// Bypasses normalization for performance.
+        /// </summary>
+        [MethodImpl(MethodImplOptions.AggressiveInlining)]
+        private Plane(Float3 normalizedNormal, float d, bool skipNormalization)
+        {
+            Normal = normalizedNormal;
+            D = d;
+        }
+
+        /// <summary>
+        /// Initializes a new plane from a normal vector and a point on the plane.
+        /// </summary>
+        /// <param name="normal">The normal vector (will be normalized).</param>
+        /// <param name="pointOnPlane">A point that lies on the plane.</param>
+        [MethodImpl(MethodImplOptions.AggressiveInlining)]
+        public static Plane FromNormalAndPoint(Float3 normal, Float3 pointOnPlane)
+        {
+            Float3 normalizedNormal = Float3.Normalize(normal);
+            return new Plane(normalizedNormal, Float3.Dot(normalizedNormal, pointOnPlane), true);
+        }
+
+        /// <summary>
+        /// Gets the signed distance from a point to this plane.
+        /// Positive if the point is on the side of the normal, negative otherwise.
+        /// </summary>
+        /// <param name="point">The point to test.</param>
+        /// <returns>The signed distance.</returns>
+        [MethodImpl(MethodImplOptions.AggressiveInlining)]
+        public float GetSignedDistanceToPoint(Float3 point)
+        {
+            return Float3.Dot(Normal, point) - D;
+        }
+
+        /// <summary>
+        /// Gets the absolute distance from a point to this plane.
+        /// </summary>
+        /// <param name="point">The point to test.</param>
+        /// <returns>The absolute distance.</returns>
+        [MethodImpl(MethodImplOptions.AggressiveInlining)]
+        public float GetDistanceToPoint(Float3 point)
+        {
+            return Maths.Abs(GetSignedDistanceToPoint(point));
+        }
+
+        /// <summary>
+        /// Projects a point onto this plane.
+        /// </summary>
+        /// <param name="point">The point to project.</param>
+        /// <returns>The closest point on the plane.</returns>
+        [MethodImpl(MethodImplOptions.AggressiveInlining)]
+        public Float3 ClosestPointOnPlane(Float3 point)
+        {
+            float distance = GetSignedDistanceToPoint(point);
+            return point - Normal * distance;
+        }
+
+        /// <summary>
+        /// Determines which side of the plane a point is on.
+        /// </summary>
+        /// <param name="point">The point to test.</param>
+        /// <returns>True if the point is on the positive side (normal side) of the plane.</returns>
+        [MethodImpl(MethodImplOptions.AggressiveInlining)]
+        public bool GetSide(Float3 point)
+        {
+            return GetSignedDistanceToPoint(point) > 0.0;
+        }
+
+        /// <summary>
+        /// Checks if two points are on the same side of the plane.
+        /// </summary>
+        /// <param name="point1">First point.</param>
+        /// <param name="point2">Second point.</param>
+        /// <returns>True if both points are on the same side.</returns>
+        [MethodImpl(MethodImplOptions.AggressiveInlining)]
+        public bool SameSide(Float3 point1, Float3 point2)
+        {
+            float d1 = GetSignedDistanceToPoint(point1);
+            float d2 = GetSignedDistanceToPoint(point2);
+            return (d1 > 0.0) == (d2 > 0.0);
+        }
+
+        /// <summary>
+        /// Flips the plane to face the opposite direction.
+        /// </summary>
+        [MethodImpl(MethodImplOptions.AggressiveInlining)]
+        public void Flip()
+        {
+            Normal = -Normal;
+            D = -D;
+        }
+
+        /// <summary>
+        /// Returns a flipped version of this plane.
+        /// </summary>
+        /// <returns>A plane facing the opposite direction.</returns>
+        [MethodImpl(MethodImplOptions.AggressiveInlining)]
+        public Plane Flipped()
+        {
+            return new Plane(-Normal, -D, true);
+        }
+
+        /// <summary>
+        /// Translates the plane by a given offset.
+        /// </summary>
+        /// <param name="translation">The translation vector.</param>
+        [MethodImpl(MethodImplOptions.AggressiveInlining)]
+        public void Translate(Float3 translation)
+        {
+            D += Float3.Dot(Normal, translation);
+        }
+
+        /// <summary>
+        /// Returns a translated version of this plane.
+        /// </summary>
+        /// <param name="translation">The translation vector.</param>
+        /// <returns>The translated plane.</returns>
+        [MethodImpl(MethodImplOptions.AggressiveInlining)]
+        public Plane Translated(Float3 translation)
+        {
+            return new Plane(Normal, D + Float3.Dot(Normal, translation), true);
+        }
+
+        /// <summary>
+        /// Computes the single point where three planes intersect.
+        /// Returns a point with NaN components if the planes do not meet at a unique point
+        /// (i.e. two or more are parallel, or they share a common line).
+        /// </summary>
+        public static Float3 Intersection(Plane plane1, Plane plane2, Plane plane3)
+        {
+            // Solve [n1;n2;n3] * P = [d1;d2;d3] using Cramer's rule:
+            // P = (d1 (n2 x n3) + d2 (n3 x n1) + d3 (n1 x n2)) / (n1 . (n2 x n3))
+            // Accumulated in double precision to keep near-degenerate brushes stable.
+            Float3 n1 = plane1.Normal, n2 = plane2.Normal, n3 = plane3.Normal;
+
+            Float3 cross23 = Float3.Cross(n2, n3);
+            double denom = (double)n1.X * cross23.X + (double)n1.Y * cross23.Y + (double)n1.Z * cross23.Z;
+
+            if (denom > -1e-9 && denom < 1e-9)
+                return new Float3(float.NaN, float.NaN, float.NaN);
+
+            Float3 cross31 = Float3.Cross(n3, n1);
+            Float3 cross12 = Float3.Cross(n1, n2);
+
+            double x = (double)plane1.D * cross23.X + (double)plane2.D * cross31.X + (double)plane3.D * cross12.X;
+            double y = (double)plane1.D * cross23.Y + (double)plane2.D * cross31.Y + (double)plane3.D * cross12.Y;
+            double z = (double)plane1.D * cross23.Z + (double)plane2.D * cross31.Z + (double)plane3.D * cross12.Z;
+
+            return new Float3((float)(x / denom), (float)(y / denom), (float)(z / denom));
+        }
+
+        // --- IEquatable & IFormattable Implementation ---
+        [MethodImpl(MethodImplOptions.AggressiveInlining)]
+        public bool Equals(Plane other) => Normal.Equals(other.Normal) && D.Equals(other.D);
+
+        [MethodImpl(MethodImplOptions.AggressiveInlining)]
+        public override bool Equals(object? obj) => obj is Plane other && Equals(other);
+
+        [MethodImpl(MethodImplOptions.AggressiveInlining)]
+        public override int GetHashCode() => HashCode.Combine(Normal, D);
+
+        [MethodImpl(MethodImplOptions.AggressiveInlining)]
+        public override string ToString() => ToString(null, CultureInfo.CurrentCulture);
+
+        [MethodImpl(MethodImplOptions.AggressiveInlining)]
+        public string ToString(string? format, IFormatProvider? formatProvider = null)
+        {
+            return string.Format(formatProvider, "PlaneD(Normal: {0}, D: {1})", 
+                Normal.ToString(format, formatProvider), D.ToString(format, formatProvider));
+        }
+
+        public static bool operator ==(Plane left, Plane right) => left.Equals(right);
+        public static bool operator !=(Plane left, Plane right) => !left.Equals(right);
+    }
+}

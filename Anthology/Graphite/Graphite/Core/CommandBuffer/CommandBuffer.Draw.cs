@@ -1,0 +1,302 @@
+namespace Prowl.Graphite;
+
+public abstract partial class CommandBuffer
+{
+    /// <summary>Draws with current bound state, no index buffer.</summary>
+    /// <param name="vertexCount">Vertex count.</param>
+    public void Draw(uint vertexCount) => Draw(vertexCount, 1, 0, 0);
+
+    /// <summary>Draws with current bound state, no index buffer.</summary>
+    /// <param name="vertexCount">Vertex count.</param>
+    /// <param name="instanceCount">Instance count.</param>
+    /// <param name="vertexStart">First vertex.</param>
+    /// <param name="instanceStart">First instance.</param>
+    public void Draw(uint vertexCount, uint instanceCount, uint vertexStart, uint instanceStart)
+    {
+        Draw_CheckBoundState();
+        ReportGraphicsState();
+        DrawCore(vertexCount, instanceCount, vertexStart, instanceStart);
+        PassSink?.Draw(vertexCount, instanceCount, vertexStart, instanceStart);
+
+        _statDraws++;
+    }
+
+    private protected abstract void DrawCore(uint vertexCount, uint instanceCount, uint vertexStart, uint instanceStart);
+
+    /// <summary>Draws indexed primitives with current bound state.</summary>
+    public void DrawIndexed() => DrawIndexed(1, 0, 0, 0);
+
+    /// <summary>Draws every index of the vertex source's index buffer with current bound state.</summary>
+    /// <param name="instanceCount">Instance count.</param>
+    /// <param name="indexStart">Indices to skip in index buffer.</param>
+    /// <param name="vertexOffset">Added to each index read.</param>
+    /// <param name="instanceStart">First instance.</param>
+    public void DrawIndexed(uint instanceCount, uint indexStart, int vertexOffset, uint instanceStart)
+    {
+        uint indexCount = 0;
+        _currentVertexSource?.TryGetIndexBuffer(out _, out _, out indexCount);
+        DrawIndexed(indexCount, instanceCount, indexStart, vertexOffset, instanceStart);
+    }
+
+    /// <summary>Draws a range of the vertex source's index buffer with current bound state.</summary>
+    /// <param name="indexCount">Indices to draw.</param>
+    /// <param name="instanceCount">Instance count.</param>
+    /// <param name="indexStart">Indices to skip in index buffer.</param>
+    /// <param name="vertexOffset">Added to each index read.</param>
+    /// <param name="instanceStart">First instance.</param>
+    public void DrawIndexed(uint indexCount, uint instanceCount, uint indexStart, int vertexOffset, uint instanceStart)
+    {
+        DrawIndexed_CheckIndexBuffer(indexCount, indexStart);
+        Draw_CheckBoundState();
+
+        ReportGraphicsState();
+        DrawIndexedCore(indexCount, instanceCount, indexStart, vertexOffset, instanceStart);
+        PassSink?.DrawIndexed(indexCount, instanceCount, indexStart, vertexOffset, instanceStart);
+
+        _statDraws++;
+    }
+
+    private void Draw_CheckBoundState()
+    {
+        if (_shaderProgram == null)
+        {
+            throw new RenderException($"A graphics GraphicsProgram must be set in order to issue draw commands.");
+        }
+        if (_framebuffer == null)
+        {
+            throw new RenderException($"A {nameof(Framebuffer)} must be set in order to issue draw commands.");
+        }
+        if (_currentVertexSource == null)
+        {
+            throw new RenderException(
+                "An IVertexSource must be set via SetVertexSource before issuing draw commands. " +
+                "Bind an empty IVertexSource implementation if no vertex data is required.");
+        }
+    }
+
+    private void Dispatch_CheckBoundState()
+    {
+        if (_computeProgram == null)
+        {
+            throw new RenderException("A ComputeProgram must be set via SetComputeShader in order to issue dispatch commands.");
+        }
+    }
+
+    private protected static void DrawIndexed_CheckIndexBufferResolved(bool resolved)
+    {
+        if (!resolved)
+        {
+            throw new RenderException(
+                "DrawIndexed/DrawIndexedIndirect requires the bound IVertexSource to supply an index buffer, " +
+                "but TryGetIndexBuffer returned false.");
+        }
+    }
+
+    private void DrawIndexed_CheckIndexBuffer(uint indexCount, uint indexStart)
+    {
+        if (_currentVertexSource == null)
+        {
+            return;
+        }
+        if (!_currentVertexSource.TryGetIndexBuffer(out DeviceBuffer ib, out IndexFormat fmt, out _))
+        {
+            throw new RenderException(
+                "DrawIndexed/DrawIndexedIndirect requires the bound IVertexSource to supply an index buffer, " +
+                "but TryGetIndexBuffer returned false.");
+        }
+
+        uint indexFormatSize = fmt == IndexFormat.UInt16 ? 2u : 4u;
+        ulong bytesNeeded = ((ulong)indexStart + indexCount) * indexFormatSize;
+        if (ib.SizeInBytes < bytesNeeded)
+        {
+            throw new RenderException(
+                $"The active index buffer does not contain enough data to satisfy the given draw command. {bytesNeeded} bytes are needed, but the buffer only contains {ib.SizeInBytes}.");
+        }
+    }
+
+    private void DrawIndexedIndirect_CheckIndexBuffer()
+    {
+        if (_currentVertexSource != null
+            && !_currentVertexSource.TryGetIndexBuffer(out _, out _, out _))
+        {
+            throw new RenderException(
+                "DrawIndexed/DrawIndexedIndirect requires the bound IVertexSource to supply an index buffer, " +
+                "but TryGetIndexBuffer returned false.");
+        }
+    }
+
+    private protected abstract void DrawIndexedCore(uint indexCount, uint instanceCount, uint indexStart, int vertexOffset, uint instanceStart);
+
+    /// <summary>Issues indirect draws from buffer. Data must match IndirectDrawArguments layout.</summary>
+    /// <param name="indirectBuffer">Buffer to read. Needs IndirectBuffer usage flag.</param>
+    /// <param name="offset">Byte offset to start reading. Multiple of 4.</param>
+    /// <param name="drawCount">Draw commands to issue.</param>
+    /// <param name="stride">Byte stride between commands. Multiple of 4, bigger than IndirectDrawArguments.</param>
+    public unsafe void DrawIndirect(DeviceBuffer indirectBuffer, uint offset, uint drawCount, uint stride)
+    {
+        DrawIndirect_CheckBuffer(indirectBuffer);
+        DrawIndirect_CheckOffset(offset);
+        DrawIndirect_CheckStride(stride, sizeof(IndirectDrawArguments));
+        DrawIndirect_CheckDrawCount(drawCount);
+        Draw_CheckBoundState();
+
+        ReportGraphicsState();
+        TrackBuffer(indirectBuffer);
+        DrawIndirectCore(indirectBuffer, offset, drawCount, stride);
+        PassSink?.DrawIndirect(indirectBuffer.CurrentVersion, offset, drawCount, stride);
+
+        _statIndirectDraws++;
+    }
+
+
+    /// <summary>Backend indirect draw.</summary>
+    /// <param name="indirectBuffer">Indirect buffer.</param>
+    /// <param name="offset">Byte offset.</param>
+    /// <param name="drawCount">Draw count.</param>
+    /// <param name="stride">Byte stride.</param>
+    private protected abstract void DrawIndirectCore(DeviceBuffer indirectBuffer, uint offset, uint drawCount, uint stride);
+
+    /// <summary>Issues indirect indexed draws from buffer. Data must match IndirectDrawIndexedArguments layout.</summary>
+    /// <param name="indirectBuffer">Buffer to read. Needs IndirectBuffer usage flag.</param>
+    /// <param name="offset">Byte offset to start reading. Multiple of 4.</param>
+    /// <param name="drawCount">Draw commands to issue.</param>
+    /// <param name="stride">Byte stride between commands. Multiple of 4, bigger than IndirectDrawIndexedArguments.</param>
+    public unsafe void DrawIndexedIndirect(DeviceBuffer indirectBuffer, uint offset, uint drawCount, uint stride)
+    {
+        DrawIndirect_CheckBuffer(indirectBuffer);
+        DrawIndirect_CheckOffset(offset);
+        DrawIndirect_CheckStride(stride, sizeof(IndirectDrawIndexedArguments));
+        DrawIndirect_CheckDrawCount(drawCount);
+        DrawIndexedIndirect_CheckIndexBuffer();
+        Draw_CheckBoundState();
+
+        ReportGraphicsState();
+        TrackBuffer(indirectBuffer);
+        DrawIndexedIndirectCore(indirectBuffer, offset, drawCount, stride);
+        PassSink?.DrawIndexedIndirect(indirectBuffer.CurrentVersion, offset, drawCount, stride);
+
+        _statIndirectDraws++;
+    }
+
+
+    /// <summary>Backend indirect indexed draw.</summary>
+    /// <param name="indirectBuffer">Indirect buffer.</param>
+    /// <param name="offset">Byte offset.</param>
+    /// <param name="drawCount">Draw count.</param>
+    /// <param name="stride">Byte stride.</param>
+    private protected abstract void DrawIndexedIndirectCore(DeviceBuffer indirectBuffer, uint offset, uint drawCount, uint stride);
+
+    /// <summary>Issues indirect draws whose count the GPU reads from a buffer, at most maxDrawCount. Needs GraphicsDeviceFeatures.DrawIndirectCount.</summary>
+    /// <param name="indirectBuffer">Buffer of IndirectDrawArguments. Needs IndirectBuffer usage flag.</param>
+    /// <param name="offset">Byte offset of the first command. Multiple of 4.</param>
+    /// <param name="countBuffer">Buffer holding the draw count as a uint. Needs IndirectBuffer usage flag.</param>
+    /// <param name="countOffset">Byte offset of the count. Multiple of 4.</param>
+    /// <param name="maxDrawCount">Upper bound on the draws issued.</param>
+    /// <param name="stride">Byte stride between commands. Multiple of 4, bigger than IndirectDrawArguments.</param>
+    public unsafe void DrawIndirectCount(DeviceBuffer indirectBuffer, uint offset, DeviceBuffer countBuffer, uint countOffset, uint maxDrawCount, uint stride)
+    {
+        DrawIndirectCount_CheckSupported();
+        DrawIndirect_CheckBuffer(indirectBuffer);
+        DrawIndirect_CheckBuffer(countBuffer);
+        DrawIndirect_CheckOffset(offset);
+        DrawIndirect_CheckOffset(countOffset);
+        DrawIndirect_CheckStride(stride, sizeof(IndirectDrawArguments));
+        Draw_CheckBoundState();
+
+        ReportGraphicsState();
+        TrackBuffer(indirectBuffer);
+        TrackBuffer(countBuffer);
+        DrawIndirectCountCore(indirectBuffer, offset, countBuffer, countOffset, maxDrawCount, stride);
+        PassSink?.DrawIndirectCount(indirectBuffer.CurrentVersion, offset, countBuffer.CurrentVersion, countOffset, maxDrawCount, stride);
+
+        _statIndirectDraws++;
+    }
+
+    private protected abstract void DrawIndirectCountCore(DeviceBuffer indirectBuffer, uint offset, DeviceBuffer countBuffer, uint countOffset, uint maxDrawCount, uint stride);
+
+    /// <summary>Issues indirect indexed draws whose count the GPU reads from a buffer, at most maxDrawCount. Needs GraphicsDeviceFeatures.DrawIndirectCount.</summary>
+    /// <param name="indirectBuffer">Buffer of IndirectDrawIndexedArguments. Needs IndirectBuffer usage flag.</param>
+    /// <param name="offset">Byte offset of the first command. Multiple of 4.</param>
+    /// <param name="countBuffer">Buffer holding the draw count as a uint. Needs IndirectBuffer usage flag.</param>
+    /// <param name="countOffset">Byte offset of the count. Multiple of 4.</param>
+    /// <param name="maxDrawCount">Upper bound on the draws issued.</param>
+    /// <param name="stride">Byte stride between commands. Multiple of 4, bigger than IndirectDrawIndexedArguments.</param>
+    public unsafe void DrawIndexedIndirectCount(DeviceBuffer indirectBuffer, uint offset, DeviceBuffer countBuffer, uint countOffset, uint maxDrawCount, uint stride)
+    {
+        DrawIndirectCount_CheckSupported();
+        DrawIndirect_CheckBuffer(indirectBuffer);
+        DrawIndirect_CheckBuffer(countBuffer);
+        DrawIndirect_CheckOffset(offset);
+        DrawIndirect_CheckOffset(countOffset);
+        DrawIndirect_CheckStride(stride, sizeof(IndirectDrawIndexedArguments));
+        DrawIndexedIndirect_CheckIndexBuffer();
+        Draw_CheckBoundState();
+
+        ReportGraphicsState();
+        TrackBuffer(indirectBuffer);
+        TrackBuffer(countBuffer);
+        DrawIndexedIndirectCountCore(indirectBuffer, offset, countBuffer, countOffset, maxDrawCount, stride);
+        PassSink?.DrawIndexedIndirectCount(indirectBuffer.CurrentVersion, offset, countBuffer.CurrentVersion, countOffset, maxDrawCount, stride);
+
+        _statIndirectDraws++;
+    }
+
+    private protected abstract void DrawIndexedIndirectCountCore(DeviceBuffer indirectBuffer, uint offset, DeviceBuffer countBuffer, uint countOffset, uint maxDrawCount, uint stride);
+
+    private void DrawIndirectCount_CheckSupported()
+    {
+        if (!_features.DrawIndirectCount)
+            throw new RenderException("DrawIndirectCount and DrawIndexedIndirectCount need a device with GraphicsDeviceFeatures.DrawIndirectCount.");
+    }
+
+    /// <summary>Dispatches compute with current bound state.</summary>
+    /// <param name="groupCountX">Thread group count X.</param>
+    /// <param name="groupCountY">Thread group count Y.</param>
+    /// <param name="groupCountZ">Thread group count Z.</param>
+    public void Dispatch(uint groupCountX, uint groupCountY, uint groupCountZ)
+    {
+        Dispatch_CheckBoundState();
+        ReportGraphicsState();
+        DispatchCore(groupCountX, groupCountY, groupCountZ);
+        PassSink?.Dispatch(groupCountX, groupCountY, groupCountZ);
+
+        _statDispatches++;
+    }
+
+    private protected abstract void DispatchCore(uint groupCountX, uint groupCountY, uint groupCountZ);
+
+    /// <summary>
+    /// Makes earlier dispatches' writes visible to later dispatches of the same pass, including as indirect arguments,
+    /// for compute work that builds on itself inside one pass. The render graph orders passes, this orders dispatches within one.
+    /// </summary>
+    public void ComputeBarrier()
+    {
+        ComputeBarrierCore();
+        PassSink?.ComputeBarrier();
+        AddBarrierStats(1);
+    }
+
+    private protected abstract void ComputeBarrierCore();
+
+    /// <summary>Issues indirect compute dispatch from buffer. Data must match IndirectDispatchArguments layout.</summary>
+    /// <param name="indirectBuffer">Buffer to read. Needs IndirectBuffer usage flag.</param>
+    /// <param name="offset">Byte offset to start reading. Multiple of 4.</param>
+    public void DispatchIndirect(DeviceBuffer indirectBuffer, uint offset)
+    {
+        DrawIndirect_CheckBuffer(indirectBuffer);
+        DrawIndirect_CheckOffset(offset);
+        Dispatch_CheckBoundState();
+        ReportGraphicsState();
+        TrackBuffer(indirectBuffer);
+        DispatchIndirectCore(indirectBuffer, offset);
+        PassSink?.DispatchIndirect(indirectBuffer.CurrentVersion, offset);
+
+        _statDispatches++;
+    }
+
+
+    /// <summary>Backend indirect dispatch.</summary>
+    /// <param name="indirectBuffer">Indirect buffer.</param>
+    /// <param name="offset">Byte offset.</param>
+    private protected abstract void DispatchIndirectCore(DeviceBuffer indirectBuffer, uint offset);
+}

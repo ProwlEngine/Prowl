@@ -1,0 +1,22 @@
+#version 460 core
+
+// At SPIR-V 1.3+ an SSBO uses the native StorageBuffer storage class + Block decoration, rather than
+// the 1.0 idiom of Uniform storage + BufferBlock. This is the second pervasive version difference.
+
+layout(local_size_x = 64) in;
+
+layout(std430, set = 0, binding = 0) readonly buffer Input
+{
+    float inData[];
+};
+
+layout(std430, set = 0, binding = 1) buffer Output
+{
+    float outData[];
+};
+
+void main()
+{
+    uint i = gl_GlobalInvocationID.x;
+    outData[i] = inData[i] * 2.0 + 1.0;
+}

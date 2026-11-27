@@ -1,0 +1,8 @@
+#version 460
+#extension GL_NV_ray_tracing : require
+hitAttributeNV vec2 attribs;
+void main()
+{
+    attribs = vec2(0.25, 0.75);
+    reportIntersectionNV(gl_RayTmaxNV * 0.5, 0u);
+}

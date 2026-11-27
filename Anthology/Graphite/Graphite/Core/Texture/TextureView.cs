@@ -1,0 +1,48 @@
+namespace Prowl.Graphite;
+
+/// <summary>
+/// Shader-bindable sampled view into a texture.
+/// </summary>
+public abstract class TextureView : GraphicsResource
+{
+    /// <summary>
+    /// Texture being sampled.
+    /// </summary>
+    public Texture Target { get; }
+    /// <summary>
+    /// First visible mip.
+    /// </summary>
+    public uint BaseMipLevel { get; }
+    /// <summary>
+    /// Visible mip count.
+    /// </summary>
+    public uint MipLevels { get; }
+    /// <summary>
+    /// First visible layer.
+    /// </summary>
+    public uint BaseArrayLayer { get; }
+    /// <summary>
+    /// Visible layer count. For cube textures, the number of cubes.
+    /// </summary>
+    public uint ArrayLayers { get; }
+    /// <summary>
+    /// Read format. Can differ from texture's real format, same size only.
+    /// </summary>
+    public PixelFormat Format { get; }
+
+    /// <summary>
+    /// Whether a 2D texture is viewed as an array even with one layer.
+    /// </summary>
+    public bool Arrayed { get; }
+
+    internal TextureView(in TextureViewDescription description)
+    {
+        Target = description.Target;
+        BaseMipLevel = description.BaseMipLevel;
+        MipLevels = description.MipLevels;
+        BaseArrayLayer = description.BaseArrayLayer;
+        ArrayLayers = description.ArrayLayers;
+        Format = description.Format ?? description.Target.Format;
+        Arrayed = description.Arrayed;
+    }
+}

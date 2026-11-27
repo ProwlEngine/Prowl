@@ -1,0 +1,7 @@
+<shader>
+ERROR: <shader>:4: 'imageAtomicAdd' : only supported on image with format r32i or r32ui 
+ERROR: <shader>:4: '' : compilation terminated 
+ERROR: 2 compilation errors.  No code generated.
+
+
+SPIR-V is not generated for failed compile or link

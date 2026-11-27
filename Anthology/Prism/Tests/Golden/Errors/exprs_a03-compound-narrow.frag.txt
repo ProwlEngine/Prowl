@@ -1,0 +1,7 @@
+<shader>
+ERROR: <shader>:5: 'assign' :  cannot convert from ' const float' to ' temp highp int'
+ERROR: <shader>:5: '' : compilation terminated 
+ERROR: 2 compilation errors.  No code generated.
+
+
+SPIR-V is not generated for failed compile or link

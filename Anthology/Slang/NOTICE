@@ -1,0 +1,7 @@
+This repository includes software from the Slang shader compiler.
+
+The following third-party component is used under the following license:
+
+- Library Name: slang
+- Source: https://github.com/shader-slang/slang
+- License: Apache Version 2.0 with LLVM Exception license (https://github.com/shader-slang/slang/blob/master/LICENSE)

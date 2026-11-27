@@ -1,0 +1,7 @@
+<shader>
+ERROR: <shader>:6: '+' :  wrong operand types: no operation '+' exists that takes a left-hand operand of type ' temp highp 3X3 matrix of float' and a right operand of type ' temp highp 4X4 matrix of float' (or there is no acceptable conversion)
+ERROR: <shader>:6: '=' :  cannot convert from ' temp highp 3X3 matrix of float' to ' temp highp 4X4 matrix of float'
+ERROR: <shader>:6: '' : compilation terminated 
+ERROR: 3 compilation errors.  No code generated.
+
+

@@ -1,0 +1,9 @@
+#version 450
+layout(local_size_x=1) in;
+layout(std430,set=0,binding=0) buffer B { double o; };
+void main() {
+  dvec3 a = dvec3(1.0LF, 2.0LF, 3.0LF);
+  dmat3 m = dmat3(1.0LF);
+  double d = dot(a, a) + length(a) + distance(a, a) + determinant(m) + a.x;
+  o = d + sqrt(d) + abs(d) + floor(d) + fma(d, d, d) + inversesqrt(d);
+}

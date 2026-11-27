@@ -1,0 +1,54 @@
+#version 460 core
+
+// Single Cooley-Tukey decimation-in-time butterfly stage for a Tessendorf-style
+// ocean spectrum FFT. The multi-pass ping-pong orchestration (which image is
+// source vs destination each stage, running log2(N) row-direction stages then
+// log2(N) column-direction stages) is a CPU-side/engine concern; this shader
+// only computes one correct stage on whichever images it is bound to.
+
+layout(local_size_x = 64, local_size_y = 1, local_size_z = 1) in;
+
+layout(set = 0, binding = 0, rg32f) uniform readonly image2D uSourceSpectrum;
+layout(set = 0, binding = 1, rg32f) uniform writeonly image2D uDestSpectrum;
+
+// Precomputed per-stage butterfly texture: xy = twiddle factor (cos, sin),
+// z = partner texel index along the active axis, w = reserved/unused.
+layout(set = 0, binding = 2, rgba32f) uniform readonly image2D uTwiddleFactors;
+
+layout(push_constant) uniform ButterflyPushConstants
+{
+    int stageIndex;        // current butterfly stage, 0 .. log2(N) - 1
+    int directionVertical; // 0 = horizontal (row) pass, 1 = vertical (column) pass
+    int textureSize;       // N, resolution of the square spectrum textures
+} uPush;
+
+vec2 complexMul(vec2 a, vec2 b)
+{
+    return vec2(a.x * b.x - a.y * b.y, a.x * b.y + a.y * b.x);
+}
+
+void main()
+{
+    ivec2 coord = ivec2(gl_GlobalInvocationID.xy);
+    if (coord.x >= uPush.textureSize || coord.y >= uPush.textureSize)
+    {
+        return;
+    }
+
+    int texelIndex1D = (uPush.directionVertical != 0) ? coord.y : coord.x;
+
+    vec4 twiddleTexel = imageLoad(uTwiddleFactors, ivec2(uPush.stageIndex, texelIndex1D));
+    vec2 twiddle = twiddleTexel.xy;
+    int partnerIndex1D = int(twiddleTexel.z + 0.5);
+
+    ivec2 partnerCoord = (uPush.directionVertical != 0)
+        ? ivec2(coord.x, partnerIndex1D)
+        : ivec2(partnerIndex1D, coord.y);
+
+    vec2 a = imageLoad(uSourceSpectrum, coord).xy;
+    vec2 b = imageLoad(uSourceSpectrum, partnerCoord).xy;
+
+    vec2 result = a + complexMul(twiddle, b);
+
+    imageStore(uDestSpectrum, coord, vec4(result, 0.0, 0.0));
+}

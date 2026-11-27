@@ -1,0 +1,5 @@
+#version 450
+layout(local_size_x=1) in;
+layout(std430,set=0,binding=0) buffer B { float o; int k; vec4 v; mat4 m; };
+struct In { vec2 p; }; struct Out { In i; float t; };
+void main(){ Out x = { { vec2(1.0,2.0) }, 3.0 }; o = x.i.p.x + x.t; }

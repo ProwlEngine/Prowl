@@ -1,0 +1,13 @@
+#version 450
+#extension GL_EXT_shader_16bit_storage : require
+#extension GL_EXT_shader_explicit_arithmetic_types_float16 : require
+layout(local_size_x=1) in;
+layout(std430,set=0,binding=0) buffer B {
+  float16_t a;
+  f16vec2 b;
+  f16vec3 c;
+  float d;
+  f16vec4 e[2];
+  float16_t o;
+} s;
+void main() { s.o = s.a + s.b.y + s.c.z + float16_t(s.d) + s.e[1].w; }

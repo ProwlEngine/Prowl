@@ -1,0 +1,11 @@
+#version 460
+#extension GL_EXT_shader_explicit_arithmetic_types_int8 : require
+#extension GL_EXT_shader_8bit_storage : require
+layout(local_size_x = 64) in;
+layout(std430, set = 0, binding = 0) buffer Data { int8_t values[]; };
+void main()
+{
+    uint i = gl_GlobalInvocationID.x;
+    int8_t v = values[i];
+    values[i] = v + int8_t(1);
+}

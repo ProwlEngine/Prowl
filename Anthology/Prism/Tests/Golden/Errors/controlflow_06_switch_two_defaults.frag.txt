@@ -1,0 +1,6 @@
+<shader>
+ERROR: <shader>:14: 'default' : duplicate label 
+ERROR: <shader>:14: '' : compilation terminated 
+ERROR: 2 compilation errors.  No code generated.
+
+

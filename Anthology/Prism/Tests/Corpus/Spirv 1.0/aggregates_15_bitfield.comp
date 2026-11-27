@@ -1,0 +1,20 @@
+#version 460
+
+layout(local_size_x = 64) in;
+
+layout(std430, binding = 0) buffer B {
+    uint inVal;
+    uint outData[];
+} b;
+
+void main() {
+    uint idx = gl_GlobalInvocationID.x;
+    uint v = b.inVal;
+    uint ext = bitfieldExtract(v, 4, 8);
+    uint ins = bitfieldInsert(v, 0xFFu, 2, 4);
+    uint rev = bitfieldReverse(v);
+    int cnt = bitCount(v);
+    int lsb = findLSB(v);
+    int msb = findMSB(v);
+    b.outData[idx] = ext + ins + rev + uint(cnt + lsb + msb);
+}

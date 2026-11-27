@@ -1,0 +1,4 @@
+<shader>
+ERROR: <shader>:7: 'committed' : argument must be compile-time constant 
+ERROR: <shader>:7: '' : compilation terminated 
+ERROR: 2 compilation errors.  No code generated.

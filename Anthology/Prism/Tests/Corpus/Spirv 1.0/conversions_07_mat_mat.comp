@@ -1,0 +1,21 @@
+#version 460
+
+layout(local_size_x = 64) in;
+
+layout(std430, binding = 0) buffer B {
+    mat3 m3a;
+    mat3 m3b;
+    mat4 m4a;
+    mat4 m4b;
+    mat2x3 p;
+    mat3x2 q;
+    float outv[];
+};
+
+void main() {
+    uint idx = gl_GlobalInvocationID.x;
+    mat3 r3 = m3a * m3b;
+    mat4 r4 = m4a * m4b;
+    mat3 r = p * q;
+    outv[idx] = r3[0][0] + r4[1][1] + r[2][2];
+}

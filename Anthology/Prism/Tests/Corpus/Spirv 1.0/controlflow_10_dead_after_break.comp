@@ -1,0 +1,15 @@
+#version 460
+layout(local_size_x = 64) in;
+layout(std430, binding = 0) buffer B { uint data[]; };
+void main() {
+    uint idx = gl_GlobalInvocationID.x;
+    uint sum = 0u;
+    for (uint i = 0u; i < 8u; i++) {
+        if (i == idx) {
+            break;
+            sum += 100u;
+        }
+        sum += i;
+    }
+    data[idx] = sum;
+}

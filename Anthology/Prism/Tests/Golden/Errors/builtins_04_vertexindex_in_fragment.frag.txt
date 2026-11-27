@@ -1,0 +1,6 @@
+<shader>
+ERROR: <shader>:7: 'gl_VertexIndex' : undeclared identifier 
+ERROR: <shader>:7: '' : compilation terminated 
+ERROR: 2 compilation errors.  No code generated.
+
+

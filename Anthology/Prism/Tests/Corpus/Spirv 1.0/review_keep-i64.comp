@@ -1,0 +1,6 @@
+#version 450
+#extension GL_EXT_shader_image_int64 : require
+#extension GL_EXT_shader_explicit_arithmetic_types_int64 : require
+layout(local_size_x=1) in;
+layout(r64ui, binding=0) uniform u64image2D img;
+void main(){ imageAtomicAdd(img, ivec2(0), 1ul); }

@@ -1,0 +1,169 @@
+#version 460 core
+
+// Fine raster pass: one thread per pixel within an 8x8 tile. Dispatched with
+// gl_WorkGroupID.xy equal to the tile coordinate. Walks the tile's binned
+// triangle list, does perspective correct edge function rasterization with a
+// top left fill rule, shades, and resolves visibility with an atomicMin
+// depth trick so only the winning thread writes color (no read modify write
+// lock needed).
+
+layout(local_size_x = 8, local_size_y = 8, local_size_z = 1) in;
+
+#define TILE_SIZE 8
+
+struct TriCacheEntry {
+    vec4 screenPos0; // xy = screen pixel pos, z = depth01, w = 1/clipW
+    vec4 screenPos1;
+    vec4 screenPos2;
+    uvec4 vertexIndices; // xyz = original vertex indices, w unused
+};
+
+layout(set = 0, binding = 0, std430) buffer DepthBufferSSBO {
+    uint depth[];
+} depthBuffer;
+
+layout(set = 0, binding = 1, std430) buffer ColorBufferSSBO {
+    uint colorPacked[];
+} colorBuffer;
+
+layout(set = 0, binding = 3, std430) readonly buffer VertexNormalsSSBO {
+    vec4 normals[];
+} vertexNormals;
+
+layout(set = 0, binding = 4, std430) readonly buffer VertexUVsSSBO {
+    vec2 uvs[];
+} vertexUVs;
+
+layout(set = 0, binding = 5, std430) readonly buffer VertexColorsSSBO {
+    vec4 colors[];
+} vertexColors;
+
+layout(set = 0, binding = 7, std430) readonly buffer TileBinCountSSBO {
+    uint counts[];
+} tileBinCount;
+
+layout(set = 0, binding = 8, std430) readonly buffer TileBinIndicesSSBO {
+    uint triIndex[];
+} tileBinIndices;
+
+layout(set = 0, binding = 9, std430) readonly buffer TriangleCacheSSBO {
+    TriCacheEntry entries[];
+} triangleCache;
+
+layout(set = 0, binding = 10, std140) uniform SceneUniforms {
+    mat4 viewProj;
+    vec4 lightDirWS;
+    vec4 lightColor;
+} scene;
+
+layout(push_constant) uniform FinePushConstants {
+    uint screenWidth;
+    uint screenHeight;
+    uint tileCountX;
+    uint maxTrisPerTile;
+} pc;
+
+float edgeFunction(vec2 a, vec2 b, vec2 c) {
+    return (b.x - a.x) * (c.y - a.y) - (b.y - a.y) * (c.x - a.x);
+}
+
+// Top left fill rule bias: edges that are "top" (horizontal, going right) or
+// "left" (going downward) include pixels exactly on the edge, other edges
+// exclude them via a tiny negative epsilon so shared edges are never double
+// rasterized.
+float topLeftBias(vec2 a, vec2 b) {
+    bool isTopEdge = (a.y == b.y) && (b.x > a.x);
+    bool isLeftEdge = (b.y < a.y);
+    return (isTopEdge || isLeftEdge) ? 0.0 : -1.0e-5;
+}
+
+void main() {
+    uint pixelX = gl_WorkGroupID.x * TILE_SIZE + gl_LocalInvocationID.x;
+    uint pixelY = gl_WorkGroupID.y * TILE_SIZE + gl_LocalInvocationID.y;
+
+    if (pixelX >= pc.screenWidth || pixelY >= pc.screenHeight) {
+        return;
+    }
+
+    uint tileIndex = gl_WorkGroupID.y * pc.tileCountX + gl_WorkGroupID.x;
+    uint pixelIndex = pixelY * pc.screenWidth + pixelX;
+
+    vec2 pixelCenter = vec2(float(pixelX) + 0.5, float(pixelY) + 0.5);
+
+    uint binCount = min(tileBinCount.counts[tileIndex], pc.maxTrisPerTile);
+
+    for (uint i = 0u; i < binCount; i++) {
+        uint triIndex = tileBinIndices.triIndex[tileIndex * pc.maxTrisPerTile + i];
+        TriCacheEntry tri = triangleCache.entries[triIndex];
+
+        vec2 v0 = tri.screenPos0.xy;
+        vec2 v1 = tri.screenPos1.xy;
+        vec2 v2 = tri.screenPos2.xy;
+
+        float area = edgeFunction(v0, v1, v2);
+        if (area <= 0.0) {
+            continue;
+        }
+        float invArea = 1.0 / area;
+
+        float bias0 = topLeftBias(v1, v2);
+        float bias1 = topLeftBias(v2, v0);
+        float bias2 = topLeftBias(v0, v1);
+
+        float e0 = edgeFunction(v1, v2, pixelCenter) + bias0;
+        float e1 = edgeFunction(v2, v0, pixelCenter) + bias1;
+        float e2 = edgeFunction(v0, v1, pixelCenter) + bias2;
+
+        if (e0 < 0.0 || e1 < 0.0 || e2 < 0.0) {
+            continue;
+        }
+
+        float w0 = e0 * invArea;
+        float w1 = e1 * invArea;
+        float w2 = e2 * invArea;
+
+        float depth01 = w0 * tri.screenPos0.z + w1 * tri.screenPos1.z + w2 * tri.screenPos2.z;
+        depth01 = clamp(depth01, 0.0, 1.0);
+
+        uint depthUint = uint(depth01 * 4294967040.0);
+        uint previousDepth = atomicMin(depthBuffer.depth[pixelIndex], depthUint);
+
+        if (depthUint >= previousDepth) {
+            continue;
+        }
+
+        float invW0 = tri.screenPos0.w;
+        float invW1 = tri.screenPos1.w;
+        float invW2 = tri.screenPos2.w;
+
+        float interpInvW = w0 * invW0 + w1 * invW1 + w2 * invW2;
+        float rcpInterpInvW = 1.0 / interpInvW;
+
+        float pc0 = (w0 * invW0) * rcpInterpInvW;
+        float pc1 = (w1 * invW1) * rcpInterpInvW;
+        float pc2 = (w2 * invW2) * rcpInterpInvW;
+
+        uint vi0 = tri.vertexIndices.x;
+        uint vi1 = tri.vertexIndices.y;
+        uint vi2 = tri.vertexIndices.z;
+
+        vec3 normal = normalize(
+            pc0 * vertexNormals.normals[vi0].xyz +
+            pc1 * vertexNormals.normals[vi1].xyz +
+            pc2 * vertexNormals.normals[vi2].xyz);
+
+        vec2 uv = pc0 * vertexUVs.uvs[vi0] + pc1 * vertexUVs.uvs[vi1] + pc2 * vertexUVs.uvs[vi2];
+
+        vec4 baseColor = pc0 * vertexColors.colors[vi0] +
+            pc1 * vertexColors.colors[vi1] +
+            pc2 * vertexColors.colors[vi2];
+
+        float ndotl = max(dot(normal, normalize(-scene.lightDirWS.xyz)), 0.0);
+        vec3 shaded = baseColor.rgb * (scene.lightColor.rgb * ndotl + scene.lightColor.rgb * scene.lightColor.a);
+
+        // uv is available for future texturing but only shading color is
+        // written to the resolve target in this pass.
+        vec4 finalColor = vec4(shaded, baseColor.a);
+        colorBuffer.colorPacked[pixelIndex] = packUnorm4x8(finalColor);
+    }
+}

@@ -1,0 +1,6 @@
+#version 460
+#extension GL_EXT_ray_tracing : require
+#extension GL_EXT_ray_tracing_position_fetch : require
+#extension GL_EXT_ray_cull_mask : require
+layout(location=0) rayPayloadInEXT vec4 p;
+void main(){ int k = int(gl_CullMaskEXT) % 3; mat3x4 w = gl_WorldToObject3x4EXT; p = w[k] + gl_ObjectToWorld3x4EXT[k] + vec4(gl_HitTriangleVertexPositionsEXT[k], float(gl_InstanceID)); }

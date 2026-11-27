@@ -1,0 +1,15 @@
+<Project Sdk="Microsoft.NET.Sdk">
+    <PropertyGroup>
+        <TargetFrameworks>$(ProwlTargetFrameworks)</TargetFrameworks>
+        <PackageId>Prowl.Crumb</PackageId>
+        <Title>Prowl.Crumb</Title>
+        
+        <Description>A lightweight tokenizer for C#.</Description>
+
+        <PackageTags>tokenizer token parser lexer</PackageTags>
+
+        <AutoGenerateBindingRedirects>true</AutoGenerateBindingRedirects>
+        <GenerateDocumentationFile>true</GenerateDocumentationFile>
+        <NoWarn>$(NoWarn);CS1591</NoWarn>
+    </PropertyGroup>
+</Project>

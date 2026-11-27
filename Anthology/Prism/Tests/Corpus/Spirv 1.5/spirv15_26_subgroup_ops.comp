@@ -1,0 +1,6 @@
+#version 450
+#extension GL_KHR_shader_subgroup_ballot : require
+#extension GL_KHR_shader_subgroup_arithmetic : require
+layout(local_size_x = 64) in;
+layout(std430, set = 0, binding = 0) buffer B { uint v[]; } b;
+void main() { uint x = b.v[gl_LocalInvocationIndex]; b.v[gl_LocalInvocationIndex] = subgroupAdd(x) + subgroupBroadcastFirst(x) + subgroupBallotBitCount(subgroupBallot(x > 3u)); }

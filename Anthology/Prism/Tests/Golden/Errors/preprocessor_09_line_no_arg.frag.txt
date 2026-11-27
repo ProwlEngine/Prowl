@@ -1,0 +1,8 @@
+<shader>
+ERROR: <shader>:4: '#line' : must by followed by an integral literal 
+ERROR: <shader>:4: '' : compilation terminated 
+ERROR: 2 compilation errors.  No code generated.
+
+
+ERROR: Linking fragment stage: Missing entry point: Each stage requires one entry point
+

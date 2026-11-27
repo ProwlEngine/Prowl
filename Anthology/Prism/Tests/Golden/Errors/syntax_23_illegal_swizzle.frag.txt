@@ -1,0 +1,6 @@
+<shader>
+ERROR: <shader>:7: 'xq9' : vector swizzle selectors not from the same set 
+ERROR: <shader>:7: '' : compilation terminated 
+ERROR: 2 compilation errors.  No code generated.
+
+

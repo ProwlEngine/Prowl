@@ -1,0 +1,6 @@
+#version 460
+#extension GL_EXT_ray_tracing : require
+hitAttributeEXT vec2 b;
+layout(location=0) rayPayloadInEXT float a;
+layout(binding=0) uniform sampler2D alpha[];
+void main(){ if (texture(alpha[gl_InstanceCustomIndexEXT], b).a < 0.5) ignoreIntersectionEXT; a += 1.0; }

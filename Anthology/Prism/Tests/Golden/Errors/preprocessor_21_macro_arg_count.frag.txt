@@ -1,0 +1,6 @@
+<shader>
+ERROR: <shader>:4: 'macro expansion' : Too few args in Macro M
+ERROR: <shader>:4: '' : compilation terminated 
+ERROR: 2 compilation errors.  No code generated.
+
+

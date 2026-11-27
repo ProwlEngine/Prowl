@@ -1,0 +1,5 @@
+<shader>
+ERROR: <shader>:2: '' :  syntax error, unexpected SEMICOLON, expecting COMMA or COLON
+ERROR: 1 compilation errors.  No code generated.
+
+

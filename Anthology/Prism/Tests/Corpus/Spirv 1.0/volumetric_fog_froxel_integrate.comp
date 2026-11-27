@@ -1,0 +1,62 @@
+#version 460 core
+
+// Froxel integration pass: walks each xy column from near to far, accumulating
+// scattering and transmittance so a lookup at any slice needs no re-walk.
+layout(local_size_x = 8, local_size_y = 8, local_size_z = 1) in;
+
+layout(set = 0, binding = 0, rgba16f) uniform readonly image3D uInScatterExtinction;
+layout(set = 0, binding = 1, rgba16f) uniform writeonly image3D uOutIntegrated;
+
+layout(set = 0, binding = 2) uniform IntegrateParams
+{
+    vec4 nearFarNumSlicesPad; // x = near, y = far, z = numSlices, w unused
+    ivec4 gridSize;           // xyz = froxel grid dimensions, w unused
+} uParams;
+
+void main()
+{
+    ivec2 froxelXY = ivec2(gl_GlobalInvocationID.xy);
+    ivec2 gridSizeXY = uParams.gridSize.xy;
+    if (any(greaterThanEqual(froxelXY, gridSizeXY)))
+    {
+        return;
+    }
+
+    float near = uParams.nearFarNumSlicesPad.x;
+    float far = uParams.nearFarNumSlicesPad.y;
+    int numSlices = int(uParams.nearFarNumSlicesPad.z);
+    const float EPS = 1e-5;
+
+    vec3 accumulatedScattering = vec3(0.0);
+    float transmittance = 1.0;
+    float prevZ = near;
+
+    for (int z = 0; z < numSlices; ++z)
+    {
+        ivec3 coord = ivec3(froxelXY, z);
+        vec4 sliceData = imageLoad(uInScatterExtinction, coord);
+        vec3 sliceScattering = sliceData.rgb;
+        float sliceExtinction = sliceData.a;
+
+        float currentZ = near * pow(far / near, float(z + 1) / float(numSlices));
+        float sliceThickness = max(currentZ - prevZ, 0.0);
+        prevZ = currentZ;
+
+        float sliceTransmittance = exp(-sliceExtinction * sliceThickness);
+
+        vec3 integratedSlice;
+        if (sliceExtinction > EPS)
+        {
+            integratedSlice = sliceScattering * (1.0 - sliceTransmittance) / sliceExtinction;
+        }
+        else
+        {
+            integratedSlice = sliceScattering * sliceThickness;
+        }
+
+        accumulatedScattering += transmittance * integratedSlice;
+        transmittance *= sliceTransmittance;
+
+        imageStore(uOutIntegrated, coord, vec4(accumulatedScattering, transmittance));
+    }
+}

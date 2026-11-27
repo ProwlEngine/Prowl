@@ -1,0 +1,10 @@
+#version 450
+layout(local_size_x=1) in;
+layout(std430,set=0,binding=0) buffer B { float o; int k; };
+#define A 1
+#if defined A && !defined B2
+#define R 1.0
+#else
+#define R 2.0
+#endif
+void main(){ o = R; }

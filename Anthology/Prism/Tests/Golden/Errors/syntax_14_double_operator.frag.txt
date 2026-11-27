@@ -1,0 +1,5 @@
+<shader>
+ERROR: <shader>:6: '' :  syntax error, unexpected STAR
+ERROR: 1 compilation errors.  No code generated.
+
+

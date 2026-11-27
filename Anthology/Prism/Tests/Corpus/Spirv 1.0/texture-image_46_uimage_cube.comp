@@ -1,0 +1,12 @@
+#version 460 core
+
+// uimageCube: unsigned-integer imageLoad/imageStore with an ivec3 coordinate.
+layout(local_size_x = 8, local_size_y = 8) in;
+
+layout(set = 0, binding = 0, r32ui) uniform uimageCube img;
+
+void main() {
+    ivec3 coord = ivec3(gl_GlobalInvocationID.xyz);
+    uvec4 texel = imageLoad(img, coord);
+    imageStore(img, coord, texel + uvec4(1u));
+}

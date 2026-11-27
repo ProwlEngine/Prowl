@@ -1,0 +1,7 @@
+// a compute local size of zero is invalid it must be at least one
+#version 450
+
+layout(local_size_x = 0) in;
+
+void main() {
+}

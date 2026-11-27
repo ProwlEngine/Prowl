@@ -1,0 +1,19 @@
+//spv 1.4
+#version 460
+#extension GL_EXT_ray_query : require
+layout(local_size_x=1) in;
+layout(set=0,binding=0) uniform accelerationStructureEXT tlas;
+layout(std430,set=0,binding=1) buffer B { float o; };
+void main() {
+  rayQueryEXT rq;
+  rayQueryInitializeEXT(rq, tlas, gl_RayFlagsOpaqueEXT, 0xFF, vec3(0.0), 0.001, vec3(0.0,0.0,1.0), 1000.0);
+  float t = 0.0;
+  while (rayQueryProceedEXT(rq)) {
+    if (rayQueryGetIntersectionTypeEXT(rq, false) == gl_RayQueryCandidateIntersectionTriangleEXT) {
+      rayQueryConfirmIntersectionEXT(rq);
+    }
+  }
+  if (rayQueryGetIntersectionTypeEXT(rq, true) != gl_RayQueryCommittedIntersectionNoneEXT)
+    t = rayQueryGetIntersectionTEXT(rq, true);
+  o = t;
+}

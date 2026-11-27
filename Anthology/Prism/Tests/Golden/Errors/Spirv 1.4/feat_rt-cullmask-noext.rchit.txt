@@ -1,0 +1,4 @@
+<shader>
+ERROR: <shader>:5: 'gl_CullMaskEXT' : required extension not requested: GL_EXT_ray_cull_mask
+ERROR: <shader>:5: '' : compilation terminated 
+ERROR: 2 compilation errors.  No code generated.

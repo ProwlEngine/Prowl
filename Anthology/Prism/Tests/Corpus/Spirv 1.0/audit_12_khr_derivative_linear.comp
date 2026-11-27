@@ -1,0 +1,6 @@
+#version 460
+#extension GL_KHR_compute_shader_derivatives : require
+layout(local_size_x=16) in;
+layout(derivative_group_linearKHR) in;
+layout(std430,set=0,binding=0) buffer B { float v[]; };
+void main() { float x = v[gl_LocalInvocationIndex]; v[gl_LocalInvocationIndex] = fwidth(x); }

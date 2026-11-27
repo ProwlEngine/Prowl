@@ -1,0 +1,5 @@
+#version 450
+#extension GL_EXT_shader_8bit_storage : require
+layout(local_size_x=1) in;
+layout(std430, binding=0) buffer B { uint8_t a; int8_t b[4]; u8vec2 c; } b;
+void main(){ b.a = uint8_t(b.b[1]); b.c = u8vec2(b.a); }

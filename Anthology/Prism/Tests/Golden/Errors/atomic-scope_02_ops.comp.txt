@@ -1,0 +1,6 @@
+<shader>
+ERROR: <shader>:12: 'atomicExchange' : Semantics must be gl_SemanticsRelease, gl_SemanticsAcquire, or gl_SemanticsAcquireRelease when used with non-zero storage class semantics 
+ERROR: <shader>:12: '' : compilation terminated 
+ERROR: 2 compilation errors.  No code generated.
+
+

@@ -1,0 +1,10 @@
+<shader>
+ERROR: <shader>:2: 'string' : End of line in string 
+ERROR: <shader>:2: 'string literal' : required extension not requested: Possible extensions include:
+GL_EXT_debug_printf
+GL_EXT_spirv_intrinsics
+GL_EXT_abort
+ERROR: <shader>:2: '' : compilation terminated 
+ERROR: 3 compilation errors.  No code generated.
+
+

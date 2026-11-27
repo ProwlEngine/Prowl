@@ -1,0 +1,4 @@
+#version 460
+#extension GL_EXT_ray_tracing : require
+hitAttributeEXT vec2 h;
+void main(){ h = vec2(float(gl_InstanceID), float(gl_PrimitiveID)); reportIntersectionEXT(0.5, 1u); }

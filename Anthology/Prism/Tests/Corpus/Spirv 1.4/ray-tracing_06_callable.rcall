@@ -1,0 +1,11 @@
+#version 460
+#extension GL_EXT_ray_tracing : require
+
+layout(location = 0) callableDataInEXT vec4 inData;
+layout(location = 1) callableDataEXT vec4 outData;
+
+void main() {
+    outData = inData * 0.5;
+    executeCallableEXT(1u, 1);
+    inData = outData + vec4(0.1, 0.1, 0.1, 0.0);
+}

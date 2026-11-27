@@ -1,0 +1,4 @@
+<shader>
+ERROR: <shader>:6: 'gl_TaskCountNV' : undeclared identifier 
+ERROR: <shader>:6: '' : compilation terminated 
+ERROR: 2 compilation errors.  No code generated.

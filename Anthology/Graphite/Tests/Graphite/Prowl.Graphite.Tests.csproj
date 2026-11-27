@@ -1,0 +1,23 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+    <PropertyGroup>
+        <OutputType>Exe</OutputType>
+        <TargetFramework>$(ProwlTestTargetFramework)</TargetFramework>
+            <AllowUnsafeCode>true</AllowUnsafeCode>
+        <DefineConstants Condition="'$(ExcludeGPU)' != 'true'">$(DefineConstants);TEST_VULKAN</DefineConstants>
+    </PropertyGroup>
+
+    <ItemGroup>
+        <!-- Shared xunit tooling comes from Tests/Directory.Build.props. -->
+        <PackageReference Include="Silk.NET.Windowing" Version="2.23.0" />
+        <ProjectReference Include="..\..\Graphite\Prowl.Graphite.csproj" />
+        <ProjectReference Include="..\..\ShaderDef\Core\Prowl.Graphite.ShaderDef.csproj" />
+        <ProjectReference Include="..\..\ShaderDef\Compiler\Prowl.Graphite.ShaderDef.Compiler.csproj" />
+    </ItemGroup>
+
+    <ItemGroup>
+        <None Remove="Shaders/**/*" />
+        <Content Include="Shaders/**/*" CopyToOutputDirectory="PreserveNewest" />
+    </ItemGroup>
+
+</Project>

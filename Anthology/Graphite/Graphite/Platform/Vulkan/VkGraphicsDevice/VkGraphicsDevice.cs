@@ -1,0 +1,314 @@
+using System;
+using System.Collections.Generic;
+using System.Diagnostics;
+using System.Runtime.InteropServices;
+
+using Silk.NET.Core;
+using Silk.NET.Vulkan;
+using Silk.NET.Vulkan.Extensions.KHR;
+
+using VkApi = Silk.NET.Vulkan.Vk;
+using VkSemaphore = Silk.NET.Vulkan.Semaphore;
+
+namespace Prowl.Graphite.Vk;
+
+internal unsafe partial class VkGraphicsDevice : GraphicsDevice
+{
+    private static byte* Name => CommonStrings.Utf8("Prowl.Graphite-VkGraphicsDevice"u8);
+    private static readonly Lazy<bool> s_isSupported = new(CheckIsSupported, isThreadSafe: true);
+
+    private readonly BackendInfoVulkan _vulkanInfo;
+    private readonly VkSwapchain _mainSwapchain;
+    private readonly VkDescriptorSetCacheRegistry _descriptorSetCaches = new();
+    private VkShaderCache? _shaderCache;
+
+    public VkGraphicsDevice(GraphicsDeviceOptions options, SwapchainDescription? scDesc)
+        : this(options, scDesc, new VulkanDeviceOptions()) { }
+
+    public VkGraphicsDevice(GraphicsDeviceOptions options, SwapchainDescription? scDesc, VulkanDeviceOptions vkOptions)
+    {
+        SwapchainSource? surfaceSource = scDesc?.Source;
+
+        CreateInstance(options.VulkanValidationLayers, vkOptions, surfaceSource);
+
+        SurfaceKHR surface = default;
+        if (surfaceSource != null)
+            surface = surfaceSource.GetSurface(Instance);
+
+        CreatePhysicalDevice(vkOptions.PickPhysicalDevice);
+        CreateLogicalDevice(surface, vkOptions);
+
+        MemoryManager = new VkDeviceMemoryManager(
+            Vk,
+            Device,
+            PhysicalDevice,
+            _physicalDeviceProperties.Limits.BufferImageGranularity);
+
+        Features = new GraphicsDeviceFeatures(
+            geometryShader: _physicalDeviceFeatures.GeometryShader,
+            tessellationShaders: _physicalDeviceFeatures.TessellationShader,
+            drawIndirectBaseInstance: _physicalDeviceFeatures.DrawIndirectFirstInstance,
+            samplerAnisotropy: _physicalDeviceFeatures.SamplerAnisotropy,
+            depthClipDisable: _physicalDeviceFeatures.DepthClamp,
+            independentBlend: _physicalDeviceFeatures.IndependentBlend,
+            commandBufferDebugMarkers: _debugUtilsEnabled,
+            shaderFloat64: _physicalDeviceFeatures.ShaderFloat64,
+            multiDrawIndirect: _physicalDeviceFeatures.MultiDrawIndirect,
+            drawIndirectCount: _enabledVulkan12Features.DrawIndirectCount,
+            descriptorIndexing: _enabledVulkan12Features.RuntimeDescriptorArray,
+            multiview: _enabledVulkan11Features.Multiview,
+            shaderOutputLayer: _enabledVulkan12Features.ShaderOutputLayer,
+            shaderOutputViewportIndex: _enabledVulkan12Features.ShaderOutputViewportIndex,
+            samplerFilterMinmax: _enabledVulkan12Features.SamplerFilterMinmax,
+            textureCompressionBC: _physicalDeviceFeatures.TextureCompressionBC,
+            textureCompressionEtc2: _physicalDeviceFeatures.TextureCompressionEtc2,
+            textureCompressionAstc: _physicalDeviceFeatures.TextureCompressionAstcLdr,
+            fragmentStoresAndAtomics: _physicalDeviceFeatures.FragmentStoresAndAtomics);
+        Limits = CreateLimits();
+
+        ResourceFactory = new VkResourceFactory(this);
+
+        InitializeFrameOptions(options);
+
+        if (scDesc != null)
+        {
+            SwapchainDescription desc = scDesc.Value;
+            _mainSwapchain = new VkSwapchain(this, ref desc, surface);
+        }
+
+        fixed (byte* initialData = options.PipelineCacheData)
+        {
+            PipelineCacheCreateInfo pcCI = new()
+            {
+                SType = StructureType.PipelineCacheCreateInfo,
+                InitialDataSize = (nuint)(options.PipelineCacheData?.Length ?? 0),
+                PInitialData = initialData,
+            };
+            Vk.CreatePipelineCache(Device, in pcCI, null, out DriverPipelineCache).CheckResult();
+        }
+
+        _vulkanInfo = new BackendInfoVulkan(this);
+
+        InitializeSlots();
+        PostDeviceCreated();
+    }
+
+    public override ResourceFactory ResourceFactory { get; }
+
+    private GraphicsDeviceLimits CreateLimits()
+    {
+        PhysicalDeviceLimits l = _physicalDeviceProperties.Limits;
+        PhysicalDeviceVulkan12Properties p = _vulkan12Properties;
+        return new GraphicsDeviceLimits
+        {
+            MaxTextureDimension2D = l.MaxImageDimension2D,
+            MaxVertexOutputComponents = l.MaxVertexOutputComponents,
+            MaxFragmentInputComponents = l.MaxFragmentInputComponents,
+            MaxColorAttachments = l.MaxColorAttachments,
+            MaxBoundDescriptorSets = l.MaxBoundDescriptorSets,
+            PerStage = new DescriptorCounts(l.MaxPerStageDescriptorSamplers, l.MaxPerStageDescriptorUniformBuffers, uint.MaxValue,
+                l.MaxPerStageDescriptorStorageBuffers, l.MaxPerStageDescriptorSampledImages, l.MaxPerStageDescriptorStorageImages, l.MaxPerStageResources),
+            PerStageWithTables = new DescriptorCounts(p.MaxPerStageDescriptorUpdateAfterBindSamplers, p.MaxPerStageDescriptorUpdateAfterBindUniformBuffers, uint.MaxValue,
+                p.MaxPerStageDescriptorUpdateAfterBindStorageBuffers, p.MaxPerStageDescriptorUpdateAfterBindSampledImages, p.MaxPerStageDescriptorUpdateAfterBindStorageImages, p.MaxPerStageUpdateAfterBindResources),
+            PerProgram = new DescriptorCounts(l.MaxDescriptorSetSamplers, l.MaxDescriptorSetUniformBuffers, l.MaxDescriptorSetUniformBuffersDynamic,
+                l.MaxDescriptorSetStorageBuffers, l.MaxDescriptorSetSampledImages, l.MaxDescriptorSetStorageImages, uint.MaxValue),
+            PerProgramWithTables = new DescriptorCounts(p.MaxDescriptorSetUpdateAfterBindSamplers, p.MaxDescriptorSetUpdateAfterBindUniformBuffers, p.MaxDescriptorSetUpdateAfterBindUniformBuffersDynamic,
+                p.MaxDescriptorSetUpdateAfterBindStorageBuffers, p.MaxDescriptorSetUpdateAfterBindSampledImages, p.MaxDescriptorSetUpdateAfterBindStorageImages, uint.MaxValue),
+        };
+    }
+
+    internal void RegisterDescriptorSetCache(VkDescriptorSetCache cache) => _descriptorSetCaches.Register(cache);
+
+    internal void UnregisterDescriptorSetCache(VkDescriptorSetCache cache) => _descriptorSetCaches.Unregister(cache);
+
+    private VkCaptureBackend? _captureBackend;
+
+    internal override ICaptureBackend CaptureBackend
+        => System.Threading.LazyInitializer.EnsureInitialized(ref _captureBackend, () => new VkCaptureBackend(this))!;
+
+    internal override CommandBuffer RentGraphCommandBuffer(ExecutionTask task)
+    {
+        ref SlotState slot = ref _slots[task.RingSlot];
+        lock (slot.Wrappers)
+        {
+            if (slot.WrappersInUse < slot.Wrappers.Count)
+                return slot.Wrappers[slot.WrappersInUse++];
+
+            VkCommandBuffer cb = new(this, slot.Pool);
+            slot.Wrappers.Add(cb);
+            slot.WrappersInUse++;
+            return cb;
+        }
+    }
+
+    /// <summary>Test hook: total distinct graph command buffers ever allocated.</summary>
+    internal int PooledGraphCommandBufferCount
+    {
+        get
+        {
+            int total = 0;
+            foreach (ref SlotState slot in _slots.AsSpan())
+            {
+                lock (slot.Wrappers)
+                    total += slot.Wrappers.Count;
+            }
+            return total;
+        }
+    }
+
+    private protected override void SwapBuffersCore(Swapchain swapchain)
+    {
+        VkSwapchain vkSC = Util.AssertSubtype<Swapchain, VkSwapchain>(swapchain);
+        if (!vkSC.ImageAcquired)
+        {
+            vkSC.AcquireNextImage();
+            return;
+        }
+
+        VkSemaphore presentSemaphore = vkSC.PresentSemaphore;
+        SignalPresentSemaphore(vkSC, presentSemaphore);
+
+        SwapchainKHR deviceSwapchain = vkSC.DeviceSwapchain;
+        uint imageIndex = vkSC.ImageIndex;
+        PresentInfoKHR presentInfo = new(sType: StructureType.PresentInfoKhr)
+        {
+            WaitSemaphoreCount = 1,
+            PWaitSemaphores = &presentSemaphore,
+            SwapchainCount = 1,
+            PSwapchains = &deviceSwapchain,
+            PImageIndices = &imageIndex,
+        };
+
+        object presentLock = vkSC.PresentQueueIndex == GraphicsQueueIndex ? _graphicsQueueLock : vkSC;
+        Result presentResult;
+        lock (presentLock)
+            presentResult = KhrSwapchain.QueuePresent(vkSC.PresentQueue, &presentInfo);
+
+        if (presentResult is not (Result.Success or Result.SuboptimalKhr or Result.ErrorOutOfDateKhr or Result.ErrorSurfaceLostKhr))
+            throw new RenderException($"Could not present the Vulkan swapchain: {presentResult}.");
+
+        vkSC.MarkPresented(presentResult);
+        vkSC.AcquireNextImage();
+    }
+
+    private protected override void WaitForIdleCore()
+    {
+        FlushPendingInitCommands();
+        if (GpuHangCheckEnabled)
+            WaitForSerial(LastSubmitSerial, ulong.MaxValue);
+        lock (_graphicsQueueLock)
+        {
+            Vk.QueueWaitIdle(GraphicsQueue);
+        }
+
+        PollSubmissions();
+        FlushValidationErrors();
+    }
+
+    internal VkShaderCache ShaderCache => System.Threading.LazyInitializer.EnsureInitialized(ref _shaderCache, () => new VkShaderCache(this));
+
+    protected override void PlatformDispose()
+    {
+        DisposeSlots();
+
+        System.Diagnostics.Debug.Assert(_pending.Count == 0);
+
+        _mainSwapchain?.Dispose();
+        DestroyDebugCallback();
+
+        DisposeCommandPools();
+
+        WaitForGraphicsQueueIdle();
+        FlushAllRetired();
+        DestroyQueryPools();
+
+        Vk.DestroyPipelineCache(Device, DriverPipelineCache, null);
+
+        MemoryManager.Dispose();
+
+        Vk.DeviceWaitIdle(Device).CheckResult();
+
+        DestroySerialFences();
+        Vk.DestroySemaphore(Device, _timelineSemaphore, null);
+        Vk.DestroyDevice(Device, null);
+        Vk.DestroyInstance(Instance, null);
+    }
+
+    internal static bool IsSupported()
+    {
+        return s_isSupported.Value;
+    }
+
+    private static bool CheckIsSupported()
+    {
+        using var vk = VkApi.GetApi();
+
+        if (!vk.IsLoaded())
+            return false;
+
+        InstanceCreateInfo instanceCI = new(sType: StructureType.InstanceCreateInfo);
+        ApplicationInfo applicationInfo = new(sType: StructureType.ApplicationInfo);
+        applicationInfo.ApiVersion = new Version32(1, 0, 0);
+        applicationInfo.ApplicationVersion = new Version32(1, 0, 0);
+        applicationInfo.EngineVersion = new Version32(1, 0, 0);
+        applicationInfo.PApplicationName = Name;
+        applicationInfo.PEngineName = Name;
+
+        instanceCI.PApplicationInfo = &applicationInfo;
+
+        Result result = vk.CreateInstance(in instanceCI, null, out Instance testInstance);
+        if (result != Result.Success)
+        {
+            return false;
+        }
+
+        uint physicalDeviceCount = 0;
+        result = vk.EnumeratePhysicalDevices(testInstance, ref physicalDeviceCount, null);
+        if (result != Result.Success || physicalDeviceCount == 0)
+        {
+            vk.DestroyInstance(testInstance, null);
+            return false;
+        }
+
+        vk.DestroyInstance(testInstance, null);
+
+        HashSet<string> instanceExtensions = [.. vk.EnumerateInstanceExtensionProperties((byte*)0)];
+
+        if (!instanceExtensions.Contains(CommonStrings.VK_KHR_SURFACE_EXTENSION_NAME))
+        {
+            return false;
+        }
+        if (RuntimeInformation.IsOSPlatform(OSPlatform.Windows))
+        {
+            return instanceExtensions.Contains(CommonStrings.VK_KHR_WIN32_SURFACE_EXTENSION_NAME);
+        }
+        else if (OperatingSystem.IsAndroid())
+        {
+            return instanceExtensions.Contains(CommonStrings.VK_KHR_ANDROID_SURFACE_EXTENSION_NAME);
+        }
+        else if (RuntimeInformation.IsOSPlatform(OSPlatform.Linux))
+        {
+            if (RuntimeInformation.OSDescription.Contains("Unix")) // Android
+            {
+                return instanceExtensions.Contains(CommonStrings.VK_KHR_ANDROID_SURFACE_EXTENSION_NAME);
+            }
+            else
+            {
+                return instanceExtensions.Contains(CommonStrings.VK_KHR_XLIB_SURFACE_EXTENSION_NAME);
+            }
+        }
+        else if (RuntimeInformation.IsOSPlatform(OSPlatform.OSX))
+        {
+            if (RuntimeInformation.OSDescription.Contains("Darwin")) // macOS
+            {
+                return instanceExtensions.Contains(CommonStrings.VK_MVK_MACOS_SURFACE_EXTENSION_NAME);
+            }
+            else // iOS
+            {
+                return instanceExtensions.Contains(CommonStrings.VK_MVK_IOS_SURFACE_EXTENSION_NAME);
+            }
+        }
+
+        return false;
+    }
+}

@@ -1,0 +1,614 @@
+// This file is part of the Prowl Game Engine
+// Licensed under the MIT License. See the LICENSE file in the project root for details.
+
+using Prowl.Photonic.Integration;
+using Prowl.Photonic.Rasterization;
+using Prowl.Photonic.Raytracing;
+using Prowl.Photonic.Sampling;
+using Prowl.Vector;
+
+namespace Prowl.Photonic;
+
+/// <summary>
+/// A running bake: created by <see cref="LightmapBaker.Start"/>, driven via <see cref="Poll"/> /
+/// <see cref="Wait"/>, terminated via <see cref="Cancel"/>.
+/// </summary>
+public sealed class Job
+{
+    private readonly BakeScene _scene;
+    private readonly LightmapTarget[] _targets;
+    private readonly BakeOptions _options;
+    private readonly System.Threading.CancellationTokenSource _cts = new();
+    private System.Threading.Tasks.Task? _task;
+
+    private volatile string _activity = "Idle";
+    private volatile int _iterationCount;
+
+    /// <summary>
+    /// Number of completed sample-accumulation passes in continuous mode. Increments after each
+    /// iteration; the caller can watch it (e.g. once per render frame) and re-upload the atlas
+    /// when it changes. Always 0 outside of continuous mode.
+    /// </summary>
+    public int IterationCount => _iterationCount;
+
+    // ---- debug viz ---------------------------------------------------------------------------
+    // Caller asks for the rays produced at a specific texel via SetDebugTexel(target, x, y); the
+    // integrator publishes a fresh DebugSegment list per iteration that ReadDebugSegments() returns.
+
+    private volatile int _debugTexelX = -1;
+    private volatile int _debugTexelY = -1;
+    private LightmapTarget? _debugTarget;
+
+    internal int DebugTexelX => _debugTexelX;
+    internal int DebugTexelY => _debugTexelY;
+    internal LightmapTarget? DebugTarget => _debugTarget;
+
+    private System.Collections.Generic.List<DebugSegment> _debugSegments = new();
+    private readonly object _debugLock = new();
+
+    /// <summary>
+    /// Set which texel's rays the integrator should record each iteration. Pass <c>null</c>
+    /// for <paramref name="target"/> (or coordinates outside the target) to disable recording.
+    /// </summary>
+    public void SetDebugTexel(LightmapTarget? target, int x, int y)
+    {
+        _debugTarget = target;
+        _debugTexelX = target is null ? -1 : x;
+        _debugTexelY = target is null ? -1 : y;
+    }
+
+    /// <summary>Returns a snapshot of the segments produced by the most recent recorded path for the debug texel.</summary>
+    public System.Collections.Generic.List<DebugSegment> ReadDebugSegments()
+    {
+        lock (_debugLock) return new System.Collections.Generic.List<DebugSegment>(_debugSegments);
+    }
+
+    internal void PublishDebugSegments(System.Collections.Generic.List<DebugSegment> segs)
+    {
+        lock (_debugLock) _debugSegments = segs;
+    }
+
+    private Rasterization.TargetWorkspace[]? _workspacesPublic;
+
+    /// <summary>
+    /// Read back the integrator's recorded data for one texel of the given target. Returns
+    /// <see cref="TexelDiagnostic.Valid"/> = false until the rasterise phase has completed,
+    /// or if the target wasn't part of this bake.
+    /// </summary>
+    public TexelDiagnostic GetTexelInfo(LightmapTarget target, int x, int y)
+    {
+        var ws = _workspacesPublic;
+        if (ws is null || target is null) return default;
+        int targetIndex = -1;
+        for (int i = 0; i < _targets.Length; i++)
+        {
+            if (object.ReferenceEquals(_targets[i], target)) { targetIndex = i; break; }
+        }
+        if (targetIndex < 0) return default;
+        var w = ws[targetIndex];
+        if (w is null) return default;
+        if (x < 0 || x >= w.Width || y < 0 || y >= w.Height) return default;
+        int idx = y * w.Width + x;
+        var s = w.Samples[idx];
+        return new TexelDiagnostic
+        {
+            Valid = true,
+            Covered = w.Covered[idx],
+            Position = s.Position,
+            Normal = s.Normal,
+            WorldRadius = s.WorldRadius,
+            LightmapValue = new Float3(
+                w.Target.PixelsRGB[idx * 3],
+                w.Target.PixelsRGB[idx * 3 + 1],
+                w.Target.PixelsRGB[idx * 3 + 2]),
+            IndirectSampleCount = w.IndirectSampleCount is null ? 0 : w.IndirectSampleCount[idx],
+        };
+    }
+
+    /// <summary>Current state.</summary>
+    public JobStatus Status { get; private set; } = JobStatus.Pending;
+
+    /// <summary>Exception captured if <see cref="Status"/> is <see cref="JobStatus.Failed"/>.</summary>
+    public System.Exception? Error { get; private set; }
+
+    /// <summary>Free-text description of what the bake is doing right now (texel rasterisation, integration, etc.).</summary>
+    public string Activity => _activity;
+
+    private System.Action<int>? _iterationComplete;
+
+    /// <summary>
+    /// Fires after the worker thread finishes folding a full iteration into the atlas. Argument
+    /// is the iteration count just completed. The callback runs on the worker thread; don't touch
+    /// UI state directly from it without marshalling.
+    /// </summary>
+    public event System.Action<int> OnIterationComplete
+    {
+        add { _iterationComplete += value; }
+        remove { _iterationComplete -= value; }
+    }
+
+    private Job(BakeScene scene, System.Collections.Generic.IReadOnlyList<LightmapTarget> targets, BakeOptions options)
+    {
+        _scene = scene;
+        _targets = new LightmapTarget[targets.Count];
+        for (int i = 0; i < targets.Count; i++) _targets[i] = targets[i];
+        _options = options;
+    }
+
+    /// <summary>Internal entry point used by <see cref="LightmapBaker.Start"/>.</summary>
+    internal static Job Start(BakeScene scene,
+                              System.Collections.Generic.IReadOnlyList<LightmapTarget> targets,
+                              BakeOptions options)
+    {
+        var j = new Job(scene, targets, options);
+        j._task = System.Threading.Tasks.Task.Run(j.Run, j._cts.Token);
+        return j;
+    }
+
+    /// <summary>Returns true while the job is still running.</summary>
+    public bool Poll() => _task is not null && !_task.IsCompleted;
+
+    /// <summary>
+    /// Block until the job ends. If the bake threw, the inner exception is rethrown here
+    /// (rather than wrapped in <see cref="System.AggregateException"/>).
+    /// </summary>
+    public void Wait()
+    {
+        try { _task?.Wait(); }
+        catch (System.AggregateException ae) when (ae.InnerException is not null)
+        {
+            System.Runtime.ExceptionServices.ExceptionDispatchInfo.Capture(ae.InnerException).Throw();
+        }
+    }
+
+    /// <summary>
+    /// Block until <paramref name="iterations"/> additional accumulator iterations have completed
+    /// (or the bake is cancelled / fails). Useful for headless / scripted bakes:
+    /// <c>baker.Start().RunIterations(64); baker.Cancel();</c>.
+    /// </summary>
+    public void RunIterations(int iterations)
+    {
+        if (iterations <= 0) return;
+        int target = _iterationCount + iterations;
+        while (Poll() && _iterationCount < target)
+        {
+            System.Threading.Thread.Sleep(1);
+        }
+    }
+
+    /// <summary>Request cancellation. The job ends as soon as the worker reaches its next cancel-check.</summary>
+    public void Cancel() => _cts.Cancel();
+
+    private Imaging.SeamFixer.Sample[][] _seamSamples = System.Array.Empty<Imaging.SeamFixer.Sample[]>();
+    private Integration.SparseTexelSet?[] _sparse = System.Array.Empty<Integration.SparseTexelSet?>();
+    private Integration.SparseNeighbours?[] _neighbours = System.Array.Empty<Integration.SparseNeighbours?>();
+
+    /// <summary>Per-target sparse sample sets, or null entries when the bake traces every texel. Diagnostics only.</summary>
+    internal Integration.SparseTexelSet?[] SparseSets => _sparse;
+
+    private System.Threading.Tasks.ParallelOptions CreateParallelOptions() => new()
+    {
+        CancellationToken = _cts.Token,
+        MaxDegreeOfParallelism = _options.MaxDegreeOfParallelism > 0
+            ? _options.MaxDegreeOfParallelism
+            : System.Environment.ProcessorCount,
+    };
+
+    /// <summary>
+    /// Walk every seam edge of every instance in atlas pixel space, sampling both of its sides at
+    /// matching points. Built once after rasterisation; the sample pairs are all the seam fixer needs.
+    /// </summary>
+    private Imaging.SeamFixer.Sample[][] BuildSeamSamples(TargetWorkspace[] workspaces, BakeInstance[] instances)
+    {
+        var cache = new System.Collections.Generic.Dictionary<(BakeMesh, string), Rasterization.UvSeamFinder.SeamSegment[]>();
+        var perTarget = new Imaging.SeamFixer.Sample[workspaces.Length][];
+
+        for (int t = 0; t < workspaces.Length; t++)
+        {
+            var ws = workspaces[t];
+            var samples = new System.Collections.Generic.List<Imaging.SeamFixer.Sample>();
+            for (int i = 0; i < instances.Length; i++)
+            {
+                var inst = instances[i];
+                if (!object.ReferenceEquals(inst.Target, ws.Target) || !inst.ReceivesLighting) continue;
+
+                var key = (inst.Mesh, inst.BakeUVLayer);
+                if (!cache.TryGetValue(key, out var segments))
+                    cache[key] = segments = Rasterization.UvSeamFinder.Find(inst.Mesh, inst.BakeUVLayer);
+
+                foreach (var seg in segments)
+                {
+                    var a0 = ToPixels(seg.A0, inst, ws);
+                    var a1 = ToPixels(seg.A1, inst, ws);
+                    var b0 = ToPixels(seg.B0, inst, ws);
+                    var b1 = ToPixels(seg.B1, inst, ws);
+
+                    float span = System.Math.Max(Float2.Distance(a0, a1), Float2.Distance(b0, b1));
+                    int steps = System.Math.Clamp((int)System.Math.Ceiling(span), 1, 4096);
+                    for (int k = 0; k <= steps; k++)
+                    {
+                        float f = k / (float)steps;
+                        var pa = a0 + (a1 - a0) * f;
+                        var pb = b0 + (b1 - b0) * f;
+                        samples.Add(new Imaging.SeamFixer.Sample { AX = pa.X, AY = pa.Y, BX = pb.X, BY = pb.Y });
+                    }
+                }
+            }
+            perTarget[t] = samples.ToArray();
+        }
+        return perTarget;
+    }
+
+    private static Float2 ToPixels(Float2 uv, BakeInstance inst, TargetWorkspace ws) => new(
+        (uv.X * inst.UVScale.X + inst.UVOffset.X) * ws.Width,
+        (uv.Y * inst.UVScale.Y + inst.UVOffset.Y) * ws.Height);
+
+    private void StitchSeams(TargetWorkspace ws, int targetIndex)
+    {
+        if (!_options.FixSeams || targetIndex >= _seamSamples.Length) return;
+        var samples = _seamSamples[targetIndex];
+        if (samples is null) return;
+        // Four passes at half strength converges without smearing the correction into the chart.
+        Imaging.SeamFixer.Run(ws.Working(), ws.Covered, ws.Width, ws.Height,
+            samples, passes: 4, strength: 0.5f, ws.ScratchRGB());
+    }
+
+    private void Run()
+    {
+        try
+        {
+            _activity = "Build BVH";
+            // Collect all instances from all targets so the TLAS sees every potential occluder.
+            // This array is canonical: hit.InstanceIndex indexes into it.
+            var allInstances = new System.Collections.Generic.List<BakeInstance>();
+            for (int t = 0; t < _targets.Length; t++)
+                allInstances.AddRange(_targets[t].Instances);
+            var instances = allInstances.ToArray();
+
+            _cts.Token.ThrowIfCancellationRequested();
+
+            // Build the merged world-space BLAS + pre-resolved materials (shared with BakeProbes).
+            var accel = Integration.BakeAcceleration.Build(_scene, instances);
+
+            // Anything the caller left automatic is decided here, from the size of what is actually
+            // being baked: a fixed ray bias or ray length cannot be right at every scale.
+            var bounds = accel.Blas.Mesh.Bounds;
+            _options.Resolve(Float3.Length(bounds.Max - bounds.Min));
+
+            // 3) For each target: rasterize UV1 to texel samples --------------------------------
+            //    Build the workspaces array fully before publishing it. GetTexelInfo (called from
+            //    the render thread) reads _workspacesPublic; publishing after the fill loop avoids
+            //    a brief window where slot[i] is still null.
+            // Stable per-triangle ids across the whole bake, so the smooth/flat decision can be
+            // recorded once per triangle rather than per texel.
+            var triangleBase = new int[instances.Length];
+            int triangleCount = 0;
+            for (int i = 0; i < instances.Length; i++)
+            {
+                triangleBase[i] = triangleCount;
+                var groups = instances[i].Mesh.MaterialGroups;
+                for (int g = 0; g < groups.Count; g++) triangleCount += groups[g].Indices.Length / 3;
+            }
+
+            var workspaces = new TargetWorkspace[_targets.Length];
+            for (int t = 0; t < _targets.Length; t++)
+            {
+                _cts.Token.ThrowIfCancellationRequested();
+                _activity = $"Rasterise UV ({_targets[t].Name})";
+                workspaces[t] = new TargetWorkspace(_targets[t]);
+                RasterizeTarget(workspaces[t], instances, triangleBase);
+            }
+            _workspacesPublic = workspaces;
+
+            _cts.Token.ThrowIfCancellationRequested();
+            _activity = "Refine texel samples";
+            Rasterization.SamplePositionRefiner.Run(workspaces, accel.Blas, _options, triangleCount, CreateParallelOptions());
+
+            if (_options.FixSeams)
+            {
+                _activity = "Find UV seams";
+                _seamSamples = BuildSeamSamples(workspaces, instances);
+            }
+
+            _sparse = new Integration.SparseTexelSet?[workspaces.Length];
+            _neighbours = new Integration.SparseNeighbours?[workspaces.Length];
+            if (_options.SparseStride > 1)
+            {
+                _activity = "Select sample points";
+                for (int t = 0; t < workspaces.Length; t++)
+                    _sparse[t] = Integration.SparseTexelSet.Build(workspaces[t], _options.SparseStride);
+
+                _activity = "Link sample points";
+                var linkOpts = CreateParallelOptions();
+                for (int t = 0; t < workspaces.Length; t++)
+                    _neighbours[t] = Integration.SparseNeighbours.Build(workspaces[t], _sparse[t]!, accel.Blas, _options, linkOpts);
+            }
+
+            for (int t = 0; t < workspaces.Length; t++)
+            {
+                var ws = workspaces[t];
+                var sparse = _sparse[t];
+                var roles = new byte[ws.Width * ws.Height];
+                for (int i = 0; i < roles.Length; i++)
+                {
+                    if (!ws.Covered[i]) continue;
+                    if (sparse is null) { roles[i] = 2; continue; }
+                    if (!sparse.IsPoint[i]) { roles[i] = 1; continue; }
+                    roles[i] = sparse.IsContact[i] ? (byte)3 : (byte)2;
+                }
+                _targets[t].SamplePointMask = roles;
+            }
+
+            for (int t = 0; t < workspaces.Length; t++) ReportChartPadding(workspaces[t]);
+
+            // Publish per-target coverage masks (1 = a triangle covers this texel) for tooling,
+            // runtime seam handling, and re-bakes.
+            for (int t = 0; t < _targets.Length; t++)
+            {
+                var ws = workspaces[t];
+                var mask = new byte[ws.Width * ws.Height];
+                for (int i = 0; i < mask.Length; i++) mask[i] = ws.Covered[i] ? (byte)1 : (byte)0;
+                _targets[t].CoverageMask = mask;
+            }
+
+            // 4) Integrate ----------------------------------------------------------------------
+            //    The bake is always progressive: each iteration accumulates SamplesPerIteration
+            //    indirect samples per texel and updates the atlas. Callers stop the bake via
+            //    Cancel() when they've seen enough iterations.
+            IntegrateContinuous(workspaces, accel);
+            _activity = "Cancelled";
+            Status = JobStatus.Cancelled;
+        }
+        catch (System.OperationCanceledException)
+        {
+            Status = JobStatus.Cancelled;
+            _activity = "Cancelled";
+        }
+        catch (System.Exception ex)
+        {
+            Status = JobStatus.Failed;
+            Error = ex;
+            _activity = $"Failed: {ex.Message}";
+        }
+    }
+
+    /// <summary>
+    /// Continuous / temporal bake: pre-compute deterministic direct lighting once per texel, then
+    /// loop forever folding new indirect samples into a running average until cancelled. After each
+    /// iteration <see cref="LightmapTarget.PixelsRGB"/> reflects <c>direct + indirectSum/count</c>
+    /// for every covered texel, so a viewer that polls <see cref="IterationCount"/> can show a
+    /// live preview converging.
+    /// </summary>
+    private void IntegrateContinuous(TargetWorkspace[] workspaces, Integration.BakeAcceleration accel)
+    {
+        var integrator = new PathIntegrator(_scene, accel.Blas, accel.MergedMats, _options);
+        var instanceMaterials = accel.InstanceMaterials;
+        var parallelOpts = CreateParallelOptions();
+
+        // ---- pre-compute direct lighting once (deterministic with current light types). -------
+        _activity = "Pre-compute direct lighting";
+        for (int ti = 0; ti < workspaces.Length; ti++)
+        {
+            var ws = workspaces[ti];
+            ws.AllocateContinuousBuffers();
+            int W = ws.Width, H = ws.Height;
+            var sparseSet = ti < _sparse.Length ? _sparse[ti] : null;
+            try
+            {
+                System.Threading.Tasks.Parallel.For(0, H, parallelOpts, y =>
+                {
+                    for (int x = 0; x < W; x++)
+                    {
+                        int idx = y * W + x;
+                        if (!ws.Covered[idx]) continue;
+                        if (sparseSet is not null && _options.SparseIncludesDirect && !sparseSet.IsPoint[idx]) continue;
+                        var s = ws.Samples[idx];
+                        var mat = instanceMaterials[s.InstanceIndex][s.MaterialGroupIndex];
+                        Float3 albedo;
+                        Float3 emissive = mat is not null ? mat.Emissive : Float3.Zero;
+                        if (_options.Diagnostics.IgnoreAlbedo)
+                        {
+                            albedo = Float3.One;
+                        }
+                        else
+                        {
+                            albedo = mat is not null ? mat.DiffuseColor : new Float3(0.7f);
+                            if (mat is not null && mat.DiffuseTexture is not null)
+                            {
+                                var samp = mat.DiffuseTexture.SampleLinearRGBA(s.UV0.X, s.UV0.Y);
+                                albedo = albedo * new Float3(samp.X, samp.Y, samp.Z);
+                            }
+                        }
+                        if (mat is not null && mat.EmissiveTexture is not null)
+                        {
+                            var samp = mat.EmissiveTexture.SampleLinearRGBA(s.UV0.X, s.UV0.Y);
+                            emissive = emissive * new Float3(samp.X, samp.Y, samp.Z);
+                        }
+                        // No texel-albedo multiply here: the lightmap stores incoming irradiance;
+                        // the runtime shader multiplies by the texel's diffuse texture.
+                        _ = albedo;
+                        var direct = (_scene.Lights.Count > 0 && _options.IncludeDirectLighting)
+                            ? integrator.ComputeBakedDirectLighting(s.Position, s.Normal)
+                            : Float3.Zero;
+                        ws.DirectCache![idx] = direct + emissive;
+                    }
+                });
+            }
+            catch (System.OperationCanceledException) { throw; }
+        }
+
+        // ---- temporal accumulation loop -------------------------------------------------------
+        int samplesPerIter = System.Math.Max(1, _options.SamplesPerIteration);
+        ulong baseSeed = _options.Seed;
+        int bounces = System.Math.Max(0, _options.Bounces);
+
+        while (!_cts.IsCancellationRequested)
+        {
+            int iter = _iterationCount + 1;
+            _activity = $"Continuous iter {iter} ({samplesPerIter}s x {bounces} bounces)";
+            ulong iterMix = (ulong)iter * 0x6A09E667F3BCC908UL;
+
+            for (int ti = 0; ti < workspaces.Length; ti++)
+            {
+                if (_cts.IsCancellationRequested) break;
+                var ws = workspaces[ti];
+                int W = ws.Width, H = ws.Height;
+                var sums = ws.IndirectSum!;
+                var counts = ws.IndirectSampleCount!;
+                var direct = ws.DirectCache!;
+                var pixels = ws.Working();
+                var sparse = ti < _sparse.Length ? _sparse[ti] : null;
+                // With sparse indirect, the direct term is added back at full resolution after the
+                // reconstruction, so points must not carry it into the interpolation.
+                bool pointsCarryDirect = sparse is null || _options.SparseIncludesDirect;
+
+                void IntegrateTexel(int idx)
+                {
+                    int x = idx % W, y = idx / W;
+                    var s = ws.Samples[idx];
+
+                    // Per-texel-per-iter deterministic seed so paths are reproducible.
+                    ulong seed = ((ulong)x * 0x9E3779B97F4A7C15UL ^ ((ulong)y * 0xC6BC279692B5C323UL))
+                               ^ baseSeed ^ iterMix;
+                    var rng = new Sampling.Sampler(seed);
+
+                    Float3 ind = integrator.IntegrateIndirect(s.Position, s.Normal, Float3.One,
+                                                               samplesPerIter, bounces, ref rng);
+                    if (x == DebugTexelX && y == DebugTexelY && object.ReferenceEquals(_debugTarget, ws.Target))
+                    {
+                        var segs = new System.Collections.Generic.List<DebugSegment>(8);
+                        integrator.RecordDirectShadowRays(s.Position, s.Normal, segs);
+                        var debugRng = new Sampling.Sampler(seed);
+                        integrator.TracePathRecorded(s.Position, s.Normal, Float3.One, bounces, ref debugRng, segs);
+                        PublishDebugSegments(segs);
+                    }
+                    sums[idx] = sums[idx] + ind;
+                    counts[idx] += samplesPerIter;
+
+                    // Refresh the display pixel: direct (cached) + indirect average.
+                    int n = counts[idx];
+                    var avg = n > 0 ? sums[idx] * (1f / n) : Float3.Zero;
+                    var final = pointsCarryDirect ? direct[idx] + avg : avg;
+                    pixels[idx * 3] = final.X;
+                    pixels[idx * 3 + 1] = final.Y;
+                    pixels[idx * 3 + 2] = final.Z;
+                }
+
+                try
+                {
+                    if (sparse is null)
+                    {
+                        System.Threading.Tasks.Parallel.For(0, H, parallelOpts, y =>
+                        {
+                            for (int x = 0; x < W; x++)
+                            {
+                                int idx = y * W + x;
+                                if (ws.Covered[idx]) IntegrateTexel(idx);
+                            }
+                        });
+                    }
+                    else
+                    {
+                        var points = sparse.Points;
+                        System.Threading.Tasks.Parallel.For(0, points.Length, parallelOpts, i => IntegrateTexel(points[i]));
+                        _neighbours[ti]?.Apply(ws, sparse, parallelOpts);
+                        if (!pointsCarryDirect) Integration.SparseTexelSet.AddDirect(ws, direct, parallelOpts);
+                    }
+                }
+                catch (System.OperationCanceledException) { return; }
+            }
+
+            // Stitch UV seams, then dilate into the gutter so chart edges don't bleed black while the
+            // viewer polls. Dilation runs on a fresh COPY of Covered so the bake's own coverage state
+            // stays untouched.
+            for (int ti = 0; ti < workspaces.Length; ti++)
+            {
+                if (_cts.IsCancellationRequested) return;
+                var ws = workspaces[ti];
+                StitchSeams(ws, ti);
+                if (_options.DilatePixels > 0)
+                    Imaging.Dilate.Run(ws.Working(), ws.ScratchCovered(), ws.Width, ws.Height,
+                        _options.DilatePixels, ws.ScratchRGB(), ws.ScratchSnapshot());
+                ws.Publish();
+            }
+
+            // Publish: the viewer polls IterationCount and re-uploads when it changes.
+            _iterationCount = iter;
+            _iterationComplete?.Invoke(iter);
+        }
+    }
+
+
+    /// <summary>
+    /// Warn when charts are packed with no gutter between them. Two charts that touch in the atlas
+    /// share their border texels with bilinear and bicubic taps, and dilation cannot help because
+    /// there is no empty texel to dilate into, so every chart edge picks up lighting from whatever
+    /// unrelated piece of surface was packed next to it.
+    /// </summary>
+    private static void ReportChartPadding(TargetWorkspace ws)
+    {
+        int covered = 0, touching = 0;
+        for (int y = 0; y < ws.Height; y++)
+        for (int x = 0; x < ws.Width; x++)
+        {
+            int idx = y * ws.Width + x;
+            if (!ws.Covered[idx]) continue;
+            covered++;
+
+            var s = ws.Samples[idx];
+            // Eight texel radii is four texels of surface. Ordinary chart seams step across about
+            // one; anything past this is a different part of the model entirely.
+            float reach = s.WorldRadius * 8f;
+            for (int d = 0; d < 4; d++)
+            {
+                int nx = x + (d == 0 ? -1 : d == 1 ? 1 : 0);
+                int ny = y + (d == 2 ? -1 : d == 3 ? 1 : 0);
+                if (nx < 0 || ny < 0 || nx >= ws.Width || ny >= ws.Height) continue;
+                int n = ny * ws.Width + nx;
+                if (!ws.Covered[n]) continue;
+                if (Float3.DistanceSquared(s.Position, ws.Samples[n].Position) <= reach * reach) continue;
+                touching++;
+                break;
+            }
+        }
+
+        if (covered == 0 || touching * 100 < covered) return;
+        LightmapBaker.RaiseWarning(
+            $"{ws.Target.Name}: {touching * 100f / covered:F1}% of texels sit directly against an unrelated chart. " +
+            "The UV layout has charts packed with no gutter between them, so their borders bleed into each other and " +
+            "dilation has nowhere to work. Increase the unwrapper's pack margin, or the atlas padding.");
+    }
+
+    private static void RasterizeTarget(TargetWorkspace ws, BakeInstance[] allInstances, int[] triangleBase)
+    {
+        for (int i = 0; i < allInstances.Length; i++)
+        {
+            var inst = allInstances[i];
+            if (inst.Target != ws.Target) continue;
+            if (!inst.ReceivesLighting) continue;
+            var mesh = inst.Mesh;
+            if (!mesh.UVLayers.TryGetValue(inst.BakeUVLayer, out var bakeUVs)) continue;
+            if (!mesh.UVLayers.TryGetValue("UV0", out var uv0)) uv0 = bakeUVs;
+
+            var positions = mesh.Positions;
+            var normals = mesh.Normals;
+            int triangleId = triangleBase[i];
+            for (int g = 0; g < mesh.MaterialGroups.Count; g++)
+            {
+                var grp = mesh.MaterialGroups[g];
+                var idx = grp.Indices;
+                for (int k = 0; k < idx.Length; k += 3, triangleId++)
+                {
+                    int i0 = idx[k], i1 = idx[k + 1], i2 = idx[k + 2];
+                    ConservativeTexelMapper.MapTriangle(ws, inst, i,
+                        positions[i0], positions[i1], positions[i2],
+                        normals[i0], normals[i1], normals[i2],
+                        bakeUVs[i0], bakeUVs[i1], bakeUVs[i2],
+                        uv0[i0], uv0[i1], uv0[i2],
+                        g, triangleId);
+                }
+            }
+        }
+    }
+
+}

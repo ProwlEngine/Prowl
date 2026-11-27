@@ -1,0 +1,7 @@
+#version 450
+layout(local_size_x=1) in;
+struct S { mat4 m; float f; };
+layout(std140,set=0,binding=0) uniform U1 { layout(row_major) S s; } a;
+layout(std140,set=0,binding=1) uniform U2 { layout(column_major) S s; } b;
+layout(std430,set=0,binding=2) buffer B { float o; };
+void main() { o = a.s.m[0][0] + b.s.m[1][1] + a.s.f; }

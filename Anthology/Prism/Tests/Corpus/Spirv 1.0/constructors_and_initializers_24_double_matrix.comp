@@ -1,0 +1,5 @@
+#version 450
+#extension GL_ARB_gpu_shader_fp64 : require
+layout(local_size_x=1) in;
+layout(std430,set=0,binding=0) buffer B { float o; };
+void main(){ dmat2 a = dmat2(1.0lf,2.0lf,3.0lf,4.0lf); dvec2 b = dvec2(a[0]); o = float(b.y); }

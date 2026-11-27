@@ -1,0 +1,169 @@
+#version 460 core
+
+// Integrates particle physics: gravity, drag, curl noise turbulence,
+// ground plane and bounding sphere collision, and lifetime bookkeeping.
+
+layout(local_size_x = 64, local_size_y = 1, local_size_z = 1) in;
+
+struct Particle
+{
+    vec3 position;
+    float age;
+    vec3 velocity;
+    float lifetime;
+    float size;
+    float rotation;
+    uint seed;
+    float padding0;
+};
+
+layout(std430, set = 0, binding = 0) buffer ParticleBuffer
+{
+    Particle particles[];
+};
+
+layout(std430, set = 0, binding = 1) buffer FreeListBuffer
+{
+    int freeListTop;
+    uint freeList[];
+};
+
+layout(set = 0, binding = 2) uniform CollisionUBO
+{
+    vec4 groundPlane;
+    vec4 obstacleSphere;
+    float restitution;
+    float padding1;
+    float padding2;
+    float padding3;
+} collision;
+
+layout(push_constant) uniform SimulatePushConstants
+{
+    vec3 gravity;
+    float deltaTime;
+    float dragCoefficient;
+    float turbulenceStrength;
+    float turbulenceScale;
+    float simTime;
+    uint maxParticles;
+} pc;
+
+float hash13(vec3 p)
+{
+    p = fract(p * 0.1031);
+    p += dot(p, p.yzx + 33.33);
+    return fract((p.x + p.y) * p.z);
+}
+
+float valueNoise(vec3 p)
+{
+    vec3 i = floor(p);
+    vec3 f = fract(p);
+    f = f * f * (3.0 - 2.0 * f);
+
+    float n000 = hash13(i + vec3(0.0, 0.0, 0.0));
+    float n100 = hash13(i + vec3(1.0, 0.0, 0.0));
+    float n010 = hash13(i + vec3(0.0, 1.0, 0.0));
+    float n110 = hash13(i + vec3(1.0, 1.0, 0.0));
+    float n001 = hash13(i + vec3(0.0, 0.0, 1.0));
+    float n101 = hash13(i + vec3(1.0, 0.0, 1.0));
+    float n011 = hash13(i + vec3(0.0, 1.0, 1.0));
+    float n111 = hash13(i + vec3(1.0, 1.0, 1.0));
+
+    float nx00 = mix(n000, n100, f.x);
+    float nx10 = mix(n010, n110, f.x);
+    float nx01 = mix(n001, n101, f.x);
+    float nx11 = mix(n011, n111, f.x);
+
+    float nxy0 = mix(nx00, nx10, f.y);
+    float nxy1 = mix(nx01, nx11, f.y);
+
+    return mix(nxy0, nxy1, f.z);
+}
+
+// Approximates curl noise by finite-differencing three decorrelated
+// scalar potential fields, then combining the partials as a curl.
+vec3 curlNoise(vec3 p)
+{
+    const float e = 0.1;
+    const float invE2 = 1.0 / (2.0 * e);
+
+    vec3 dx = vec3(e, 0.0, 0.0);
+    vec3 dy = vec3(0.0, e, 0.0);
+    vec3 dz = vec3(0.0, 0.0, e);
+
+    vec3 p0 = p + vec3(123.4, 0.0, 0.0);
+    vec3 p1 = p + vec3(0.0, 456.7, 0.0);
+    vec3 p2 = p + vec3(0.0, 0.0, 789.1);
+
+    float dPsi0_dy = (valueNoise(p0 + dy) - valueNoise(p0 - dy)) * invE2;
+    float dPsi0_dz = (valueNoise(p0 + dz) - valueNoise(p0 - dz)) * invE2;
+
+    float dPsi1_dz = (valueNoise(p1 + dz) - valueNoise(p1 - dz)) * invE2;
+    float dPsi1_dx = (valueNoise(p1 + dx) - valueNoise(p1 - dx)) * invE2;
+
+    float dPsi2_dx = (valueNoise(p2 + dx) - valueNoise(p2 - dx)) * invE2;
+    float dPsi2_dy = (valueNoise(p2 + dy) - valueNoise(p2 - dy)) * invE2;
+
+    return vec3(
+        dPsi2_dy - dPsi1_dz,
+        dPsi0_dz - dPsi2_dx,
+        dPsi1_dx - dPsi0_dy
+    );
+}
+
+void main()
+{
+    uint idx = gl_GlobalInvocationID.x;
+    if (idx >= pc.maxParticles)
+    {
+        return;
+    }
+
+    Particle p = particles[idx];
+
+    // dead sentinel: lifetime <= 0 means the slot is inactive
+    if (p.lifetime <= 0.0)
+    {
+        return;
+    }
+
+    p.velocity += pc.gravity * pc.deltaTime;
+    p.velocity *= exp(-pc.dragCoefficient * pc.deltaTime);
+
+    vec3 noiseSample = p.position * pc.turbulenceScale + vec3(0.0, 0.0, pc.simTime * 0.1);
+    vec3 turbulence = curlNoise(noiseSample);
+    p.velocity += turbulence * pc.turbulenceStrength * pc.deltaTime;
+
+    p.position += p.velocity * pc.deltaTime;
+
+    float planeDist = dot(p.position, collision.groundPlane.xyz) - collision.groundPlane.w;
+    float halfSize = p.size * 0.5;
+    if (planeDist < halfSize)
+    {
+        vec3 n = collision.groundPlane.xyz;
+        p.velocity = reflect(p.velocity, n) * collision.restitution;
+        p.position += n * (halfSize - planeDist);
+    }
+
+    vec3 toParticle = p.position - collision.obstacleSphere.xyz;
+    float sphereDist = length(toParticle);
+    float penetration = (collision.obstacleSphere.w + halfSize) - sphereDist;
+    if (penetration > 0.0 && sphereDist > 0.0001)
+    {
+        vec3 n = toParticle / sphereDist;
+        p.velocity = reflect(p.velocity, n) * collision.restitution;
+        p.position += n * penetration;
+    }
+
+    p.age += pc.deltaTime;
+    if (p.age >= p.lifetime)
+    {
+        p.lifetime = -1.0;
+        int oldTop = atomicAdd(freeListTop, 1);
+        freeList[uint(oldTop)] = idx;
+    }
+
+    particles[idx] = p;
+}

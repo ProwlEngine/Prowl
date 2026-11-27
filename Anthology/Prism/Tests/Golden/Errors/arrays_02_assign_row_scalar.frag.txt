@@ -1,0 +1,6 @@
+<shader>
+ERROR: <shader>:3: 'assign' :  cannot convert from ' const int' to ' temp 3-element array of highp int'
+ERROR: <shader>:3: '' : compilation terminated 
+ERROR: 2 compilation errors.  No code generated.
+
+

@@ -1,0 +1,12 @@
+#version 450
+layout(local_size_x=1) in;
+layout(std430,set=0,binding=0) buffer B {
+  float a;
+  double b;
+  dvec3 c;
+  float d;
+  dmat2 e;
+  dvec4 f[2];
+  double tail[];
+} s;
+void main() { s.a = float(s.b + s.c.x + double(s.d) + s.e[1][1] + s.f[1].w + s.tail[0]); }

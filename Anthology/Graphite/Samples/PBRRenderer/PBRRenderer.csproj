@@ -1,0 +1,24 @@
+<Project Sdk="Microsoft.NET.Sdk">
+    <PropertyGroup>
+        <TargetFramework>$(ProwlSampleTargetFramework)</TargetFramework>
+        <OutputType>Exe</OutputType>
+        <Nullable>enable</Nullable>
+        <AllowUnsafeBlocks>true</AllowUnsafeBlocks>
+    </PropertyGroup>
+
+    <ItemGroup>
+        <ProjectReference Include="../Shared/Shared.csproj" />
+        <ProjectReference Include="../../Rendering.Tools/Prowl.Graphite.Rendering.Tools.csproj" />
+        <ProjectReference Include="../../../Clay/Clay/Clay.csproj" />
+        <ProjectReference Include="../../../Aperture/Aperture/Aperture.csproj" />
+    </ItemGroup>
+
+    <ItemGroup>
+        <InternalsVisibleTo Include="DebuggerViewer" />
+    </ItemGroup>
+
+    <ItemGroup>
+        <None Include="Shaders/**/*" CopyToOutputDirectory="PreserveNewest" />
+        <None Include="Assets/Models/**/*" CopyToOutputDirectory="PreserveNewest" />
+    </ItemGroup>
+</Project>

@@ -1,0 +1,173 @@
+using System;
+using System.Collections.Generic;
+using System.Linq;
+
+using Prowl.Graphite.ShaderDef;
+using Prowl.Graphite.ShaderDef.Compiler;
+using Prowl.Vector;
+
+using Xunit;
+
+namespace Prowl.Graphite.Rendering.Tests;
+
+file sealed class FakeResources : IMaterialResources
+{
+    public uint TextureSlot(Texture? texture, MaterialPropertyType type, string defaultName)
+        => texture != null ? 42u : defaultName == "black" ? 5u : 9u;
+
+    public uint SamplerSlot(SamplerDescription? sampler) => sampler == null ? 0u : 3u;
+}
+
+[Collection("GPU Tests")]
+public sealed class GlobalsTests : IDisposable
+{
+    private readonly GraphicsDevice _device = GraphicsDevice.CreateVulkan(new GraphicsDeviceOptions(true));
+    private readonly RenderStore _store = new();
+    private readonly GlslShaderCompiler _compiler = TestCompiler.Shared;
+    private readonly GlobalRegistry _registry;
+    private readonly Uploader _uploader;
+    private readonly List<RendererError> _reports = new();
+
+    private static readonly GlobalAxis s_fog = GlobalAxis.Define("TEST_FOG", "OFF", "LINEAR", "EXP");
+
+    public GlobalsTests()
+    {
+        InternalShaders.Register();
+        _registry = new GlobalRegistry(_device, _store, new FakeResources()) { Reporter = _reports.Add };
+        _uploader = new Uploader(_device, InternalShaders.Compute(_device, _compiler, "Internal/Scatter.glsl"));
+    }
+
+    public void Dispose()
+    {
+        _uploader.Dispose();
+        _store.Dispose();
+        _device.Dispose();
+    }
+
+    private static float F(uint bits) => BitConverter.UInt32BitsToSingle(bits);
+
+    private uint[] Region(int region) => _registry.ReadRegion(region).ToArray();
+
+    [Fact]
+    public void Offsets_AppendInStd430_AndNeverMove()
+    {
+        _registry.Renderer.SetFloat("_A", 1);
+        _registry.Renderer.SetFloat3("_B", new Float3(1, 2, 3));
+        _registry.Renderer.SetFloat("_C", 2);
+        _registry.Renderer.SetMatrix("_D", Float4x4.Identity);
+        Assert.True(_registry.Declare("_E", MaterialPropertyType.Texture2D, out _, out _));
+
+        Assert.Equal(new uint[] { 0, 4, 7, 8, 24 }, _registry.Properties.Select(p => p.Offset));
+
+        _registry.Renderer.SetFloat("_A", 5);
+        Assert.Equal(0u, _registry.Properties[0].Offset);
+
+        // Many globals grow the regions, keeping every value, and report the new buffer
+        (GlobalProperties world, int region) = _registry.AddWorld();
+        int first = _registry.Properties.Length;
+        world.SetFloat("_First", 7);
+        _registry.Extract();
+        Assert.False(_registry.Flush(_uploader, 0));
+        DeviceBuffer before = _registry.Buffer;
+
+        for (int i = 0; i < 40; i++)
+            _registry.Renderer.SetFloat4("_Grow" + i, new Float4(i, 0, 0, 0));
+        _registry.Extract();
+
+        Assert.True(_registry.RegionWords >= 161);
+        Assert.True(_registry.Flush(_uploader, 1));
+        Assert.NotSame(before, _registry.Buffer);
+        Assert.Equal(7f, F(Region(region)[(int)_registry.Properties[first].Offset]));
+        Assert.Equal(39f, F(Region(region)[(int)_registry.Properties[^1].Offset]));
+    }
+
+    [Fact]
+    public void KeywordSnapshots_ChangeOnlyAtExtraction()
+    {
+        (GlobalProperties world, _) = _registry.AddWorld();
+        _registry.Renderer.Set(s_fog, "LINEAR");
+        Assert.False(world.KeywordSnapshot.ContainsKey(s_fog.Name));
+
+        _registry.Extract();
+        Assert.Equal("LINEAR", world.KeywordSnapshot[s_fog.Name]);
+
+        world.Set(s_fog, "EXP");
+        Assert.Equal("LINEAR", world.KeywordSnapshot[s_fog.Name]);
+        _registry.Extract();
+        Assert.Equal("EXP", world.KeywordSnapshot[s_fog.Name]);
+        Assert.Equal("LINEAR", _registry.Renderer.KeywordSnapshot[s_fog.Name]);
+
+        uint words = _registry.RegionWords;
+        DeviceBuffer buffer = _registry.Buffer;
+        for (int i = 0; i < 40; i++)
+            Assert.True(_registry.Declare("_Late" + i, MaterialPropertyType.Float4, out _, out _));
+
+        Assert.True(_registry.NeedsGrowth);
+        Assert.Equal(words, _registry.RegionWords);
+        Assert.Same(buffer, _registry.Buffer);
+
+        _registry.Extract();
+        Assert.False(_registry.NeedsGrowth);
+        Assert.True(_registry.RegionWords > words);
+    }
+
+    [Fact]
+    public void RemovedWorldRegions_AreReusedAfterRetire()
+    {
+        (_, int first) = _registry.AddWorld();
+        _registry.RemoveWorld(first);
+        _registry.Flush(_uploader, 3);
+        (_, int second) = _registry.AddWorld();
+        Assert.NotEqual(first, second);
+
+        _registry.Reclaim(3);
+        (_, int third) = _registry.AddWorld();
+        Assert.Equal(first, third);
+    }
+
+    [Fact]
+    public void Regions_ReadBackInGlsl()
+    {
+        _registry.Renderer.SetFloat("_Wind", 0.4f);
+        _registry.Renderer.SetFloat3("_Sun", new Float3(1, 2, 3));
+        (GlobalProperties world, int region) = _registry.AddWorld();
+        world.SetFloat3("_Sun", new Float3(4, 5, 6));
+        _registry.Extract();
+        _registry.Flush(_uploader, 0);
+
+        const string source = """
+            Compute
+            {
+                layout(local_size_x = 1) in;
+                layout(set = 0, binding = 0, std430) readonly buffer Graphite_Globals { uint globals[]; };
+                layout(set = 0, binding = 1, std430) buffer Output { float values[]; };
+                layout(push_constant) uniform Push { uint regionBase; } push;
+
+                void main()
+                {
+                    values[0] = uintBitsToFloat(globals[push.regionBase + 0u]);
+                    values[1] = uintBitsToFloat(globals[push.regionBase + 4u]);
+                    values[2] = uintBitsToFloat(globals[push.regionBase + 6u]);
+                }
+            }
+            """;
+        using ComputeProgram program = _device.ResourceFactory.CreateComputeProgram(
+            _compiler.CompileCompute(new ShaderPass { State = new PassState(), Source = source }, [], _device.BackendType));
+        using DeviceBuffer output = _device.ResourceFactory.CreateBuffer(new BufferDescription(16, BufferUsage.StructuredBufferReadWrite));
+        using DeviceBuffer readback = _device.ResourceFactory.CreateBuffer(new BufferDescription(16, BufferUsage.Staging));
+        PropertySet properties = new();
+        properties.SetBuffer("Graphite_Globals", _registry.Buffer);
+        properties.SetBuffer("Output", output);
+        TestGraph.Run(_device, graph =>
+        {
+            graph.Uploads("UploadGlobals", _uploader, _registry.Buffer);
+            graph.Dispatches("ReadGlobals", program, properties, (uint)region * _registry.RegionWords, [_registry.Buffer], output);
+            graph.Copies("ReadbackGlobals", output, readback);
+        });
+        _device.WaitForIdle();
+
+        float[] values = _device.Map<float>(readback).ToArray();
+        _device.Unmap(readback);
+        Assert.Equal(new[] { 0.4f, 4f, 6f }, values[..3]);
+    }
+}

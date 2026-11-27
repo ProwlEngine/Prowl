@@ -1,0 +1,8 @@
+<shader>
+ERROR: <shader>:4: '[]' : only outermost dimension of an array of arrays can be implicitly sized 
+WARNING: <shader>:4: '[][]' : Generating SPIR-V array-of-arrays, but Vulkan only supports single array level for this resource 
+ERROR: 1 compilation errors.  No code generated.
+
+
+ERROR: Linking fragment stage: Missing entry point: Each stage requires one entry point
+

@@ -1,0 +1,12 @@
+#version 460 core
+
+// imageLoad/imageStore on an r32ui uimage2D: the integer format signedness drives the ZeroExtend operand.
+layout(local_size_x = 8, local_size_y = 8) in;
+
+layout(set = 0, binding = 0, r32ui) uniform uimage2D img;
+
+void main() {
+    ivec2 coord = ivec2(gl_GlobalInvocationID.xy);
+    uvec4 texel = imageLoad(img, coord);
+    imageStore(img, coord, texel + uvec4(1u));
+}

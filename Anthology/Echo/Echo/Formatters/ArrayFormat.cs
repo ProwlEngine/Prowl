@@ -1,0 +1,206 @@
+﻿// This file is part of the Prowl Game Engine
+// Licensed under the MIT License. See the LICENSE file in the project root for details.
+
+using System.Collections;
+using System.IO;
+
+namespace Prowl.Echo.Formatters;
+
+internal sealed class ArrayFormat : ISerializationFormat
+{
+    // Array.MaxLength, which netstandard2.1 lacks.
+    private const int MaxArrayLength = 0x7FFFFFC7;
+
+    public bool CanHandle(Type type) => type.IsArray;
+
+    public EchoObject Serialize(Type? targetType, object value, SerializationContext context)
+    {
+        var reference = CollectionReferences.TryWriteReference(value, context, out int id);
+        if (reference != null) return reference;
+
+        var array = (Array)value;
+        var elementType = targetType!.GetElementType() ?? typeof(object);
+        Type actualType = value.GetType();
+
+        // Create a compound to store array data and type info
+        var arrCompound = EchoObject.NewCompound(2);
+
+        if (array.Rank == 1)
+        {
+            // Single dimensional array
+            List<EchoObject>? tags = PrimitiveCollections.TryWrite(array, elementType);
+            if (tags == null)
+            {
+                tags = new(array.Length);
+                foreach (var item in array)
+                    tags.Add(Serializer.Serialize(elementType, item, context));
+            }
+            arrCompound["array"] = new EchoObject(tags);
+        }
+        else
+        {
+            // Multi-dimensional array
+            var dimensions = new int[array.Rank];
+            for (int i = 0; i < array.Rank; i++)
+                dimensions[i] = array.GetLength(i);
+
+            arrCompound["dimensions"] = Serializer.Serialize(dimensions, context);
+
+            // Store elements
+            List<EchoObject> elements = new();
+            if (array.Length != 0)
+                SerializeMultiDimensionalArray(elementType, array, new int[array.Rank], 0, elements, context);
+            arrCompound["elements"] = new EchoObject(elements);
+        }
+
+        return CollectionReferences.WrapCompoundBody(arrCompound, id);
+    }
+
+    private static void SerializeMultiDimensionalArray(
+        Type elementType,
+        Array array,
+        int[] indices,
+        int dimension,
+        List<EchoObject> elements,
+        SerializationContext context)
+    {
+        if (dimension == array.Rank)
+        {
+            elements.Add(Serializer.Serialize(elementType, array.GetValue(indices), context));
+            return;
+        }
+
+        for (int i = 0; i < array.GetLength(dimension); i++)
+        {
+            indices[dimension] = i;
+            SerializeMultiDimensionalArray(elementType, array, indices, dimension + 1, elements, context);
+        }
+    }
+
+    public object? Deserialize(EchoObject value, Type targetType, SerializationContext context)
+    {
+        Type elementType = targetType.GetElementType()
+            ?? throw new InvalidOperationException("Array element type is null");
+
+        if (CollectionReferences.TryReadReference(value, context, out var existing))
+            return existing;
+
+        // If value is a compound with type info
+        if (value.TagType == EchoType.Compound)
+        {
+            // Single dimensional array
+            if (value.TryGet("array", out var arrayTag) && arrayTag.TagType == EchoType.List)
+            {
+                var primitives = PrimitiveCollections.TryReadArray(arrayTag.List, elementType, context);
+                if (primitives != null)
+                {
+                    CollectionReferences.Register(value, primitives, context);
+                    return primitives;
+                }
+
+                var array = Array.CreateInstance(elementType, arrayTag.Count);
+                CollectionReferences.Register(value, array, context);
+                for (int idx = 0; idx < array.Length; idx++)
+                {
+                    var item = arrayTag[idx];
+                    try
+                    {
+                        // Object arrays may carry per element type info.
+                        Type actual = elementType;
+                        if (elementType == typeof(object) && item.TagType == EchoType.Compound && item.TryGet("$type", out var typeTag))
+                            actual = ReflectionUtils.FindTypeByName(typeTag.StringValue) ?? elementType;
+
+                        array.SetValue(Serializer.Deserialize(item, actual, context), idx);
+                    }
+                    catch (Exception ex)
+                    {
+                        // One bad element must not abandon the rest of the array; leave this slot at default.
+                        Serializer.Logger.Error($"Failed to deserialize array element {idx}", ex);
+                    }
+                }
+                return array;
+            }
+            // Multi-dimensional array
+            else if (value.TryGet("dimensions", out var dimensionsTag))
+            {
+                var dimensions = Serializer.Deserialize(dimensionsTag, typeof(int[]), context) as int[];
+                var elementsTag = value.Get("elements")
+                    ?? throw new InvalidDataException("Missing elements in multi-dimensional array");
+
+                if (dimensions == null || dimensions.Length != targetType.GetArrayRank() || elementsTag.TagType != EchoType.List)
+                    throw new InvalidDataException("Invalid multi-dimensional array rank or elements.");
+                bool empty = false;
+                foreach (int length in dimensions)
+                {
+                    if (length < 0) throw new InvalidDataException("Array dimensions cannot be negative.");
+                    if (length > MaxArrayLength) throw new InvalidDataException("Array dimension exceeds the largest supported length.");
+                    empty |= length == 0;
+                }
+
+                // Bound the product by the actual element count before allocating. Division avoids
+                // overflow even for malicious dimensions; a zero axis makes the entire array empty.
+                int count = empty ? 0 : 1;
+                if (!empty)
+                    foreach (int length in dimensions)
+                    {
+                        if (count > elementsTag.Count / length)
+                            throw new InvalidDataException("Array dimensions exceed the supplied element count.");
+                        count *= length;
+                    }
+                if (count != elementsTag.Count)
+                    throw new InvalidDataException("Array dimensions do not match the supplied element count.");
+
+                var array = Array.CreateInstance(elementType, dimensions);
+                CollectionReferences.Register(value, array, context);
+                // Do not walk huge leading dimensions when a later axis is empty.
+                if (empty) return array;
+                var indices = new int[dimensions.Length];
+                int elementIndex = 0;
+
+                DeserializeMultiDimensionalArray(array, indices, 0, elementsTag.List, ref elementIndex, elementType, context);
+                return array;
+            }
+        }
+
+        throw new InvalidOperationException("Invalid tag type for array deserialization");
+    }
+
+    private static void DeserializeMultiDimensionalArray(
+        Array array,
+        int[] indices,
+        int dimension,
+        List<EchoObject> elements,
+        ref int elementIndex,
+        Type elementType,
+        SerializationContext context)
+    {
+        if (dimension == array.Rank)
+        {
+            var item = elements[elementIndex];
+
+            // Special handling for object arrays - check if the element has its own type info
+            if (elementType == typeof(object) && item.TagType == EchoType.Compound && item.TryGet("$type", out var typeTag))
+            {
+                var actualType = ReflectionUtils.FindTypeByName(typeTag.StringValue);
+                if (actualType != null)
+                {
+                    // Deserialize using the specific type found in the element
+                    array.SetValue(Serializer.Deserialize(item, actualType, context), indices);
+                    elementIndex++;
+                    return;
+                }
+            }
+
+            // Regular deserialization
+            array.SetValue(Serializer.Deserialize(item, elementType, context), indices);
+            elementIndex++;
+            return;
+        }
+
+        for (int i = 0; i < array.GetLength(dimension); i++)
+        {
+            indices[dimension] = i;
+            DeserializeMultiDimensionalArray(array, indices, dimension + 1, elements, ref elementIndex, elementType, context);
+        }
+    }
+}

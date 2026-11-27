@@ -1,0 +1,5 @@
+<svg xmlns="http://www.w3.org/2000/svg" xmlns:xlink="http://www.w3.org/1999/xlink" width="24" height="24" viewBox="0 0 24 24">
+  <!-- polygon with fill and ellipse element -->
+  <polygon points="10,50 60,10 110,50" fill="#87ceeb" stroke="blue" stroke-width="1.5" />
+  <ellipse cx="60" cy="30" rx="20" ry="10" stroke="red" fill="none" stroke-width="3" />
+</svg>

@@ -1,0 +1,6 @@
+#version 450
+#extension GL_KHR_memory_scope_semantics : require
+#pragma use_vulkan_memory_model
+layout(local_size_x=1) in;
+layout(std430, binding=1) nonprivate buffer C { uint e; } c;
+void main(){ c.e = 1u; }

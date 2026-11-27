@@ -1,0 +1,27 @@
+#version 460
+#extension GL_EXT_shader_atomic_int64 : require
+#extension GL_EXT_shader_explicit_arithmetic_types_int64 : require
+layout(local_size_x = 64) in;
+layout(std430, set = 0, binding = 0) buffer Data {
+    uint64_t acc;
+    uint64_t lo;
+    uint64_t hi;
+    uint64_t bits;
+    uint64_t xchg;
+    uint64_t cmp;
+    uint64_t results[];
+};
+void main()
+{
+    uint i = gl_GlobalInvocationID.x;
+    uint64_t v = uint64_t(i);
+    uint64_t a = atomicAdd(acc, v);
+    uint64_t b = atomicMin(lo, v);
+    uint64_t c = atomicMax(hi, v);
+    uint64_t d = atomicAnd(bits, v);
+    uint64_t e = atomicOr(bits, v);
+    uint64_t f = atomicXor(bits, v);
+    uint64_t g = atomicExchange(xchg, v);
+    uint64_t h = atomicCompSwap(cmp, 0ul, v);
+    results[i] = a + b + c + d + e + f + g + h;
+}

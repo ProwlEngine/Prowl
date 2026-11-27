@@ -1,0 +1,15 @@
+#version 450
+layout(local_size_x=1) in;
+layout(std430,set=0,binding=0) buffer B { int k; float o; };
+void main() {
+  mat4 m = mat4(1.0);
+  m[1] = vec4(2.0);
+  m[2][3] = 3.0;
+  m[k] = vec4(4.0);
+  m[k][1] = 5.0;
+  m[1].yz = vec2(6.0);
+  mat3 arr[2];
+  arr[1][2] = vec3(7.0);
+  arr[k][1][0] = 8.0;
+  o = m[1][1] + m[2][3] + arr[1][2].x + arr[0][1][0];
+}

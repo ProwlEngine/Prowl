@@ -1,0 +1,13 @@
+#version 460
+#extension GL_KHR_shader_subgroup_shuffle : require
+#extension GL_KHR_shader_subgroup_shuffle_relative : require
+layout(local_size_x = 64) in;
+layout(std430, set = 0, binding = 0) buffer Data { uint values[]; };
+void main()
+{
+    uint i = gl_GlobalInvocationID.x;
+    uint v = values[i];
+    uint s = subgroupShuffle(v, 0u) + subgroupShuffleXor(v, 1u)
+           + subgroupShuffleUp(v, 1u) + subgroupShuffleDown(v, 1u);
+    values[i] = s;
+}

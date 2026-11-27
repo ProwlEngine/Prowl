@@ -1,0 +1,8 @@
+// imageStore is missing the required data value argument so it is called with too few arguments
+#version 450
+layout(local_size_x=1) in;
+layout(binding=0, rgba8) uniform image2D img;
+layout(binding=1) uniform Coords { ivec2 coord; };
+void main() {
+    imageStore(img, coord);
+}

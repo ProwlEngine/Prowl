@@ -1,0 +1,8 @@
+<shader>
+ERROR: <shader>:3: 'rgba8' : only apply to images 
+ERROR: 1 compilation errors.  No code generated.
+
+
+ERROR: Linking compute stage: Missing entry point: Each stage requires one entry point
+
+SPIR-V is not generated for failed compile or link

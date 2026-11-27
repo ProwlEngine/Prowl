@@ -1,0 +1,24 @@
+#version 460 core
+
+layout(local_size_x=1, local_size_y=1, local_size_z=1) in;
+
+layout(std430, binding=0) buffer OutputBuffer
+{
+    uint result_value;
+};
+
+void main()
+{
+    // full bitwise operator set on uint locals
+    uint a = 0x0000F0F0u;
+    uint b = 0x00FF00FFu;
+
+    uint and_result = a & b;
+    uint or_result = a | b;
+    uint xor_result = a ^ b;
+    uint not_result = ~a;
+    uint shl_result = a << 2u;
+    uint shr_result = b >> 3u;
+
+    result_value = and_result + or_result + xor_result + not_result + shl_result + shr_result;
+}

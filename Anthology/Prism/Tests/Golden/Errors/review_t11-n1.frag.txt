@@ -1,0 +1,7 @@
+<shader>
+ERROR: <shader>:3: '' : float literal needs a decimal point or exponent 
+ERROR: <shader>:3: '' : compilation terminated 
+ERROR: 2 compilation errors.  No code generated.
+
+
+SPIR-V is not generated for failed compile or link

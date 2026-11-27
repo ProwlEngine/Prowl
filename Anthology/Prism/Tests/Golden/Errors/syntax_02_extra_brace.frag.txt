@@ -1,0 +1,5 @@
+<shader>
+ERROR: <shader>:3: '' :  syntax error, unexpected RIGHT_BRACE
+ERROR: 1 compilation errors.  No code generated.
+
+

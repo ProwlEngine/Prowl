@@ -1,0 +1,18 @@
+#version 460
+#extension GL_NV_mesh_shader : require
+layout(local_size_x=2) in;
+layout(lines, max_vertices=4, max_primitives=2) out;
+taskNV in Task { uint ids[4]; } IN;
+perviewNV layout(location=0) out vec4 pv[][];
+layout(location=4) out vec2 uv[];
+void main(){
+    uint i = gl_LocalInvocationID.x;
+    gl_MeshVerticesNV[i].gl_PositionPerViewNV[2] = vec4(float(IN.ids[i]));
+    gl_MeshVerticesNV[i].gl_ClipDistancePerViewNV[3][2] = 0.25;
+    pv[i][1] = vec4(2);
+    uv[i] = vec2(0);
+    gl_MeshPrimitivesNV[i].gl_LayerPerViewNV[1] = 3;
+    gl_MeshPrimitivesNV[i].gl_ViewportMaskPerViewNV[2][1] = 5;
+    writePackedPrimitiveIndices4x8NV(i * 4u, 0x00010203u);
+    gl_PrimitiveCountNV = 2u;
+}

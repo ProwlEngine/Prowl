@@ -1,0 +1,11 @@
+<shader>
+ERROR: <shader>:2: '#include' : required extension not requested: Possible extensions include:
+GL_GOOGLE_include_directive
+GL_ARB_shading_language_include
+ERROR: <shader>:2: '#include' : must be followed by a header name 
+ERROR: <shader>:2: '' : compilation terminated 
+ERROR: 3 compilation errors.  No code generated.
+
+
+ERROR: Linking fragment stage: Missing entry point: Each stage requires one entry point
+

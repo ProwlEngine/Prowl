@@ -1,0 +1,11 @@
+#version 450
+layout(local_size_x=1) in;
+layout(std430,set=0,binding=0) buffer B { float o; };
+void main() {
+  int i = 0; float s = 0.0;
+  do { ++i; if (i == 2) continue; s += float(i); } while (i < 5);
+  int j = 0;
+  while (j < 5) { ++j; if (j == 3) continue; s += 10.0; }
+  for (int k = 0; k < 5; ++k) { if (k == 4) continue; s += 100.0; }
+  o = s + float(i) + float(j);
+}

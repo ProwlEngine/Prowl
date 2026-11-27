@@ -1,0 +1,360 @@
+// This file is part of the Prowl Game Engine
+// Licensed under the MIT License. See the LICENSE file in the project root for details.
+
+namespace Prowl.Echo.Formatters;
+
+public sealed class AnyObjectFormat : ISerializationFormat
+{
+    public bool CanHandle(Type type) => true; // Fallback format for any object
+
+    public EchoObject Serialize(Type? targetType, object value, SerializationContext context)
+    {
+        Type actualType = value.GetType();
+        int? id = null;
+
+        // Handle reference tracking for non-value types
+        if (!actualType.IsValueType)
+        {
+            if (context.objectToId.TryGetValue(value, out int existingId))
+            {
+                var stub = EchoObject.NewCompound(1);
+                stub["$id"] = new(existingId);
+                return stub;
+            }
+
+            id = context.nextId++;
+            context.objectToId[value] = id.Value;
+            context.idToObject[id.Value] = value;
+        }
+
+        // A throw from here on must not escape: this object's $id is already handed out, so dropping its
+        // definition would leave every other reference to it pointing at an empty placeholder.
+        if (value is ISerializationCallbackReceiver callback)
+        {
+            try { callback.OnBeforeSerialize(); }
+            catch (Exception ex) { Serializer.Logger.Error($"OnBeforeSerialize threw on {actualType.FullName}", ex); }
+        }
+
+        CachedFieldInfo[]? fields = value is ISerializable ? null : value.GetSerializableFields();
+
+        // Room for every field plus $id and $type.
+        var compound = fields == null ? EchoObject.NewCompound() : EchoObject.NewCompound(fields.Length + 2);
+
+        // Serialize the object's data
+        if (value is ISerializable serializable)
+        {
+            try { serializable.Serialize(ref compound, context); }
+            catch (Exception ex) { Serializer.Logger.Error($"Serialize threw on {actualType.FullName}, keeping what it wrote", ex); }
+        }
+        else
+        {
+            foreach (var cachedField in fields!)
+            {
+                try
+                {
+                    if (cachedField.SerializeIf != null && !cachedField.SerializeIf(value))
+                        continue;
+
+                    object? propValue = cachedField.GetValue(value);
+                    if (propValue == null)
+                    {
+                        // Use cached IgnoreOnNull flag
+                        if (cachedField.HasIgnoreOnNull)
+                            continue;
+                        compound.AddUnique(cachedField.SerializedName, new(EchoType.Null, null));
+                    }
+                    else
+                    {
+                        // Serialize with field type as target to enable polymorphism detection
+                        EchoObject tag = Serializer.Serialize(cachedField.MemberType, propValue, context);
+                        compound.AddUnique(cachedField.SerializedName, tag);
+                    }
+                }
+                catch (Exception ex)
+                {
+                    Serializer.Logger.Error($"Failed to serialize field {cachedField.Name}", ex);
+                    // We don't want to stop the serialization process because of a single field, so we just skip it and continue
+                }
+            }
+        }
+
+        // Add reference ID if needed
+        if (id.HasValue)
+        {
+            // Field names can never be "$id", but an ISerializable may have written one.
+            if (fields != null)
+                compound.AddUnique("$id", new(id.Value));
+            else
+                compound["$id"] = new(id.Value);
+        }
+
+        // NOTE: Type information is now handled by the centralized Serializer class
+        // We don't add $type here - the Serializer will wrap this with type info if needed
+
+        return compound;
+    }
+
+    public object? Deserialize(EchoObject value, Type targetType, SerializationContext context)
+    {
+        // Handle primitive values that might come through (for backward compatibility)
+        if (value.TagType != EchoType.Compound)
+        {
+            return DeserializePrimitiveValue(value, targetType);
+        }
+
+        // Reference handling for non-value types. A serialized reference is written as only { "$id": N }
+        // (optionally $type-wrapped); a definition carries real field data. This lets a reference that
+        // arrives BEFORE its definition (a forward reference) be resolved to a placeholder now and
+        // back-patched when the definition shows up, so every reference ends up on one populated instance.
+        EchoObject? id = null;
+        bool hasId = !targetType.IsValueType && value.TryGet("$id", value.Count - 1, out id);
+        int idValue = hasId ? id!.IntValue : 0;
+        bool carriesBody = HasBody(value);
+
+        object result;
+
+        if (hasId && context.idToObject.TryGetValue(idValue, out object? existing))
+        {
+            // We already have an instance for this id - a definition seen earlier, or a placeholder we
+            // created from an earlier forward reference.
+            if (!carriesBody)
+                return existing; // a plain reference use - hand back the shared instance
+
+            // A body for an id we already have: back-patch the placeholder. A second full definition for
+            // the same id is malformed data.
+            if (!context.fullyDefinedIds.Add(idValue))
+                throw new InvalidOperationException(
+                    $"Echo: encountered a second definition for $id {idValue}. A reference id may be defined at most once.");
+
+            result = existing; // populate the existing instance in place
+        }
+        else
+        {
+            // The target type is now passed in correctly by the centralized system
+            // We don't need to extract $type here - it's already been handled
+            Type objectType = targetType;
+
+            if (objectType.IsInterface || objectType.IsAbstract)
+            {
+                Serializer.Logger.Error($"Cannot deserialize to interface or abstract type: {objectType.FullName}.");
+                return null;
+            }
+
+            // Create the object instance
+            try
+            {
+                result = Activator.CreateInstance(objectType, nonPublic: true)!;
+            }
+            catch (MissingMethodException ex)
+            {
+                Serializer.Logger.Error($"No parameterless constructor found for type: {objectType.FullName}.", ex);
+                return null;
+            }
+            catch (Exception ex)
+            {
+                Serializer.Logger.Error($"Failed to create instance of type: {objectType.FullName}.", ex);
+                return null;
+            }
+
+            // Register before deserializing fields so cyclic/forward references resolve to this instance.
+            if (hasId)
+            {
+                context.idToObject[idValue] = result;
+                if (carriesBody)
+                    context.fullyDefinedIds.Add(idValue);
+                else
+                    // Forward-reference stub: return an empty placeholder now; its definition (which carries
+                    // the body) will populate this same instance when it is reached later.
+                    return result;
+            }
+        }
+
+        DeserializeBody(value, result, context);
+        return result;
+    }
+
+    /// <summary>
+    /// True when <paramref name="value"/> carries field data (a definition) rather than being a bare
+    /// reference stub of only <c>$id</c> (and an optional <c>$type</c> wrapper).
+    /// </summary>
+    private static bool HasBody(EchoObject value)
+    {
+        foreach (var tag in value.Tags)
+            if (tag.Key != "$id" && tag.Key != "$type")
+                return true;
+        return false;
+    }
+
+    /// <summary>Deserialize a compound's fields into an already-created instance.</summary>
+    private static void DeserializeBody(EchoObject value, object result, SerializationContext context)
+    {
+        if (result is ISerializable serializable)
+        {
+            try { serializable.Deserialize(value, context); }
+            catch (Exception ex) { Serializer.Logger.Error($"Deserialize threw on {result.GetType().FullName}, keeping what it loaded", ex); }
+        }
+        else
+        {
+            var fields = result.GetSerializableFields();
+            for (int i = 0; i < fields.Length; i++)
+            {
+                var cachedField = fields[i];
+                if (!TryGetFieldValue(value, cachedField, i, out EchoObject? fieldValue))
+                    continue;
+
+                try
+                {
+                    // Let the centralized deserializer handle type resolution for fields
+                    object? deserializedValue = Serializer.Deserialize(fieldValue, cachedField.MemberType, context);
+
+                    if (cachedField.IsInitOnly)
+                        Serializer.Logger.Warning($"Setting readonly field '{cachedField.Name}' in type '{result.GetType().FullName}'.");
+
+                    cachedField.SetValue(result, deserializedValue);
+                }
+                catch (Exception ex)
+                {
+                    Serializer.Logger.Error($"Failed to deserialize field {cachedField.Name}", ex);
+                    // We don't want to stop the deserialization process because of a single field, so we just skip it and continue
+                }
+            }
+        }
+
+        InvokeAfterDeserialize(result, context);
+    }
+
+    private static void InvokeAfterDeserialize(object target, SerializationContext context)
+    {
+        // The root sees the graph with every deferred back-patch already applied.
+        if (context.IsOutermostDeserialize)
+            context.RunDeferredActions();
+
+        if (target is ISerializationCallbackReceiver callback)
+        {
+            try { callback.OnAfterDeserialize(); }
+            catch (Exception ex) { Serializer.Logger.Error($"OnAfterDeserialize threw on {target.GetType().FullName}", ex); }
+        }
+    }
+
+    /// <summary>
+    /// Deserialize EchoObject data INTO an existing object instance, overwriting its
+    /// serializable fields without creating a new instance. Internal state (non-serialized
+    /// fields, caches, GPU resources, etc.) is preserved.
+    /// </summary>
+    public void DeserializeInto(EchoObject value, object target, SerializationContext context)
+    {
+        if (value.TagType != EchoType.Compound) return;
+
+        Type objectType = target.GetType();
+
+        // Anything in the data that points back at its root resolves to the target, not to a new copy.
+        if (!objectType.IsValueType && value.TryGet("$id", out EchoObject? id))
+        {
+            context.idToObject[id!.IntValue] = target;
+            context.fullyDefinedIds.Add(id.IntValue);
+        }
+
+        if (target is ISerializable serializable)
+        {
+            try { serializable.Deserialize(value, context); }
+            catch (Exception ex) { Serializer.Logger.Error($"Deserialize threw on {objectType.FullName}, keeping what it loaded", ex); }
+        }
+        else
+        {
+            var fields = target.GetSerializableFields();
+            for (int i = 0; i < fields.Length; i++)
+            {
+                var cachedField = fields[i];
+                if (!TryGetFieldValue(value, cachedField, i, out EchoObject? fieldValue))
+                    continue;
+
+                try
+                {
+                    object? deserializedValue = Serializer.Deserialize(fieldValue, cachedField.MemberType, context);
+                    cachedField.SetValue(target, deserializedValue);
+                }
+                catch (Exception ex)
+                {
+                    Serializer.Logger.Error($"Failed to deserialize field {cachedField.Name} into existing instance", ex);
+                }
+            }
+        }
+
+        InvokeAfterDeserialize(target, context);
+    }
+
+    private static object? DeserializePrimitiveValue(EchoObject value, Type targetType)
+    {
+        // Handle primitive values that might be passed directly
+        // This provides backward compatibility and handles edge cases
+        try
+        {
+            return value.TagType switch
+            {
+                EchoType.Null => null,
+                EchoType.Byte => Convert.ChangeType(value.ByteValue, targetType),
+                EchoType.sByte => Convert.ChangeType(value.sByteValue, targetType),
+                EchoType.Short => Convert.ChangeType(value.ShortValue, targetType),
+                EchoType.UShort => Convert.ChangeType(value.UShortValue, targetType),
+                EchoType.Int => Convert.ChangeType(value.IntValue, targetType),
+                EchoType.UInt => Convert.ChangeType(value.UIntValue, targetType),
+                EchoType.Long => Convert.ChangeType(value.LongValue, targetType),
+                EchoType.ULong => Convert.ChangeType(value.ULongValue, targetType),
+                EchoType.Float => Convert.ChangeType(value.FloatValue, targetType),
+                EchoType.Double => Convert.ChangeType(value.DoubleValue, targetType),
+                EchoType.Decimal => Convert.ChangeType(value.DecimalValue, targetType),
+                EchoType.Bool => Convert.ChangeType(value.BoolValue, targetType),
+                EchoType.String => Convert.ChangeType(value.StringValue, targetType),
+                EchoType.ByteArray => targetType == typeof(byte[]) ? value.ByteArrayValue :
+                                     throw new InvalidCastException($"Cannot convert byte array to {targetType}"),
+                _ => throw new NotSupportedException($"Cannot deserialize {value.TagType} as {targetType}")
+            };
+        }
+        catch (Exception ex)
+        {
+            Serializer.Logger.Error($"Failed to deserialize primitive value of type {value.TagType} to {targetType}", ex);
+            return null;
+        }
+    }
+
+    private static bool TryGetFieldValue(EchoObject compound, CachedFieldInfo cachedField, int fieldIndex, out EchoObject? value)
+    {
+        var fieldName = cachedField.SerializedName;
+
+        if (compound.TryGet(fieldName, fieldIndex, out value))
+            return true;
+
+        // Case-insensitive fallback
+        foreach (var key in compound.GetNames())
+        {
+            if (string.Equals(key, fieldName, StringComparison.OrdinalIgnoreCase))
+            {
+                value = compound[key];
+                return true;
+            }
+        }
+
+        // Check former names (using cached attribute data)
+        if (cachedField.FormerNames != null)
+        {
+            foreach (var formerName in cachedField.FormerNames)
+            {
+                if (compound.TryGet(formerName, out value))
+                    return true;
+
+                // Case-insensitive check for former names
+                foreach (var key in compound.GetNames())
+                {
+                    if (string.Equals(key, formerName, StringComparison.OrdinalIgnoreCase))
+                    {
+                        value = compound[key];
+                        return true;
+                    }
+                }
+            }
+        }
+
+        value = null;
+        return false;
+    }
+}

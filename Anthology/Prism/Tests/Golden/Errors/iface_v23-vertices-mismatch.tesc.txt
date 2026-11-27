@@ -1,0 +1,8 @@
+<shader>
+ERROR: <shader>:3: 'vertices' : inconsistent output number of vertices for array size of o
+ERROR: 1 compilation errors.  No code generated.
+
+
+ERROR: Linking tessellation control stage: Missing entry point: Each stage requires one entry point
+
+SPIR-V is not generated for failed compile or link

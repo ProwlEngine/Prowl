@@ -1,0 +1,6 @@
+#version 460
+#extension GL_EXT_mesh_shader : require
+layout(local_size_x=1) in;
+taskPayloadSharedEXT uint p;
+void emit(){ EmitMeshTasksEXT(1,1,1); }
+void main(){ p = 3u; if (gl_WorkGroupID.x > 2u) { p = 4u; } emit(); }

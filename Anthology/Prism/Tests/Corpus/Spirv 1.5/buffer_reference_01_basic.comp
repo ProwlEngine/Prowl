@@ -1,0 +1,18 @@
+#version 460
+#extension GL_EXT_buffer_reference : require
+layout(local_size_x = 64) in;
+layout(buffer_reference, std430) buffer VertexData
+{
+    vec4 positions[];
+};
+layout(std430, set = 0, binding = 0) buffer Params
+{
+    VertexData verts;
+    uint count;
+};
+void main()
+{
+    uint i = gl_GlobalInvocationID.x;
+    if (i < count)
+        verts.positions[i] = vec4(float(i), 0.0, 0.0, 1.0);
+}

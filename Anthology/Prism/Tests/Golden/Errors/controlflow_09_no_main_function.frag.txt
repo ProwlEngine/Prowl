@@ -1,0 +1,3 @@
+<shader>
+ERROR: Linking fragment stage: Missing entry point: Each stage requires one entry point
+

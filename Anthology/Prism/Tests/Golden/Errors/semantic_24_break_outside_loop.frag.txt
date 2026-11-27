@@ -1,0 +1,6 @@
+<shader>
+ERROR: <shader>:4: '' : break statement only allowed in switch and loops 
+ERROR: <shader>:4: '' : compilation terminated 
+ERROR: 2 compilation errors.  No code generated.
+
+

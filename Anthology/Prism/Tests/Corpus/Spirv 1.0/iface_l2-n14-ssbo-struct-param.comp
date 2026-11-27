@@ -1,0 +1,7 @@
+#version 450
+layout(local_size_x=1) in;
+struct S { vec3 a; float b[2]; };
+layout(std430, binding=0) buffer B { S s[2]; } b;
+float f(S s){ return s.a.x + s.b[1]; }
+void g(inout S s){ s.b[0] = 1.0; }
+void main(){ b.s[0].b[0] = f(b.s[1]); g(b.s[1]); }

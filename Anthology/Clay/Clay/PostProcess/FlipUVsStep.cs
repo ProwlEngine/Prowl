@@ -1,0 +1,45 @@
+// This file is part of the Prowl Game Engine
+// Licensed under the MIT License. See the LICENSE file in the project root for details.
+
+using Prowl.Clay.Importer;
+using Prowl.Clay.Intermediate;
+using Prowl.Vector;
+
+namespace Prowl.Clay.PostProcess;
+
+/// <summary>
+/// Flips the V coordinate on every UV channel: <c>V := 1 - V</c>. Bitangent signs in
+/// <see cref="IntermediateMesh.Tangents"/> are negated, since the bitangent follows +V.
+/// </summary>
+/// <remarks>
+/// Use when the source's UV origin convention doesn't match the engine's. Clay's convention is glTF's,
+/// V starting at the top, and the FBX reader flips to it on import. OBJ keeps V starting at the bottom.
+/// </remarks>
+internal sealed class FlipUVsStep : IPostProcess
+{
+    public PostProcessFlags Flag => PostProcessFlags.FlipUVs;
+    public string Name => "FlipUVs";
+
+    public void Execute(IntermediateScene scene, ImportContext context)
+    {
+        foreach (var mesh in scene.Meshes)
+        {
+            for (int uv = 0; uv < Mesh.MaxUVChannels; uv++)
+            {
+                if (mesh.UVs[uv] is not { } list) continue;
+                for (int i = 0; i < list.Count; i++)
+                    list[i] = new Float2(list[i].X, 1f - list[i].Y);
+            }
+
+            if (mesh.Tangents is { } tangents)
+            {
+                for (int i = 0; i < tangents.Count; i++)
+                {
+                    var t = tangents[i];
+                    tangents[i] = new Float4(t.X, t.Y, t.Z, -t.W);
+                }
+            }
+        }
+        _ = context;
+    }
+}

@@ -1,0 +1,12 @@
+<shader>
+ERROR: #version: ES shaders for SPIR-V require version 310 or higher
+ERROR: <shader>:1: '#version' : must occur first in shader 
+ERROR: <shader>:1: '#version' : must be followed by version number 
+ERROR: <shader>:1: '#version' : bad profile name; use es, core, or compatibility 
+ERROR: <shader>:1: '#version' : bad tokens following profile -- expected newline 
+ERROR: <shader>:1: '' : compilation terminated 
+ERROR: 6 compilation errors.  No code generated.
+
+
+ERROR: Linking fragment stage: Missing entry point: Each stage requires one entry point
+

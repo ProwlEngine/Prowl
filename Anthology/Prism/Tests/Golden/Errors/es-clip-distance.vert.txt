@@ -1,0 +1,5 @@
+<shader>
+ERROR: <shader>:4: 'gl_ClipDistance' : undeclared identifier 
+ERROR: <shader>:4: 'gl_ClipDistance' :  left of '[' is not of type array, matrix, or vector  
+ERROR: <shader>:4: '' : compilation terminated 
+ERROR: 3 compilation errors.  No code generated.

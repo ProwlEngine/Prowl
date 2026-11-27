@@ -1,0 +1,10 @@
+#version 450
+layout(local_size_x = 8, local_size_y = 8) in;
+layout(set = 0, binding = 0, rgba8) uniform readonly image2D uInput;
+layout(set = 0, binding = 1, rgba8) uniform writeonly image2D uOutput;
+void main() {
+    ivec2 coord = ivec2(gl_GlobalInvocationID.xy);
+    vec4 c = imageLoad(uInput, coord);
+    float gray = dot(c.rgb, vec3(0.299, 0.587, 0.114));
+    imageStore(uOutput, coord, vec4(vec3(gray), c.a));
+}

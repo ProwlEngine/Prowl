@@ -1,0 +1,7 @@
+<shader>
+ERROR: <shader>:4: 'gl_FragCoord' : undeclared identifier 
+ERROR: <shader>:4: 'assign' :  cannot convert from ' temp float' to ' gl_Position 4-component vector of float Position'
+ERROR: <shader>:4: '' : compilation terminated 
+ERROR: 3 compilation errors.  No code generated.
+
+

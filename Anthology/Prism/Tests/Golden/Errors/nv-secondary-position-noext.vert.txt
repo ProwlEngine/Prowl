@@ -1,0 +1,4 @@
+<shader>
+ERROR: <shader>:2: 'gl_SecondaryPositionNV' : required extension not requested: GL_NV_stereo_view_rendering
+ERROR: <shader>:2: '' : compilation terminated 
+ERROR: 2 compilation errors.  No code generated.

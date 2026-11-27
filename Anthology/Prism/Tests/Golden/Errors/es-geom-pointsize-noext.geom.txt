@@ -1,0 +1,6 @@
+<shader>
+ERROR: <shader>:4: 'gl_PointSize' : required extension not requested: Possible extensions include:
+GL_EXT_geometry_point_size
+GL_OES_geometry_point_size
+ERROR: <shader>:4: '' : compilation terminated 
+ERROR: 2 compilation errors.  No code generated.

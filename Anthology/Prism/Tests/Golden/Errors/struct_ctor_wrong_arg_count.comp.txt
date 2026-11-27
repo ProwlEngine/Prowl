@@ -1,0 +1,7 @@
+<shader>
+ERROR: <shader>:5: 'constructor' : Number of constructor parameters does not match the number of structure fields 
+ERROR: <shader>:5: '=' :  cannot convert from ' const float' to ' temp structure{ global highp float a,  global highp float b}'
+ERROR: <shader>:5: '' : compilation terminated 
+ERROR: 3 compilation errors.  No code generated.
+
+

@@ -1,0 +1,9 @@
+#version 450
+#extension GL_EXT_shader_explicit_arithmetic_types_int64 : require
+layout(local_size_x=1) in;
+layout(std430, binding=0) buffer B { uint64_t a, b, c, d; int64_t e; uint f; } o;
+void main(){
+  const uint64_t big = 0xFFFFFFFF00000000ul;
+  o.a = big >> 4; o.b = big / 3ul; o.c = 1ul << 40; o.d = big % 7ul; o.e = 1l << 40;
+  o.f = (big > 1ul) ? 1u : 0u;
+}

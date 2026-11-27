@@ -1,0 +1,49 @@
+#version 460 core
+
+// Whether `&&` short circuits depends on how trivial its RIGHT operand is, and a symbol only counts as
+// trivial for certain storage. A buffer block is not one of them; a uniform block is. These two blocks
+// hold the same shapes so only the storage differs.
+
+layout(local_size_x = 8) in;
+
+layout(std140, set = 0, binding = 0) uniform Uniforms
+{
+    bool uFlagA;
+    bool uFlagB;
+    float uLimit;
+};
+
+layout(std430, set = 0, binding = 1) buffer Storage
+{
+    bool sFlagA;
+    bool sFlagB;
+    float sLimit;
+    float results[];
+};
+
+void main()
+{
+    uint i = gl_GlobalInvocationID.x;
+
+    // uniform members: trivial reads, so no branching.
+    bool u = uFlagA && uFlagB;
+    bool u2 = uFlagA || uFlagB;
+
+    // buffer members: not trivial.
+    bool s = sFlagA && sFlagB;
+    bool s2 = sFlagA || sFlagB;
+
+    // a comparison over a block member is never a trivial leaf on either side.
+    bool cmp = uFlagA && uLimit > 0.5;
+    bool cmp2 = sFlagA || sLimit < 0.25;
+
+    float v = 0.0;
+    if (u) v += 1.0;
+    if (u2) v += 2.0;
+    if (s) v += 4.0;
+    if (s2) v += 8.0;
+    if (cmp) v += 16.0;
+    if (cmp2) v += 32.0;
+
+    results[i] = v;
+}

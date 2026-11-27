@@ -1,0 +1,42 @@
+#version 460 core
+#extension GL_EXT_scalar_block_layout : require
+
+// Scalar layout aligns everything to just its component scalar: no rounding to 16, no vec4 padding, so
+// a vec3 array packs at stride 12 and a mat3 column at 12. Mixed widths make the packing visible.
+
+layout(local_size_x = 4) in;
+
+layout(scalar, set = 0, binding = 0) uniform Packed
+{
+    vec3 positions[3];
+    float weights[3];
+    mat3 rotation;
+    mat2x3 skew;
+    vec2 pair;
+    float tail;
+    double wide;
+} packed;
+
+layout(scalar, set = 0, binding = 1) buffer PackedOut
+{
+    vec3 normals[2];
+    mat3 basis;
+    float results[];
+};
+
+void main()
+{
+    uint i = gl_GlobalInvocationID.x;
+
+    vec3 p = packed.positions[0] * packed.weights[0]
+           + packed.positions[1] * packed.weights[1]
+           + packed.positions[2] * packed.weights[2];
+
+    vec3 r = packed.rotation * p;
+    vec3 s = packed.skew * packed.pair;
+
+    normals[0] = normalize(r);
+    basis[1] = s;
+
+    results[i] = r.x + s.y + packed.tail + float(packed.wide);
+}

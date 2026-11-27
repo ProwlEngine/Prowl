@@ -1,0 +1,5 @@
+#version 460
+#extension GL_NV_mesh_shader : require
+layout(local_size_x=4) in;
+taskNV out Task { uint ids[4]; vec4 extra; } OUT;
+void main(){ uint i = gl_LocalInvocationID.x; OUT.ids[i] = i + gl_MeshViewIndicesNV[1]; OUT.extra = vec4(float(gl_MeshViewCountNV)); if (i == 0u) gl_TaskCountNV = 2u; }

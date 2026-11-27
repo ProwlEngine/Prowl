@@ -1,0 +1,25 @@
+#version 460
+
+layout(local_size_x = 64) in;
+
+layout(std430, binding = 0) buffer B {
+    uint data[64];
+};
+
+shared uint scratch[64];
+
+void main() {
+    uint lid = gl_LocalInvocationID.x;
+
+    scratch[lid] = data[lid];
+    memoryBarrierShared();
+    barrier();
+
+    uint neighbor = scratch[(lid + 1u) & 63u];
+    groupMemoryBarrier();
+
+    data[lid] = neighbor;
+    memoryBarrierBuffer();
+    memoryBarrier();
+    barrier();
+}

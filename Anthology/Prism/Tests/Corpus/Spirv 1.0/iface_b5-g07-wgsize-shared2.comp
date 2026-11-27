@@ -1,0 +1,6 @@
+#version 450
+layout(local_size_x=8) in;
+layout(constant_id=5) const uint K = 3u;
+shared uint arr[K * 2u];
+layout(std430, binding=0) buffer B { uint o[]; } b;
+void main(){ arr[gl_LocalInvocationIndex] = 1u; b.o[0] = arr[0] + arr.length(); }

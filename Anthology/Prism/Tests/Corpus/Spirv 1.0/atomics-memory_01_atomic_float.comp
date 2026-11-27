@@ -1,0 +1,21 @@
+#version 460
+#extension GL_EXT_shader_atomic_float : require
+#extension GL_EXT_shader_atomic_float2 : require
+layout(local_size_x = 64) in;
+layout(std430, set = 0, binding = 0) buffer Data {
+    float sum;
+    float lo;
+    float hi;
+    float xchg;
+    float results[];
+};
+void main()
+{
+    uint i = gl_GlobalInvocationID.x;
+    float v = float(i);
+    float a = atomicAdd(sum, v);
+    float b = atomicMin(lo, v);
+    float c = atomicMax(hi, v);
+    float d = atomicExchange(xchg, v);
+    results[i] = a + b + c + d;
+}

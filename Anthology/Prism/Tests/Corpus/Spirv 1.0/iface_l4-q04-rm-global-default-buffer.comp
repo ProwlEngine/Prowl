@@ -1,0 +1,5 @@
+#version 450
+layout(local_size_x=1) in;
+layout(std430, row_major) buffer;
+layout(binding=0) buffer B { mat4x3 m; float f; } b;
+void main(){ b.f = b.m[3].z; }

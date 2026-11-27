@@ -1,0 +1,22 @@
+#version 460
+
+layout(local_size_x = 64) in;
+
+layout(binding = 0) uniform U {
+    double a;
+    double b;
+    double t;
+    dvec3 va;
+    dvec3 vb;
+};
+
+layout(binding = 1) buffer B {
+    vec4 result[];
+};
+
+void main() {
+    uint i = gl_GlobalInvocationID.x;
+    double s = clamp(a, b, a + b) + mix(a, b, t) + min(a, b) + max(a, b);
+    dvec3 sv = clamp(va, vb, va + vb) + mix(va, vb, t) + min(va, vb) + max(va, vb);
+    result[i] = vec4(vec3(sv), float(s));
+}

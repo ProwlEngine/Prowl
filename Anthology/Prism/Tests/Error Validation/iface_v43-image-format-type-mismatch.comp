@@ -1,0 +1,4 @@
+#version 450
+layout(local_size_x=1) in;
+layout(binding=0, r32f) uniform uimage2D img;
+void main(){ imageStore(img, ivec2(0), uvec4(0)); }

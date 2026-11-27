@@ -1,0 +1,144 @@
+// This file is part of the Prowl Game Engine
+// Licensed under the MIT License. See the LICENSE file in the project root for details.
+
+using Prowl.Clay.Importer;
+using Prowl.Clay.Intermediate;
+
+namespace Prowl.Clay.PostProcess;
+
+/// <summary>
+/// Splits any mesh that contains a mix of point/line/triangle faces into one mesh per topology.
+/// </summary>
+/// <remarks>
+/// After this step every <see cref="IntermediateMesh"/> has exactly one
+/// <see cref="PrimitiveKind"/> set in <see cref="IntermediateMesh.PrimitiveKinds"/>. Source data
+/// is duplicated where necessary (positions, normals, tangents, etc.) because most renderers
+/// expect a single topology per draw call.
+/// </remarks>
+internal sealed class SortByPrimitiveTypeStep : IPostProcess
+{
+    public PostProcessFlags Flag => PostProcessFlags.SortByPrimitiveType;
+    public string Name => "SortByPrimitiveType";
+
+    public void Execute(IntermediateScene scene, ImportContext context)
+    {
+        // Snapshot the mesh list because we'll be appending split-out meshes during the walk.
+        int originalCount = scene.Meshes.Count;
+        for (int i = 0; i < originalCount; i++)
+        {
+            var mesh = scene.Meshes[i];
+            SplitOne(mesh, scene, i, context);
+        }
+    }
+
+    private static void SplitOne(IntermediateMesh mesh, IntermediateScene scene, int meshIndex, ImportContext ctx)
+    {
+        var kinds = mesh.PrimitiveKinds;
+        int kindCount = CountFlags(kinds);
+        if (kindCount <= 1) return;
+
+        // Bucket faces by topology.
+        var pointFaces = new FaceList();
+        var lineFaces = new FaceList();
+        var triFaces = new FaceList();
+        foreach (var face in mesh.Faces)
+        {
+            (face.Count switch
+            {
+                1 => pointFaces,
+                2 => lineFaces,
+                _ => triFaces,
+            }).Add(mesh.Faces.IndicesOf(face), face);
+        }
+
+        // Keep the largest bucket in-place; split the others into clones.
+        FaceList keep;
+        PrimitiveKind keepKind;
+        FaceList? splitPoints = pointFaces.Count > 0 ? pointFaces : null;
+        FaceList? splitLines = lineFaces.Count > 0 ? lineFaces : null;
+        FaceList? splitTris = triFaces.Count > 0 ? triFaces : null;
+
+        if (triFaces.Count >= lineFaces.Count && triFaces.Count >= pointFaces.Count)
+        {
+            keep = splitTris!;
+            keepKind = PrimitiveKind.Triangle;
+            splitTris = null;
+        }
+        else if (lineFaces.Count >= pointFaces.Count)
+        {
+            keep = splitLines!;
+            keepKind = PrimitiveKind.Line;
+            splitLines = null;
+        }
+        else
+        {
+            keep = splitPoints!;
+            keepKind = PrimitiveKind.Point;
+            splitPoints = null;
+        }
+
+        mesh.Faces = keep;
+        mesh.PrimitiveKinds = keepKind;
+
+        if (splitTris is not null)
+            scene.Meshes.Add(CloneWithFaces(mesh, splitTris, PrimitiveKind.Triangle));
+        if (splitLines is not null)
+            scene.Meshes.Add(CloneWithFaces(mesh, splitLines, PrimitiveKind.Line));
+        if (splitPoints is not null)
+            scene.Meshes.Add(CloneWithFaces(mesh, splitPoints, PrimitiveKind.Point));
+
+        _ = meshIndex; _ = ctx;
+    }
+
+    private static IntermediateMesh CloneWithFaces(IntermediateMesh src, FaceList faces, PrimitiveKind kind)
+    {
+        var dst = new IntermediateMesh
+        {
+            Name = $"{src.Name}_{kind}",
+            MaterialIndex = src.MaterialIndex,
+            MaxInfluencesPerVertex = src.MaxInfluencesPerVertex,
+            PrimitiveKinds = kind,
+        };
+
+        dst.Positions.AddRange(src.Positions);
+        if (src.Normals is not null) dst.Normals = new List<Prowl.Vector.Float3>(src.Normals);
+        if (src.Tangents is not null) dst.Tangents = new List<Prowl.Vector.Float4>(src.Tangents);
+        if (src.Colors0 is not null) dst.Colors0 = new List<Prowl.Vector.Color>(src.Colors0);
+        for (int uv = 0; uv < Mesh.MaxUVChannels; uv++)
+            if (src.UVs[uv] is { } u)
+                dst.UVs[uv] = new List<Prowl.Vector.Float2>(u);
+
+        if (src.VertexJoints is { } vj) dst.VertexJoints = (int[])vj.Clone();
+        if (src.VertexWeights is { } vw) dst.VertexWeights = (float[])vw.Clone();
+
+        // Later steps edit blend shape deltas in place, so each mesh gets its own copy.
+        foreach (var bs in src.BlendShapes)
+        {
+            var copy = new IntermediateBlendShape { Name = bs.Name };
+            foreach (var frame in bs.Frames)
+            {
+                copy.Frames.Add(new IntermediateBlendShapeFrame
+                {
+                    Weight = frame.Weight,
+                    DeltaPositions = (Prowl.Vector.Float3[])frame.DeltaPositions.Clone(),
+                    DeltaNormals = (Prowl.Vector.Float3[]?)frame.DeltaNormals?.Clone(),
+                    DeltaTangents = (Prowl.Vector.Float3[]?)frame.DeltaTangents?.Clone(),
+                });
+            }
+            dst.BlendShapes.Add(copy);
+        }
+
+        dst.Faces = faces;
+        return dst;
+    }
+
+    private static int CountFlags(PrimitiveKind k)
+    {
+        int n = 0;
+        if ((k & PrimitiveKind.Point) != 0) n++;
+        if ((k & PrimitiveKind.Line) != 0) n++;
+        if ((k & PrimitiveKind.Triangle) != 0) n++;
+        if ((k & PrimitiveKind.Polygon) != 0) n++;
+        return n;
+    }
+}

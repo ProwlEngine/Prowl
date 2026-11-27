@@ -1,0 +1,28 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+  <PropertyGroup>
+    <TargetFrameworks>$(ProwlTargetFrameworks)</TargetFrameworks>
+    <RootNamespace>Prowl.Clay</RootNamespace>
+    <AllowUnsafeBlocks>true</AllowUnsafeBlocks>
+    <GenerateDocumentationFile>true</GenerateDocumentationFile>
+  </PropertyGroup>
+
+  <PropertyGroup>
+    <!-- Package metadata -->
+    <PackageId>Prowl.Clay</PackageId>
+    <Title>Prowl.Clay</Title>
+    
+    <Description>3D model importing library for the Prowl Game Engine. Loads glTF2 / GLB / VRM, OBJ, and FBX (binary + ASCII) into a read-only Model graph with a configurable post-process pipeline (triangulation, tangent generation, bone limiting, coordinate conversion, mesh optimization).</Description>
+    <PackageTags>3d;model;import;gltf;glb;vrm;obj;fbx;prowl;gamedev;game-engine;dotnet;csharp</PackageTags>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <ProjectReference Include="..\..\Vector\Vector\Vector.csproj" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <InternalsVisibleTo Include="Clay.Tests" />
+    <InternalsVisibleTo Include="DiffDebugger" />
+  </ItemGroup>
+
+</Project>

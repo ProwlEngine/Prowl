@@ -1,0 +1,6 @@
+<shader>
+ERROR: <shader>:3: 'x' :  left of '[' is not of type array, matrix, or vector  
+ERROR: <shader>:3: '' : compilation terminated 
+ERROR: 2 compilation errors.  No code generated.
+
+

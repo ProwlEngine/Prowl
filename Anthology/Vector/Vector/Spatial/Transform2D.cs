@@ -1,0 +1,339 @@
+﻿using System;
+using System.Globalization;
+
+namespace Prowl.Vector.Spatial
+{
+    /// <summary>
+    /// Represents a 2D affine transformation matrix. Provides a rich API for manipulating
+    /// position, rotation, and scale, suitable for 2D object transformations.
+    /// The matrix is in the form:
+    /// | A C E |
+    /// | B D F |
+    /// | 0 0 1 |
+    /// </summary>
+    public struct Transform2D : IEquatable<Transform2D>, IFormattable
+    {
+        /// <summary>A transform with default values, representing no transformation.</summary>
+        public static readonly Transform2D Identity = new Transform2D(1.0f, 0.0f, 0.0f, 1.0f, 0.0f, 0.0f);
+
+
+        public float A, B, C, D, E, F;
+
+
+        /// <summary>Initializes a new transform with the specified coefficients.</summary>
+        public Transform2D(float a, float b, float c, float d, float e, float f)
+        {
+            A = a; B = b; C = c; D = d; E = e; F = f;
+        }
+
+
+        #region Properties
+
+        /// <summary>
+        /// Gets or sets the position (translation) of the transform.
+        /// </summary>
+        public Float2 Position
+        {
+            get => new Float2(E, F);
+            set { E = value.X; F = value.Y; }
+        }
+
+        /// <summary>
+        /// Gets or sets the rotation of the transform in degrees.
+        /// When setting, this preserves the existing scale and translation.
+        /// </summary>
+        public float Rotation
+        {
+            get => Maths.Atan2(B, A) * (float)Maths.Rad2Deg;
+            set
+            {
+                // Preserve scale and translation
+                var scale = this.Scale;
+                var position = this.Position;
+                var rad = value * (float)Maths.Deg2Rad;
+                var cs = Maths.Cos(rad);
+                var sn = Maths.Sin(rad);
+
+                A = cs * scale.X;
+                B = sn * scale.X;
+                C = -sn * scale.Y;
+                D = cs * scale.Y;
+                E = position.X;
+                F = position.Y;
+            }
+        }
+
+        /// <summary>
+        /// Gets or sets the scale of the transform.
+        /// When setting, this preserves the existing rotation and translation.
+        /// </summary>
+        public Float2 Scale
+        {
+            get => new Float2(Maths.Sqrt(A * A + B * B), Maths.Sqrt(C * C + D * D));
+            set
+            {
+                // Preserve rotation and translation
+                var rotation = this.Rotation;
+                var position = this.Position;
+                var rad = rotation * (float)Maths.Deg2Rad;
+                var cs = Maths.Cos(rad);
+                var sn = Maths.Sin(rad);
+
+                A = cs * value.X;
+                B = sn * value.X;
+                C = -sn * value.Y;
+                D = cs * value.Y;
+                E = position.X;
+                F = position.Y;
+            }
+        }
+
+        /// <summary>
+        /// Gets the normalized right-facing direction vector of the transform's local space (+X axis).
+        /// </summary>
+        public Float2 Right => Float2.Normalize(new Float2(A, B));
+
+        /// <summary>
+        /// Gets the normalized up-facing direction vector of the transform's local space (+Y axis).
+        /// </summary>
+        public Float2 Up => Float2.Normalize(new Float2(C, D));
+
+        /// <summary>Checks if this transform is the identity matrix.</summary>
+        public bool IsIdentity => A == 1.0 && B == 0.0 && C == 0.0 && D == 1.0 && E == 0.0 && F == 0.0;
+
+        /// <summary>Checks if this transform only contains translation.</summary>
+        public bool IsIdentityOrTranslation => A == 1.0 && B == 0.0 && C == 0.0 && D == 1.0;
+
+        /// <summary>Checks if this transform can be inverted.</summary>
+        public bool IsInvertible => Maths.Abs(A * D - C * B) > float.Epsilon;
+
+        #endregion
+
+
+        #region Public Methods
+
+        /// <summary>Applies a translation to the current transform.</summary>
+        /// <param name="translation">The vector to translate by.</param>
+        public void Translate(Float2 translation)
+        {
+            this = this * CreateTranslation(translation.X, translation.Y);
+        }
+
+        /// <summary>Applies a rotation (in degrees) to the current transform, relative to its own origin.</summary>
+        /// <param name="degrees">The angle to rotate by, in degrees.</param>
+        public void Rotate(float degrees)
+        {
+            this = this * CreateRotation(degrees);
+        }
+
+        /// <summary>Applies a rotation (in degrees) to the current transform around a world-space pivot point.</summary>
+        /// <param name="pivot">The world-space point to rotate around.</param>
+        /// <param name="degrees">The angle to rotate by, in degrees.</param>
+        public void RotateAround(Float2 pivot, float degrees)
+        {
+            this = CreateTranslation(pivot) * CreateRotation(degrees) * CreateTranslation(-pivot) * this;
+        }
+        
+        /// <summary>Applies a scale to the current transform, relative to its own origin.</summary>
+        /// <param name="scale">The vector to scale by.</param>
+        public void AddScale(Float2 scale)
+        {
+            this = this * CreateScale(scale.X, scale.Y);
+        }
+
+        /// <summary>Applies a scale to the current transform around a world-space pivot point.</summary>
+        /// <param name="pivot">The world-space point to scale around.</param>
+        /// <param name="scale">The vector to scale by.</param>
+        public void ScaleAround(Float2 pivot, Float2 scale)
+        {
+            this = CreateTranslation(pivot) * CreateScale(scale.X, scale.Y) * CreateTranslation(-pivot) * this;
+        }
+
+        /// <summary>
+        /// Rotates the transform to face a target point in world space.
+        /// The local right-facing axis (+X) will point towards the target.
+        /// </summary>
+        /// <param name="worldTarget">The world-space position to look at.</param>
+        public void LookAt(Float2 worldTarget)
+        {
+            var direction = Float2.Normalize(worldTarget - this.Position);
+            this.Rotation = Maths.Atan2(direction.Y, direction.X) * (float)Maths.Rad2Deg;
+        }
+
+        /// <summary>
+        /// Gets the angle in degrees from this transform's position to a world target.
+        /// </summary>
+        /// <param name="worldTarget">The world-space position.</param>
+        /// <returns>The angle in degrees.</returns>
+        public float GetAngleTo(Float2 worldTarget)
+        {
+            var direction = Float2.Normalize(worldTarget - this.Position);
+            return Maths.Atan2(direction.Y, direction.X) * (float)Maths.Rad2Deg;
+        }
+        
+        /// <summary>Transforms a point from local space to world space.</summary>
+        public Float2 TransformPoint(Float2 localPoint) => new Float2(localPoint.X * A + localPoint.Y * C + E, localPoint.X * B + localPoint.Y * D + F);
+        
+        /// <summary>Transforms a point from world space to local space.</summary>
+        public Float2 InverseTransformPoint(Float2 worldPoint) => this.Inverse() * worldPoint;
+
+        /// <summary>Transforms a direction from local space to world space (ignoring translation).</summary>
+        public Float2 TransformDirection(Float2 localDirection) => new Float2(localDirection.X * A + localDirection.Y * C, localDirection.X * B + localDirection.Y * D);
+
+        /// <summary>Transforms a direction from world space to local space (ignoring translation).</summary>
+        public Float2 InverseTransformDirection(Float2 worldDirection)
+        {
+            var inv = this.Inverse();
+            return new Float2(worldDirection.X * inv.A + worldDirection.Y * inv.C, worldDirection.X * inv.B + worldDirection.Y * inv.D);
+        }
+
+        /// <summary>Returns the inverse of this transform.</summary>
+        public Transform2D Inverse()
+        {
+            if (IsIdentityOrTranslation)
+                return CreateTranslation(-E, -F);
+
+            var det = A * D - C * B;
+            if (Maths.Abs(det) <= float.Epsilon)
+                return Identity;
+
+            var invDet = 1.0f / det;
+            return new Transform2D(
+                D * invDet, -B * invDet,
+                -C * invDet, A * invDet,
+                (C * F - D * E) * invDet,
+                (B * E - A * F) * invDet
+            );
+        }
+
+        /// <summary>Converts this 2D transform to a 4x4 matrix, suitable for 3D rendering pipelines.</summary>
+        public Float4x4 ToMatrix()
+        {
+            return new Float4x4(
+                new Float4(A, B, 0.0f, 0.0f),
+                new Float4(C, D, 0.0f, 0.0f),
+                new Float4(0.0f, 0.0f, 1.0f, 0.0f),
+                new Float4(E, F, 0.0f, 1.0f)
+            );
+        }
+
+        #endregion
+
+
+        #region Operators
+
+        /// <summary>Multiplies two transforms together (concatenates them).</summary>
+        public static Transform2D operator *(Transform2D left, Transform2D right)
+        {
+            // Note: This is the standard affine matrix multiplication order.
+            // It's equivalent to:
+            // | A' C' E' |   | A C E |   | a c e |
+            // | B' D' F' | = | B D F | * | b d f |
+            // | 0  0  1  |   | 0 0 1 |   | 0 0 1 |
+            return new Transform2D(
+                left.A * right.A + left.C * right.B,
+                left.B * right.A + left.D * right.B,
+                left.A * right.C + left.C * right.D,
+                left.B * right.C + left.D * right.D,
+                left.A * right.E + left.C * right.F + left.E,
+                left.B * right.E + left.D * right.F + left.F
+            );
+        }
+
+        /// <summary>Transforms a 2D vector by a transform.</summary>
+        public static Float2 operator *(Transform2D transform, Float2 point) => transform.TransformPoint(point);
+
+        #endregion
+
+
+        #region Static Methods
+
+        /// <summary>Linearly interpolates between two transforms.</summary>
+        public static Transform2D Lerp(Transform2D start, Transform2D end, float amount)
+        {
+            amount = Maths.Clamp(amount, 0.0f, 1.0f);
+            return new Transform2D(
+                start.A + (end.A - start.A) * amount,
+                start.B + (end.B - start.B) * amount,
+                start.C + (end.C - start.C) * amount,
+                start.D + (end.D - start.D) * amount,
+                start.E + (end.E - start.E) * amount,
+                start.F + (end.F - start.F) * amount
+            );
+        }
+
+        /// <summary>Creates a translation transform.</summary>
+        public static Transform2D CreateTranslation(Float2 translation) => new Transform2D(1.0f, 0.0f, 0.0f, 1.0f, translation.X, translation.Y);
+
+        /// <summary>Creates a translation transform.</summary>
+        public static Transform2D CreateTranslation(float tx, float ty) => new Transform2D(1.0f, 0.0f, 0.0f, 1.0f, tx, ty);
+
+        /// <summary>Creates a rotation transform with the angle specified in degrees.</summary>
+        public static Transform2D CreateRotation(float angleInDegrees) => CreateRotationRadians(angleInDegrees * (float)Maths.Deg2Rad);
+
+        /// <summary>Creates a rotation transform with the angle specified in radians.</summary>
+        public static Transform2D CreateRotationRadians(float angleInRadians)
+        {
+            var cs = Maths.Cos(angleInRadians);
+            var sn = Maths.Sin(angleInRadians);
+            return new Transform2D(cs, sn, -sn, cs, 0.0f, 0.0f);
+        }
+
+        /// <summary>Creates a uniform scale transform.</summary>
+        public static Transform2D CreateScale(float s) => new Transform2D(s, 0.0f, 0.0f, s, 0.0f, 0.0f);
+
+        /// <summary>Creates a non-uniform scale transform.</summary>
+        public static Transform2D CreateScale(float sx, float sy) => new Transform2D(sx, 0.0f, 0.0f, sy, 0.0f, 0.0f);
+
+        /// <summary>Creates a skew transform along the X-axis.</summary>
+        /// <param name="angleInDegrees">The angle in degrees to skew by.</param>
+        public static Transform2D CreateSkewX(float angleInDegrees)
+        {
+            return new Transform2D(1.0f, 0.0f, Maths.Tan(angleInDegrees * (float)Maths.Deg2Rad), 1.0f, 0.0f, 0.0f);
+        }
+
+        /// <summary>Creates a skew transform along the Y-axis.</summary>
+        /// <param name="angleInDegrees">The angle in degrees to skew by.</param>
+        public static Transform2D CreateSkewY(float angleInDegrees)
+        {
+            return new Transform2D(1.0f, Maths.Tan(angleInDegrees * (float)Maths.Deg2Rad), 0.0f, 1.0f, 0.0f, 0.0f);
+        }
+
+        /// <summary>Creates a skew transform along the X-axis around a pivot point.</summary>
+        public static Transform2D CreateSkewX(float angleInDegrees, Float2 origin)
+        {
+            return CreateTranslation(origin) * CreateSkewX(angleInDegrees) * CreateTranslation(-origin);
+        }
+
+        /// <summary>Creates a skew transform along the Y-axis around a pivot point.</summary>
+        public static Transform2D CreateSkewY(float angleInDegrees, Float2 origin)
+        {
+            return CreateTranslation(origin) * CreateSkewY(angleInDegrees) * CreateTranslation(-origin);
+        }
+
+        #endregion
+
+
+        #region Equals and GetHashCode
+
+        public static bool operator ==(Transform2D left, Transform2D right) => left.Equals(right);
+        public static bool operator !=(Transform2D left, Transform2D right) => !left.Equals(right);
+        public bool Equals(Transform2D other)
+        {
+            return A == other.A && B == other.B && C == other.C &&
+                   D == other.D && E == other.E && F == other.F;
+        }
+        public override bool Equals(object? obj) => obj is Transform2D other && Equals(other);
+        public override int GetHashCode() => HashCode.Combine(A, B, C, D, E, F);
+
+        #endregion
+
+
+        public override string ToString() => ToString(null, CultureInfo.CurrentCulture);
+        public string ToString(string? format, IFormatProvider? formatProvider)
+        {
+            return string.Format(formatProvider, "Transform2DD(Position: {0}, Rotation: {1}, Scale: {2})",
+                Position.ToString(format, formatProvider), Rotation.ToString(format, formatProvider), Scale.ToString(format, formatProvider));
+        }
+    }
+}

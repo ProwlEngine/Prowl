@@ -1,0 +1,11 @@
+#version 450
+layout(constant_id = 0) const uint WORKGROUP_SIZE = 64u;
+layout(constant_id = 1) const float SCALE = 1.0;
+layout(local_size_x_id = 0) in;
+layout(set = 0, binding = 0, std430) buffer Data {
+    float values[];
+} data;
+void main() {
+    uint i = gl_GlobalInvocationID.x;
+    data.values[i] *= SCALE;
+}

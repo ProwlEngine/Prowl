@@ -1,0 +1,7 @@
+<shader>
+ERROR: <shader>:5: '==' : can't use with samplers or structs containing samplers 
+ERROR: <shader>:5: '==' :  wrong operand types: no operation '==' exists that takes a left-hand operand of type 'layout( set=0 binding=0) uniform highp sampler2D' and a right operand of type 'layout( set=0 binding=1) uniform highp sampler2D' (or there is no acceptable conversion)
+ERROR: <shader>:5: '' : compilation terminated 
+ERROR: 3 compilation errors.  No code generated.
+
+

@@ -1,0 +1,13 @@
+// S2.8 subgroup op as a ternary condition mis-infers its type (found 2026-10-14 during S3):
+// InferBuiltinType has no subgroup return types (best-effort fallback = float), so
+// `subgroupElect() ? 1u : 0u` fails with "a ternary condition must be a boolean expression,
+// not 'float'" even at SPIR-V 1.3/1.4 targets where the op is perfectly legal.
+// subgroupElect() inside an `if` works — the type only matters where inference is read directly
+// (ternary conditions, overload resolution). glslang compiles this.
+// Expected today: clean reject (BUG — legal GLSL rejected). Fix shape: give InferBuiltinType
+// the subgroup return types (elect/all/any -> bool; ballot -> uvec4; shuffle/arithmetic -> arg type).
+#version 460
+#extension GL_KHR_shader_subgroup_basic : require
+layout(local_size_x = 8) in;
+layout(std430, binding = 0) buffer D { uint v[]; };
+void main() { v[gl_GlobalInvocationID.x] = subgroupElect() ? 1u : 0u; }

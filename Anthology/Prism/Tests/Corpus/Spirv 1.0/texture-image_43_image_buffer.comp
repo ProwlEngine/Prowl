@@ -1,0 +1,12 @@
+#version 460 core
+
+// imageBuffer: imageLoad/imageStore with a scalar integer coordinate.
+layout(local_size_x = 64) in;
+
+layout(set = 0, binding = 0, rgba32f) uniform imageBuffer img;
+
+void main() {
+    int coord = int(gl_GlobalInvocationID.x);
+    vec4 texel = imageLoad(img, coord);
+    imageStore(img, coord, texel + vec4(1.0));
+}

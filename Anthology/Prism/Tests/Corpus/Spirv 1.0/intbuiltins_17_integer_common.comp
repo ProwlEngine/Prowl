@@ -1,0 +1,29 @@
+#version 460
+
+layout(local_size_x = 64) in;
+
+layout(std430, binding = 0) buffer B {
+    ivec4 sa;
+    ivec4 sb;
+    uvec4 ua;
+    uvec4 ub;
+    ivec4 rSMin;
+    ivec4 rSMax;
+    ivec4 rSClamp;
+    ivec4 rSAbs;
+    ivec4 rSSign;
+    uvec4 rUMin;
+    uvec4 rUMax;
+    uvec4 rUClamp;
+};
+
+void main() {
+    rSMin = min(sa, sb);
+    rSMax = max(sa, sb);
+    rSClamp = clamp(sa, sb, sb + ivec4(4));
+    rSAbs = abs(sa);
+    rSSign = sign(sa);
+    rUMin = min(ua, ub);
+    rUMax = max(ua, ub);
+    rUClamp = clamp(ua, ub, ub + uvec4(4u));
+}

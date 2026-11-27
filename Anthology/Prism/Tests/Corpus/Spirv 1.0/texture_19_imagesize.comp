@@ -1,0 +1,18 @@
+#version 460
+
+layout(local_size_x=8, local_size_y=8) in;
+
+layout(rgba32f, set=0, binding=0) uniform image2D img2d;
+layout(rgba32f, set=0, binding=1) uniform image2DArray imgArr;
+
+layout(std430, set=0, binding=2) buffer Out {
+    ivec4 result;
+};
+
+void main() {
+    ivec2 s2 = imageSize(img2d);
+    ivec3 sa = imageSize(imgArr);
+    if (gl_GlobalInvocationID.x == 0u && gl_GlobalInvocationID.y == 0u) {
+        result = ivec4(s2, sa.z, sa.x);
+    }
+}

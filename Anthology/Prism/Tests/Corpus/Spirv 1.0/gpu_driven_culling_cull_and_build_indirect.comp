@@ -1,0 +1,156 @@
+#version 460 core
+
+// GPU-driven frustum + Hi-Z occlusion culling with compacted indirect draw
+// generation. One thread per instance, 1D dispatch over instanceCount.
+//
+// Hi-Z convention matches hiz_downsample.comp: standard Z (0.0 near,
+// 1.0 far), pyramid texels store the MAX (furthest, most conservative)
+// depth seen in their footprint. An instance is occluded when the depth
+// of its nearest point to the camera is still farther than that stored
+// conservative value, meaning nothing in front of it could have produced
+// a smaller stored depth to hide behind.
+
+layout(local_size_x = 64, local_size_y = 1, local_size_z = 1) in;
+
+struct InstanceData
+{
+    vec4 boundingSphere;   // xyz = world center, w = radius
+    uint transformIndex;
+    uint materialIndex;
+    uint padding0;
+    uint padding1;
+};
+
+layout(std430, set = 0, binding = 0) readonly buffer InstanceBuffer
+{
+    InstanceData instances[];
+};
+
+layout(set = 0, binding = 1) uniform CullingParams
+{
+    mat4 viewProj;
+    vec4 frustumPlanes[6];
+    vec4 cameraPosAndInstanceCount; // xyz = camera pos, w = instance count
+    vec2 screenSize;
+    float hizMipCount;
+    float padding0;
+} cullParams;
+
+layout(set = 0, binding = 2) uniform sampler2D hizPyramid;
+
+layout(std430, set = 0, binding = 3) buffer VisibleCounter
+{
+    uint visibleInstanceCount;
+};
+
+layout(std430, set = 0, binding = 4) writeonly buffer VisibleIndices
+{
+    uint visibleIndices[];
+};
+
+struct DrawIndexedIndirectCommand
+{
+    uint indexCount;
+    uint instanceCount;
+    uint firstIndex;
+    int vertexOffset;
+    uint firstInstance;
+};
+
+layout(std430, set = 0, binding = 5) buffer IndirectDrawBuffer
+{
+    DrawIndexedIndirectCommand drawCommand;
+};
+
+bool frustumCull(vec3 center, float radius)
+{
+    for (int i = 0; i < 6; i++)
+    {
+        vec4 plane = cullParams.frustumPlanes[i];
+        float dist = dot(plane.xyz, center) + plane.w;
+        if (dist < -radius)
+        {
+            return true;
+        }
+    }
+    return false;
+}
+
+// Projects 6 world-space points offset from the sphere center along the
+// cardinal axes and returns the resulting screen-space AABB in NDC xy.
+void projectScreenAABB(vec3 center, float radius, out vec2 aabbMin, out vec2 aabbMax)
+{
+    vec3 offsets[6] = vec3[](
+        vec3(radius, 0.0, 0.0), vec3(-radius, 0.0, 0.0),
+        vec3(0.0, radius, 0.0), vec3(0.0, -radius, 0.0),
+        vec3(0.0, 0.0, radius), vec3(0.0, 0.0, -radius)
+    );
+
+    aabbMin = vec2(1.0);
+    aabbMax = vec2(-1.0);
+
+    for (int i = 0; i < 6; i++)
+    {
+        vec4 clipPos = cullParams.viewProj * vec4(center + offsets[i], 1.0);
+        float w = max(clipPos.w, 0.0001);
+        vec2 ndc = clamp(clipPos.xy / w, vec2(-1.0), vec2(1.0));
+        aabbMin = min(aabbMin, ndc);
+        aabbMax = max(aabbMax, ndc);
+    }
+}
+
+void main()
+{
+    uint idx = gl_GlobalInvocationID.x;
+    uint instanceCount = uint(cullParams.cameraPosAndInstanceCount.w);
+    if (idx >= instanceCount)
+    {
+        return;
+    }
+
+    vec3 center = instances[idx].boundingSphere.xyz;
+    float radius = instances[idx].boundingSphere.w;
+
+    if (frustumCull(center, radius))
+    {
+        return;
+    }
+
+    vec2 aabbMin;
+    vec2 aabbMax;
+    projectScreenAABB(center, radius, aabbMin, aabbMax);
+
+    vec2 uvMin = clamp(aabbMin * 0.5 + 0.5, vec2(0.0), vec2(1.0));
+    vec2 uvMax = clamp(aabbMax * 0.5 + 0.5, vec2(0.0), vec2(1.0));
+
+    vec2 aabbSizePixels = max(uvMax - uvMin, vec2(0.0)) * cullParams.screenSize;
+    float mipLevel = ceil(log2(max(max(aabbSizePixels.x, aabbSizePixels.y), 1.0)));
+    mipLevel = clamp(mipLevel, 0.0, cullParams.hizMipCount - 1.0);
+
+    // Sample up to 4 corner taps of the AABB footprint at the chosen mip
+    // and keep the conservative maximum.
+    float d0 = textureLod(hizPyramid, vec2(uvMin.x, uvMin.y), mipLevel).r;
+    float d1 = textureLod(hizPyramid, vec2(uvMax.x, uvMin.y), mipLevel).r;
+    float d2 = textureLod(hizPyramid, vec2(uvMin.x, uvMax.y), mipLevel).r;
+    float d3 = textureLod(hizPyramid, vec2(uvMax.x, uvMax.y), mipLevel).r;
+    float hizDepth = max(max(d0, d1), max(d2, d3));
+
+    vec3 cameraPos = cullParams.cameraPosAndInstanceCount.xyz;
+    vec3 toCamera = cameraPos - center;
+    float distToCamera = max(length(toCamera), 0.0001);
+    vec3 nearestPoint = center + (toCamera / distToCamera) * radius;
+
+    vec4 nearestClip = cullParams.viewProj * vec4(nearestPoint, 1.0);
+    if (nearestClip.w > 0.0001)
+    {
+        float nearestDepth = nearestClip.z / nearestClip.w;
+        if (nearestDepth > hizDepth)
+        {
+            return; // occluded, culled
+        }
+    }
+
+    uint slot = atomicAdd(visibleInstanceCount, 1u);
+    visibleIndices[slot] = idx;
+    atomicAdd(drawCommand.instanceCount, 1u);
+}

@@ -1,0 +1,19 @@
+#version 460
+
+layout(local_size_x = 64) in;
+
+layout(std430, binding = 0) buffer B {
+    int si;
+    uint ui;
+    int rLsbS;
+    int rLsbU;
+    int rMsbS;
+    int rMsbU;
+};
+
+void main() {
+    rLsbS = findLSB(si);
+    rLsbU = findLSB(ui);
+    rMsbS = findMSB(si);
+    rMsbU = findMSB(ui);
+}

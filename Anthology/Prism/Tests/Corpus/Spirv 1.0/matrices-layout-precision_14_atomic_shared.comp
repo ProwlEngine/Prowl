@@ -1,0 +1,11 @@
+#version 460
+layout(local_size_x = 64) in;
+shared uint counter;
+layout(std430, binding = 0) buffer B { uint data[]; };
+void main() {
+    if (gl_LocalInvocationIndex == 0u) counter = 0u;
+    barrier();
+    atomicAdd(counter, 1u);
+    barrier();
+    data[gl_WorkGroupID.x] = counter;
+}

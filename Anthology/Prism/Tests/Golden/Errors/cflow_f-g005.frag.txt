@@ -1,0 +1,8 @@
+<shader>
+ERROR: <shader>:6: 'assign' :  l-value of swizzle cannot have duplicate components 
+ERROR: <shader>:6: 'out' : Non-L-value cannot be passed for 'out' or 'inout' parameters. 
+ERROR: <shader>:6: '' : compilation terminated 
+ERROR: 3 compilation errors.  No code generated.
+
+
+SPIR-V is not generated for failed compile or link

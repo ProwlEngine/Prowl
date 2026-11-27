@@ -1,0 +1,8 @@
+<shader>
+ERROR: <shader>:5: 'variable index' : required extension not requested: GL_EXT_nonuniform_qualifier
+ERROR: <shader>:5: '=' :  cannot convert from 'layout( set=0 binding=0 column_major std430) temp block{layout( column_major std430) buffer 4-element array of highp float x}' to ' temp highp float'
+ERROR: <shader>:5: '' : compilation terminated 
+ERROR: 3 compilation errors.  No code generated.
+
+
+SPIR-V is not generated for failed compile or link

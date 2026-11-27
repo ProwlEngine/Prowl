@@ -1,0 +1,17 @@
+#version 460
+#extension GL_EXT_ray_tracing : require
+
+layout(location = 0) rayPayloadInEXT vec4 payload;
+hitAttributeEXT vec2 attribs;
+
+void main() {
+    float coverage = attribs.x + attribs.y;
+    if (coverage < 0.1) {
+        ignoreIntersectionEXT;
+    }
+
+    payload.a += 1.0;
+    if (payload.a > 4.0) {
+        terminateRayEXT;
+    }
+}

@@ -1,0 +1,6 @@
+#version 460
+#extension GL_EXT_ray_tracing : require
+#extension GL_EXT_shader_explicit_arithmetic_types_int64 : require
+layout(location=0) rayPayloadEXT float p;
+layout(push_constant) uniform PC { uint64_t as; uvec2 as2; } pc;
+void main(){ traceRayEXT(accelerationStructureEXT(pc.as), 0u, 0xFFu, 0u, 0u, 0u, vec3(0), 0.0, vec3(1), 1.0, 0); traceRayEXT(accelerationStructureEXT(pc.as2), 0u, 0xFFu, 0u, 0u, 0u, vec3(0), 0.0, vec3(1), 1.0, 0); }

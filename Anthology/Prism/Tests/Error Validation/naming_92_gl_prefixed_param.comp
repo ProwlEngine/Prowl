@@ -1,0 +1,6 @@
+// glslang rejects this shader (gl_-prefixed user identifier); our compiler must reject it too.
+#version 450
+layout(local_size_x=1) in;
+layout(std430,set=0,binding=0) buffer B { float o; };
+float f(float gl_arg){ return gl_arg; }
+void main(){ o = f(1.0); }

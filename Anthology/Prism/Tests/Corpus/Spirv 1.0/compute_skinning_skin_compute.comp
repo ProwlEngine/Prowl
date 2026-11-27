@@ -1,0 +1,132 @@
+#version 460 core
+
+// GPU compute skinning pre-pass: applies morph target blend shapes then linear
+// blend skinning (LBS, not dual quaternion) to a bind-pose mesh, writing a
+// skinned vertex buffer that a later vertex-pulling render pass reads directly.
+
+layout(local_size_x = 64, local_size_y = 1, local_size_z = 1) in;
+
+#define MAX_MORPH_TARGETS 8
+#define MAX_BONE_INFLUENCES 4
+
+struct BindPoseVertex
+{
+    vec4 position;
+    vec4 normal;
+    vec4 tangent;
+};
+
+struct BoneInfluence
+{
+    uvec4 boneIndices;
+    vec4 boneWeights;
+};
+
+struct SkinnedVertex
+{
+    vec4 position;
+    vec4 normal;
+    vec4 tangent;
+};
+
+layout(set = 0, binding = 0, std430) readonly buffer BindPoseBuffer
+{
+    BindPoseVertex bindPoseVertices[];
+};
+
+layout(set = 0, binding = 1, std430) readonly buffer BoneInfluenceBuffer
+{
+    BoneInfluence boneInfluences[];
+};
+
+layout(set = 0, binding = 2, std430) readonly buffer BonePaletteBuffer
+{
+    mat4 bonePalette[];
+};
+
+layout(set = 0, binding = 3, std430) readonly buffer MorphPositionDeltaBuffer
+{
+    vec4 morphPositionDeltas[];
+};
+
+layout(set = 0, binding = 4, std430) readonly buffer MorphNormalDeltaBuffer
+{
+    vec4 morphNormalDeltas[];
+};
+
+layout(set = 0, binding = 5, std430) writeonly buffer SkinnedOutputBuffer
+{
+    SkinnedVertex skinnedVertices[];
+};
+
+layout(push_constant) uniform SkinningPushConstants
+{
+    uint vertexCount;
+    uint activeMorphTargetCount;
+    float morphWeights[MAX_MORPH_TARGETS];
+} pushConstants;
+
+void main()
+{
+    uint vertexIndex = gl_GlobalInvocationID.x;
+    if (vertexIndex >= pushConstants.vertexCount)
+    {
+        return;
+    }
+
+    BindPoseVertex bindPoseVertex = bindPoseVertices[vertexIndex];
+    vec4 morphedPosition = bindPoseVertex.position;
+    vec3 morphedNormal = bindPoseVertex.normal.xyz;
+    vec4 bindTangent = bindPoseVertex.tangent;
+
+    // Blend shapes are applied in bind space, before skinning, so the deltas
+    // travel through the same bone transforms as the rest of the mesh.
+    uint morphTargetCount = min(pushConstants.activeMorphTargetCount, uint(MAX_MORPH_TARGETS));
+    for (uint targetIndex = 0; targetIndex < morphTargetCount; ++targetIndex)
+    {
+        float weight = pushConstants.morphWeights[targetIndex];
+        uint deltaIndex = targetIndex * pushConstants.vertexCount + vertexIndex;
+        morphedPosition.xyz += morphPositionDeltas[deltaIndex].xyz * weight;
+        morphedNormal += morphNormalDeltas[deltaIndex].xyz * weight;
+    }
+
+    BoneInfluence influence = boneInfluences[vertexIndex];
+
+    vec4 skinnedPosition = vec4(0.0);
+    vec3 skinnedNormal = vec3(0.0);
+    vec3 skinnedTangent = vec3(0.0);
+
+    // Linear blend skinning: weighted sum of per-bone transformed attributes.
+    // The normal and tangent use the bone matrix's upper-left 3x3 directly
+    // rather than a per-bone inverse-transpose normal matrix. This is a
+    // documented simplification that is only correct when skinning matrices
+    // are close to orthogonal / uniform-scale, which holds for the rigid and
+    // uniformly scaled bone transforms produced by this engine's rig.
+    for (uint influenceIndex = 0; influenceIndex < MAX_BONE_INFLUENCES; ++influenceIndex)
+    {
+        float boneWeight = influence.boneWeights[influenceIndex];
+        if (boneWeight <= 0.0)
+        {
+            continue;
+        }
+
+        uint boneIndex = influence.boneIndices[influenceIndex];
+        mat4 boneMatrix = bonePalette[boneIndex];
+        mat3 boneRotationScale = mat3(boneMatrix);
+
+        skinnedPosition += boneWeight * (boneMatrix * morphedPosition);
+        skinnedNormal += boneWeight * (boneRotationScale * morphedNormal);
+        skinnedTangent += boneWeight * (boneRotationScale * bindTangent.xyz);
+    }
+
+    skinnedPosition.w = 1.0;
+
+    // Renormalize after the weighted blend of per-bone rotations, the
+    // standard LBS correction for the candy-wrapper artifact on normals.
+    vec3 finalNormal = normalize(skinnedNormal);
+    vec3 finalTangent = normalize(skinnedTangent);
+
+    skinnedVertices[vertexIndex].position = skinnedPosition;
+    skinnedVertices[vertexIndex].normal = vec4(finalNormal, 0.0);
+    skinnedVertices[vertexIndex].tangent = vec4(finalTangent, bindTangent.w);
+}

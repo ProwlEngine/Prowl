@@ -1,0 +1,5 @@
+#version 450
+layout(local_size_x=1) in;
+struct S { float a; double b; vec3 c; double d[2]; };
+layout(std430,set=0,binding=0) buffer B { S s[2]; double o; };
+void main() { o = double(s[1].a) + s[1].b + double(s[1].c.z) + s[1].d[1]; }

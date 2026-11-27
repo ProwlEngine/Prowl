@@ -1,0 +1,19 @@
+#version 460
+
+layout(local_size_x = 64) in;
+
+layout(std430, binding = 0) buffer B {
+    float f;
+    vec3 fv;
+    uint rBits;
+    float rBack;
+    uvec3 rBitsV;
+    vec3 rBackV;
+};
+
+void main() {
+    rBits = floatBitsToUint(f);
+    rBack = uintBitsToFloat(rBits);
+    rBitsV = floatBitsToUint(fv);
+    rBackV = uintBitsToFloat(rBitsV);
+}

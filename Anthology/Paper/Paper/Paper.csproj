@@ -1,0 +1,32 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+  <PropertyGroup>
+    <TargetFrameworks>$(ProwlTargetFrameworksCompat)</TargetFrameworks>
+    <Nullable>enable</Nullable>
+    <AllowUnsafeBlocks>true</AllowUnsafeBlocks>
+    <PackageId>Prowl.$(AssemblyName)</PackageId>
+    <Title>Prowl.Paper</Title>
+    <Description>A powerful immediate mode .net UI Library powering the Prowl Game Engine!</Description>
+    <RootNamespace>Prowl.$(MSBuildProjectName.Replace(" ", "_"))</RootNamespace>
+    <PackageTags>UI framework;immediate mode GUI;C#;.NET;layout engine;responsive design;fluid layouts;component library;animations;easing functions;transitions;event handling;input management;styling system;theme support;widget toolkit;interactive elements;vector graphics;fluent API;text rendering;scrolling;dragging;flexible layouts;Windows;user interface;GUI library;desktop applications;game UI;dark mode;light mode;reactive design;rendering engine;transform effects;UI components;window management;tooltips;text field;buttons;sliders</PackageTags>
+    <GenerateDocumentationFile>true</GenerateDocumentationFile>
+    <NoWarn>$(NoWarn);CS1591</NoWarn>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <InternalsVisibleTo Include="Paper.Tests" />
+  </ItemGroup>
+
+  <!-- Unsafe.As lets the typed style setters convert a generic value without boxing it. It is
+       built into net8.0 and later; on netstandard it comes from this package. -->
+  <ItemGroup Condition="'$(TargetFramework)' == 'netstandard2.1'">
+    <PackageReference Include="System.Runtime.CompilerServices.Unsafe" Version="6.0.0" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <ProjectReference Include="..\..\Quill\Quill\Quill.csproj" />
+    <ProjectReference Include="..\..\Scaffold\Scaffold\Scaffold.csproj" />
+    <ProjectReference Include="..\..\Quire\Quire\Quire.csproj" />
+  </ItemGroup>
+
+</Project>

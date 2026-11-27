@@ -1,0 +1,15 @@
+#version 460
+
+layout(local_size_x = 64) in;
+
+layout(std430, binding = 0) buffer B {
+    float inVal;
+    float outData[];
+} b;
+
+void main() {
+    uint idx = gl_GlobalInvocationID.x;
+    float ip;
+    float frac = modf(b.inVal, ip);
+    b.outData[idx] = frac + ip * 0.5;
+}

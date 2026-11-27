@@ -1,0 +1,7 @@
+<shader>
+ERROR: <shader>:4: 'data' : member of block cannot be or contain a sampler, image, or atomic_uint type 
+ERROR: 1 compilation errors.  No code generated.
+
+
+ERROR: Linking compute stage: Missing entry point: Each stage requires one entry point
+

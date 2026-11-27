@@ -1,0 +1,14 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+    <PropertyGroup>
+        <TargetFramework>$(ProwlTestTargetFramework)</TargetFramework>
+        </PropertyGroup>
+
+    <ItemGroup>
+        <ProjectReference Include="..\..\Graphite\Prowl.Graphite.csproj" />
+        <ProjectReference Include="..\..\ShaderDef\Core\Prowl.Graphite.ShaderDef.csproj" />
+        <ProjectReference Include="..\..\ShaderDef\Compiler\Prowl.Graphite.ShaderDef.Compiler.csproj" />
+        <ProjectReference Include="..\..\Rendering\Prowl.Graphite.Rendering.csproj" />
+    </ItemGroup>
+
+</Project>

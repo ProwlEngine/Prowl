@@ -1,0 +1,6 @@
+#version 450
+layout(local_size_x=1) in;
+struct S { mat2x3 m; vec3 v; };
+layout(std430, binding=0, row_major) buffer B { S a; S b; } b;
+layout(std430, binding=1) buffer C { S c; } c;
+void main(){ b.b = b.a; c.c = b.a; S tmp = c.c; b.a = tmp; }

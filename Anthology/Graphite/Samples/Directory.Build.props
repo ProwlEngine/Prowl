@@ -1,0 +1,14 @@
+<Project>
+  <!-- Inherit build settings from the parent Directory.Build.props file. -->
+  <Import Project="$([MSBuild]::GetPathOfFileAbove('Directory.Build.props', '$(MSBuildThisFileDirectory)../'))" />
+
+  <PropertyGroup>
+            <AllowUnsafeBlocks>true</AllowUnsafeBlocks>
+        <Nullable>enable</Nullable>
+        <NoWarn>$(NoWarn);NU1902;NU1903</NoWarn>
+    </PropertyGroup>
+
+    <ItemGroup>
+        <ProjectReference Include="../../Graphite/Prowl.Graphite.csproj" />
+    </ItemGroup>
+</Project>

@@ -1,0 +1,175 @@
+using System;
+using System.Collections.Generic;
+
+using Xunit;
+
+namespace Prowl.Graphite.Tests;
+
+// The overflow tests need a device with a small primary transient buffer, so they build their
+// own isolated device rather than using the shared one.
+public abstract class TransientAllocationTests<T> : GraphicsDeviceTestBase<T> where T : GraphicsDeviceCreator
+{
+    private const uint PrimarySize = 4096;
+
+    private GraphicsDevice CreateIsolatedDevice(GraphicsDeviceOptions options) => GD.BackendType switch
+    {
+        GraphicsBackend.Vulkan => GraphicsDevice.CreateVulkan(options),
+        _ => throw new NotSupportedException(),
+    };
+
+    // A device whose primary transient buffer is PrimarySize, so overflow is reachable in a test.
+    private GraphicsDevice CreateSmallTransientDevice()
+        => CreateIsolatedDevice(new GraphicsDeviceOptions(true)
+        {
+            TransientBufferInitialSize = PrimarySize,
+        });
+
+    [Fact]
+    public void AllocateTransient_RunOfAllocations_NeverOverlap()
+    {
+        List<DeviceBufferRange> ranges = [];
+
+        GD.RunTestGraph(context =>
+        {
+            for (uint i = 0; i < 64; i++)
+                ranges.Add(context.AllocateTransient(64 + i));
+        });
+        GD.WaitForIdle();
+
+        // Every pair sharing a backing buffer must occupy disjoint byte ranges. The existing
+        // suite only compares two allocations for an identical offset, which an overlapping
+        // allocator would still pass.
+        for (int i = 0; i < ranges.Count; i++)
+        {
+            for (int j = i + 1; j < ranges.Count; j++)
+            {
+                if (ranges[i].Buffer != ranges[j].Buffer) continue;
+
+                bool disjoint = ranges[i].Offset + ranges[i].SizeInBytes <= ranges[j].Offset
+                    || ranges[j].Offset + ranges[j].SizeInBytes <= ranges[i].Offset;
+                Assert.True(disjoint, $"ranges {i} and {j} overlap in the same buffer");
+            }
+        }
+
+        uint alignment = GD.UniformBufferMinOffsetAlignment;
+
+        GD.RunTestGraph(context =>
+        {
+            // Deliberately unaligned sizes: the allocator must round the head up each time,
+            // otherwise the returned offset is illegal as a dynamic UBO offset.
+            foreach (uint size in new uint[] { 1, 7, 33, 100, 255, 3 })
+            {
+                DeviceBufferRange range = context.AllocateTransient(size);
+                Assert.Equal(0u, range.Offset % alignment);
+            }
+        });
+        GD.WaitForIdle();
+
+        Dictionary<uint, DeviceBuffer> primaryBySlot = [];
+
+        for (uint i = 0; i < GD.MaxExecutingTasks * 2; i++)
+        {
+            DeviceBufferRange first = default;
+            ExecutionTask task = GD.RunTestGraph(context =>
+            {
+                first = context.AllocateTransient(256);
+                context.AllocateTransient(1024);
+            });
+
+            // The bump head restarts at 0 for every frame, so the frame's first allocation is
+            // always at offset 0 regardless of how much the previous frame consumed.
+            Assert.Equal(0u, first.Offset);
+
+            // A ring slot keeps its primary buffer across cycles; it is reused, not reallocated.
+            if (primaryBySlot.TryGetValue(task.RingSlot, out DeviceBuffer previous))
+                Assert.Same(previous, first.Buffer);
+            else
+                primaryBySlot[task.RingSlot] = first.Buffer;
+
+            GD.WaitForExecution(task);
+        }
+
+        // Proves the ranges are backed by real, non-aliasing memory: two allocations written
+        // through the mapped pointer must read back independently.
+        using DeviceBuffer staging = GD.ResourceFactory.CreateBuffer(
+            new BufferDescription(sizeof(uint) * 2, BufferUsage.Staging));
+
+        DeviceBufferRange a = default, b = default;
+        GD.RunTestGraph((context, cl) =>
+        {
+            a = context.AllocateTransient(sizeof(uint));
+            b = context.AllocateTransient(sizeof(uint));
+
+            WriteUInt(a, 0xAAAAAAAA);
+            WriteUInt(b, 0xBBBBBBBB);
+
+            cl.CopyBuffer(a.Buffer, a.Offset, staging, 0, sizeof(uint));
+            cl.CopyBuffer(b.Buffer, b.Offset, staging, sizeof(uint), sizeof(uint));
+        });
+        GD.WaitForIdle();
+
+        Span<uint> map = GD.Map<uint>(staging);
+        uint firstValue = map[0];
+        uint secondValue = map[1];
+        GD.Unmap(staging);
+
+        Assert.Equal(0xAAAAAAAA, firstValue);
+        Assert.Equal(0xBBBBBBBB, secondValue);
+    }
+
+    private void WriteUInt(DeviceBufferRange range, uint value)
+    {
+        Span<byte> mapped = GD.Map(range.Buffer);
+        BitConverter.TryWriteBytes(mapped.Slice((int)range.Offset), value);
+        GD.Unmap(range.Buffer);
+    }
+
+    [Fact]
+    public void AllocateTransient_PastPrimaryCapacity_SpillsToAnOverflowBuffer()
+    {
+        using GraphicsDevice device = CreateSmallTransientDevice();
+
+        device.RunTestGraph(context =>
+        {
+            DeviceBufferRange primary = context.AllocateTransient(PrimarySize);
+            Assert.Equal(0u, primary.Offset);
+
+            // The primary is now exactly full, so this must land in a fresh overflow buffer.
+            DeviceBufferRange spilled = context.AllocateTransient(256);
+
+            Assert.NotSame(primary.Buffer, spilled.Buffer);
+            Assert.Equal(0u, spilled.Offset);
+            Assert.True(spilled.Buffer.SizeInBytes >= 256);
+        });
+        device.WaitForIdle();
+
+        device.RunTestGraph(context =>
+        {
+            // A single request no primary could ever satisfy is served by a right-sized overflow.
+            DeviceBufferRange range = context.AllocateTransient(PrimarySize * 4);
+
+            Assert.Equal(0u, range.Offset);
+            Assert.True(range.Buffer.SizeInBytes >= PrimarySize * 4);
+        });
+        device.WaitForIdle();
+
+        device.RunTestGraph(context =>
+        {
+            context.AllocateTransient(PrimarySize);
+            DeviceBufferRange firstSpill = context.AllocateTransient(64);
+            DeviceBufferRange secondSpill = context.AllocateTransient(64);
+
+            // Once spilled, the overflow buffer becomes the active one and keeps bump-allocating
+            // rather than creating a buffer per allocation.
+            Assert.Same(firstSpill.Buffer, secondSpill.Buffer);
+            Assert.True(secondSpill.Offset >= firstSpill.Offset + firstSpill.SizeInBytes);
+        });
+        device.WaitForIdle();
+    }
+}
+
+#if TEST_VULKAN
+[Trait("Backend", "Vulkan")]
+[Collection("GPU Tests")]
+public class VulkanTransientAllocationTests : TransientAllocationTests<VulkanDeviceCreator> { }
+#endif

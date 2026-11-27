@@ -1,0 +1,6 @@
+#version 450
+layout(local_size_x=1) in;
+struct S { vec3 a; float b; };
+layout(std430, binding=0) buffer B { S s; } b;
+void mk(out S s){ s.a = vec3(1); s.b = 2.0; }
+void main(){ mk(b.s); }

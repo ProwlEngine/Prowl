@@ -1,0 +1,6 @@
+<shader>
+ERROR: <shader>:5: 'assign' :  l-value required "b" (can't modify a readonly buffer)
+ERROR: <shader>:5: '' : compilation terminated 
+ERROR: 2 compilation errors.  No code generated.
+
+

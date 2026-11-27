@@ -1,0 +1,19 @@
+#version 460
+
+layout(local_size_x = 64) in;
+
+layout(std430, binding = 0) buffer B {
+    float f;
+    ivec2 fv;
+    int rBits;
+    float rBack;
+    ivec2 rBitsV;
+    vec2 rBackV;
+};
+
+void main() {
+    rBits = floatBitsToInt(f);
+    rBack = intBitsToFloat(rBits);
+    rBitsV = floatBitsToInt(vec2(f, rBack));
+    rBackV = intBitsToFloat(rBitsV);
+}

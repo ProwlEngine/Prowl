@@ -1,0 +1,4 @@
+<shader>
+ERROR: <shader>:4: 'clock2x32ARB' : required extension not requested: GL_ARB_shader_clock
+ERROR: <shader>:4: '' : compilation terminated 
+ERROR: 2 compilation errors.  No code generated.

@@ -1,0 +1,18 @@
+#version 460 core
+
+// Explicit member alignment via layout(align=16) inside an SSBO block.
+
+layout(local_size_x = 1) in;
+
+layout(std430, set = 0, binding = 0) buffer Data
+{
+    float scalar;
+    layout(align = 16) float aligned;   // natural offset is 4; align forces it to 16
+    float values[];
+};
+
+void main()
+{
+    aligned = scalar * 2.0;
+    values[gl_GlobalInvocationID.x] = aligned + scalar;
+}

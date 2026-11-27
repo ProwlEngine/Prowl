@@ -1,0 +1,50 @@
+<Solution>
+    <Folder Name="/Tests/">
+        <Project Path="Tests/Graphite/Prowl.Graphite.Tests.csproj" />
+        <Project Path="Tests/Debugger/Prowl.Graphite.Debugger.Tests.csproj" />
+        <Project Path="Tests/ShaderDef/Prowl.Graphite.ShaderDef.Tests.csproj" />
+        <Project Path="Tests/ShaderDef.Compiler/Prowl.Graphite.ShaderDef.Compiler.Tests.csproj" />
+        <Project Path="Tests/Rendering/Prowl.Graphite.Rendering.Tests.csproj" />
+        <Project Path="Tests/Rendering.Tools/Prowl.Graphite.Rendering.Tools.Tests.csproj" />
+    </Folder>
+    <Folder Name="/Graphite/">
+        <Project Path="Graphite/Prowl.Graphite.csproj" />
+    </Folder>
+    <Folder Name="/Debugger/">
+        <Project Path="Debugger/Prowl.Graphite.Debugger.csproj" />
+        <Project Path="Debugger/Viewer/Prowl.Graphite.Debugger.Viewer.csproj" />
+    </Folder>
+    <Folder Name="/Rendering/">
+        <Project Path="Rendering/Prowl.Graphite.Rendering.csproj" />
+        <Project Path="Rendering.Tools/Prowl.Graphite.Rendering.Tools.csproj" />
+    </Folder>
+    <Folder Name="/ShaderDef/">
+        <Project Path="ShaderDef/Core/Prowl.Graphite.ShaderDef.csproj" />
+        <Project Path="ShaderDef/Compiler/Prowl.Graphite.ShaderDef.Compiler.csproj" />
+    </Folder>
+    <Folder Name="/Samples/" />
+    <Folder Name="/Samples/HelloTriangle/">
+        <Project Path="Samples/HelloTriangle/HelloTriangle.csproj" />
+    </Folder>
+    <Folder Name="/Samples/CubeGrid/">
+        <Project Path="Samples/CubeGrid/CubeGrid.csproj" />
+    </Folder>
+    <Folder Name="/Samples/Cube/">
+        <Project Path="Samples/Cube/Cube.csproj" />
+    </Folder>
+    <Folder Name="/Samples/TexturedQuad/">
+        <Project Path="Samples/TexturedQuad/TexturedQuad.csproj" />
+    </Folder>
+    <Folder Name="/Samples/DebuggerReplay/">
+        <Project Path="Samples/DebuggerReplay/DebuggerReplay.csproj" />
+    </Folder>
+    <Folder Name="/Samples/DebuggerViewer/">
+        <Project Path="Samples/DebuggerViewer/DebuggerViewer.csproj" />
+    </Folder>
+    <Folder Name="/Samples/Shared/">
+        <Project Path="Samples/Shared/Shared.csproj" />
+    </Folder>
+    <Folder Name="/Tools/">
+        <Project Path="Tools/GraphiteBench/GraphiteBench.csproj" />
+    </Folder>
+</Solution>

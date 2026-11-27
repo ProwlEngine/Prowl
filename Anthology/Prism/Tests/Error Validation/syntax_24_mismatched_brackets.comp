@@ -1,0 +1,8 @@
+#version 460
+
+layout(local_size_x = 1) in;
+
+void main() {
+    float foo[4];
+    float x = foo[0);
+}

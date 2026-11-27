@@ -1,0 +1,11 @@
+#version 460
+#extension GL_KHR_shader_subgroup_vote : require
+#extension GL_EXT_shader_quad_control : require
+layout(local_size_x = 64) in;
+layout(std430, set = 0, binding = 0) buffer Data { uint values[]; };
+void main()
+{
+    uint i = gl_GlobalInvocationID.x;
+    bool cond = values[i] > 10u;
+    values[i] = subgroupQuadAll(cond) ? 1u : 0u;
+}

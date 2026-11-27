@@ -1,0 +1,4 @@
+<shader>
+ERROR: <shader>:3: 'float' : cannot apply precision statement to this type; use 'float', 'int' or a sampler type 
+ERROR: <shader>:3: '' : compilation terminated 
+ERROR: 2 compilation errors.  No code generated.

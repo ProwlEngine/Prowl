@@ -1,0 +1,17 @@
+#version 460
+#extension GL_KHR_memory_scope_semantics : require
+#extension GL_KHR_cooperative_matrix : require
+#extension GL_EXT_shader_explicit_arithmetic_types_float16 : require
+layout(local_size_x = 64) in;
+layout(std430, set = 0, binding = 0) buffer Data { float16_t values[]; };
+void main()
+{
+    coopmat<float16_t, gl_ScopeSubgroup, 16, 16, gl_MatrixUseA> matA;
+    coopmat<float16_t, gl_ScopeSubgroup, 16, 16, gl_MatrixUseB> matB;
+    coopmat<float16_t, gl_ScopeSubgroup, 16, 16, gl_MatrixUseAccumulator> matC;
+    coopMatLoad(matA, values, 0, 16, gl_CooperativeMatrixLayoutRowMajor);
+    coopMatLoad(matB, values, 256, 16, gl_CooperativeMatrixLayoutRowMajor);
+    coopMatLoad(matC, values, 512, 16, gl_CooperativeMatrixLayoutRowMajor);
+    matC = coopMatMulAdd(matA, matB, matC);
+    coopMatStore(matC, values, 512, 16, gl_CooperativeMatrixLayoutRowMajor);
+}

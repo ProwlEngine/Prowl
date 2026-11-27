@@ -1,0 +1,5 @@
+<shader>
+ERROR: <shader>:3: '' :  syntax error, unexpected IDENTIFIER, expecting COMMA or SEMICOLON
+ERROR: 1 compilation errors.  No code generated.
+
+

@@ -1,0 +1,13 @@
+#version 450
+layout(local_size_x = 64) in;
+layout(set = 0, binding = 0, std430) buffer Counters {
+    uint histogram[256];
+} counters;
+layout(set = 0, binding = 1, std430) readonly buffer Values {
+    uint values[];
+} src;
+void main() {
+    uint i = gl_GlobalInvocationID.x;
+    uint bin = src.values[i] & 0xFFu;
+    atomicAdd(counters.histogram[bin], 1u);
+}

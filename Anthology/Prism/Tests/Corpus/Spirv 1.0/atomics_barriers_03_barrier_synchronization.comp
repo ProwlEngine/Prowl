@@ -1,0 +1,25 @@
+#version 460 core
+
+// barrier and memory barrier synchronization
+layout(local_size_x = 64) in;
+
+shared uint shared_data[64];
+
+layout(std430, binding = 0) buffer Data {
+    uint buffer_data[];
+};
+
+void main() {
+    uint idx = gl_LocalInvocationID.x;
+
+    shared_data[idx] = idx;
+    barrier();
+    memoryBarrierShared();
+
+    uint neighbor = shared_data[(idx + 1u) % 64u];
+    groupMemoryBarrier();
+
+    buffer_data[idx] = neighbor;
+    memoryBarrierBuffer();
+    barrier();
+}

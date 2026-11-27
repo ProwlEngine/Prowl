@@ -1,0 +1,7 @@
+<shader>
+ERROR: <shader>:4: 'xyz' : vector swizzle selection out of range 
+ERROR: <shader>:4: 'assign' :  cannot convert from ' temp highp 2-component vector of float' to 'layout( column_major std430 offset=0) buffer highp float'
+ERROR: <shader>:4: '' : compilation terminated 
+ERROR: 3 compilation errors.  No code generated.
+
+

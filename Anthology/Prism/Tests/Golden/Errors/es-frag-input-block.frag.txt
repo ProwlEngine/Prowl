@@ -1,0 +1,6 @@
+<shader>
+ERROR: <shader>:3: 'fragment input block' : not supported for this version or the enabled extensions 
+ERROR: 1 compilation errors.  No code generated.
+
+
+ERROR: Linking fragment stage: Missing entry point: Each stage requires one entry point

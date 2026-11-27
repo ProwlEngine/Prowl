@@ -1,0 +1,6 @@
+<shader>
+ERROR: <shader>:3: 'c' : variables with qualifier 'const' must be initialized 
+ERROR: <shader>:3: '' : compilation terminated 
+ERROR: 2 compilation errors.  No code generated.
+
+

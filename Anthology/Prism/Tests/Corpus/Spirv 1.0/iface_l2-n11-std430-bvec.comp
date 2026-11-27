@@ -1,0 +1,5 @@
+#version 450
+layout(local_size_x=1) in;
+struct S { bool a; bvec2 b; };
+layout(std430, binding=0) buffer B { S s[2]; bool c[3]; bvec4 d; } b;
+void main(){ b.s[1] = b.s[0]; b.c[2] = !b.c[1]; b.d = not(b.d); S loc = b.s[1]; loc.a = !loc.a; b.s[0] = loc; bool cc[3] = b.c; b.c = cc; }

@@ -1,0 +1,8 @@
+<shader>
+ERROR: <shader>:3: 'x' : undeclared identifier 
+ERROR: <shader>:3: 'x' : redefinition 
+ERROR: <shader>:3: '' : compilation terminated 
+ERROR: 3 compilation errors.  No code generated.
+
+
+SPIR-V is not generated for failed compile or link

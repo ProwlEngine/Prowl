@@ -1,0 +1,6 @@
+<shader>
+ERROR: <shader>:5: 'assign' : can't read from writeonly object:  B
+ERROR: <shader>:5: '' : compilation terminated 
+ERROR: 2 compilation errors.  No code generated.
+
+

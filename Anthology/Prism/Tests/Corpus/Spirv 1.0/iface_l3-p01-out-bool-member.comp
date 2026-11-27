@@ -1,0 +1,7 @@
+#version 450
+layout(local_size_x=1) in;
+layout(std430, binding=0) buffer B { bool f; bvec2 g; float x[2]; } b;
+void set(out bool v){ v = true; }
+void set2(inout bvec2 v){ v = not(v); }
+void setarr(out float a[2]){ a[0]=1.0; a[1]=2.0; }
+void main(){ set(b.f); set2(b.g); setarr(b.x); }

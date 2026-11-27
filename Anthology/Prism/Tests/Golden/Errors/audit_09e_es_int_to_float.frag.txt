@@ -1,0 +1,6 @@
+<shader>
+ERROR: <shader>:4: '=' :  cannot convert from ' temp mediump int' to ' temp highp float'
+ERROR: <shader>:4: '' : compilation terminated 
+ERROR: 2 compilation errors.  No code generated.
+
+

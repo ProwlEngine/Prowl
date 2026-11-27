@@ -1,0 +1,13 @@
+#version 450
+layout(local_size_x=1) in;
+layout(std430,set=0,binding=0) buffer B { float o; };
+void addBoth(inout float x, inout float y) { x += 1.0; y += 10.0; }
+void useVal(in float x, out float y) { y = x * 2.0; }
+void main() {
+  float p = 1.0, q = 2.0;
+  addBoth(p, q);
+  float r; useVal(p, r);
+  float arr[2]; arr[0] = 5.0; arr[1] = 6.0;
+  addBoth(arr[0], arr[1]);
+  o = p + q + r + arr[0] + arr[1];
+}

@@ -1,0 +1,11 @@
+// S6.1 unknown layout qualifier — FIXED 2026-10-14:
+// `layout(q77 = 64)` now rejects at parse time ('q77' : unrecognized layout identifier taking an
+// assigned value) instead of silently changing nothing. The whitelist covers everything the corpus
+// uses plus the spec's other stage primitives, image formats, XFB modes, ray-tracing payload
+// qualifiers, and depth/stencil/fragment-ordering modes. Stage-scoped misuse (local_size_x in a
+// fragment shader) is deliberately not checked — the parser is context-free; glslang rejects that
+// separately ("for this stage").
+// Expected today: REJECT (fixed).
+#version 460
+layout(q77 = 64) in;
+void main(){}

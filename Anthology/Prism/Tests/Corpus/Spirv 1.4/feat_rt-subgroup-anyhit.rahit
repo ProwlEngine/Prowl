@@ -1,0 +1,5 @@
+#version 460
+#extension GL_EXT_ray_tracing : require
+#extension GL_KHR_shader_subgroup_basic : require
+layout(std430, binding=0) buffer B { uint s; } b;
+void main(){ b.s = gl_SubgroupSize + gl_SubgroupInvocationID; }

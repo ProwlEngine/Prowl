@@ -1,0 +1,420 @@
+﻿// This file is part of the Prowl Game Engine
+// Licensed under the MIT License. See the LICENSE file in the project root for details.
+
+using System;
+using System.Globalization;
+using System.Runtime.CompilerServices;
+
+using Prowl.Vector.Geometry;
+
+namespace Prowl.Vector
+{
+    /// <summary>
+    /// Represents a 3D sphere defined by a center point and radius.
+    /// </summary>
+    public struct Sphere : IEquatable<Sphere>, IFormattable, IBoundingShape
+    {
+        /// <summary>The center point of the sphere.</summary>
+        public Float3 Center;
+
+        /// <summary>The radius of the sphere.</summary>
+        public float Radius;
+
+        /// <summary>
+        /// Initializes a new sphere with the specified center and radius.
+        /// </summary>
+        /// <param name="center">The center point of the sphere.</param>
+        /// <param name="radius">The radius of the sphere.</param>
+        [MethodImpl(MethodImplOptions.AggressiveInlining)]
+        public Sphere(Float3 center, float radius)
+        {
+            Center = center;
+            Radius = Maths.Max(radius, 0.0f); // Ensure non-negative radius
+        }
+
+        /// <summary>
+        /// Initializes a new sphere with center components and radius.
+        /// </summary>
+        /// <param name="x">X coordinate of the center.</param>
+        /// <param name="y">Y coordinate of the center.</param>
+        /// <param name="z">Z coordinate of the center.</param>
+        /// <param name="radius">The radius of the sphere.</param>
+        [MethodImpl(MethodImplOptions.AggressiveInlining)]
+        public Sphere(float x, float y, float z, float radius)
+        {
+            Center = new Float3(x, y, z);
+            Radius = Maths.Max(radius, 0.0f);
+        }
+
+        /// <summary>
+        /// Gets the diameter of the sphere.
+        /// </summary>
+        public float Diameter
+        {
+            [MethodImpl(MethodImplOptions.AggressiveInlining)]
+            get => Radius * 2.0f;
+        }
+
+        /// <summary>
+        /// Gets the surface area of the sphere (4πr²).
+        /// </summary>
+        public float SurfaceArea
+        {
+            [MethodImpl(MethodImplOptions.AggressiveInlining)]
+            get => 4 * (float)Maths.PI * Radius * Radius;
+        }
+
+        /// <summary>
+        /// Gets the volume of the sphere (4/3πr³).
+        /// </summary>
+        public float Volume
+        {
+            [MethodImpl(MethodImplOptions.AggressiveInlining)]
+            get => (4 / 3) * (float)Maths.PI * Radius * Radius * Radius;
+        }
+
+        /// <summary>
+        /// Gets the circumference of the sphere (2πr).
+        /// </summary>
+        public float Circumference
+        {
+            [MethodImpl(MethodImplOptions.AggressiveInlining)]
+            get => 2.0f * (float)Maths.PI * Radius;
+        }
+
+        /// <summary>
+        /// Checks if this sphere contains a point.
+        /// </summary>
+        /// <param name="point">The point to test.</param>
+        /// <returns>True if the point is inside or on the sphere surface.</returns>
+        [MethodImpl(MethodImplOptions.AggressiveInlining)]
+        public bool Contains(Float3 point)
+        {
+            return Float3.LengthSquared(point - Center) <= Radius * Radius + float.Epsilon;
+        }
+
+        /// <summary>
+        /// Checks if this sphere completely contains another sphere.
+        /// </summary>
+        /// <param name="other">The other sphere to test.</param>
+        /// <returns>True if the other sphere is completely inside this sphere.</returns>
+        [MethodImpl(MethodImplOptions.AggressiveInlining)]
+        public bool Contains(Sphere other)
+        {
+            float distance = Float3.Length(other.Center - Center);
+            return distance + other.Radius <= Radius + float.Epsilon;
+        }
+
+        /// <summary>
+        /// Checks if this sphere intersects with another sphere.
+        /// </summary>
+        /// <param name="other">The other sphere to test.</param>
+        /// <returns>True if the spheres intersect or touch.</returns>
+        [MethodImpl(MethodImplOptions.AggressiveInlining)]
+        public bool Intersects(Sphere other)
+        {
+            return Intersection.SphereSphereOverlap(Center, Radius, other.Center, other.Radius);
+        }
+
+        /// <summary>
+        /// Checks if this sphere intersects with an AABB.
+        /// </summary>
+        /// <param name="aabb">The AABB to test.</param>
+        /// <returns>True if the sphere intersects the AABB.</returns>
+        [MethodImpl(MethodImplOptions.AggressiveInlining)]
+        public bool Intersects(AABB aabb)
+        {
+            return Intersection.SphereAABBOverlap(Center, Radius, aabb.Min, aabb.Max);
+        }
+
+        /// <summary>
+        /// Gets the signed distance from a point to the sphere surface.
+        /// Positive if outside, negative if inside, zero if on the surface.
+        /// </summary>
+        /// <param name="point">The point to test.</param>
+        /// <returns>The signed distance.</returns>
+        [MethodImpl(MethodImplOptions.AggressiveInlining)]
+        public float GetSignedDistanceToPoint(Float3 point)
+        {
+            return Float3.Length(point - Center) - Radius;
+        }
+
+        /// <summary>
+        /// Gets the absolute distance from a point to the sphere surface.
+        /// </summary>
+        /// <param name="point">The point to test.</param>
+        /// <returns>The absolute distance.</returns>
+        [MethodImpl(MethodImplOptions.AggressiveInlining)]
+        public float GetDistanceToPoint(Float3 point)
+        {
+            return Maths.Abs(GetSignedDistanceToPoint(point));
+        }
+
+        /// <summary>
+        /// Gets the closest point on the sphere surface to a given point.
+        /// </summary>
+        /// <param name="point">The point to find the closest point to.</param>
+        /// <returns>The closest point on the sphere surface.</returns>
+        [MethodImpl(MethodImplOptions.AggressiveInlining)]
+        public Float3 ClosestPointTo(Float3 point)
+        {
+            Float3 closestPoint;
+            Intersection.ClosestPointOnSphereToPoint(point, Center, Radius, out closestPoint);
+            return closestPoint;
+        }
+
+        /// <summary>
+        /// Expands the sphere to include a point.
+        /// </summary>
+        /// <param name="point">The point to include.</param>
+        [MethodImpl(MethodImplOptions.AggressiveInlining)]
+        public void Encapsulate(Float3 point)
+        {
+            float distance = Float3.Length(point - Center);
+            if (distance > Radius)
+            {
+                Radius = distance;
+            }
+        }
+
+        /// <summary>
+        /// Expands the sphere to include another sphere.
+        /// </summary>
+        /// <param name="other">The sphere to include.</param>
+        [MethodImpl(MethodImplOptions.AggressiveInlining)]
+        public void Encapsulate(Sphere other)
+        {
+            float distance = Float3.Length(other.Center - Center);
+            float requiredRadius = distance + other.Radius;
+            if (requiredRadius > Radius)
+            {
+                Radius = requiredRadius;
+            }
+        }
+
+        /// <summary>
+        /// Returns a sphere that encapsulates both this sphere and a point.
+        /// </summary>
+        /// <param name="point">The point to include.</param>
+        /// <returns>The encapsulating sphere.</returns>
+        [MethodImpl(MethodImplOptions.AggressiveInlining)]
+        public Sphere Encapsulating(Float3 point)
+        {
+            var result = this;
+            result.Encapsulate(point);
+            return result;
+        }
+
+        /// <summary>
+        /// Returns a sphere that encapsulates both this sphere and another sphere.
+        /// </summary>
+        /// <param name="other">The sphere to include.</param>
+        /// <returns>The encapsulating sphere.</returns>
+        [MethodImpl(MethodImplOptions.AggressiveInlining)]
+        public Sphere Encapsulating(Sphere other)
+        {
+            var result = this;
+            result.Encapsulate(other);
+            return result;
+        }
+
+        /// <summary>
+        /// Transforms the sphere by a 4x4 matrix.
+        /// Note: Only uniform scaling is properly supported.
+        /// </summary>
+        /// <param name="matrix">The transformation matrix.</param>
+        /// <returns>The transformed sphere.</returns>
+        [MethodImpl(MethodImplOptions.AggressiveInlining)]
+        public Sphere Transform(Float4x4 matrix)
+        {
+            Float3 transformedCenter = Float4x4.TransformPoint(Center, matrix);
+            
+            // For radius, we need to handle scaling. We'll use the maximum scale factor.
+            Float3 scaleVector = new Float3(
+                Float3.Length(new Float3(matrix.c0.X, matrix.c0.Y, matrix.c0.Z)),
+                Float3.Length(new Float3(matrix.c1.X, matrix.c1.Y, matrix.c1.Z)),
+                Float3.Length(new Float3(matrix.c2.X, matrix.c2.Y, matrix.c2.Z))
+            );
+            float maxScale = Maths.Max(scaleVector.X, Maths.Max(scaleVector.Y, scaleVector.Z));
+            float transformedRadius = Radius * maxScale;
+            
+            return new Sphere(transformedCenter, transformedRadius);
+        }
+
+        /// <summary>
+        /// Samples a random point uniformly distributed on the sphere surface.
+        /// </summary>
+        /// <returns>A uniformly distributed point on the sphere surface.</returns>
+        [MethodImpl(MethodImplOptions.AggressiveInlining)]
+        public Float3 SampleSurface()
+        {
+            float u = RNG.Shared.NextFloat();
+            float v = RNG.Shared.NextFloat();
+            float theta = 2.0f * (float)Maths.PI * u;
+            float phi = Maths.Acos(2.0f * v - 1.0f);
+            
+            float sinPhi = Maths.Sin(phi);
+            float x = sinPhi * Maths.Cos(theta);
+            float y = sinPhi * Maths.Sin(theta);
+            float z = Maths.Cos(phi);
+            
+            return Center + new Float3(x, y, z) * Radius;
+        }
+
+        /// <summary>
+        /// Samples a random point uniformly distributed inside the sphere volume.
+        /// </summary>
+        /// <returns>A uniformly distributed point inside the sphere.</returns>
+        [MethodImpl(MethodImplOptions.AggressiveInlining)]
+        public Float3 SampleVolume()
+        {
+            float u = RNG.Shared.NextFloat();
+            float r = Radius * Maths.Pow(u, 1.0f / 3); // Cube root for uniform distribution
+            Float3 direction = SampleSurface() - Center;
+            direction = Float3.Normalize(direction);
+            return Center + direction * r;
+        }
+
+        /// <summary>
+        /// Creates a sphere from two points (diameter endpoints).
+        /// </summary>
+        /// <param name="pointA">First endpoint.</param>
+        /// <param name="pointB">Second endpoint.</param>
+        /// <returns>A sphere with the two points as diameter endpoints.</returns>
+        [MethodImpl(MethodImplOptions.AggressiveInlining)]
+        public static Sphere FromDiameter(Float3 pointA, Float3 pointB)
+        {
+            Float3 center = (pointA + pointB) / 2.0f;
+            float radius = Float3.Length(pointB - pointA) / 2.0f;
+            return new Sphere(center, radius);
+        }
+
+        /// <summary>
+        /// Creates the smallest sphere that contains all the given points.
+        /// </summary>
+        /// <param name="points">The points to encapsulate.</param>
+        /// <returns>The smallest encapsulating sphere.</returns>
+        public static Sphere FromPoints(Float3[] points)
+        {
+            if (points == null || points.Length == 0)
+                return new Sphere(Float3.Zero, 0.0f);
+            
+            if (points.Length == 1)
+                return new Sphere(points[0], 0.0f);
+            
+            if (points.Length == 2)
+                return FromDiameter(points[0], points[1]);
+            
+            // For simplicity, use centroid and max distance approach
+            // A more sophisticated implementation would use Welzl's algorithm
+            Float3 centroid = Float3.Zero;
+            for (int i = 0; i < points.Length; i++)
+            {
+                centroid += points[i];
+            }
+            centroid /= points.Length;
+            
+            float maxDistSq = 0.0f;
+            for (int i = 0; i < points.Length; i++)
+            {
+                float distSq = Float3.LengthSquared(points[i] - centroid);
+                if (distSq > maxDistSq)
+                    maxDistSq = distSq;
+            }
+            
+            return new Sphere(centroid, Maths.Sqrt(maxDistSq));
+        }
+
+        // --- IBoundingShape Implementation ---
+
+        /// <summary>
+        /// Returns the point on the sphere that is farthest in the given direction.
+        /// </summary>
+        /// <param name="direction">The direction to search in.</param>
+        /// <returns>The farthest point on the sphere in the given direction.</returns>
+        [MethodImpl(MethodImplOptions.AggressiveInlining)]
+        public Float3 SupportMap(Float3 direction)
+        {
+            float length = Float3.Length(direction);
+            if (length < float.Epsilon)
+                return Center; // Return center if direction is zero
+
+            return Center + (direction / length) * Radius;
+        }
+
+        /// <summary>
+        /// Generates geometry data for this sphere as a BMesh-like structure.
+        /// </summary>
+        /// <param name="resolution">Number of segments for latitude and longitude (must be at least 3).</param>
+        /// <returns>GeometryData containing vertices, edges, and quad faces forming a UV sphere.</returns>
+        public GeometryData GetGeometryData(int resolution = 16)
+        {
+            resolution = Maths.Max(resolution, 3);
+            var geometryData = new GeometryData();
+
+            // Generate vertices using UV sphere parameterization
+            var vertexGrid = new GeometryData.Vertex[resolution + 1, resolution + 1];
+
+            for (int lat = 0; lat <= resolution; lat++)
+            {
+                float theta = lat * (float)Maths.PI / resolution;
+                float sinTheta = Maths.Sin(theta);
+                float cosTheta = Maths.Cos(theta);
+
+                for (int lon = 0; lon <= resolution; lon++)
+                {
+                    float phi = lon * 2.0f * (float)Maths.PI / resolution;
+                    float sinPhi = Maths.Sin(phi);
+                    float cosPhi = Maths.Cos(phi);
+
+                    Float3 position = Center + new Float3(
+                        Radius * sinTheta * cosPhi,
+                        Radius * cosTheta,
+                        Radius * sinTheta * sinPhi
+                    );
+
+                    vertexGrid[lat, lon] = geometryData.AddVertex(position);
+                }
+            }
+
+            // Generate quad faces (will be triangulated automatically on conversion)
+            for (int lat = 0; lat < resolution; lat++)
+            {
+                for (int lon = 0; lon < resolution; lon++)
+                {
+                    var v0 = vertexGrid[lat, lon];
+                    var v1 = vertexGrid[lat, lon + 1];
+                    var v2 = vertexGrid[lat + 1, lon + 1];
+                    var v3 = vertexGrid[lat + 1, lon];
+
+                    geometryData.AddFace(v0, v1, v2, v3);
+                }
+            }
+
+            return geometryData;
+        }
+
+        // --- IEquatable & IFormattable Implementation ---
+        [MethodImpl(MethodImplOptions.AggressiveInlining)]
+        public bool Equals(Sphere other) => Center.Equals(other.Center) && Radius.Equals(other.Radius);
+
+        [MethodImpl(MethodImplOptions.AggressiveInlining)]
+        public override bool Equals(object? obj) => obj is Sphere other && Equals(other);
+
+        [MethodImpl(MethodImplOptions.AggressiveInlining)]
+        public override int GetHashCode() => HashCode.Combine(Center, Radius);
+
+        [MethodImpl(MethodImplOptions.AggressiveInlining)]
+        public override string ToString() => ToString(null, CultureInfo.CurrentCulture);
+
+        [MethodImpl(MethodImplOptions.AggressiveInlining)]
+        public string ToString(string? format, IFormatProvider? formatProvider = null)
+        {
+            return string.Format(formatProvider, "SphereD(Center: {0}, Radius: {1})", 
+                Center.ToString(format, formatProvider), Radius.ToString(format, formatProvider));
+        }
+
+        public static bool operator ==(Sphere left, Sphere right) => left.Equals(right);
+        public static bool operator !=(Sphere left, Sphere right) => !left.Equals(right);
+    }
+}

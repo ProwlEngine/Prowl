@@ -1,0 +1,75 @@
+using System;
+using System.Linq;
+
+using Xunit;
+
+namespace Prowl.Graphite.ShaderDef.Tests;
+
+public class PassKeywordTests : IDisposable
+{
+    private const string Source = """
+        Shader "Test/Keywords"
+        {
+            Pass
+            {
+                GLSLPROGRAM
+                void main() {}
+                ENDGLSL
+            }
+        }
+        """;
+
+    private static readonly VariantSpace[] s_axes =
+    [
+        VariantSpace.Toggle("SKINNED"),
+        new("ALPHA_MODE", ["Opaque", "Cutout", "Transparent"]),
+    ];
+
+    private readonly GraphicsDevice _device;
+    private readonly ShaderPass _pass;
+
+    public PassKeywordTests()
+    {
+        _device = GraphicsDevice.CreateVulkan(new GraphicsDeviceOptions(false));
+
+        ShaderDefinition definition = Parse.Shader(Source);
+        _pass = definition.Passes![0];
+
+        Variant[] variants = VariantCombos.Generate(s_axes).Select(combo => new Variant(combo, [])).ToArray();
+        definition.Create(_device, new ShaderSnapshot { Passes = [new PassSnapshot { Axes = s_axes, Variants = variants }] });
+    }
+
+    public void Dispose()
+    {
+        _device.Dispose();
+    }
+
+    private static Keyword K(string name, string value) => new(name, value);
+
+    private string KeyedAxis(VariantKey key, string axis) => _pass.GetVariant(key).Keywords.First(k => k.Name == axis).Value;
+
+    [Fact]
+    public void GetKey_SetsKnownAndSkipsUnknown()
+    {
+        VariantKey key = _pass.GetKey([K("SKINNED", "true"), K("NOT_AN_AXIS", "true"), K("ALPHA_MODE", "Cutout")]);
+
+        Assert.Equal("true", KeyedAxis(key, "SKINNED"));
+        Assert.Equal("Cutout", KeyedAxis(key, "ALPHA_MODE"));
+
+        Assert.Equal(default, _pass.GetKey(ReadOnlySpan<Keyword>.Empty));
+        Assert.Equal(default, _pass.GetKey([K("NOT_AN_AXIS", "true")]));
+        Assert.Equal("false", KeyedAxis(default, "SKINNED"));
+        Assert.Equal("Opaque", KeyedAxis(default, "ALPHA_MODE"));
+
+        VariantKey collapsedKey = _pass.GetKey([K("ANISOTROPIC", "true"), K("SKINNED", "true")]);
+
+        Assert.DoesNotContain(_pass.Axes, a => a.Name == "ANISOTROPIC");
+        Assert.Equal("true", KeyedAxis(collapsedKey, "SKINNED"));
+        Assert.Equal("Opaque", KeyedAxis(collapsedKey, "ALPHA_MODE"));
+        Assert.DoesNotContain(_pass.GetVariant(collapsedKey).Keywords, k => k.Name == "ANISOTROPIC");
+
+        VariantKey laterKey = _pass.GetKey([K("ALPHA_MODE", "Cutout"), K("ALPHA_MODE", "Transparent")]);
+
+        Assert.Equal("Transparent", KeyedAxis(laterKey, "ALPHA_MODE"));
+    }
+}

@@ -1,0 +1,8 @@
+#version 450
+#extension GL_EXT_buffer_reference : require
+#extension GL_EXT_buffer_reference_uvec2 : require
+layout(local_size_x = 1) in;
+layout(buffer_reference, std430) buffer Data { float v; };
+layout(push_constant) uniform P { Data d; } pc;
+layout(std430, set = 0, binding = 0) buffer O { uvec2 o; };
+void main() { o = uvec2(pc.d); }

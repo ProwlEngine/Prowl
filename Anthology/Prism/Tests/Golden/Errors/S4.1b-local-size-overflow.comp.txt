@@ -1,0 +1,9 @@
+<shader>
+ERROR: <shader>:4: '' : numeric literal too big 
+ERROR: <shader>:4: 'layout-id value' : cannot be negative 
+ERROR: <shader>:4: '' : compilation terminated 
+ERROR: 3 compilation errors.  No code generated.
+
+
+ERROR: Linking compute stage: Missing entry point: Each stage requires one entry point
+

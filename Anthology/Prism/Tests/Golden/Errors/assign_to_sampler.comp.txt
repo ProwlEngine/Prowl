@@ -1,0 +1,9 @@
+<shader>
+ERROR: <shader>:6: '=' : can't use with samplers or structs containing samplers 
+ERROR: <shader>:6: 'assign' :  l-value required "a" (can't modify a uniform)
+ERROR: <shader>:6: 'sampler assignment for bindless texture' : required extension not requested: GL_ARB_bindless_texture
+ERROR: <shader>:6: 'assign' :  cannot convert from 'layout( set=0 binding=1) uniform highp sampler2D' to 'layout( set=0 binding=0) uniform highp sampler2D'
+ERROR: <shader>:6: '' : compilation terminated 
+ERROR: 5 compilation errors.  No code generated.
+
+

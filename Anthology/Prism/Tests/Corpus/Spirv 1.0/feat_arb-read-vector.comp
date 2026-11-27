@@ -1,0 +1,6 @@
+#version 450
+#extension GL_ARB_shader_ballot : require
+#extension GL_ARB_gpu_shader_int64 : require
+layout(local_size_x=32) in;
+layout(std430, binding=0) buffer B { vec4 v; ivec2 i; } b;
+void main(){ b.v = readInvocationARB(b.v, 2u) + readFirstInvocationARB(b.v); b.i = readFirstInvocationARB(b.i); }
