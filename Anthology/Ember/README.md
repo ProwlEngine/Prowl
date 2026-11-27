@@ -58,4 +58,4 @@ Everything user code touches lives in `Prowl.Ember.Contracts`, which has no depe
 
 ## License
 
-MIT - part of the [Prowl Anthology](https://github.com/ProwlEngine/Anthology).
+MIT - part of the [Prowl Anthology](https://github.com/ProwlEngine/Prowl/tree/main/Anthology).

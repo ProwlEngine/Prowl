@@ -32,14 +32,16 @@ them lands in a single commit, no cross-repo version juggling, no publish chain.
 
 ## Versioning
 
-The whole family ships under one version, set once in [`Directory.Build.props`](Directory.Build.props).
-Bump that single `<Version>` and tag the commit `vX.Y.Z`; CI builds, packs and pushes every
-package at that version.
+The whole family, together with `Prowl.Runtime`, ships under one version, set once in
+[`Directory.Build.props`](../Directory.Build.props) at the repository root. Bump that single
+`<Version>` and tag the commit `nuget-vX.Y.Z`; CI builds, packs and pushes every package at
+that version.
 
 ## Repository layout
 
-Every library is a self-contained folder. Shared build and packaging rules live in the
-root `Directory.Build.props`, so individual project files stay small.
+Every library is a self-contained folder that never references the engine, so
+[`Anthology.slnx`](Anthology.slnx) builds on its own. Shared build and packaging rules live in
+the repository root `Directory.Build.props`, so individual project files stay small.
 
 History for each library is preserved under its folder, so `git log -- Scribe/` shows the
 full past of that library.

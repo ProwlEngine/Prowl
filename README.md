@@ -51,11 +51,11 @@ Prowl is currently in **1.0 Preview 5**, which brings a new Vulkan renderer, ani
     - C# Scripting with .NET 11, compiled in process with Roslyn
     - GameObject & Component Architecture
     - **Prowl.Runtime works fully standalone from the Editor** - reference it directly and ship a game with zero Editor dependency
-    - Custom Immediate Mode UI ([Paper](https://github.com/ProwlEngine/Anthology)), Editor built on top of [Origami](https://github.com/ProwlEngine/Anthology)
-    - Vector Graphics & Text Rendering via [Quill](https://github.com/ProwlEngine/Anthology)
+    - Custom Immediate Mode UI ([Paper](Anthology/Paper)), Editor built on top of [Origami](Anthology/Origami)
+    - Vector Graphics & Text Rendering via [Quill](Anthology/Quill)
     - `GameTask` async API (`MainThread`, `WorkerThread`, `NextFrame`, `Delay`, `WaitUntil`) with per session cancellation
     - Roslyn analyzers that catch common scripting mistakes (component constructors, blocking waits, `?.` on engine objects)
-    - Serialization via [Prowl.Echo](https://github.com/ProwlEngine/Anthology)
+    - Serialization via [Prowl.Echo](Anthology/Echo)
     - Tags & Layers System
     - Scenes with `Scene.Environment` (sky, ambient, fog), async load handles, additive sections and persistent objects
     - Prefabs
@@ -66,7 +66,7 @@ Prowl is currently in **1.0 Preview 5**, which brings a new Vulkan renderer, ani
         - Composite bindings (WASD to Float2, D-pad, etc.) for keyboard, mouse, gamepad & XR controllers
     - GameObject-Based UI, including World Space UI
         - `RectTransform`-driven layout, Buttons, Toggles, Sliders, Dropdowns, layout groups, drag & drop event handlers
-    - Math via [Prowl.Vector](https://github.com/ProwlEngine/Anthology)
+    - Math via [Prowl.Vector](Anthology/Vector)
         - SIMD backed vectors, Matrices (`Float4x4`), Quaternions, Transform2D
         - Shapes: AABB, Bounds, Frustum, Cone, Ray, Plane, LineSegment, Rect
         - Mesh editing operators & Quadric mesh simplification
@@ -92,7 +92,7 @@ Prowl is currently in **1.0 Preview 5**, which brings a new Vulkan renderer, ani
     - **Prowl CLI** - drive a running editor from scripts or AI agents, projects ship with agent skills
 
 -   **Graphics Rendering:**
-    - Vulkan via [Prowl.Graphite](https://github.com/ProwlEngine/Anthology) (MoltenVK on macOS)
+    - Vulkan via [Prowl.Graphite](Anthology/Graphite) (MoltenVK on macOS)
     - GPU Driven Renderer: render graph, dedicated render thread, bindless textures, vertex pulling, multi draw indirect
     - Camera relative rendering
     - H-Forward Lighting and cached static shadows
@@ -114,7 +114,7 @@ Prowl is currently in **1.0 Preview 5**, which brings a new Vulkan renderer, ani
         - Hard, Tent & Contact Hardening shadow filters
     - Decals (Albedo, Normal & Mask)
     - Reflection Probes (Baked & Realtime) with box projection and a Sky Probe
-    - UV-Unwrapping via [Prowl.Unwrapper](https://github.com/ProwlEngine/Anthology), Progressive Lightmapper via [Prowl.Photonic](https://github.com/ProwlEngine/Anthology)
+    - UV-Unwrapping via [Prowl.Unwrapper](Anthology/Unwrapper), Progressive Lightmapper via [Prowl.Photonic](Anthology/Photonic)
     - Baked Light Probes
     - Skies: Procedural Atmosphere, Gradient, Cubemap, Panorama & Six Sided
     - Volumetric Clouds & Volumetric Fog
@@ -136,7 +136,7 @@ Prowl is currently in **1.0 Preview 5**, which brings a new Vulkan renderer, ani
         - Local & World Simulation Spaces
 
 -   **Animation:**
-    - `Animator` with Animation Graphs via [Prowl.Motion](https://github.com/ProwlEngine/Anthology), about 90 nodes
+    - `Animator` with Animation Graphs via [Prowl.Motion](Anthology/Motion), about 90 nodes
     - State Machines, Blend Spaces, Layers & Masks, Inertial Blending
     - Humanoid Avatars with Retargeting between rigs
     - IK (Two Bone, Look At, Aim), Foot Grounding, Root Motion & Warping
@@ -153,7 +153,7 @@ Prowl is currently in **1.0 Preview 5**, which brings a new Vulkan renderer, ani
     - Raycasting & Shape Query API
 
 -   **Navigation:**
-    - NavMesh via [Prowl.Recast](https://github.com/ProwlEngine/Anthology)
+    - NavMesh via [Prowl.Recast](Anthology/Recast)
     - NavMesh Surfaces, Agents, Obstacles (carving), Links & Modifiers
     - Area costs, Crowd Steering, background baking & partial rebuilds
 
@@ -179,8 +179,8 @@ Prowl is currently in **1.0 Preview 5**, which brings a new Vulkan renderer, ani
     - Async Loading & Residency Management with a memory budget
     - Runtime Asset Mounting (folders, zips, HTTP) and Runtime Importers for mods & user content
     - Supported Formats:
-        - Models: GLTF, GLB, OBJ, FBX (via [Prowl.Clay](https://github.com/ProwlEngine/Anthology))
-        - Textures: PNG, JPG, BMP, GIF, TGA, TIFF, WEBP, PSD, DDS, EXR, HDR and more (via [Prowl.Aperture](https://github.com/ProwlEngine/Anthology))
+        - Models: GLTF, GLB, OBJ, FBX (via [Prowl.Clay](Anthology/Clay))
+        - Textures: PNG, JPG, BMP, GIF, TGA, TIFF, WEBP, PSD, DDS, EXR, HDR and more (via [Prowl.Aperture](Anthology/Aperture))
         - Audio: WAV, MP3, OGG, FLAC
         - Fonts: TTF, OTF
 
@@ -475,23 +475,23 @@ Check our [Contributing guide](https://github.com/ProwlEngine/Prowl/blob/main/CO
 - [Silk.NET](https://github.com/dotnet/Silk.NET) - Windowing, Input & OpenXR Bindings
 - [Jitter Physics 2](https://github.com/notgiven688/jitterphysics2) - Physics Engine
 - [miniaudio](https://github.com/mackron/miniaudio) - Audio
-- [Prowl.Graphite](https://github.com/ProwlEngine/Anthology) - Vulkan Graphics & Renderer
-- [Prowl.Motion](https://github.com/ProwlEngine/Anthology) - Animation
-- [Prowl.Recast](https://github.com/ProwlEngine/Anthology) - Navigation
-- [Prowl.Aperture](https://github.com/ProwlEngine/Anthology) - Image Decoding
-- [Prowl.Echo](https://github.com/ProwlEngine/Anthology) - Serialization
-- [Prowl.Paper](https://github.com/ProwlEngine/Anthology) - UI Framework
-- [Prowl.Origami](https://github.com/ProwlEngine/Anthology) - Component Library for Paper
-- [Prowl.Quill](https://github.com/ProwlEngine/Anthology) - Vector Graphics & Text Rendering
-- [Prowl.Scribe](https://github.com/ProwlEngine/Anthology) - TrueType font parsing & glyph rasterization
-- [Prowl.Scaffold](https://github.com/ProwlEngine/Anthology) - Layout Engine for Paper
-- [Prowl.Quire](https://github.com/ProwlEngine/Anthology) - Markdown Parsing
-- [Prowl.Ember](https://github.com/ProwlEngine/Anthology) - Script Hot Reload
-- [Prowl.Rosetta](https://github.com/ProwlEngine/Anthology) - For Editor Localisation
-- [Prowl.Vector](https://github.com/ProwlEngine/Anthology) - 64-bit Math Library
-- [Prowl.Unwrapper](https://github.com/ProwlEngine/Anthology) - UV Unwrapper
-- [Prowl.Photonic](https://github.com/ProwlEngine/Anthology) - Progressive Lightmapper
-- [Prowl.Clay](https://github.com/ProwlEngine/Anthology) - Model Importing (GLTF, GLB, OBJ, FBX)
+- [Prowl.Graphite](Anthology/Graphite) - Vulkan Graphics & Renderer
+- [Prowl.Motion](Anthology/Motion) - Animation
+- [Prowl.Recast](Anthology/Recast) - Navigation
+- [Prowl.Aperture](Anthology/Aperture) - Image Decoding
+- [Prowl.Echo](Anthology/Echo) - Serialization
+- [Prowl.Paper](Anthology/Paper) - UI Framework
+- [Prowl.Origami](Anthology/Origami) - Component Library for Paper
+- [Prowl.Quill](Anthology/Quill) - Vector Graphics & Text Rendering
+- [Prowl.Scribe](Anthology/Scribe) - TrueType font parsing & glyph rasterization
+- [Prowl.Scaffold](Anthology/Scaffold) - Layout Engine for Paper
+- [Prowl.Quire](Anthology/Quire) - Markdown Parsing
+- [Prowl.Ember](Anthology/Ember) - Script Hot Reload
+- [Prowl.Rosetta](Anthology/Rosetta) - For Editor Localisation
+- [Prowl.Vector](Anthology/Vector) - 64-bit Math Library
+- [Prowl.Unwrapper](Anthology/Unwrapper) - UV Unwrapper
+- [Prowl.Photonic](Anthology/Photonic) - Progressive Lightmapper
+- [Prowl.Clay](Anthology/Clay) - Model Importing (GLTF, GLB, OBJ, FBX)
 
 <p align="right">(<a href="#readme-top">back to top</a>)</p>
 
