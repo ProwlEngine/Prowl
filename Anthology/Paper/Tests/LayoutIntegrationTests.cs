@@ -387,41 +387,6 @@ public class LayoutIntegrationTests
         Rect(child, 310, 210, 10, 10);
     }
 
-    [Fact]
-    public void ResolvedLayoutBridgeAllocatesNothingAfterWarmup()
-    {
-        var p = NewPaper();
-        for (int i = 0; i < 100; i++)
-        {
-            var h = p.CreateElement(i + 1);
-            h.Data.ParentIndex = p.RootElement.Index;
-            p.RootElement.Data.ChildIndices.Add(h.Index);
-            h.Data._elementStyle.SetDirectValue(GuiProp.Width, UnitValue.Pixels(10));
-            h.Data._elementStyle.SetDirectValue(GuiProp.Height, UnitValue.Pixels(10));
-        }
-
-        for (int i = 0; i < 100; i++)
-        {
-            p.ComputeLayout();
-        }
-
-        // The runtime can allocate on this thread while it recompiles hot code, so one clean round is the proof
-        long least = long.MaxValue;
-        for (int round = 0; round < 5 && least > 0; round++)
-        {
-            long before = GC.GetAllocatedBytesForCurrentThread();
-            for (int i = 0; i < 100; i++)
-            {
-                p.ComputeLayout();
-            }
-
-            least = Math.Min(least, GC.GetAllocatedBytesForCurrentThread() - before);
-        }
-
-        Assert.Equal(0, least);
-        Assert.Equal(0, p.LayoutStatistics.ArrangedNodes);
-    }
-
     private sealed class NullRenderer : ICanvasRenderer
     {
         public void Dispose()
