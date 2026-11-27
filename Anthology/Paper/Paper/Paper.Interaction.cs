@@ -186,9 +186,6 @@ namespace Prowl.PaperUI
 
         #region Interaction State
 
-        // Drag threshold - minimum distance to move before starting drag
-        private const float DRAG_THRESHOLD = 5.0f; // pixels
-
         // Element interaction state tracking
         private int _theHoveredElementId = 0;  // The ID of the element directly hovered by the pointer
         private int _activeElementId = 0;      // Currently active (pressed) element
@@ -970,13 +967,14 @@ namespace Prowl.PaperUI
                         bool wasDragging = _isDragging.TryGetValue(_activeElementId, out bool isDragging) && isDragging;
                         Float2 startPos = _dragStartPos[_activeElementId];
                         Float2 currentPos = PointerPos;
-                        float distanceMoved = Float2.Length(currentPos - startPos);
 
                         // Total movement since the initial click; TotalDelta always measures from there.
                         Float2 totalDelta = currentPos - startPos;
+                        bool dragExceedsThreshold = Math.Abs(totalDelta.X) > SystemInformation.DragThreshold.X ||
+                            Math.Abs(totalDelta.Y) > SystemInformation.DragThreshold.X;
 
                         // Only start dragging if we've moved beyond the threshold
-                        if (!wasDragging && distanceMoved >= DRAG_THRESHOLD)
+                        if (!wasDragging && dragExceedsThreshold)
                         {
                             // First drag frame: report the movement accumulated since the click
                             // (including the threshold pixels) rather than just this frame's delta, so
@@ -990,7 +988,7 @@ namespace Prowl.PaperUI
                         }
 
                         // Don't fire the Dragging event until after the DragStart event has been fired.
-                        if (wasDragging || distanceMoved >= DRAG_THRESHOLD)
+                        if (wasDragging || dragExceedsThreshold)
                         {
                             // Per-frame delta. On the frame the drag starts it spans the whole distance from
                             // the initial click; on later frames it is just the movement since last frame.

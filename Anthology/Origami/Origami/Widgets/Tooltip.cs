@@ -35,7 +35,7 @@ public sealed class TooltipOptions
     public TooltipAnchor Anchor { get; set; } = TooltipAnchor.Cursor;
     public bool ShowArrow { get; set; }
 
-    /// <summary>Hover delay in seconds, or null to use TooltipSystem.ShowDelay.</summary>
+    /// <summary>Hover delay in seconds, or null to use <see cref="TooltipSystem.ShowDelay"/>.</summary>
     public float? Delay { get; set; }
 }
 
@@ -69,7 +69,7 @@ public static class TooltipSystem
     private static TooltipContent? _pending;
     private static int _activeElementId;
     private static float _hoverTime;
-    private static float _showDelay = 0.5f;
+    private static float _showDelay = SystemInformation.ToolTipDelay;
     private static float _lastDeltaTime;
 
     public static float ShowDelay { get => _showDelay; set => _showDelay = MathF.Max(0f, value); }
