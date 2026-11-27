@@ -203,6 +203,8 @@ internal sealed class UvFlattener
     /// Run LSCM with the LinABF-computed angles. Picks an initial PCA-like projection, locks the
     /// two extremes along the dominant axis, and solves a least-squares conformal system.
     /// </summary>
+    /// <param name="tolerance">Residual the conjugate gradient solve stops at.</param>
+    /// <param name="iterationBudget">Most solver iterations, per unknown.</param>
     /// <param name="pins">
     /// Vertices to hold at given UVs, keyed by their index in the region's mesh. With two or more, they replace the
     /// two vertices the solve would lock by itself, and the layout comes out in the pins' own scale and place.
@@ -502,7 +504,4 @@ internal sealed class ConformalRowBuffer
     /// <summary>Which vertices are held in place, and for the others their place among the free ones.</summary>
     public bool[] Locked = System.Array.Empty<bool>();
     public int[] Slot = System.Array.Empty<int>();
-
-    public int LockVertex0, LockVertex1;
-    public int LockVar0, LockVar1, LockVar2, LockVar3;
 }

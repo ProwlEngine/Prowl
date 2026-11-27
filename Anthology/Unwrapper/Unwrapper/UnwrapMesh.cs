@@ -17,7 +17,7 @@ public sealed class UnwrapException : System.Exception
 
 /// <summary>
 /// Fluent builder for an unwrap call. Construct with positions + triangles, optionally chain
-/// <see cref="WithNormals"/> and <see cref="WithMaterialUVs"/>, then call <see cref="Unwrap"/>.
+/// <see cref="WithNormals"/> and <see cref="WithMaterialUVs"/>, then call <see cref="Unwrap(UnwrapOptions?)"/>.
 ///
 /// Triangles are flat unsigned indices (three per triangle). Per-corner UVs, if provided,
 /// are 3 × triangleCount Double2 values — they are only used as a hint when welding vertices.

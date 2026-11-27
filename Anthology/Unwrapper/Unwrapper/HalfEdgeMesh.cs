@@ -37,6 +37,12 @@ internal sealed class HalfEdgeMesh
     public System.Action<string>? ProgressSink;
 
     /// <summary>Build a new mesh from positions + indices, with optional per-corner UV hints.</summary>
+    /// <param name="positionCount">Number of vertices in <paramref name="positions"/>.</param>
+    /// <param name="positions">Vertex positions, three doubles per vertex.</param>
+    /// <param name="triangleCount">Number of triangles in <paramref name="triangles"/>.</param>
+    /// <param name="triangles">Vertex indices, three per triangle.</param>
+    /// <param name="creaseAngleDegrees">Edges whose faces turn more than this are creases.</param>
+    /// <param name="cornerUVs">Optional UV per triangle corner, six doubles per triangle.</param>
     /// <param name="assumeManifold">
     /// Skip the per-vertex non-manifold detection walk. Pass <c>true</c> when the caller can
     /// guarantee the input topology is already manifold (e.g. when re-building from a region
