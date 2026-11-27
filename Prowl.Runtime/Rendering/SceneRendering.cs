@@ -2,7 +2,6 @@
 // Licensed under the MIT License. See the LICENSE file in the project root for details.
 
 using System;
-using System.Linq;
 using System.Collections.Generic;
 
 using Prowl.Graphite.Rendering;
@@ -293,15 +292,25 @@ public sealed class SceneRendering : IDisposable
     private readonly List<FogVolumeDesc> _fogVolumes = [];
 
     // The scene's enabled fog volumes, their density a multiple of the volumetric fog's
+    private readonly List<FogVolume> _fogVolumeComponents = [];
+
+    /// <summary>The enabled fog volumes in the scene, in the order they enabled.</summary>
+    internal IReadOnlyList<FogVolume> FogVolumeComponents => _fogVolumeComponents;
+
+    internal void AddFogVolume(FogVolume volume)
+    {
+        if (!_fogVolumeComponents.Contains(volume)) _fogVolumeComponents.Add(volume);
+    }
+
+    internal void RemoveFogVolume(FogVolume volume) => _fogVolumeComponents.Remove(volume);
+
     private FogVolumeDesc[] FogVolumes(float density)
     {
+        if (_fogVolumeComponents.Count == 0) return [];
         _fogVolumes.Clear();
-        foreach (GameObject go in _scene.Objects.Where(o => o.EnabledInHierarchy))
-        {
-            FogVolume? volume = go.GetComponent<FogVolume>();
-            if (volume.IsValid() && volume.EnabledInHierarchy && _fogVolumes.Count < EnvironmentDesc.MaxFogVolumes)
+        foreach (FogVolume volume in _fogVolumeComponents)
+            if (volume.IsValid() && _fogVolumes.Count < EnvironmentDesc.MaxFogVolumes)
                 _fogVolumes.Add(volume.Describe(density));
-        }
         return [.. _fogVolumes];
     }
 

@@ -44,6 +44,10 @@ public sealed class FogVolume : Component
     /// <summary>Cone half-angle in degrees. Only used when <see cref="Shape"/> = Cone.</summary>
     [SerializeField] public float ConeAngle = 30f;
 
+    internal override void JoinWorld(Resources.Scene world) => world.Rendering.AddFogVolume(this);
+
+    internal override void LeaveWorld(Resources.Scene world) => world.Rendering.RemoveFogVolume(this);
+
     /// <summary>The volume as the world's volumetric fog reads it, its density a multiple of the scene's.</summary>
     internal Graphite.Rendering.FogVolumeDesc Describe(float density)
     {

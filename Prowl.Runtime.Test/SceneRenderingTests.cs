@@ -252,4 +252,34 @@ public class SceneRenderingTests : RuntimeTestBase
         scene.Rendering.WakeChanged();
         Assert.False(scene.Rendering.IsParked(renderer));
     }
+
+    [Fact]
+    public void FogVolumes_JoinTheirSceneWhileEnabled()
+    {
+        Scene scene = CreateScene(enable: true);
+        GameObject go = CreateGameObject();
+        scene.Add(go);
+        FogVolume volume = go.AddComponent<FogVolume>();
+        Assert.Contains(volume, scene.Rendering.FogVolumeComponents);
+
+        volume.Enabled = false;
+        Assert.DoesNotContain(volume, scene.Rendering.FogVolumeComponents);
+
+        volume.Enabled = true;
+        go.Enabled = false;
+        Assert.DoesNotContain(volume, scene.Rendering.FogVolumeComponents);
+    }
+
+    [Fact]
+    public void FogVolumes_InAnEditScene_JoinWithoutPlaying()
+    {
+        using (EditMode())
+        {
+            Scene scene = CreateScene(enable: true);
+            GameObject go = CreateGameObject();
+            scene.Add(go);
+            FogVolume volume = go.AddComponent<FogVolume>();
+            Assert.Contains(volume, scene.Rendering.FogVolumeComponents);
+        }
+    }
 }
