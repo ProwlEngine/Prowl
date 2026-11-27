@@ -1110,13 +1110,15 @@ namespace Prowl.PaperUI
         }
 
         /// <summary>
-        /// Clamps the element so it stays within the screen bounds.
+        /// Flips the alignment of the element so it stays within the screen bounds.
         /// Applied after layout, before rendering. Works with both SelfDirected and ParentDirected elements.
         /// Children are moved with the parent automatically.
         /// </summary>
-        public ElementBuilder ClampToScreen()
+        /// <param name="areaToAvoid">Optionally specifies an area to avoid when clamping.</param>
+        public ElementBuilder ClampToScreen(Rect areaToAvoid = default)
         {
             _handle.Data._clampToScreen = true;
+            _handle.Data._clampToScreenAvoidanceArea = areaToAvoid;
             return this;
         }
 
