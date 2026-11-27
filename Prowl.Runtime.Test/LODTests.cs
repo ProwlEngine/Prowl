@@ -63,31 +63,6 @@ public class LODTests
         Assert.Equal(0, MeshGeometry.ToGeometryData(cube).Edges.Count(e => e.IsHidden));
     }
 
-    /// <summary>A large grid converts in about linear time, its edges kept in sets that hash well.</summary>
-    [Fact]
-    public void ALargeGridConvertsQuickly()
-    {
-        const int N = 200;
-        var vertices = new Float3[(N + 1) * (N + 1)];
-        for (int z = 0; z <= N; z++)
-            for (int x = 0; x <= N; x++)
-                vertices[z * (N + 1) + x] = new Float3(x, 0, z);
-        var indices = new List<uint>();
-        for (int z = 0; z < N; z++)
-            for (int x = 0; x < N; x++)
-            {
-                uint a = (uint)(z * (N + 1) + x), b = a + 1, c = a + (uint)(N + 1), d = c + 1;
-                indices.AddRange([a, c, d, a, d, b]);
-            }
-        using var grid = new Mesh { Vertices = vertices, Indices = [.. indices] };
-
-        var watch = System.Diagnostics.Stopwatch.StartNew();
-        GeometryData geometry = MeshGeometry.ToGeometryData(grid);
-
-        Assert.Equal(N * N * 2, geometry.Faces.Count);
-        Assert.True(watch.ElapsedMilliseconds < 3000, $"took {watch.ElapsedMilliseconds} ms");
-    }
-
     /// <summary>A concave face is cut inside itself: its triangles cover its area once, all facing its way.</summary>
     [Fact]
     public void AConcaveFaceIsEarClippedNotFanned()

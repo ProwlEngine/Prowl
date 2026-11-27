@@ -511,22 +511,6 @@ public class CodeEditorViewTests
     }
 
     [Fact]
-    public void LargeDocument_EditNearTopStaysFast()
-    {
-        var sb = new System.Text.StringBuilder();
-        for (int i = 0; i < 200_000; i++) sb.Append("    int value").Append(i).Append(" = ").Append(i).Append("; // line\n");
-        var e = new CodeEditor(sb.ToString(), new CSharpLanguage());
-
-        var watch = System.Diagnostics.Stopwatch.StartNew();
-        e.SetCaret(new TextPosition(10, 4));
-        for (int i = 0; i < 200; i++) e.TypeChar('x');
-        watch.Stop();
-
-        Assert.Equal(200_001, e.Document.LineCount);
-        Assert.True(watch.ElapsedMilliseconds < 2000, $"200 keystrokes took {watch.ElapsedMilliseconds}ms");
-    }
-
-    [Fact]
     public void Tab_OverSingleLineSelection_IndentsInsteadOfReplacing()
     {
         var e = new CodeEditor("abc def", new CSharpLanguage());

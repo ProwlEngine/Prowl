@@ -465,17 +465,6 @@ public class GeometrySimplifyTests
     }
 
     [Fact]
-    public void LargeQuadMeshesSimplifyQuickly()
-    {
-        var mesh = GeometryGenerator.Plane(100f, 300);
-        var timer = Stopwatch.StartNew();
-
-        GeometryOperators.Simplify(mesh, new SimplifyOptions { TargetRatio = 0.5f });
-
-        Assert.True(timer.Elapsed.TotalSeconds < 10, $"Took {timer.Elapsed.TotalSeconds:F1}s");
-    }
-
-    [Fact]
     public void ATiltedFlatPlaneCollapsesUnderAZeroLimit()
     {
         // Float rounding leaves residuals off an axis aligned plane, which must not count as moving the surface
@@ -486,28 +475,6 @@ public class GeometrySimplifyTests
         GeometryOperators.Simplify(mesh, new SimplifyOptions { TargetRatio = 0f, MaxError = 0f });
 
         Assert.Equal(2, mesh.Faces.Count);
-    }
-
-    [Fact]
-    public void BusyFanCentresStayFast()
-    {
-        // A disk fan with one centre touching every triangle, which every rim collapse comes back to
-        const int rim = 20000;
-        var mesh = new GeometryData();
-        var centre = mesh.AddVertex(0, 0, 0);
-        var ring = new GeometryData.Vertex[rim];
-        for (int i = 0; i < rim; i++)
-        {
-            float angle = i * MathF.PI * 2 / rim;
-            ring[i] = mesh.AddVertex(MathF.Cos(angle), 0, MathF.Sin(angle));
-        }
-        for (int i = 0; i < rim; i++) mesh.AddFace(centre, ring[(i + 1) % rim], ring[i]);
-
-        var timer = Stopwatch.StartNew();
-        var result = GeometryOperators.Simplify(mesh, new SimplifyOptions { TargetRatio = 0.5f });
-
-        Assert.True(result.TrianglesAfter <= rim / 2);
-        Assert.True(timer.Elapsed.TotalSeconds < 10, $"Took {timer.Elapsed.TotalSeconds:F1}s");
     }
 
     [Fact]

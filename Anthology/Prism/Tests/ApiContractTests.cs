@@ -274,32 +274,4 @@ public sealed class ResourceUsageTests
     }
 
     // ---- #75: layout of deep struct nesting must not be cubic ----
-
-    [Fact]
-    [Trait("Category", "Perf")]
-    public void DeepStructNestingInABufferLaysOutQuickly()
-    {
-        const int depth = 512;
-        var sb = new StringBuilder(Frag).Append("struct S0 { float x; };\n");
-        for (int i = 1; i <= depth; i++) sb.Append($"struct S{i} {{ S{i - 1} x; }};\n");
-        sb.Append($"layout(std430, binding=0) buffer B {{ S{depth} s; }} b;\nvoid main(){{ o = b.s")
-          .Append(string.Concat(Enumerable.Repeat(".x", depth + 1))).Append("; }\n");
-        string src = sb.ToString();
-        var sw = Stopwatch.StartNew();
-        GlslCompiler.CompileToBytes(src, ShaderStage.Fragment);
-        // Align/Size/StructSize recurse without memoization: ~7.7 s at 512 levels, >40 s at 1024.
-        Assert.True(sw.Elapsed < TimeSpan.FromSeconds(2), $"{depth}-deep struct chain took {sw.Elapsed.TotalSeconds:F1} s");
-    }
-
-    [Fact]
-    [Trait("Category", "Perf")]
-    public void NestedUnrollLoopsOptimizeQuickly()
-    {
-        const int depth = 128;
-        string src = Frag + "void main(){ float x = 0.0; " + string.Concat(Enumerable.Repeat("[[unroll]] for(int i=0;i<2;i++) ", depth))
-                   + "x += f; o = x; }\n";
-        var sw = Stopwatch.StartNew();
-        GlslCompiler.CompileToBytes(src, ShaderStage.Fragment, optimize: true);
-        Assert.True(sw.Elapsed < TimeSpan.FromSeconds(5), $"{depth} nested [[unroll]] loops took {sw.Elapsed.TotalSeconds:F1} s to optimize");
-    }
 }

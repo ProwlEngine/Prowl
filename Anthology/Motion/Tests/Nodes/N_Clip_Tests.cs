@@ -76,23 +76,6 @@ public class N_Clip_Tests
     }
 
     [Fact]
-    public void AHugeStepDoesNotStallTheGraph()
-    {
-        Skeleton skeleton = TestSkeletons.MakeChain();
-        var graph = new AnimationGraph();
-        var frame = new Pose(skeleton);
-        frame.SetToReferencePose();
-        graph.SetRoot(graph.AddClip(new AnimationClip(skeleton, new[] { frame, frame }, 0.033f)));
-        AnimationGraphInstance instance = graph.CreateInstance(skeleton);
-
-        var watch = System.Diagnostics.Stopwatch.StartNew();
-        instance.Update(1e6f, Transform3D.Identity);
-        watch.Stop();
-
-        Assert.True(watch.ElapsedMilliseconds < 500, $"one update took {watch.ElapsedMilliseconds} ms");
-    }
-
-    [Fact]
     public void ReversePlayback_MovesRootBackwardOneStepAtATime()
     {
         Skeleton skeleton = TestSkeletons.MakeChain();

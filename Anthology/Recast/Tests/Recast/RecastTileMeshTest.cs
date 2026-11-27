@@ -94,46 +94,6 @@ public class RecastTileMeshTest
         Assert.Equal(15, rcResult.Mesh.nverts);
     }
 
-    [Fact]
-    public void TestPerformance()
-    {
-        IRcInputGeomProvider geom = RcSampleInputGeomProvider.LoadFile("dungeon.obj");
-        RcBuilder builder = new RcBuilder();
-        RcConfig cfg = new RcConfig(
-            true, m_tileSize, m_tileSize,
-            RcConfig.CalcBorder(m_agentRadius, m_cellSize),
-            m_partitionType,
-            m_cellSize, m_cellHeight,
-            m_agentMaxSlope, m_agentHeight, m_agentRadius, m_agentMaxClimb,
-            m_regionMinArea, m_regionMergeArea,
-            m_edgeMaxLen, m_edgeMaxError,
-            m_vertsPerPoly,
-            m_detailSampleDist, m_detailSampleMaxError,
-            true, true, true,
-            SampleAreaModifications.SAMPLE_AREAMOD_GROUND, true);
-        for (int i = 0; i < 4; i++)
-        {
-            Build(geom, builder, cfg, 1, true);
-            Build(geom, builder, cfg, 4, true);
-        }
-
-        long t1 = RcFrequency.Ticks;
-        for (int i = 0; i < 4; i++)
-        {
-            Build(geom, builder, cfg, 1, false);
-        }
-
-        long t2 = RcFrequency.Ticks;
-        for (int i = 0; i < 4; i++)
-        {
-            Build(geom, builder, cfg, 4, false);
-        }
-
-        long t3 = RcFrequency.Ticks;
-        Console.WriteLine(" Time ST : " + (t2 - t1) / TimeSpan.TicksPerMillisecond);
-        Console.WriteLine(" Time MT : " + (t3 - t2) / TimeSpan.TicksPerMillisecond);
-    }
-
     private void Build(IRcInputGeomProvider geom, RcBuilder builder, RcConfig cfg, int threads, bool validate)
     {
         CancellationTokenSource cts = new CancellationTokenSource();

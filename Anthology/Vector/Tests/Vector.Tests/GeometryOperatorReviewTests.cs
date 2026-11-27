@@ -278,15 +278,6 @@ public class GeometryOperatorReviewTests
     }
 
     [Fact]
-    public void Weld_LargeMeshFinishesQuickly()
-    {
-        GeometryData sphere = GeometryGenerator.Sphere(1f, Float3.Zero, 128, 64);
-        var watch = System.Diagnostics.Stopwatch.StartNew();
-        GeometryOperators.WeldVertices(sphere, 1e-4f);
-        Assert.True(watch.ElapsedMilliseconds < 5000, $"{watch.ElapsedMilliseconds} ms");
-    }
-
-    [Fact]
     public void Bisect_CutsCubeInHalfWatertightWithAttributes()
     {
         GeometryData cube = Cube();

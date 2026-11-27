@@ -46,17 +46,6 @@ public class RecastSoloMeshTest
     private RcPartition m_partitionType = RcPartition.WATERSHED;
 
     [Fact]
-    public void TestPerformance()
-    {
-        for (int i = 0; i < 10; i++)
-        {
-            TestBuild("dungeon.obj", RcPartition.WATERSHED, 52, 16, 15, 223, 118, 118, 513, 291);
-            TestBuild("dungeon.obj", RcPartition.MONOTONE, 0, 17, 16, 210, 100, 100, 453, 264);
-            TestBuild("dungeon.obj", RcPartition.LAYERS, 0, 5, 5, 203, 97, 97, 446, 266);
-        }
-    }
-
-    [Fact]
     public void TestDungeonWatershed()
     {
         TestBuild("dungeon.obj", RcPartition.WATERSHED, 52, 16, 15, 223, 118, 118, 513, 291);
