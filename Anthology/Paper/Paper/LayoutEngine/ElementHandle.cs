@@ -34,7 +34,7 @@ public readonly struct ElementHandle : IEquatable<ElementHandle>
 
     public bool Equals(ElementHandle other) => Owner == other.Owner && Index == other.Index;
 
-    public override bool Equals(object obj) => obj is ElementHandle other && Equals(other);
+    public override bool Equals(object? obj) => obj is ElementHandle other && Equals(other);
 
     public override int GetHashCode() => HashCode.Combine(Owner, Index);
 

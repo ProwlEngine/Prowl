@@ -32,18 +32,21 @@ namespace Prowl.PaperUI
         /// <summary> All defined PaperMouseBtn values, cached for iteration. </summary>
         public readonly PaperMouseBtn[] MouseValues = Enum.GetValues(typeof(PaperMouseBtn)).Cast<PaperMouseBtn>().ToArray();
 
+        private static readonly int KeyCount = Enum.GetValues(typeof(PaperKey)).Length;
+        private static readonly int MouseCount = Enum.GetValues(typeof(PaperMouseBtn)).Length;
+
         // Events
         /// <summary> Raised when the pointer position is set. The Float2 parameter contains the new pointer coordinates. </summary>
-        public event Action<Float2> OnPointerPosSet;
+        public event Action<Float2>? OnPointerPosSet;
         /// <summary> Raised when the cursor visibility changes. The boolean parameter is true when the cursor becomes visible and false when it becomes hidden. </summary>
-        public event Action<bool> OnCursorVisibilitySet;
+        public event Action<bool>? OnCursorVisibilitySet;
 
         #region Keyboard State
 
         // Keyboard state tracking
-        private bool[] _keyCurState;
-        private bool[] _keyPrevState;
-        private float[] _keyPressedTime;
+        private bool[] _keyCurState = new bool[KeyCount];
+        private bool[] _keyPrevState = new bool[KeyCount];
+        private float[] _keyPressedTime = new float[KeyCount];
         /// <summary> Gets the most recently pressed key, or PaperKey.Unknown if no key has been pressed since the last reset. </summary>
         public PaperKey LastKeyPressed { get; private set; } = PaperKey.Unknown;
 
@@ -55,8 +58,8 @@ namespace Prowl.PaperUI
         private float _autoRepeatRate = SystemInformation.KeyRepeatInterval; // Time between repeats once started
 
         // Auto-repeat state tracking
-        private float[] _keyRepeatTimer;
-        private bool[] _keyRepeating;
+        private float[] _keyRepeatTimer = new float[KeyCount];
+        private bool[] _keyRepeating = new bool[KeyCount];
 
         // Public properties for configuration
 
@@ -88,10 +91,10 @@ namespace Prowl.PaperUI
         #region Mouse State
 
         // Mouse state tracking
-        private bool[] _pointerCurState;
-        private bool[] _pointerPrevState;
-        private float[] _pointerPressedTime;
-        private Float2[] _pointerClickPos;
+        private bool[] _pointerCurState = new bool[MouseCount];
+        private bool[] _pointerPrevState = new bool[MouseCount];
+        private float[] _pointerPressedTime = new float[MouseCount];
+        private Float2[] _pointerClickPos = new Float2[MouseCount];
         public PaperMouseBtn LastButtonPressed { get; private set; } = PaperMouseBtn.Unknown;
         public Float2 PreviousPointerPos { get; private set; } = Float2.Zero;
 
@@ -142,11 +145,11 @@ namespace Prowl.PaperUI
         public bool IsPointerMoving => Float2.LengthSquared(PointerDelta) > 0;
 
         // Double-click tracking
-        private float[] _pointerLastClickTime;
-        private Float2[] _pointerLastClickPos;
+        private float[] _pointerLastClickTime = new float[MouseCount];
+        private Float2[] _pointerLastClickPos = new Float2[MouseCount];
         // Set when a press completes a double-click, so the release that follows does not re-arm the
         // window; without this a third click keeps chaining into further double-clicks.
-        private bool[] _pointerDoubleClickConsumed;
+        private bool[] _pointerDoubleClickConsumed = new bool[MouseCount];
 
         #endregion
 
@@ -171,43 +174,7 @@ namespace Prowl.PaperUI
         #endregion
 
         // Clipboard handling
-        private IClipboardHandler _clipboardHandler;
-
-        #endregion
-
-        #region Initialization
-
-        /// <summary>
-        /// Initializes the input system.
-        /// </summary>
-        private void InitializeInput()
-        {
-            // Initialize keyboard arrays
-            _keyCurState = new bool[KeyValues.Length];
-            _keyPrevState = new bool[KeyValues.Length];
-            _keyPressedTime = new float[KeyValues.Length];
-            _keyRepeatTimer = new float[KeyValues.Length];
-            _keyRepeating = new bool[KeyValues.Length];
-
-            // Initialize keyboard arrays
-            _keyCurState = new bool[KeyValues.Length];
-            _keyPrevState = new bool[KeyValues.Length];
-            _keyPressedTime = new float[KeyValues.Length];
-
-            // Initialize mouse arrays
-            _pointerCurState = new bool[MouseValues.Length];
-            _pointerPrevState = new bool[MouseValues.Length];
-            _pointerPressedTime = new float[MouseValues.Length];
-            _pointerClickPos = new Float2[MouseValues.Length];
-            _pointerLastClickTime = new float[MouseValues.Length];
-            _pointerLastClickPos = new Float2[MouseValues.Length];
-            _pointerDoubleClickConsumed = new bool[MouseValues.Length];
-
-            // Initialize clipboard handler
-            _clipboardHandler = null;
-
-            _time = 0;
-        }
+        private IClipboardHandler? _clipboardHandler;
 
         #endregion
 

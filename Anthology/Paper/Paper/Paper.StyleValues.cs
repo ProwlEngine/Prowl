@@ -38,7 +38,7 @@ namespace Prowl.PaperUI
         public UnitValue PaddingLeft, PaddingRight, PaddingTop, PaddingBottom;
         public float TranslateX, TranslateY, ScaleX, ScaleY, Rotate, OriginX, OriginY, SkewX, SkewY;
         public Transform2D Transform;
-        public object BackgroundImage;
+        public object? BackgroundImage;
         public Color TextColor;
         public float WordSpacing, LetterSpacing, LineHeight;
         public int TabSize;
@@ -219,7 +219,7 @@ namespace Prowl.PaperUI
         }
 
         /// <summary>The object field a property maps to, by reference so it can be read and written.</summary>
-        internal static ref object ObjectRef(ref StyleValues v, GuiProp p)
+        internal static ref object? ObjectRef(ref StyleValues v, GuiProp p)
         {
             switch (p)
             {
@@ -354,7 +354,7 @@ namespace Prowl.PaperUI
         #endregion
 
         /// <summary>Boxing read of a property (for the compatibility shim / cold callers).</summary>
-        public readonly object GetBoxed(GuiProp p) => p switch
+        public readonly object? GetBoxed(GuiProp p) => p switch
         {
             GuiProp.BackgroundColor => BackgroundColor,
             GuiProp.BackgroundGradient => BackgroundGradient,

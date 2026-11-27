@@ -93,7 +93,7 @@ namespace Prowl.PaperUI.Utilities
             EnsureSize(_count + data.Count);
 
             // Copy data from segment to the end of our array
-            System.Array.Copy(data.Array, data.Offset, _array, _count, data.Count);
+            System.Array.Copy(data.Array!, data.Offset, _array, _count, data.Count);
             _count += data.Count;
         }
     }

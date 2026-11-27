@@ -20,7 +20,7 @@ namespace Prowl.PaperUI
         // every Paper instance, which may live on different threads, hence the lock.
         private static readonly Dictionary<char, GlyphCustomizer> _masks = new Dictionary<char, GlyphCustomizer>();
 
-        public static GlyphCustomizer For(char? mask)
+        public static GlyphCustomizer? For(char? mask)
         {
             if (!mask.HasValue) return null;
 

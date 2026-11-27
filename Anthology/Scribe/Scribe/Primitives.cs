@@ -113,7 +113,7 @@ namespace Prowl.Scribe
         /// or even the character itself. Whatever it returns is what the text is shaped, measured,
         /// wrapped and drawn with.
         /// </summary>
-        public GlyphCustomizer Customizer;
+        public GlyphCustomizer? Customizer;
 
         public static TextLayoutSettings Default => new TextLayoutSettings {
             PixelSize = 16,

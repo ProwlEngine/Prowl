@@ -181,10 +181,10 @@ namespace Prowl.PaperUI
     /// </summary>
     internal sealed class TextLayoutCache
     {
-        private TextLayout _layout, _other;
+        private TextLayout? _layout, _other;
         private PlainTextKey _key, _otherKey;
 
-        public TextLayout Find(in PlainTextKey key)
+        public TextLayout? Find(in PlainTextKey key)
         {
             if (_layout != null && _key.Equals(key)) return _layout;
             if (_other == null || !_otherKey.Equals(key)) return null;
@@ -216,7 +216,7 @@ namespace Prowl.PaperUI
         readonly int TabSize;
         readonly FontQuality Quality;
         readonly FontFile Font;
-        readonly GlyphCustomizer Customizer;
+        readonly GlyphCustomizer? Customizer;
         readonly bool NoLigatures, Truncated;
         readonly TextWrapMode Wrap;
         readonly Scribe.TextAlignment Alignment;
@@ -249,7 +249,7 @@ namespace Prowl.PaperUI
             && LineHeight == o.LineHeight && FbScale == o.FbScale && Width.Equals(o.Width)
             && (ReferenceEquals(Text, o.Text) || string.Equals(Text, o.Text));
 
-        public override bool Equals(object obj) => obj is PlainTextKey o && Equals(o);
+        public override bool Equals(object? obj) => obj is PlainTextKey o && Equals(o);
 
         public override int GetHashCode() => HashCode.Combine(Text, PixelSize, TabSize, (int)Quality, Font, FbScale, Width);
     }

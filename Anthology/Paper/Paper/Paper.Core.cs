@@ -122,8 +122,6 @@ namespace Prowl.PaperUI
             // Create canvas
             _canvas = new Canvas(renderer, fontAtlas);
 
-            InitializeInput();
-
             _devTools = new PaperDevTools(this);
         }
 
@@ -1031,15 +1029,15 @@ namespace Prowl.PaperUI
         #region Element Storage
 
         /// <summary> Get a value from the root element this persists across all Frames and Elements </summary>
-        public T GetRootStorage<T>(string key) => GetElementStorage<T>(_rootElementHandle, key, default);
+        public T GetRootStorage<T>(string key) => GetElementStorage<T>(_rootElementHandle, key, default!);
         /// <summary> Set a value in the root element </summary>
         public void SetRootStorage<T>(string key, T value) => SetElementStorage(_rootElementHandle, key, value);
 
         /// <summary> Get a value from the current element's storage </summary>
-        public T GetElementStorage<T>(string key, T defaultValue = default) => GetElementStorage(CurrentParent, key, defaultValue);
+        public T GetElementStorage<T>(string key, T defaultValue = default!) => GetElementStorage(CurrentParent, key, defaultValue);
 
         /// <summary> Get a value from the current element's storage </summary>
-        public T GetElementStorage<T>(ElementHandle el, string key, T defaultValue = default)
+        public T GetElementStorage<T>(ElementHandle el, string key, T defaultValue = default!)
         {
             if (!_storage.TryGetValue(el.Data.ID, out var storage))
                 return defaultValue;
@@ -1067,7 +1065,7 @@ namespace Prowl.PaperUI
         internal T? GetElementStorageById<T>(int id, string key, T? defaultValue = default)
         {
             if (!_storage.TryGetValue(id, out var storage)) return defaultValue;
-            if (storage.ContainsKey(key)) return (T)storage[key];
+            if (storage.ContainsKey(key)) return (T?)storage[key];
             return defaultValue;
         }
 

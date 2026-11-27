@@ -99,10 +99,10 @@ public struct ElementData
     /// <summary>Rich text is drawn only when nothing masks it, since a mask has to hide the characters.</summary>
     internal bool DrawsRichText => IsRichText && !MaskChar.HasValue;
     public FontFile Font;
-    public FontFile FontBold;
-    public FontFile FontItalic;
-    public FontFile FontBoldItalic;
-    public FontFile FontMono;
+    public FontFile? FontBold;
+    public FontFile? FontItalic;
+    public FontFile? FontBoldItalic;
+    public FontFile? FontMono;
     public FontStyle FontStyle;
     /// <summary> How text wraps within the element's bounds. Defaults to NoWrap. </summary>
     public TextWrapMode WrapMode;
@@ -187,7 +187,7 @@ public struct ElementData
     public Prowl.Vector.Rect ContentRect;
 
     /// <summary> Callback that measures the element's content size given optional width and height constraints. Returns the measured (width, height) or null if the measurement is unavailable. </summary>
-    public Func<float?, float?, (float, float)?> ContentSizer;
+    public Func<float?, float?, (float, float)?>? ContentSizer;
 
     /// <summary> Gets the bounding rectangle of this element in sceen (or root) cordinate space, derived from X, Y, LayoutWidth and LayoutHeight. </summary>
     public readonly Rect LayoutRect => new Rect(X, Y, X + LayoutWidth, Y + LayoutHeight);

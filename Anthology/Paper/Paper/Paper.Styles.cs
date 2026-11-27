@@ -1,5 +1,6 @@
 using System;
 using System.Collections.Generic;
+using System.Diagnostics.CodeAnalysis;
 using System.Linq;
 
 using Prowl.Scribe;
@@ -399,7 +400,7 @@ namespace Prowl.PaperUI
         /// <summary>
         /// Gets the current value of a property, falling back to parent or default.
         /// </summary>
-        public object GetValue(GuiProp property)
+        public object? GetValue(GuiProp property)
         {
             // Boxing shim for cold callers (DevTools, templates); hot readers use the typed accessors.
             // Inherit from the parent only when not set locally; otherwise GetBoxed returns the set
@@ -420,25 +421,25 @@ namespace Prowl.PaperUI
             return _current.GetUnit(property);
         }
 
-        public Color GetBackgroundColor() => (_parent != null && !_current.Has(GuiProp.BackgroundColor)) ? (Color)_parent.GetValue(GuiProp.BackgroundColor) : _current.BackgroundColor;
-        public Gradient GetBackgroundGradient() => (_parent != null && !_current.Has(GuiProp.BackgroundGradient)) ? (Gradient)_parent.GetValue(GuiProp.BackgroundGradient) : _current.BackgroundGradient;
-        public Color GetBorderColor() => (_parent != null && !_current.Has(GuiProp.BorderColor)) ? (Color)_parent.GetValue(GuiProp.BorderColor) : _current.BorderColor;
-        public float GetBorderWidth() => (_parent != null && !_current.Has(GuiProp.BorderWidth)) ? (float)_parent.GetValue(GuiProp.BorderWidth) : _current.BorderWidth;
-        public Float4 GetRounded() => (_parent != null && !_current.Has(GuiProp.Rounded)) ? (Float4)_parent.GetValue(GuiProp.Rounded) : _current.Rounded;
-        public BoxShadow GetBoxShadow() => (_parent != null && !_current.Has(GuiProp.BoxShadow)) ? (BoxShadow)_parent.GetValue(GuiProp.BoxShadow) : _current.BoxShadow;
-        public float GetOpacity() => (_parent != null && !_current.Has(GuiProp.Opacity)) ? (float)_parent.GetValue(GuiProp.Opacity) : _current.Opacity;
-        public float GetBackdropBlur() => (_parent != null && !_current.Has(GuiProp.BackdropBlur)) ? (float)_parent.GetValue(GuiProp.BackdropBlur) : _current.BackdropBlur;
-        public object GetBackgroundImage() => (_parent != null && !_current.Has(GuiProp.BackgroundImage)) ? _parent.GetValue(GuiProp.BackgroundImage) : _current.BackgroundImage;
-        public Color GetTextColor() => (_parent != null && !_current.Has(GuiProp.TextColor)) ? (Color)_parent.GetValue(GuiProp.TextColor) : _current.TextColor;
-        public float GetAspectRatio() => (_parent != null && !_current.Has(GuiProp.AspectRatio)) ? (float)_parent.GetValue(GuiProp.AspectRatio) : _current.AspectRatio;
-        public float GetGap() => (_parent != null && !_current.Has(GuiProp.Gap)) ? (float)_parent.GetValue(GuiProp.Gap) : _current.Gap;
-        public float GetLineGap() => (_parent != null && !_current.Has(GuiProp.LineGap)) ? (float)_parent.GetValue(GuiProp.LineGap) : _current.LineGap;
-        public float GetFontSize() => (_parent != null && !_current.Has(GuiProp.FontSize)) ? (float)_parent.GetValue(GuiProp.FontSize) : _current.FontSize;
-        public float GetLineHeight() => (_parent != null && !_current.Has(GuiProp.LineHeight)) ? (float)_parent.GetValue(GuiProp.LineHeight) : _current.LineHeight;
-        public float GetLetterSpacing() => (_parent != null && !_current.Has(GuiProp.LetterSpacing)) ? (float)_parent.GetValue(GuiProp.LetterSpacing) : _current.LetterSpacing;
-        public float GetWordSpacing() => (_parent != null && !_current.Has(GuiProp.WordSpacing)) ? (float)_parent.GetValue(GuiProp.WordSpacing) : _current.WordSpacing;
-        public int GetTabSize() => (_parent != null && !_current.Has(GuiProp.TabSize)) ? (int)_parent.GetValue(GuiProp.TabSize) : _current.TabSize;
-        public FontQuality GetTextQuality() => (_parent != null && !_current.Has(GuiProp.TextQuality)) ? (FontQuality)_parent.GetValue(GuiProp.TextQuality) : _current.TextQuality;
+        public Color GetBackgroundColor() => (_parent != null && !_current.Has(GuiProp.BackgroundColor)) ? (Color)_parent.GetValue(GuiProp.BackgroundColor)! : _current.BackgroundColor;
+        public Gradient GetBackgroundGradient() => (_parent != null && !_current.Has(GuiProp.BackgroundGradient)) ? (Gradient)_parent.GetValue(GuiProp.BackgroundGradient)! : _current.BackgroundGradient;
+        public Color GetBorderColor() => (_parent != null && !_current.Has(GuiProp.BorderColor)) ? (Color)_parent.GetValue(GuiProp.BorderColor)! : _current.BorderColor;
+        public float GetBorderWidth() => (_parent != null && !_current.Has(GuiProp.BorderWidth)) ? (float)_parent.GetValue(GuiProp.BorderWidth)! : _current.BorderWidth;
+        public Float4 GetRounded() => (_parent != null && !_current.Has(GuiProp.Rounded)) ? (Float4)_parent.GetValue(GuiProp.Rounded)! : _current.Rounded;
+        public BoxShadow GetBoxShadow() => (_parent != null && !_current.Has(GuiProp.BoxShadow)) ? (BoxShadow)_parent.GetValue(GuiProp.BoxShadow)! : _current.BoxShadow;
+        public float GetOpacity() => (_parent != null && !_current.Has(GuiProp.Opacity)) ? (float)_parent.GetValue(GuiProp.Opacity)! : _current.Opacity;
+        public float GetBackdropBlur() => (_parent != null && !_current.Has(GuiProp.BackdropBlur)) ? (float)_parent.GetValue(GuiProp.BackdropBlur)! : _current.BackdropBlur;
+        public object? GetBackgroundImage() => (_parent != null && !_current.Has(GuiProp.BackgroundImage)) ? _parent.GetValue(GuiProp.BackgroundImage) : _current.BackgroundImage;
+        public Color GetTextColor() => (_parent != null && !_current.Has(GuiProp.TextColor)) ? (Color)_parent.GetValue(GuiProp.TextColor)! : _current.TextColor;
+        public float GetAspectRatio() => (_parent != null && !_current.Has(GuiProp.AspectRatio)) ? (float)_parent.GetValue(GuiProp.AspectRatio)! : _current.AspectRatio;
+        public float GetGap() => (_parent != null && !_current.Has(GuiProp.Gap)) ? (float)_parent.GetValue(GuiProp.Gap)! : _current.Gap;
+        public float GetLineGap() => (_parent != null && !_current.Has(GuiProp.LineGap)) ? (float)_parent.GetValue(GuiProp.LineGap)! : _current.LineGap;
+        public float GetFontSize() => (_parent != null && !_current.Has(GuiProp.FontSize)) ? (float)_parent.GetValue(GuiProp.FontSize)! : _current.FontSize;
+        public float GetLineHeight() => (_parent != null && !_current.Has(GuiProp.LineHeight)) ? (float)_parent.GetValue(GuiProp.LineHeight)! : _current.LineHeight;
+        public float GetLetterSpacing() => (_parent != null && !_current.Has(GuiProp.LetterSpacing)) ? (float)_parent.GetValue(GuiProp.LetterSpacing)! : _current.LetterSpacing;
+        public float GetWordSpacing() => (_parent != null && !_current.Has(GuiProp.WordSpacing)) ? (float)_parent.GetValue(GuiProp.WordSpacing)! : _current.WordSpacing;
+        public int GetTabSize() => (_parent != null && !_current.Has(GuiProp.TabSize)) ? (int)_parent.GetValue(GuiProp.TabSize)! : _current.TabSize;
+        public FontQuality GetTextQuality() => (_parent != null && !_current.Has(GuiProp.TextQuality)) ? (FontQuality)_parent.GetValue(GuiProp.TextQuality)! : _current.TextQuality;
 
         /// <summary>
         /// Sets a property value directly (already-resolved values such as the root size). In the new
@@ -888,7 +889,7 @@ namespace Prowl.PaperUI
         }
 
         /// <summary> Attempts to retrieve a style template by name, returning true if found and setting template to the matching StyleTemplate, or false if no template exists with that name. </summary>
-        public bool TryGetStyle(string name, out StyleTemplate? template)
+        public bool TryGetStyle(string name, [NotNullWhen(true)] out StyleTemplate? template)
         {
             return _styleTemplates.TryGetValue(name, out template);
         }
@@ -939,10 +940,10 @@ namespace Prowl.PaperUI
         public void RegisterStyleFamily(
             string baseName,
             StyleTemplate baseStyle,
-            StyleTemplate normalStyle = null,
-            StyleTemplate hoveredStyle = null,
-            StyleTemplate focusedStyle = null,
-            StyleTemplate activeStyle = null)
+            StyleTemplate? normalStyle = null,
+            StyleTemplate? hoveredStyle = null,
+            StyleTemplate? focusedStyle = null,
+            StyleTemplate? activeStyle = null)
         {
             // Register base style
             RegisterStyle(baseName, baseStyle);
@@ -978,11 +979,11 @@ namespace Prowl.PaperUI
         {
             private readonly Paper _paper;
             private readonly string _baseName;
-            private StyleTemplate _baseStyle;
-            private StyleTemplate _normalStyle;
-            private StyleTemplate _hoveredStyle;
-            private StyleTemplate _focusedStyle;
-            private StyleTemplate _activeStyle;
+            private StyleTemplate _baseStyle = null!;
+            private StyleTemplate? _normalStyle;
+            private StyleTemplate? _hoveredStyle;
+            private StyleTemplate? _focusedStyle;
+            private StyleTemplate? _activeStyle;
 
             internal StyleFamilyBuilder(Paper paper, string baseName)
             {

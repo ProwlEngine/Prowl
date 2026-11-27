@@ -883,7 +883,7 @@ namespace Prowl.Scribe
         /// effect is being applied. Decoration bars arrive with <c>IsDecoration</c> set and the
         /// <c>CharIndex</c> of the first character in their run.
         /// </summary>
-        public void DrawLayout(TextLayout layout, Float2 position, FontColor color, GlyphModifier modifier)
+        public void DrawLayout(TextLayout layout, Float2 position, FontColor color, GlyphModifier? modifier)
         {
             if (layout.Lines.Count == 0) return;
 

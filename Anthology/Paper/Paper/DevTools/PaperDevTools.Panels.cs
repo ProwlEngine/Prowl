@@ -45,7 +45,7 @@ namespace Prowl.PaperUI
             public bool Visible, Scissor;
             public LayoutType Lay;
             public PositionType Pos;
-            public string Text, Handlers, Draw;
+            public string Text = "", Handlers = "", Draw = "";
         }
 
         private readonly List<Node> _snap = new();
@@ -165,11 +165,11 @@ namespace Prowl.PaperUI
                 _selStyles.Add((p.ToString(), FormatStyle(style.GetValue(p)), style.IsAnimating(p)));
         }
 
-        private static string FormatStyle(object v)
+        private static string FormatStyle(object? v)
         {
             if (v == null) return "null";
             if (v is Color c) return $"#{(int)(c.R * 255):X2}{(int)(c.G * 255):X2}{(int)(c.B * 255):X2} a{(int)(c.A * 255)}";
-            return v.ToString();
+            return v.ToString() ?? "";
         }
 
         // ================================================================= Draw-call stats
@@ -861,7 +861,7 @@ namespace Prowl.PaperUI
             void Head(string t) => _selInfo.Add(("", t, Accent));
 
             bool inTree = _idToSnap.TryGetValue(_selectedId, out int si);
-            Node n = inTree ? _snap[si] : null;
+            Node? n = inTree ? _snap[si] : null;
 
             Head("ELEMENT");
             Row("id", _selectedId.ToString(), Text);

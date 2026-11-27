@@ -357,10 +357,10 @@ namespace Prowl.PaperUI
         /// <param name="property">The property to animate</param>
         /// <param name="duration">Animation duration in seconds</param>
         /// <param name="easing">Optional easing function</param>
-        public T Transition(GuiProp property, float duration, Func<float, float> easing = null) => SetTransition(property, duration, easing);
+        public T Transition(GuiProp property, float duration, Func<float, float>? easing = null) => SetTransition(property, duration, easing);
 
         /// <summary> Configures a property transition with the specified duration and easing function. </summary>
-        protected abstract T SetTransition(GuiProp property, float duration, Func<float, float> easing);
+        protected abstract T SetTransition(GuiProp property, float duration, Func<float, float>? easing);
 
         #endregion
     }
@@ -371,7 +371,7 @@ namespace Prowl.PaperUI
     /// </summary>
     public class StateDrivenStyle : StyleSetterBase<StateDrivenStyle>
     {
-        private ElementBuilder _owner;
+        private ElementBuilder _owner = null!;
         private bool _isActive;
         // One pool per thread, so taking a style never locks even with several Paper instances around.
         [ThreadStatic] private static ObjectPool<StateDrivenStyle>? _pool;
@@ -380,7 +380,6 @@ namespace Prowl.PaperUI
         // Private constructor for the pool
         private StateDrivenStyle() : base(default)
         {
-            _owner = null;
             _isActive = false;
         }
 
@@ -453,7 +452,7 @@ namespace Prowl.PaperUI
         /// <param name="property">The property to animate</param>
         /// <param name="duration">Animation duration in seconds</param>
         /// <param name="easing">Optional easing function</param>
-        protected override StateDrivenStyle SetTransition(GuiProp property, float duration, Func<float, float> easing)
+        protected override StateDrivenStyle SetTransition(GuiProp property, float duration, Func<float, float>? easing)
         {
             if (_isActive)
                 _owner._paper.SetTransitionConfig(_handle.Data.ID, property, duration, easing);
@@ -477,7 +476,7 @@ namespace Prowl.PaperUI
     /// </summary>
     public class StyleTemplate : StyleSetterBase<StyleTemplate>
     {
-        private readonly Dictionary<GuiProp, (float duration, Func<float, float> easing)> _transitions = new Dictionary<GuiProp, (float, Func<float, float>)>();
+        private readonly Dictionary<GuiProp, (float duration, Func<float, float>? easing)> _transitions = new Dictionary<GuiProp, (float, Func<float, float>?)>();
 
         /// <summary>
         /// Creates a new style template
@@ -502,7 +501,7 @@ namespace Prowl.PaperUI
         /// <param name="property">The property to animate</param>
         /// <param name="duration">Animation duration in seconds</param>
         /// <param name="easing">Optional easing function</param>
-        protected override StyleTemplate SetTransition(GuiProp property, float duration, Func<float, float> easing)
+        protected override StyleTemplate SetTransition(GuiProp property, float duration, Func<float, float>? easing)
         {
             _transitions[property] = (duration, easing);
             return this;
@@ -595,7 +594,7 @@ namespace Prowl.PaperUI
         /// <param name="property">The property to animate</param>
         /// <param name="duration">Animation duration in seconds</param>
         /// <param name="easing">Optional easing function</param>
-        protected override ElementBuilder SetTransition(GuiProp property, float duration, Func<float, float> easing)
+        protected override ElementBuilder SetTransition(GuiProp property, float duration, Func<float, float>? easing)
         {
             _paper.SetTransitionConfig(_handle.Data.ID, property, duration, easing);
             return this;
@@ -1168,7 +1167,7 @@ namespace Prowl.PaperUI
         ///
         /// <para>The faces are optional. A style whose face is missing falls back to the regular font.</para>
         /// </summary>
-        public ElementBuilder RichText(FontFile bold = null, FontFile italic = null, FontFile boldItalic = null, FontFile mono = null)
+        public ElementBuilder RichText(FontFile? bold = null, FontFile? italic = null, FontFile? boldItalic = null, FontFile? mono = null)
         {
             _handle.Data.IsRichText = true;
             _handle.Data.FontBold = bold;
@@ -1321,7 +1320,7 @@ namespace Prowl.PaperUI
         public struct TextInputSettings
         {
             /// <summary>Font used to render the text</summary>
-            public FontFile Font;
+            public FontFile? Font;
 
             /// <summary>Color of the text</summary>
             public Color TextColor;
@@ -1363,7 +1362,7 @@ namespace Prowl.PaperUI
             /// <para>Set this only on the frame where you want to force the change; on
             /// subsequent frames the field's internal state is authoritative again.</para>
             /// </summary>
-            public string ForceValue;
+            public string? ForceValue;
 
             /// <summary> Companion to ForceValue: when true and a force-update lands while focused, the new text is fully selected so the user's next keystroke replaces it. When the field isn't focused this flag is ignored (no selection on a non-focused field). </summary>
             public bool ForceSelectAll;
@@ -1573,7 +1572,7 @@ namespace Prowl.PaperUI
             var settings = TextLayoutSettings.Default;
             settings.PixelSize = (float)fontSize;
             settings.Quality = _handle.Data._elementStyle.GetTextQuality();
-            settings.Font = inputSettings.Font;
+            settings.Font = inputSettings.Font!;
             settings.LetterSpacing = (float)letterSpacing;
             settings.WordSpacing = _handle.Data._elementStyle.GetWordSpacing();
             settings.LineHeight = _handle.Data._elementStyle.GetLineHeight();
@@ -1942,7 +1941,7 @@ namespace Prowl.PaperUI
         public ElementBuilder TextField(
             string value,
             TextInputSettings settings,
-            Action<string> onChange = null,
+            Action<string>? onChange = null,
             [System.Runtime.CompilerServices.CallerLineNumber] int intID = 0)
         {
             return CreateTextInput(value, settings, onChange, false, intID);
@@ -1963,7 +1962,7 @@ namespace Prowl.PaperUI
         public ElementBuilder TextField(
             string value,
             FontFile font,
-            Action<string> onChange = null,
+            Action<string>? onChange = null,
             Color? textColor = null,
             string placeholder = "",
             Color? placeholderColor = null,
@@ -1989,7 +1988,7 @@ namespace Prowl.PaperUI
         public ElementBuilder TextArea(
             string value,
             TextInputSettings settings,
-            Action<string> onChange = null,
+            Action<string>? onChange = null,
             [System.Runtime.CompilerServices.CallerLineNumber] int intID = 0)
         {
             return CreateTextInput(value, settings, onChange, true, intID);
@@ -2010,7 +2009,7 @@ namespace Prowl.PaperUI
         public ElementBuilder TextArea(
             string value,
             FontFile font,
-            Action<string> onChange = null,
+            Action<string>? onChange = null,
             string placeholder = "",
             Color? textColor = null,
             Color? placeholderColor = null,
@@ -2031,7 +2030,7 @@ namespace Prowl.PaperUI
         private ElementBuilder CreateTextInput(
             string value,
             TextInputSettings settings,
-            Action<string> onChange,
+            Action<string>? onChange,
             bool isMultiLine,
             int intID)
         {

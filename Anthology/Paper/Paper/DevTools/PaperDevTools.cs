@@ -23,7 +23,7 @@ public sealed partial class PaperDevTools
     public bool Enabled = false;
 
     /// <summary>Font used to render the DevTools UI. If null, the first system font is loaded lazily.</summary>
-    public FontFile Font;
+    public FontFile? Font;
 
     private bool _open;
     private float _panelH = 440f;
@@ -118,7 +118,7 @@ public sealed partial class PaperDevTools
 
     // ---------------------------------------------------------------- Font
 
-    private FontFile _font;
+    private FontFile _font = null!;
     private bool _fontTried;
 
     private void EnsureFont()
@@ -126,8 +126,8 @@ public sealed partial class PaperDevTools
         if (Font != null) { _font = Font; return; }
         if (_font != null || _fontTried) return;
         _fontTried = true;
-        try { _font = _p.EnumerateSystemFonts().FirstOrDefault(); }
-        catch { _font = null; }
+        try { _font = _p.EnumerateSystemFonts().FirstOrDefault()!; }
+        catch { _font = null!; }
         if (_font == null) Log("DevTools: no font available (set PaperDevTools.Font).", LogLevel.Warning);
     }
 

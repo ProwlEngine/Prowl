@@ -224,7 +224,7 @@ namespace Prowl.PaperUI
 
         /// <summary>Fires when <see cref="CurrentCursor"/> changes, so a host can set the OS cursor
         /// only on change rather than every frame.</summary>
-        public event Action<PaperCursor> OnCursorChange;
+        public event Action<PaperCursor>? OnCursorChange;
 
         /// <summary>
         /// Programmatically set focus to an element.

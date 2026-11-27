@@ -97,7 +97,7 @@ public sealed class RichTextBlock
 
         var text = new TextLayoutSettings
         {
-            Font = settings.Regular,
+            Font = settings.Regular!,
             PixelSize = settings.PixelSize,
             LetterSpacing = settings.LetterSpacing,
             WordSpacing = settings.WordSpacing,
