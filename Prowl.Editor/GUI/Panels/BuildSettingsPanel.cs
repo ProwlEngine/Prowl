@@ -299,7 +299,7 @@ public class BuildSettingsPanel : DockPanel
             return;
         }
 
-        _activeProgress = ProjectBuilder.StartBuildAsync(andRun, _buildSettings.OutputDirectory);
+        _activeProgress = ProjectBuilder.StartBuildAsync(andRun, _buildSettings.OutputDirectory, null, null);
 
         // Every other reason to return null is logged where it happens, so this only has to stop the
         // click looking like it did nothing.

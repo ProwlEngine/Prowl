@@ -8,6 +8,8 @@ using Prowl.Editor.Core;
 using Prowl.Editor.Projects;
 using Prowl.Editor.Projects.Scripting;
 using Prowl.Editor.Theming;
+using Prowl.Editor.Build;
+using System.Linq;
 
 
 namespace Prowl.Editor;
@@ -23,7 +25,12 @@ public static class Program
     public static bool BuildMode { get; private set; } = false;
 
     /// <summary>If set via --output arg, it builds the game into this path when built through the --build arg.</summary>
-    public static string? BuildOutputPath { get; private set; }
+    public static string? BuildOutputPath { get; private set; } = null;
+
+    public static string? Platform { get; private set; } = null;
+
+    /// <summary>If set via --platform arg, it selects a predefined build profile to use when built through the --build arg.</summary>
+    public static PlatformOverrides? Overrides { get; private set; } = null;
 
 
     private static void LogCommands(List<string> args)
@@ -48,6 +55,13 @@ public static class Program
 
         (["--buildmode", "-build", "-b"], (args) => { BuildMode = true; StartupProjectPath = args[0]; }, 1,
             "Builds a project directly without opening the editor UI"),
+
+        (["--platform", "-platform", "-pL"], (args) =>
+            {
+                Platform = args[0];
+                Overrides = new(args[1..]);
+            }, -2,
+            "Specifies a target platform to publish for with a default configuration"),
 
         (["--output", "-output", "-o"], (args) => BuildOutputPath = args[0], 1,
             "Specifies the build output path when the editor builds a project"),
@@ -83,7 +97,7 @@ public static class Program
                 cmdArgs.Add(argQueue.Dequeue());
             }
 
-            if (cmdArgs.Count < argsCount)
+            if (cmdArgs.Count < (argsCount < -1 ? 1 : argsCount))
                 throw new Exception($"Not enough arguments specified for '{result}'");
 
             action.Invoke(cmdArgs);
@@ -123,7 +137,7 @@ public static class Program
             var db = new EditorAssetBackend(Project.Current!);
             db.Initialize();
 
-            Build.ProjectBuilder.StartBuildAsync(false, BuildOutputPath ?? StartupProjectPath + "/../Builds");
+            Build.ProjectBuilder.StartBuildAsync(false, BuildOutputPath ?? StartupProjectPath + "/../Builds", Platform, Overrides);
             return;
         }
 

@@ -251,23 +251,23 @@ public static class CliEditorCommands
                 Guarded(() => EditorSceneManager.SetActive(Listed(scene)));
                 break;
             case SceneAction.Save when scene.Length > 0:
-            {
-                OpenScene listed = Listed(scene);
-                if (listed.Path == null) throw new CliException($"'{listed.Name}' has never been saved. Use --action saveas --scene \"{listed.Name}\" --path Scenes/Name.scene.");
-                if (!EditorSceneManager.Save(listed)) throw new CliException("Saving failed. See the logs.");
-                break;
-            }
+                {
+                    OpenScene listed = Listed(scene);
+                    if (listed.Path == null) throw new CliException($"'{listed.Name}' has never been saved. Use --action saveas --scene \"{listed.Name}\" --path Scenes/Name.scene.");
+                    if (!EditorSceneManager.Save(listed)) throw new CliException("Saving failed. See the logs.");
+                    break;
+                }
             case SceneAction.Save:
                 if (EditorSceneManager.OpenScenes.FirstOrDefault(o => o.IsDirty && o.Path == null) is { } untitled)
                     throw new CliException($"'{untitled.Name}' has never been saved. Use --action saveas --scene \"{untitled.Name}\" --path Scenes/Name.scene.");
                 if (!EditorSceneManager.SaveAll()) throw new CliException("Saving failed. See the logs.");
                 break;
             case SceneAction.SaveAs:
-            {
-                OpenScene listed = scene.Length > 0 ? Listed(scene) : EditorSceneManager.ActiveScene;
-                if (!EditorSceneManager.SaveAs(listed, CliRefs.AssetPath(Require(path, "path")))) throw new CliException("Saving failed. See the logs.");
-                break;
-            }
+                {
+                    OpenScene listed = scene.Length > 0 ? Listed(scene) : EditorSceneManager.ActiveScene;
+                    if (!EditorSceneManager.SaveAs(listed, CliRefs.AssetPath(Require(path, "path")))) throw new CliException("Saving failed. See the logs.");
+                    break;
+                }
         }
 
         // Commands run between frames, so the editor's queued scene changes apply at once.
@@ -425,14 +425,14 @@ public static class CliEditorCommands
                 });
 
             case GoAction.Delete:
-            {
+                {
                     List<GameObject> targets = Targets(target);
-                if (PrefabUtility.NeedsBreaking(targets))
-                    throw new CliException("Deleting this would change a prefab instance's structure. Run 'prefab --action unpack' on the instance first.");
-                var summaries = targets.Select(CliRefs.Summary).ToList();
-                CliEdit.Run("Delete", () => { foreach (GameObject go in targets) if (go.IsValid()) HierarchyPanel.DeleteOneGameObject(go); });
-                return new { deleted = summaries };
-            }
+                    if (PrefabUtility.NeedsBreaking(targets))
+                        throw new CliException("Deleting this would change a prefab instance's structure. Run 'prefab --action unpack' on the instance first.");
+                    var summaries = targets.Select(CliRefs.Summary).ToList();
+                    CliEdit.Run("Delete", () => { foreach (GameObject go in targets) if (go.IsValid()) HierarchyPanel.DeleteOneGameObject(go); });
+                    return new { deleted = summaries };
+                }
 
             case GoAction.Duplicate:
                 return CliEdit.Run("Duplicate", () =>
@@ -443,59 +443,59 @@ public static class CliEditorCommands
                 });
 
             case GoAction.Rename:
-            {
-                    GameObject go = CliRefs.ResolveGameObject(Require(target, "target"));
-                string newName = Require(name, "name");
-                CliEdit.Run("Rename", () =>
                 {
-                    Undo.RecordObject(go, "CLI: Rename");
-                    go.Name = newName;
-                });
-                return CliRefs.Summary(go);
-            }
+                    GameObject go = CliRefs.ResolveGameObject(Require(target, "target"));
+                    string newName = Require(name, "name");
+                    CliEdit.Run("Rename", () =>
+                    {
+                        Undo.RecordObject(go, "CLI: Rename");
+                        go.Name = newName;
+                    });
+                    return CliRefs.Summary(go);
+                }
 
             case GoAction.Parent:
-            {
-                    List<GameObject> targets = Targets(target);
-                GameObject? newParent = parent.Length == 0 || parent == "/" ? null : CliRefs.ResolveGameObject(parent);
-                if (PrefabUtility.NeedsBreaking(targets))
-                    throw new CliException("Moving this would change a prefab instance's structure. Run 'prefab --action unpack' on the instance first.");
-                foreach (GameObject go in targets)
-                    if (newParent.IsValid() && GameObject.IsChildOrSameTransform(newParent, go))
-                        throw new CliException($"{CliRefs.PathOf(newParent)} is {go.Name} or inside it.");
-
-                CliEdit.Run("Parent", () =>
                 {
+                    List<GameObject> targets = Targets(target);
+                    GameObject? newParent = parent.Length == 0 || parent == "/" ? null : CliRefs.ResolveGameObject(parent);
+                    if (PrefabUtility.NeedsBreaking(targets))
+                        throw new CliException("Moving this would change a prefab instance's structure. Run 'prefab --action unpack' on the instance first.");
                     foreach (GameObject go in targets)
+                        if (newParent.IsValid() && GameObject.IsChildOrSameTransform(newParent, go))
+                            throw new CliException($"{CliRefs.PathOf(newParent)} is {go.Name} or inside it.");
+
+                    CliEdit.Run("Parent", () =>
                     {
-                        Undo.SetTransformParent(go, newParent, world, "CLI: Parent");
-                        if (index >= 0) Undo.SetSiblingIndex(go, index, "CLI: Parent");
-                    }
-                });
-                return targets.Select(CliRefs.Summary).ToList();
-            }
+                        foreach (GameObject go in targets)
+                        {
+                            Undo.SetTransformParent(go, newParent, world, "CLI: Parent");
+                            if (index >= 0) Undo.SetSiblingIndex(go, index, "CLI: Parent");
+                        }
+                    });
+                    return targets.Select(CliRefs.Summary).ToList();
+                }
 
             case GoAction.Active:
-            {
-                    List<GameObject> targets = Targets(target);
-                CliEdit.Run("Active", () =>
                 {
-                    Undo.RecordObjects(targets, "CLI: Active");
-                    foreach (GameObject go in targets) go.Enabled = active;
-                });
-                return targets.Select(CliRefs.Summary).ToList();
-            }
+                    List<GameObject> targets = Targets(target);
+                    CliEdit.Run("Active", () =>
+                    {
+                        Undo.RecordObjects(targets, "CLI: Active");
+                        foreach (GameObject go in targets) go.Enabled = active;
+                    });
+                    return targets.Select(CliRefs.Summary).ToList();
+                }
 
             case GoAction.Transform:
-            {
-                    GameObject go = CliRefs.ResolveGameObject(Require(target, "target"));
-                CliEdit.Run("Transform", () =>
                 {
-                    Undo.RecordObject(go, "CLI: Transform");
-                    ApplyTransform(go, position, rotation, scale, world);
-                });
-                return Described(go);
-            }
+                    GameObject go = CliRefs.ResolveGameObject(Require(target, "target"));
+                    CliEdit.Run("Transform", () =>
+                    {
+                        Undo.RecordObject(go, "CLI: Transform");
+                        ApplyTransform(go, position, rotation, scale, world);
+                    });
+                    return Described(go);
+                }
         }
 
         throw new CliException($"Unknown action {action}.");
@@ -546,38 +546,38 @@ public static class CliEditorCommands
                 return CliRefs.ResolveGameObject(target).GetComponents().Select(CliRefs.Summary).ToList();
 
             case ComponentAction.Add:
-            {
-                    GameObject go = CliRefs.ResolveGameObject(target);
-                Type componentType = CliRefs.FindType(Require(type, "type"), typeof(Component));
-                    List<(string Path, string Json)> fieldValues = ParseValues(values);
-                return CliEdit.Run("Add Component", () =>
                 {
-                    Component added = Undo.AddComponent(go, componentType);
-                    if (added.IsNotValid()) throw new CliException($"{componentType.Name} could not be added to {go.Name}. See the logs.");
-                    try
+                    GameObject go = CliRefs.ResolveGameObject(target);
+                    Type componentType = CliRefs.FindType(Require(type, "type"), typeof(Component));
+                    List<(string Path, string Json)> fieldValues = ParseValues(values);
+                    return CliEdit.Run("Add Component", () =>
                     {
-                        if (fieldValues.Count > 0) CliRefs.WriteFields(added, fieldValues);
-                    }
-                    catch
-                    {
-                        Undo.RevertAllInCurrentGroup();
-                        throw;
-                    }
-                    JsonObject summary = CliRefs.Summary(added);
-                    summary["fields"] = CliRefs.GetFields(added, "");
-                    return summary;
-                });
-            }
+                        Component added = Undo.AddComponent(go, componentType);
+                        if (added.IsNotValid()) throw new CliException($"{componentType.Name} could not be added to {go.Name}. See the logs.");
+                        try
+                        {
+                            if (fieldValues.Count > 0) CliRefs.WriteFields(added, fieldValues);
+                        }
+                        catch
+                        {
+                            Undo.RevertAllInCurrentGroup();
+                            throw;
+                        }
+                        JsonObject summary = CliRefs.Summary(added);
+                        summary["fields"] = CliRefs.GetFields(added, "");
+                        return summary;
+                    });
+                }
 
             case ComponentAction.Remove:
-            {
-                if (CliRefs.Resolve(target) is not Component component) throw new CliException("Give a component ref, for example /Player:Rigidbody3D.");
-                if (!component.CanDestroy()) throw new CliException($"{component.GetType().Name} can not be removed. Something else needs it.");
-                if (PrefabUtility.NeedsBreaking(component)) throw new CliException("This component comes from a prefab. Run 'prefab --action unpack' on the instance first.");
+                {
+                    if (CliRefs.Resolve(target) is not Component component) throw new CliException("Give a component ref, for example /Player:Rigidbody3D.");
+                    if (!component.CanDestroy()) throw new CliException($"{component.GetType().Name} can not be removed. Something else needs it.");
+                    if (PrefabUtility.NeedsBreaking(component)) throw new CliException("This component comes from a prefab. Run 'prefab --action unpack' on the instance first.");
                     JsonObject summary = CliRefs.Summary(component);
-                CliEdit.Run("Remove Component", () => GameObjectInspector.RemoveComponentWithUndo(component));
-                return new { removed = summary };
-            }
+                    CliEdit.Run("Remove Component", () => GameObjectInspector.RemoveComponentWithUndo(component));
+                    return new { removed = summary };
+                }
         }
 
         throw new CliException($"Unknown action {action}.");
@@ -724,36 +724,36 @@ public static class CliEditorCommands
         switch (action)
         {
             case AssetAction.Find:
-            {
-                string folder = CliRefs.AssetPath(path);
-                IEnumerable<(Guid Guid, string Path, Type? Type)> found = type.Length > 0
-                    ? assets.FindAllOfType(CliRefs.FindAssetType(type))
-                        .Select(f => (f.guid, assets.GetEntry(f.guid) != null ? f.parentPath : $"{f.parentPath}#{f.name}", (Type?)f.assetType))
-                    : assets.GetAllEntries().Select(e => (e.Guid, e.Path, e.MainAssetType));
-                var results = found
-                    .Where(f => folder.Length == 0 || f.Path.StartsWith(folder, StringComparison.OrdinalIgnoreCase))
-                    .Where(f => query.Length == 0 || f.Path.Contains(query, StringComparison.OrdinalIgnoreCase))
-                    .Take(Math.Clamp(limit, 1, 1000))
-                    .Select(f => new { guid = f.Guid.ToString(), path = f.Path, type = f.Type?.Name })
-                    .ToList();
-                return new { count = results.Count, results };
-            }
+                {
+                    string folder = CliRefs.AssetPath(path);
+                    IEnumerable<(Guid Guid, string Path, Type? Type)> found = type.Length > 0
+                        ? assets.FindAllOfType(CliRefs.FindAssetType(type))
+                            .Select(f => (f.guid, assets.GetEntry(f.guid) != null ? f.parentPath : $"{f.parentPath}#{f.name}", (Type?)f.assetType))
+                        : assets.GetAllEntries().Select(e => (e.Guid, e.Path, e.MainAssetType));
+                    var results = found
+                        .Where(f => folder.Length == 0 || f.Path.StartsWith(folder, StringComparison.OrdinalIgnoreCase))
+                        .Where(f => query.Length == 0 || f.Path.Contains(query, StringComparison.OrdinalIgnoreCase))
+                        .Take(Math.Clamp(limit, 1, 1000))
+                        .Select(f => new { guid = f.Guid.ToString(), path = f.Path, type = f.Type?.Name })
+                        .ToList();
+                    return new { count = results.Count, results };
+                }
 
             case AssetAction.Info:
-            {
-                Guid guid = CliRefs.ResolveAssetGuid(Require(path, "path"));
-                    AssetEntry? entry = assets.GetEntry(guid);
-                if (entry == null) return CliRefs.AssetSummary(guid, AssetDatabase.GetAssetType(guid));
-                return new
                 {
-                    guid = entry.Guid.ToString(),
-                    path = entry.Path,
-                    type = entry.MainAssetType?.Name,
-                    importer = entry.ImporterType,
-                    subAssets = entry.SubAssets.Select(s => new { name = s.Name, guid = s.Guid.ToString(), type = s.Type?.Name, @ref = $"{entry.Path}#{s.Name}" }).ToList(),
-                    dependencies = entry.Dependencies.Select(d => assets.GuidToPathIncludingSubAssets(d) ?? d.ToString()).ToList(),
-                };
-            }
+                    Guid guid = CliRefs.ResolveAssetGuid(Require(path, "path"));
+                    AssetEntry? entry = assets.GetEntry(guid);
+                    if (entry == null) return CliRefs.AssetSummary(guid, AssetDatabase.GetAssetType(guid));
+                    return new
+                    {
+                        guid = entry.Guid.ToString(),
+                        path = entry.Path,
+                        type = entry.MainAssetType?.Name,
+                        importer = entry.ImporterType,
+                        subAssets = entry.SubAssets.Select(s => new { name = s.Name, guid = s.Guid.ToString(), type = s.Type?.Name, @ref = $"{entry.Path}#{s.Name}" }).ToList(),
+                        dependencies = entry.Dependencies.Select(d => assets.GuidToPathIncludingSubAssets(d) ?? d.ToString()).ToList(),
+                    };
+                }
 
             case AssetAction.Types:
                 return EditorRegistries.AssetMenuEntries
@@ -762,46 +762,46 @@ public static class CliEditorCommands
                     .ToList();
 
             case AssetAction.Create:
-            {
-                string relative = CliRefs.AssetPath(Require(path, "path"));
-                string absolute = Path.Combine(Project.Current!.AssetsPath, relative);
-
-                if (type.Equals("Folder", StringComparison.OrdinalIgnoreCase))
                 {
-                    Directory.CreateDirectory(absolute);
-                    MetaFile.EnsureMeta(absolute, "DefaultImporter");
-                    assets.InvalidateFolderIndex();
-                    return new { created = relative, type = "Folder" };
-                }
+                    string relative = CliRefs.AssetPath(Require(path, "path"));
+                    string absolute = Path.Combine(Project.Current!.AssetsPath, relative);
+
+                    if (type.Equals("Folder", StringComparison.OrdinalIgnoreCase))
+                    {
+                        Directory.CreateDirectory(absolute);
+                        MetaFile.EnsureMeta(absolute, "DefaultImporter");
+                        assets.InvalidateFolderIndex();
+                        return new { created = relative, type = "Folder" };
+                    }
 
                     AssetMenuEntry entry = EditorRegistries.AssetMenuEntries.FirstOrDefault(e => e.Type.Name.Equals(Require(type, "type"), StringComparison.OrdinalIgnoreCase)
                                                                                || e.Name.Equals(type, StringComparison.OrdinalIgnoreCase));
-                if (entry.Type == null)
-                    throw new CliException($"No creatable asset type '{type}'. Run 'asset --action types' to list them.");
-                if (!string.IsNullOrEmpty(entry.Extension) && !relative.EndsWith(entry.Extension, StringComparison.OrdinalIgnoreCase))
-                    relative += entry.Extension;
-                absolute = Path.Combine(Project.Current!.AssetsPath, relative);
-                if (File.Exists(absolute) && !overwrite) throw new CliException($"'{relative}' already exists. Pass --overwrite to replace it.");
+                    if (entry.Type == null)
+                        throw new CliException($"No creatable asset type '{type}'. Run 'asset --action types' to list them.");
+                    if (!string.IsNullOrEmpty(entry.Extension) && !relative.EndsWith(entry.Extension, StringComparison.OrdinalIgnoreCase))
+                        relative += entry.Extension;
+                    absolute = Path.Combine(Project.Current!.AssetsPath, relative);
+                    if (File.Exists(absolute) && !overwrite) throw new CliException($"'{relative}' already exists. Pass --overwrite to replace it.");
 
-                Directory.CreateDirectory(Path.GetDirectoryName(absolute)!);
-                object instance = entry.Factory != null ? entry.Factory() : Activator.CreateInstance(entry.Type)!;
-                if (instance is Runtime.Asset asset) assets.CreateAsset(asset, relative);
-                else
-                {
-                    File.WriteAllText(absolute, Echo.Serializer.Serialize(typeof(object), instance).WriteToString());
-                    assets.ImportFile(relative);
+                    Directory.CreateDirectory(Path.GetDirectoryName(absolute)!);
+                    object instance = entry.Factory != null ? entry.Factory() : Activator.CreateInstance(entry.Type)!;
+                    if (instance is Runtime.Asset asset) assets.CreateAsset(asset, relative);
+                    else
+                    {
+                        File.WriteAllText(absolute, Echo.Serializer.Serialize(typeof(object), instance).WriteToString());
+                        assets.ImportFile(relative);
+                    }
+                    Guid guid = assets.PathToGuid(relative);
+                    return CliRefs.AssetSummary(guid, entry.Type);
                 }
-                Guid guid = assets.PathToGuid(relative);
-                return CliRefs.AssetSummary(guid, entry.Type);
-            }
 
             case AssetAction.Import:
-            {
-                string relative = CliRefs.AssetPath(Require(path, "path"));
-                Guid guid = assets.ImportFile(relative);
-                if (guid == Guid.Empty) throw new CliException($"Nothing to import at '{relative}'.");
-                return CliRefs.AssetSummary(guid, AssetDatabase.GetAssetType(guid));
-            }
+                {
+                    string relative = CliRefs.AssetPath(Require(path, "path"));
+                    Guid guid = assets.ImportFile(relative);
+                    if (guid == Guid.Empty) throw new CliException($"Nothing to import at '{relative}'.");
+                    return CliRefs.AssetSummary(guid, AssetDatabase.GetAssetType(guid));
+                }
 
             case AssetAction.Refresh:
                 assets.Refresh();
@@ -809,73 +809,73 @@ public static class CliEditorCommands
                 return new { assets = assets.GetAllEntries().Count() };
 
             case AssetAction.Reimport:
-            {
-                Guid guid = CliRefs.ResolveAssetGuid(Require(path, "path"));
-                assets.Reimport(guid);
-                return CliRefs.AssetSummary(guid, AssetDatabase.GetAssetType(guid));
-            }
+                {
+                    Guid guid = CliRefs.ResolveAssetGuid(Require(path, "path"));
+                    assets.Reimport(guid);
+                    return CliRefs.AssetSummary(guid, AssetDatabase.GetAssetType(guid));
+                }
 
             case AssetAction.Move:
-            {
-                string from = CliRefs.AssetPath(Require(path, "path"));
-                string target = CliRefs.AssetPath(Require(to, "to"));
-                bool isFolder = Directory.Exists(Path.Combine(Project.Current!.AssetsPath, from));
-                bool moved = isFolder ? assets.MoveFolder(from, target) : assets.MoveAsset(from, target);
-                if (!moved) throw new CliException($"Could not move '{from}' to '{target}'. See the logs.");
-                return new { moved = from, to = target };
-            }
+                {
+                    string from = CliRefs.AssetPath(Require(path, "path"));
+                    string target = CliRefs.AssetPath(Require(to, "to"));
+                    bool isFolder = Directory.Exists(Path.Combine(Project.Current!.AssetsPath, from));
+                    bool moved = isFolder ? assets.MoveFolder(from, target) : assets.MoveAsset(from, target);
+                    if (!moved) throw new CliException($"Could not move '{from}' to '{target}'. See the logs.");
+                    return new { moved = from, to = target };
+                }
 
             case AssetAction.Copy:
-            {
-                string from = CliRefs.AssetPath(Require(path, "path"));
-                bool isFolder = Directory.Exists(Path.Combine(Project.Current!.AssetsPath, from));
-                Guid source = isFolder ? Guid.Empty : CliRefs.ResolveAssetGuid(path);
-                AssetEntry? entry = isFolder ? null : assets.GetEntry(source);
-                bool isSubAsset = !isFolder && entry == null;
-                if (isSubAsset && !assets.TryGetParentGuid(source, out _)) throw new CliException($"No asset at '{path}'.");
-                if (entry != null) from = entry.Path;
-
-                string target = CliRefs.AssetPath(Require(to, "to"));
-                if (Directory.Exists(Path.Combine(Project.Current!.AssetsPath, target))) throw new CliException($"'{target}' already exists.");
-                string? extension = isFolder ? null
-                    : isSubAsset ? EditorRegistries.AssetMenuEntries.FirstOrDefault(e => e.Type == AssetDatabase.GetAssetType(source)).Extension
-                    : Path.GetExtension(from);
-                if (!string.IsNullOrEmpty(extension))
                 {
-                    if (Path.GetExtension(target).Length == 0) target += extension;
-                    else if (!Path.GetExtension(target).Equals(extension, StringComparison.OrdinalIgnoreCase))
-                        throw new CliException($"'{target}' needs the {extension} extension.");
-                }
-                string targetAbsolute = Path.Combine(Project.Current!.AssetsPath, target);
-                if (File.Exists(targetAbsolute) || Directory.Exists(targetAbsolute)) throw new CliException($"'{target}' already exists.");
+                    string from = CliRefs.AssetPath(Require(path, "path"));
+                    bool isFolder = Directory.Exists(Path.Combine(Project.Current!.AssetsPath, from));
+                    Guid source = isFolder ? Guid.Empty : CliRefs.ResolveAssetGuid(path);
+                    AssetEntry? entry = isFolder ? null : assets.GetEntry(source);
+                    bool isSubAsset = !isFolder && entry == null;
+                    if (isSubAsset && !assets.TryGetParentGuid(source, out _)) throw new CliException($"No asset at '{path}'.");
+                    if (entry != null) from = entry.Path;
 
-                if (!isSubAsset)
-                {
-                    if (!assets.CopyAsset(from, target)) throw new CliException($"Could not copy '{from}' to '{target}'. See the logs.");
-                }
-                else
-                {
-                    // ExtractSubAsset only takes a folder and picks its own name, so the copy is renamed after
-                    string folder = Path.GetDirectoryName(target)?.Replace('\\', '/') ?? "";
-                    Directory.CreateDirectory(Path.Combine(Project.Current!.AssetsPath, folder));
-                    string copied = assets.ExtractSubAsset(source, folder) ?? throw new CliException($"Could not copy '{from}' to '{target}'. See the logs.");
-                    if (!copied.Equals(target, StringComparison.Ordinal) && !assets.MoveAsset(copied, target))
-                        throw new CliException($"Copied '{from}' to '{copied}' but could not rename it to '{target}'. See the logs.");
-                }
+                    string target = CliRefs.AssetPath(Require(to, "to"));
+                    if (Directory.Exists(Path.Combine(Project.Current!.AssetsPath, target))) throw new CliException($"'{target}' already exists.");
+                    string? extension = isFolder ? null
+                        : isSubAsset ? EditorRegistries.AssetMenuEntries.FirstOrDefault(e => e.Type == AssetDatabase.GetAssetType(source)).Extension
+                        : Path.GetExtension(from);
+                    if (!string.IsNullOrEmpty(extension))
+                    {
+                        if (Path.GetExtension(target).Length == 0) target += extension;
+                        else if (!Path.GetExtension(target).Equals(extension, StringComparison.OrdinalIgnoreCase))
+                            throw new CliException($"'{target}' needs the {extension} extension.");
+                    }
+                    string targetAbsolute = Path.Combine(Project.Current!.AssetsPath, target);
+                    if (File.Exists(targetAbsolute) || Directory.Exists(targetAbsolute)) throw new CliException($"'{target}' already exists.");
 
-                if (isFolder) return new { copied = from, to = target };
-                Guid guid = assets.PathToGuid(target);
-                return CliRefs.AssetSummary(guid, AssetDatabase.GetAssetType(guid));
-            }
+                    if (!isSubAsset)
+                    {
+                        if (!assets.CopyAsset(from, target)) throw new CliException($"Could not copy '{from}' to '{target}'. See the logs.");
+                    }
+                    else
+                    {
+                        // ExtractSubAsset only takes a folder and picks its own name, so the copy is renamed after
+                        string folder = Path.GetDirectoryName(target)?.Replace('\\', '/') ?? "";
+                        Directory.CreateDirectory(Path.Combine(Project.Current!.AssetsPath, folder));
+                        string copied = assets.ExtractSubAsset(source, folder) ?? throw new CliException($"Could not copy '{from}' to '{target}'. See the logs.");
+                        if (!copied.Equals(target, StringComparison.Ordinal) && !assets.MoveAsset(copied, target))
+                            throw new CliException($"Copied '{from}' to '{copied}' but could not rename it to '{target}'. See the logs.");
+                    }
+
+                    if (isFolder) return new { copied = from, to = target };
+                    Guid guid = assets.PathToGuid(target);
+                    return CliRefs.AssetSummary(guid, AssetDatabase.GetAssetType(guid));
+                }
 
             case AssetAction.Delete:
-            {
-                string relative = CliRefs.AssetPath(Require(path, "path"));
-                if (!confirm) throw new CliException($"Deleting removes '{relative}' from disk. Pass --confirm to delete it.");
-                if (assets.GetEntry(relative) == null) throw new CliException($"No asset at '{relative}'.");
-                assets.DeleteAsset(relative);
-                return new { deleted = relative };
-            }
+                {
+                    string relative = CliRefs.AssetPath(Require(path, "path"));
+                    if (!confirm) throw new CliException($"Deleting removes '{relative}' from disk. Pass --confirm to delete it.");
+                    if (assets.GetEntry(relative) == null) throw new CliException($"No asset at '{relative}'.");
+                    assets.DeleteAsset(relative);
+                    return new { deleted = relative };
+                }
         }
 
         throw new CliException($"Unknown action {action}.");
@@ -929,63 +929,63 @@ public static class CliEditorCommands
         switch (action)
         {
             case PrefabAction.Create:
-            {
-                string relative = CliRefs.AssetPath(Require(path, "path"));
-                if (!relative.EndsWith(".prefab", StringComparison.OrdinalIgnoreCase)) relative += ".prefab";
-                Directory.CreateDirectory(Path.GetDirectoryName(Path.Combine(Project.Current!.AssetsPath, relative))!);
-                bool saved = CliEdit.Run("Create Prefab", () => PrefabUtility.SaveAsPrefabAssetAndConnect(go, relative, overwrite));
-                if (!saved) throw new CliException($"Could not save '{relative}'. It may exist already (pass --overwrite), see the logs.");
-                Guid guid = CliRefs.Assets.ImportFile(relative);
-                return new { prefab = CliRefs.AssetSummary(guid, typeof(PrefabAsset)), instance = CliRefs.Summary(go) };
-            }
+                {
+                    string relative = CliRefs.AssetPath(Require(path, "path"));
+                    if (!relative.EndsWith(".prefab", StringComparison.OrdinalIgnoreCase)) relative += ".prefab";
+                    Directory.CreateDirectory(Path.GetDirectoryName(Path.Combine(Project.Current!.AssetsPath, relative))!);
+                    bool saved = CliEdit.Run("Create Prefab", () => PrefabUtility.SaveAsPrefabAssetAndConnect(go, relative, overwrite));
+                    if (!saved) throw new CliException($"Could not save '{relative}'. It may exist already (pass --overwrite), see the logs.");
+                    Guid guid = CliRefs.Assets.ImportFile(relative);
+                    return new { prefab = CliRefs.AssetSummary(guid, typeof(PrefabAsset)), instance = CliRefs.Summary(go) };
+                }
             case PrefabAction.Apply:
-            {
+                {
                     GameObject root = Root();
-                Guid rootId = root.Identifier;
-                int overrides = PrefabUtility.CountOverrides(root);
+                    Guid rootId = root.Identifier;
+                    int overrides = PrefabUtility.CountOverrides(root);
                     List<PrefabUtility.AdditionDescription> additions = PrefabUtility.DescribeAdditions(root);
-                GameObject? LiveRoot() => EditorSceneManager.EditedWorld.IsValid() ? EditorSceneManager.EditedWorld.FindObject<GameObject>(rootId) : null;
-                CliEdit.Run("Apply Prefab", () =>
-                {
-                    PrefabUtility.ApplyOverrides(root);
-                    // Each apply refreshes the instance, which can replace its objects, so the root is found again every time.
-                    foreach (PrefabUtility.AdditionDescription addition in additions)
-                        if (LiveRoot() is { } live && live.IsValid())
-                            PrefabUtility.ApplyAddition(live, addition);
-                });
+                    GameObject? LiveRoot() => EditorSceneManager.EditedWorld.IsValid() ? EditorSceneManager.EditedWorld.FindObject<GameObject>(rootId) : null;
+                    CliEdit.Run("Apply Prefab", () =>
+                    {
+                        PrefabUtility.ApplyOverrides(root);
+                        // Each apply refreshes the instance, which can replace its objects, so the root is found again every time.
+                        foreach (PrefabUtility.AdditionDescription addition in additions)
+                            if (LiveRoot() is { } live && live.IsValid())
+                                PrefabUtility.ApplyAddition(live, addition);
+                    });
                     GameObject? applied = LiveRoot();
-                return new
-                {
-                    instance = applied.IsValid() ? CliRefs.Summary(applied!) : null,
-                    appliedOverrides = overrides,
-                    appliedAdditions = additions.Select(a => a.Label).ToList(),
-                };
-            }
+                    return new
+                    {
+                        instance = applied.IsValid() ? CliRefs.Summary(applied!) : null,
+                        appliedOverrides = overrides,
+                        appliedAdditions = additions.Select(a => a.Label).ToList(),
+                    };
+                }
             case PrefabAction.Revert:
-            {
-                    GameObject root = Root();
-                CliEdit.Run("Revert Prefab", () => PrefabUtility.RevertOverrides(root));
-                return CliRefs.Summary(root);
-            }
-            case PrefabAction.Unpack:
-            {
-                    GameObject root = Root();
-                CliEdit.Run("Unpack Prefab", () => PrefabUtility.UnpackPrefabInstance(root));
-                return CliRefs.Summary(root);
-            }
-            case PrefabAction.Overrides:
-            {
-                    GameObject root = Root();
-                return new
                 {
-                    overrides = PrefabUtility.DescribeOverrides(root)
-                        .Select(o => new { o.Path, o.ObjectName, o.ComponentName, o.MemberName, o.InstanceValue })
-                        .ToList(),
-                    additions = PrefabUtility.DescribeAdditions(root)
-                        .Select(a => new { @object = a.ObjectName, component = a.IsWholeObject ? null : a.ComponentName, id = "#" + a.Identifier })
-                        .ToList(),
-                };
-            }
+                    GameObject root = Root();
+                    CliEdit.Run("Revert Prefab", () => PrefabUtility.RevertOverrides(root));
+                    return CliRefs.Summary(root);
+                }
+            case PrefabAction.Unpack:
+                {
+                    GameObject root = Root();
+                    CliEdit.Run("Unpack Prefab", () => PrefabUtility.UnpackPrefabInstance(root));
+                    return CliRefs.Summary(root);
+                }
+            case PrefabAction.Overrides:
+                {
+                    GameObject root = Root();
+                    return new
+                    {
+                        overrides = PrefabUtility.DescribeOverrides(root)
+                            .Select(o => new { o.Path, o.ObjectName, o.ComponentName, o.MemberName, o.InstanceValue })
+                            .ToList(),
+                        additions = PrefabUtility.DescribeAdditions(root)
+                            .Select(a => new { @object = a.ObjectName, component = a.IsWholeObject ? null : a.ComponentName, id = "#" + a.Identifier })
+                            .ToList(),
+                    };
+                }
         }
 
         throw new CliException($"Unknown action {action}.");
@@ -1257,7 +1257,7 @@ public static class CliEditorCommands
         [CliArg("wait", "Wait for the build to finish")] bool wait = true)
     {
         string path = Path.GetFullPath(Path.IsPathRooted(@out) ? @out : Path.Combine(Project.Current!.RootPath, @out));
-        BuildProgress progress = Build.ProjectBuilder.StartBuildAsync(run, path) ?? throw new CliException("The build did not start. See the logs.");
+        BuildProgress progress = Build.ProjectBuilder.StartBuildAsync(run, path, null, null) ?? throw new CliException("The build did not start. See the logs.");
         if (!wait) return new { started = true, output = path };
 
         await CliServer.WaitUntil(() => progress.IsComplete, TimeSpan.FromHours(2));
@@ -1560,182 +1560,182 @@ internal static class CliGraph
         switch (kind)
         {
             case "add":
-            {
-                string typeId = Str(op, "type") ?? throw new CliException("add needs a \"type\". See 'graph --action types'.");
+                {
+                    string typeId = Str(op, "type") ?? throw new CliException("add needs a \"type\". See 'graph --action types'.");
                     AnimationGraphNode type = AnimationNodeRegistry.Get(typeId) ?? throw new CliException($"No node type '{typeId}'. See 'graph --action types'.");
-                string owner = Id(op, "owner", ids, graph, required: false) ?? "";
-                GraphNodeRecord record = domain.Create(type.Id, default, owner)!;
-                record.Name = Str(op, "name") ?? "";
-                Alias(op, ids, record.Id);
-                return new JsonObject { ["added"] = record.Id };
-            }
+                    string owner = Id(op, "owner", ids, graph, required: false) ?? "";
+                    GraphNodeRecord record = domain.Create(type.Id, default, owner)!;
+                    record.Name = Str(op, "name") ?? "";
+                    Alias(op, ids, record.Id);
+                    return new JsonObject { ["added"] = record.Id };
+                }
 
             case "connect":
-            {
-                string from = Id(op, "from", ids, graph)!;
-                    GraphNodeRecord target = Node(graph, Id(op, "to", ids, graph)!);
-                if (Node(graph, from) == target) throw new CliException("A node can not feed itself.");
-                string? pinText = op["pin"] is JsonValue v && v.TryGetValue(out string? s) ? s : null;
-                if (pinText != null && pinText.StartsWith("setting:", StringComparison.OrdinalIgnoreCase))
                 {
-                    domain.SetSource(target, AnimationGraphDomain.PropertyPort(pinText[8..]), new WireEnd(from, AnimationGraphDomain.OutputPort));
-                    return new JsonObject { ["connected"] = from, ["to"] = target.Id, ["setting"] = pinText[8..] };
-                }
+                    string from = Id(op, "from", ids, graph)!;
+                    GraphNodeRecord target = Node(graph, Id(op, "to", ids, graph)!);
+                    if (Node(graph, from) == target) throw new CliException("A node can not feed itself.");
+                    string? pinText = op["pin"] is JsonValue v && v.TryGetValue(out string? s) ? s : null;
+                    if (pinText != null && pinText.StartsWith("setting:", StringComparison.OrdinalIgnoreCase))
+                    {
+                        domain.SetSource(target, AnimationGraphDomain.PropertyPort(pinText[8..]), new WireEnd(from, AnimationGraphDomain.OutputPort));
+                        return new JsonObject { ["connected"] = from, ["to"] = target.Id, ["setting"] = pinText[8..] };
+                    }
 
-                int pin = PinIndex(target, op["pin"], allowNext: true);
-                domain.SetSource(target, AnimationGraphDomain.PinId(pin), new WireEnd(from, AnimationGraphDomain.OutputPort));
-                domain.PadRepeating(target);
-                return new JsonObject { ["connected"] = from, ["to"] = target.Id, ["pin"] = pin };
-            }
+                    int pin = PinIndex(target, op["pin"], allowNext: true);
+                    domain.SetSource(target, AnimationGraphDomain.PinId(pin), new WireEnd(from, AnimationGraphDomain.OutputPort));
+                    domain.PadRepeating(target);
+                    return new JsonObject { ["connected"] = from, ["to"] = target.Id, ["pin"] = pin };
+                }
 
             case "disconnect":
-            {
-                    GraphNodeRecord target = Node(graph, Id(op, "to", ids, graph)!);
-                if (op["pin"] is JsonValue v && v.TryGetValue(out string? s) && s.StartsWith("setting:", StringComparison.OrdinalIgnoreCase))
                 {
-                    domain.SetSource(target, AnimationGraphDomain.PropertyPort(s[8..]), null);
+                    GraphNodeRecord target = Node(graph, Id(op, "to", ids, graph)!);
+                    if (op["pin"] is JsonValue v && v.TryGetValue(out string? s) && s.StartsWith("setting:", StringComparison.OrdinalIgnoreCase))
+                    {
+                        domain.SetSource(target, AnimationGraphDomain.PropertyPort(s[8..]), null);
+                        return null;
+                    }
+                    int pin = PinIndex(target, op["pin"], allowNext: false);
+                    domain.Disconnect(target.Id, AnimationGraphDomain.PinId(pin));
                     return null;
                 }
-                int pin = PinIndex(target, op["pin"], allowNext: false);
-                domain.Disconnect(target.Id, AnimationGraphDomain.PinId(pin));
-                return null;
-            }
 
             case "input":
-            {
-                    GraphNodeRecord target = Node(graph, Id(op, "node", ids, graph)!);
-                int pin = PinIndex(target, op["pin"], allowNext: false);
-                while (target.Inputs.Count <= pin) target.Inputs.Add(new GraphInputRecord());
-                    GraphInputRecord input = target.Inputs[pin];
-                if (op["value"] is { } value) input.Value = value.GetValue<float>();
-                if (op["flag"] is { } flag) input.Flag = flag.GetValue<bool>();
-                if (op["name"] is { } name) input.Name = name.GetValue<string>();
-                if (op["text"] is { } text) input.Text = text.GetValue<string>();
-                if (op["position"] is JsonArray position) input.Position = new Float2(position[0]!.GetValue<float>(), position[1]!.GetValue<float>());
-                return null;
-            }
-
-            case "set":
-            {
-                    GraphNodeRecord target = Node(graph, Id(op, "node", ids, graph)!);
-                if (op["name"] is { } newName && op["key"] == null) { target.Name = newName.GetValue<string>(); return null; }
-                string key = Str(op, "key") ?? throw new CliException("set needs a \"key\", or a \"name\" to rename the node.");
-                    AnimationGraphNode? type = AnimationNodeRegistry.Get(target.Type);
-                    NodeSetting? setting = type?.Properties.FirstOrDefault(p => p.Key.Equals(key, StringComparison.OrdinalIgnoreCase));
-                if (type != null && setting == null)
-                    throw new CliException($"{target.Type} has no setting '{key}'. It has: {string.Join(", ", type.Properties.Select(p => p.Key))}.");
-                target.Properties[setting?.Key ?? key] = ToValue(op["value"], setting?.Kind ?? Infer(op["value"]), setting);
-                return null;
-            }
-
-            case "remove":
-            {
-                    GraphNodeRecord target = Node(graph, Id(op, "node", ids, graph)!);
-                if (target.Type is AnimationNodeIds.StateOutput or AnimationNodeIds.GraphOutput)
-                    throw new CliException("Output nodes go with their state or graph. Remove the state instead.");
-
-                domain.Delete([target], []);
-                return null;
-            }
-
-            case "root":
-            {
-                    GraphNodeRecord target = Node(graph, Id(op, "node", ids, graph)!);
-                if (target.Owner.Length > 0) throw new CliException("The root must be a node of the graph itself, not one inside a state.");
-                graph.RootNode = target.Id;
-                return null;
-            }
-
-            case "param":
-            {
-                string name = Str(op, "name") ?? throw new CliException("param needs a \"name\".");
-                    GraphParameterRecord? existing = graph.Parameters.FirstOrDefault(p => p.Name == name);
-                if (op["remove"]?.GetValue<bool>() == true)
                 {
-                    if (existing != null) graph.Parameters.Remove(existing);
+                    GraphNodeRecord target = Node(graph, Id(op, "node", ids, graph)!);
+                    int pin = PinIndex(target, op["pin"], allowNext: false);
+                    while (target.Inputs.Count <= pin) target.Inputs.Add(new GraphInputRecord());
+                    GraphInputRecord input = target.Inputs[pin];
+                    if (op["value"] is { } value) input.Value = value.GetValue<float>();
+                    if (op["flag"] is { } flag) input.Flag = flag.GetValue<bool>();
+                    if (op["name"] is { } name) input.Name = name.GetValue<string>();
+                    if (op["text"] is { } text) input.Text = text.GetValue<string>();
+                    if (op["position"] is JsonArray position) input.Position = new Float2(position[0]!.GetValue<float>(), position[1]!.GetValue<float>());
                     return null;
                 }
 
-                    GraphParameterRecord parameter = existing ?? new GraphParameterRecord { Name = name };
-                if (Str(op, "kind") is { } kindText)
-                    parameter.Kind = Enum.TryParse(kindText, ignoreCase: true, out NodeValueKind parsed) ? parsed
-                        : throw new CliException($"Parameter kind must be one of {string.Join(", ", Enum.GetNames<NodeValueKind>())}.");
-                if (op["trigger"] is { } trigger) parameter.Trigger = trigger.GetValue<bool>();
-                if (op["value"] is { } value)
+            case "set":
                 {
-                        NodeValue converted = ToValue(value, parameter.Kind, null);
-                    parameter.Number = converted.Number;
-                    parameter.Flag = converted.Flag;
-                    parameter.Integer = converted.Integer;
-                    parameter.Vector = converted.Vector;
-                    parameter.Text = converted.Text;
+                    GraphNodeRecord target = Node(graph, Id(op, "node", ids, graph)!);
+                    if (op["name"] is { } newName && op["key"] == null) { target.Name = newName.GetValue<string>(); return null; }
+                    string key = Str(op, "key") ?? throw new CliException("set needs a \"key\", or a \"name\" to rename the node.");
+                    AnimationGraphNode? type = AnimationNodeRegistry.Get(target.Type);
+                    NodeSetting? setting = type?.Properties.FirstOrDefault(p => p.Key.Equals(key, StringComparison.OrdinalIgnoreCase));
+                    if (type != null && setting == null)
+                        throw new CliException($"{target.Type} has no setting '{key}'. It has: {string.Join(", ", type.Properties.Select(p => p.Key))}.");
+                    target.Properties[setting?.Key ?? key] = ToValue(op["value"], setting?.Kind ?? Infer(op["value"]), setting);
+                    return null;
                 }
-                if (existing == null) graph.Parameters.Add(parameter);
-                return null;
-            }
+
+            case "remove":
+                {
+                    GraphNodeRecord target = Node(graph, Id(op, "node", ids, graph)!);
+                    if (target.Type is AnimationNodeIds.StateOutput or AnimationNodeIds.GraphOutput)
+                        throw new CliException("Output nodes go with their state or graph. Remove the state instead.");
+
+                    domain.Delete([target], []);
+                    return null;
+                }
+
+            case "root":
+                {
+                    GraphNodeRecord target = Node(graph, Id(op, "node", ids, graph)!);
+                    if (target.Owner.Length > 0) throw new CliException("The root must be a node of the graph itself, not one inside a state.");
+                    graph.RootNode = target.Id;
+                    return null;
+                }
+
+            case "param":
+                {
+                    string name = Str(op, "name") ?? throw new CliException("param needs a \"name\".");
+                    GraphParameterRecord? existing = graph.Parameters.FirstOrDefault(p => p.Name == name);
+                    if (op["remove"]?.GetValue<bool>() == true)
+                    {
+                        if (existing != null) graph.Parameters.Remove(existing);
+                        return null;
+                    }
+
+                    GraphParameterRecord parameter = existing ?? new GraphParameterRecord { Name = name };
+                    if (Str(op, "kind") is { } kindText)
+                        parameter.Kind = Enum.TryParse(kindText, ignoreCase: true, out NodeValueKind parsed) ? parsed
+                            : throw new CliException($"Parameter kind must be one of {string.Join(", ", Enum.GetNames<NodeValueKind>())}.");
+                    if (op["trigger"] is { } trigger) parameter.Trigger = trigger.GetValue<bool>();
+                    if (op["value"] is { } value)
+                    {
+                        NodeValue converted = ToValue(value, parameter.Kind, null);
+                        parameter.Number = converted.Number;
+                        parameter.Flag = converted.Flag;
+                        parameter.Integer = converted.Integer;
+                        parameter.Vector = converted.Vector;
+                        parameter.Text = converted.Text;
+                    }
+                    if (existing == null) graph.Parameters.Add(parameter);
+                    return null;
+                }
 
             case "state":
-            {
+                {
                     GraphNodeRecord machine = Node(graph, Id(op, "machine", ids, graph)!);
-                if (machine.Type != AnimationNodeIds.StateMachine)
-                    throw new CliException($"{machine.Id} is a {machine.Type}, not a state machine.");
-                string name = Str(op, "name") ?? throw new CliException("state needs a \"name\".");
-                if (machine.States.Any(s => s.Name == name)) throw new CliException($"The machine already has a state named '{name}'.");
+                    if (machine.Type != AnimationNodeIds.StateMachine)
+                        throw new CliException($"{machine.Id} is a {machine.Type}, not a state machine.");
+                    string name = Str(op, "name") ?? throw new CliException("state needs a \"name\".");
+                    if (machine.States.Any(s => s.Name == name)) throw new CliException($"The machine already has a state named '{name}'.");
 
-                var state = new GraphStateRecord
-                {
-                    Id = domain.NewId(IdKind.Scope),
-                    Name = name,
-                    IsDefault = !machine.States.Exists(s => !s.IsAny),
-                };
-                if (op["default"]?.GetValue<bool>() == true)
-                {
-                    foreach (GraphStateRecord other in machine.States) other.IsDefault = false;
-                    state.IsDefault = true;
-                }
-                if (Str(op, "graph") is { } played)
-                    state.Graph = CliRefs.ResolveAsset(played) is AnimationGraph playedGraph ? playedGraph : throw new CliException($"'{played}' is not an animation graph.");
+                    var state = new GraphStateRecord
+                    {
+                        Id = domain.NewId(IdKind.Scope),
+                        Name = name,
+                        IsDefault = !machine.States.Exists(s => !s.IsAny),
+                    };
+                    if (op["default"]?.GetValue<bool>() == true)
+                    {
+                        foreach (GraphStateRecord other in machine.States) other.IsDefault = false;
+                        state.IsDefault = true;
+                    }
+                    if (Str(op, "graph") is { } played)
+                        state.Graph = CliRefs.ResolveAsset(played) is AnimationGraph playedGraph ? playedGraph : throw new CliException($"'{played}' is not an animation graph.");
 
-                machine.States.Add(state);
+                    machine.States.Add(state);
                     GraphNodeRecord output = domain.EnsureOutput(state.Id, AnimationNodeIds.StateOutput);
-                Alias(op, ids, state.Id);
-                if (Str(op, "as") is { } alias) ids[alias.TrimStart('$') + ".output"] = output.Id;
-                return new JsonObject { ["state"] = state.Id, ["output"] = output.Id };
-            }
+                    Alias(op, ids, state.Id);
+                    if (Str(op, "as") is { } alias) ids[alias.TrimStart('$') + ".output"] = output.Id;
+                    return new JsonObject { ["state"] = state.Id, ["output"] = output.Id };
+                }
 
             case "transition":
-            {
+                {
                     GraphNodeRecord machine = Node(graph, Id(op, "machine", ids, graph)!);
                     GraphStateRecord from = StateNamed(machine, Str(op, "from"));
                     GraphStateRecord to = StateNamed(machine, Str(op, "to"));
-                if (to.IsAny) throw new CliException("Nothing transitions into Any State.");
-                if (ReferenceEquals(from, to)) throw new CliException("A transition needs two different states.");
+                    if (to.IsAny) throw new CliException("Nothing transitions into Any State.");
+                    if (ReferenceEquals(from, to)) throw new CliException("A transition needs two different states.");
 
                     GraphTransitionRecord? transition = from.Transitions.FirstOrDefault(t => t.To == to.Name);
-                if (op["remove"]?.GetValue<bool>() == true)
-                {
-                    if (transition != null) from.Transitions.Remove(transition);
+                    if (op["remove"]?.GetValue<bool>() == true)
+                    {
+                        if (transition != null) from.Transitions.Remove(transition);
+                        return null;
+                    }
+                    if (transition == null) from.Transitions.Add(transition = new GraphTransitionRecord { To = to.Name, Duration = 0.2f });
+                    if (op["duration"] is { } duration) transition.Duration = duration.GetValue<float>();
+                    if (Str(op, "easing") is { } easing) transition.Easing = Enum.Parse<Motion.TransitionEasing>(easing, ignoreCase: true);
+                    if (Str(op, "sync") is { } sync) transition.Sync = Enum.Parse<Motion.TransitionSync>(sync, ignoreCase: true);
+                    if (op["clampToSource"] is { } clamp) transition.ClampToSource = clamp.GetValue<bool>();
+                    if (op["canInterrupt"] is { } interrupt) transition.CanInterrupt = interrupt.GetValue<bool>();
                     return null;
                 }
-                if (transition == null) from.Transitions.Add(transition = new GraphTransitionRecord { To = to.Name, Duration = 0.2f });
-                if (op["duration"] is { } duration) transition.Duration = duration.GetValue<float>();
-                if (Str(op, "easing") is { } easing) transition.Easing = Enum.Parse<Motion.TransitionEasing>(easing, ignoreCase: true);
-                if (Str(op, "sync") is { } sync) transition.Sync = Enum.Parse<Motion.TransitionSync>(sync, ignoreCase: true);
-                if (op["clampToSource"] is { } clamp) transition.ClampToSource = clamp.GetValue<bool>();
-                if (op["canInterrupt"] is { } interrupt) transition.CanInterrupt = interrupt.GetValue<bool>();
-                return null;
-            }
 
             case "gate":
-            {
-                string stateId = Id(op, "state", ids, graph)!;
+                {
+                    string stateId = Id(op, "state", ids, graph)!;
                     GraphNodeRecord output = graph.OwnedNode(stateId, AnimationNodeIds.StateOutput)
                     ?? throw new CliException($"No state '{stateId}'. Use the id a state op returned, or \"as\" to name it.");
-                while (output.Inputs.Count < 3) output.Inputs.Add(new GraphInputRecord());
-                if (op["enter"] is { } enter) output.Inputs[1].Flag = enter.GetValue<bool>();
-                if (op["exit"] is { } exit) output.Inputs[2].Flag = exit.GetValue<bool>();
-                return null;
-            }
+                    while (output.Inputs.Count < 3) output.Inputs.Add(new GraphInputRecord());
+                    if (op["enter"] is { } enter) output.Inputs[1].Flag = enter.GetValue<bool>();
+                    if (op["exit"] is { } exit) output.Inputs[2].Flag = exit.GetValue<bool>();
+                    return null;
+                }
         }
 
         throw new CliException($"Unknown op '{kind}'. Ops: add, connect, disconnect, input, set, remove, root, param, state, transition, gate.");
@@ -2017,10 +2017,22 @@ internal static class CliApi
 
     private static readonly Dictionary<Type, string> s_keywords = new()
     {
-        [typeof(void)] = "void", [typeof(bool)] = "bool", [typeof(byte)] = "byte", [typeof(sbyte)] = "sbyte", [typeof(short)] = "short",
-        [typeof(ushort)] = "ushort", [typeof(int)] = "int", [typeof(uint)] = "uint", [typeof(long)] = "long", [typeof(ulong)] = "ulong",
-        [typeof(float)] = "float", [typeof(double)] = "double", [typeof(decimal)] = "decimal", [typeof(char)] = "char",
-        [typeof(string)] = "string", [typeof(object)] = "object",
+        [typeof(void)] = "void",
+        [typeof(bool)] = "bool",
+        [typeof(byte)] = "byte",
+        [typeof(sbyte)] = "sbyte",
+        [typeof(short)] = "short",
+        [typeof(ushort)] = "ushort",
+        [typeof(int)] = "int",
+        [typeof(uint)] = "uint",
+        [typeof(long)] = "long",
+        [typeof(ulong)] = "ulong",
+        [typeof(float)] = "float",
+        [typeof(double)] = "double",
+        [typeof(decimal)] = "decimal",
+        [typeof(char)] = "char",
+        [typeof(string)] = "string",
+        [typeof(object)] = "object",
     };
 
     private static string TypeName(Type type, bool full)

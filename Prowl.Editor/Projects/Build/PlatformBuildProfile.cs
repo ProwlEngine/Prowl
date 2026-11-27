@@ -3,6 +3,7 @@
 
 using System;
 using System.Collections.Generic;
+using System.Linq;
 
 namespace Prowl.Editor.Build;
 
@@ -27,6 +28,81 @@ public class PlatformBuildProfile
     /// <summary> Resets all profile properties to their default values. </summary>
     public virtual void ToDefault() { }
 
+    public virtual void ApplyOverrides(PlatformOverrides overrides) { }
+
     /// <summary> Adds platform-specific scripting define symbols to the given list. </summary>
     public virtual void ModifyDefines(List<string> defines) { }
+}
+
+
+public sealed class PlatformOverrides
+{
+    private static Dictionary<Type, Func<string, object>> _parsers = new()
+    {
+        { typeof(bool), (x) => bool.Parse(x) },
+        { typeof(int), (x) => int.Parse(x) },
+        { typeof(float), (x) => float.Parse(x) },
+    };
+
+    private Dictionary<string, string> _args;
+
+
+    public PlatformOverrides(List<string> values)
+    {
+        _args = [];
+
+        foreach (string s in values)
+        {
+            string[] vals = s.Split('=', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries);
+
+            if (vals.Length != 2)
+                throw new ArgumentException($"Improperly formatted selector: {s}");
+
+            _args[vals[0]] = vals[1];
+        }
+    }
+
+
+    public T GetArg<T>(string key, T defaultValue) where T : struct
+    {
+        if (!_args.TryGetValue(key, out string value))
+            return defaultValue;
+
+        _args.Remove(key);
+
+        try
+        {
+            if (typeof(T).IsEnum)
+                return Enum.Parse<T>(value, true);
+
+            if (_parsers.TryGetValue(typeof(T), out Func<string, object>? parser))
+                return (T)parser.Invoke(value);
+        }
+        catch (Exception e)
+        {
+            throw new ArgumentException($"Invalid value '{value}' for {key}", e);
+        }
+
+        // we should probably report if we hit an unknown generic but wtv
+        return defaultValue;
+    }
+
+
+    public bool TryGetTarget(string family, out PlatformTarget? target)
+    {
+        target = default;
+        if (!_args.Remove("target", out string value))
+            return false;
+
+        target = TargetRegistry.Shared.ByFamily(family).FirstOrDefault(x => x.Id.Equals(value, StringComparison.OrdinalIgnoreCase))
+            ?? throw new ArgumentException($"Unknown {family} target '{value}'. Options: {string.Join(", ", TargetRegistry.Shared.ByFamily(family).Select(x => x.Id))}");
+        return true;
+    }
+
+
+    public void LogUnknown()
+    {
+        if (_args.Count > 0)
+            throw new ArgumentException($"Unknown keys: {string.Join(", ", _args.Keys)}");
+    }
 }

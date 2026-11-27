@@ -20,6 +20,7 @@ using Prowl.Runtime;
 
 namespace Prowl.Editor.Build;
 
+
 /// <summary> Provides methods for starting builds, logging build progress, and receiving logs from a separate build process. </summary>
 public static class ProjectBuilder
 {
@@ -170,7 +171,7 @@ public static class ProjectBuilder
     }
 
     /// <summary> Starts a build using the configured pipeline, optionally running it on a background thread. Returns a BuildProgress that tracks the build status. </summary>
-    public static BuildProgress StartBuildAsync(bool andRun, string? outputPath)
+    public static BuildProgress StartBuildAsync(bool andRun, string? outputPath, string? selectedPipeline, PlatformOverrides? overrides)
     {
         if (EditorApplication.Instance != null && Preferences.Get<PlayModePreferences>().ClearConsoleOnBuild)
             ConsolePanel.Clear();
@@ -192,12 +193,18 @@ public static class ProjectBuilder
         settings.OutputDirectory = outputPath;
         EditorRegistries.SaveSettings();
 
-        BuildPipeline? pipeline = CreateSelectedPipeline(settings);
+        string pipelineName = selectedPipeline ?? settings.SelectedPipeline;
+        BuildPipeline? pipeline = CreateSelectedPipeline(pipelineName, selectedPipeline == null);
+
         if (pipeline == null)
         {
-            Runtime.Debug.LogError($"[Build] Build pipeline '{settings.SelectedPipeline}' was not found.");
+            Runtime.Debug.LogError($"[Build] Build pipeline '{pipelineName}' was not found.");
             return null;
         }
+
+        // Don't save the overrides on disk
+        if (overrides != null)
+            settings.GetOrCreateProfile(pipeline.GetType()).ApplyOverrides(overrides);
 
         // The build reads the Library caches straight off disk, so reconcile them against the actual
         // files first. Waiting on the watcher would ship whatever the assets were before the last save.
@@ -261,10 +268,10 @@ public static class ProjectBuilder
     /// pipeline that has since been deleted or become unconstructable reports a build failure instead of
     /// taking the editor down from a button press.
     /// </remarks>
-    public static BuildPipeline? CreateSelectedPipeline(BuildSettings settings)
-        => string.IsNullOrEmpty(settings.SelectedPipeline)
+    public static BuildPipeline? CreateSelectedPipeline(string pipeline, bool exact = true)
+        => string.IsNullOrEmpty(pipeline)
             ? new DesktopBuildPipeline()
-            : DiscoverPipelines().FirstOrDefault(p => p.GetType().FullName == settings.SelectedPipeline);
+            : DiscoverPipelines().FirstOrDefault(p => exact ? p.GetType().FullName == pipeline : p.DisplayName.Equals(pipeline, StringComparison.OrdinalIgnoreCase));
 
     /// <summary> Runs the specified pipeline's build synchronously and handles the result, including cancellation and fatal errors. </summary>
     public static void ProcessBuild(string projectPath, BuildPipeline pipeline, BuildSettings settings, string outputPath, BuildProgress progress, bool andRun)
