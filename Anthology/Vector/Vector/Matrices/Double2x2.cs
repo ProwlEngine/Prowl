@@ -272,8 +272,8 @@ namespace Prowl.Vector
         }
 
         public override string ToString() => ToString(null, CultureInfo.CurrentCulture);
-        public string ToString(string format) => ToString(format, CultureInfo.CurrentCulture);
-        public string ToString(string format, IFormatProvider formatProvider)
+        public string ToString(string? format) => ToString(format, CultureInfo.CurrentCulture);
+        public string ToString(string? format, IFormatProvider? formatProvider)
         {
             StringBuilder sb = new StringBuilder();
             sb.Append("Double2x2(");

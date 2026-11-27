@@ -172,8 +172,8 @@ public partial struct Int3 : IEquatable<Int3>, IFormattable
     public int[] ToArray() => new int[] { X, Y, Z };
 
     public override string ToString() => ToString("G", CultureInfo.CurrentCulture);
-    public string ToString(string format) => ToString(format, CultureInfo.CurrentCulture);
-    public string ToString(string format, IFormatProvider formatProvider)
+    public string ToString(string? format) => ToString(format, CultureInfo.CurrentCulture);
+    public string ToString(string? format, IFormatProvider? formatProvider)
     {
         string separator = (formatProvider is CultureInfo) ? ((CultureInfo)formatProvider).TextInfo.ListSeparator : ", ";
         return "(" + X.ToString(format, formatProvider) + separator + Y.ToString(format, formatProvider) + separator + Z.ToString(format, formatProvider) + ")";

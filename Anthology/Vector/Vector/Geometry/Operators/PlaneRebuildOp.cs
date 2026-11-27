@@ -38,9 +38,12 @@ internal static class PlaneRebuildOp
         public List<List<int>> Holes = [];
     }
 
+    /// <param name="mesh">The mesh to rebuild.</param>
     /// <param name="normal">The plane normal. New faces in empty space face this way.</param>
+    /// <param name="origin">A point on the plane.</param>
     /// <param name="seeds">Vertices in the plane to rebuild around. Only the connected parts of the plane they reach are touched.</param>
     /// <param name="newSegments">Freshly drawn lines. Only regions they close off become new faces.</param>
+    /// <param name="newMaterial">The material new faces get.</param>
     /// <param name="dissolve">Edges to remove when the faces on both sides face the same way, merging them.</param>
     internal static void Run(GeometryData mesh, Float3 normal, Float3 origin, IEnumerable<Vertex> seeds,
         IReadOnlyList<(Float3 A, Float3 B)> newSegments, int newMaterial, IReadOnlyCollection<Edge>? dissolve = null)

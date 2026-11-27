@@ -486,8 +486,8 @@ public partial struct Double3x3 : System.IEquatable<Double3x3>, IFormattable
     }
 
     public override string ToString() => ToString(null, CultureInfo.CurrentCulture);
-    public string ToString(string format) => ToString(format, CultureInfo.CurrentCulture);
-    public string ToString(string format, IFormatProvider formatProvider)
+    public string ToString(string? format) => ToString(format, CultureInfo.CurrentCulture);
+    public string ToString(string? format, IFormatProvider? formatProvider)
     {
         StringBuilder sb = new StringBuilder();
         sb.Append("Double3x3(");

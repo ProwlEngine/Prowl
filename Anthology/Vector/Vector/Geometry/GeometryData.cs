@@ -59,7 +59,7 @@ public partial class GeometryData
                 do
                 {
                     edges.Add(it);
-                    it = it.Next(this);
+                    it = it.Next(this)!;
                 } while (it != Edge);
             }
             return edges;
@@ -78,7 +78,7 @@ public partial class GeometryData
                 {
                     foreach (var f in it.NeighborFaces())
                         faces.Add(f);
-                    it = it.Next(this);
+                    it = it.Next(this)!;
                 } while (it != Edge);
             }
             return faces.ToList();
@@ -158,7 +158,7 @@ public partial class GeometryData
                 do
                 {
                     faces.Add(it.Face);
-                    it = it.RadialNext;
+                    it = it.RadialNext!;
                 } while (it != Loop);
             }
             return faces;
@@ -211,7 +211,7 @@ public partial class GeometryData
                 do
                 {
                     verts.Add(it.Vert);
-                    it = it.Next;
+                    it = it.Next!;
                 } while (it != Loop);
             }
             return verts;
@@ -225,7 +225,7 @@ public partial class GeometryData
                 do
                 {
                     yield return it.Vert;
-                    it = it.Next;
+                    it = it.Next!;
                 } while (it != Loop);
             }
         }
@@ -250,7 +250,7 @@ public partial class GeometryData
                 do
                 {
                     if (it.Vert == v) return it;
-                    it = it.Next;
+                    it = it.Next!;
                 } while (it != Loop);
             }
             return null;
@@ -265,7 +265,7 @@ public partial class GeometryData
                 do
                 {
                     edges.Add(it.Edge);
-                    it = it.Next;
+                    it = it.Next!;
                 } while (it != Loop);
             }
             return edges;

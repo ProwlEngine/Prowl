@@ -687,7 +687,9 @@ public static class GeometryOperators
     /// angle against each other and the quad they make has no corner bent further than that from a right angle. Seams
     /// and sharp edges are never joined across.
     /// </summary>
+    /// <param name="mesh">The mesh to change.</param>
     /// <param name="faces">The triangles that may be joined, all when null.</param>
+    /// <param name="degrees">The largest angle a pair may turn or a corner may bend.</param>
     /// <returns>The quads made.</returns>
     public static List<GeometryData.Face> TrisToQuads(GeometryData mesh, IEnumerable<GeometryData.Face>? faces, float degrees)
     {
@@ -933,7 +935,10 @@ public static class GeometryOperators
     /// Moves vertices towards the middle of the vertices they share an edge with. A vertex on a border only follows
     /// its border neighbours, so it stays on the border.
     /// </summary>
+    /// <param name="mesh">The mesh to change.</param>
+    /// <param name="vertices">The vertices to move.</param>
     /// <param name="factor">How far each pass moves a vertex, from 0 to 1 for all the way.</param>
+    /// <param name="iterations">How many passes to make.</param>
     /// <returns>How many vertices moved.</returns>
     public static int SmoothVertices(GeometryData mesh, IEnumerable<GeometryData.Vertex> vertices, float factor = 0.5f, int iterations = 1)
     {
@@ -961,7 +966,9 @@ public static class GeometryOperators
     /// A copy of the mesh with its mirror image across a plane. Vertices within the merge distance of the plane
     /// are shared by both halves and put on it. The mesh given is not changed.
     /// </summary>
+    /// <param name="mesh">The mesh to mirror.</param>
     /// <param name="axis">The axis the plane is across: 0, 1 or 2 for X, Y or Z.</param>
+    /// <param name="mergeDistance">How close to the plane a vertex is shared by both halves.</param>
     /// <param name="offset">Where along the axis the plane stands, 0 for through the origin.</param>
     public static GeometryData MirrorCopy(GeometryData mesh, int axis = 0, float mergeDistance = 0.001f, float offset = 0f)
     {
@@ -1017,6 +1024,8 @@ public static class GeometryOperators
     /// also through points inside it and when it is crossed more than once. Where the path starts or stops inside a
     /// face, that end is left as edges lying on the face, which stays whole.
     /// </summary>
+    /// <param name="mesh">The mesh to cut.</param>
+    /// <param name="points">The points the path runs through, in order.</param>
     /// <param name="planes">The plane of each stretch, one fewer than there are points.</param>
     /// <param name="along">How far along a stretch a point of its plane is, 0 at its start and 1 at its end. Null when the point is not part of the cut, as when it is past an end or out of sight.</param>
     /// <param name="cuts">Which faces may be cut, all when null.</param>
@@ -1051,6 +1060,8 @@ public static class GeometryOperators
     /// Fills a closed ring of edges with a grid of four sided faces. The ring needs an even number of edges. Throws
     /// <see cref="InvalidOperationException"/> when the edges are not one such ring.
     /// </summary>
+    /// <param name="mesh">The mesh to fill.</param>
+    /// <param name="edges">The ring of edges to fill.</param>
     /// <param name="span">How many faces run along the first side of the grid. The rest of the ring gives the other way.</param>
     /// <param name="offset">Turns the ring, moving where the grid's first corner is.</param>
     /// <returns>The new faces.</returns>
@@ -1145,6 +1156,8 @@ public static class GeometryOperators
     }
 
     /// <summary>Collapses each connected group of edges to a single point at its centre. Returns how many vertices were joined.</summary>
+    /// <param name="mesh">The mesh to change.</param>
+    /// <param name="edges">The edges to collapse.</param>
     /// <param name="centres">Given the point each joined group went to.</param>
     public static int CollapseEdges(GeometryData mesh, IEnumerable<GeometryData.Edge> edges, List<Float3>? centres = null)
     {
@@ -1273,6 +1286,7 @@ public static class GeometryOperators
     /// <param name="edges">Loose edges to copy.</param>
     /// <param name="transform">Where each point of the copy goes.</param>
     /// <param name="flip">Reverse the copies, for transforms that mirror.</param>
+    /// <param name="weld">Merge copies that land on existing faces into them.</param>
     public static List<GeometryData.Vertex> CopyFaces(GeometryData mesh, IReadOnlyCollection<GeometryData.Face> faces, IReadOnlyCollection<GeometryData.Edge> edges, Func<Float3, Float3> transform, bool flip = false, bool weld = true)
     {
         return CopyOp.Copy(mesh, faces, edges, transform, flip, weld);

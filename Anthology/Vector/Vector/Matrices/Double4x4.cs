@@ -644,8 +644,8 @@ public partial struct Double4x4 : System.IEquatable<Double4x4>, IFormattable
     }
 
     public override string ToString() => ToString(null, CultureInfo.CurrentCulture);
-    public string ToString(string format) => ToString(format, CultureInfo.CurrentCulture);
-    public string ToString(string format, IFormatProvider formatProvider)
+    public string ToString(string? format) => ToString(format, CultureInfo.CurrentCulture);
+    public string ToString(string? format, IFormatProvider? formatProvider)
     {
         StringBuilder sb = new StringBuilder();
         sb.Append("Double4x4(");

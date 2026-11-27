@@ -19,8 +19,11 @@ internal static class DrawSegmentsOp
     /// Draws lines into the mesh. Any closed loop they make on a plane becomes a face, and lines across an
     /// existing face split it.
     /// </summary>
+    /// <param name="mesh">The mesh to draw into.</param>
+    /// <param name="segments">The lines to draw.</param>
     /// <param name="planeNormal">The plane the lines were drawn on, when the tool knows it.</param>
     /// <param name="viewDirection">Where the camera looks, so new faces in the air face it.</param>
+    /// <param name="material">The material new faces get.</param>
     internal static void DrawSegments(GeometryData mesh, IReadOnlyList<(Float3 A, Float3 B)> segments, Float3? planeNormal, Float3 viewDirection, int material)
     {
         var drawn = segments.Where(s => Float3.Length(s.B - s.A) > Eps).ToList();

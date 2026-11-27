@@ -13,6 +13,7 @@
     <PackageTags>mathematics;3d;3d-math;linear-algebra;vector;matrix;quaternion;geometry;transformation;double-precision;numerical;math-library;spatial;rotation;interpolation</PackageTags>
 
     <GenerateDocumentationFile>true</GenerateDocumentationFile>
+    <NoWarn>$(NoWarn);1591</NoWarn>
     <EmbedAllSources>true</EmbedAllSources>
   </PropertyGroup>
 

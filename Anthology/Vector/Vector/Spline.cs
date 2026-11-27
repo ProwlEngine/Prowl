@@ -1106,7 +1106,7 @@ namespace Prowl.Vector
 
            if (ControlPoints.Length == 1)
            {
-               ControlPoints = null;
+               ControlPoints = Array.Empty<Float3>();
                Tangents = null;
                return;
            }
@@ -1463,7 +1463,7 @@ namespace Prowl.Vector
            {
                for (int i = 0; i < ControlPoints.Length; i++)
                {
-                   if (!ControlPoints[i].Equals(other.ControlPoints[i]))
+                   if (!ControlPoints[i].Equals(other.ControlPoints![i]))
                        return false;
                }
            }
@@ -1475,7 +1475,7 @@ namespace Prowl.Vector
            {
                for (int i = 0; i < Tangents.Length; i++)
                {
-                   if (!Tangents[i].Equals(other.Tangents[i]))
+                   if (!Tangents[i].Equals(other.Tangents![i]))
                        return false;
                }
            }

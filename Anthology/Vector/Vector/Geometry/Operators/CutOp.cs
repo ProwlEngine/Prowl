@@ -95,6 +95,8 @@ internal static class CutOp
     /// around it, so the faces either side no longer share it. Where a run of edges ends inside the surface the end
     /// stays joined, which opens a slit. Returns the new vertices.
     /// </summary>
+    /// <param name="mesh">The mesh to split.</param>
+    /// <param name="edges">The edges to pull apart along.</param>
     /// <param name="rebuilt">Told of each face put back as a new one, and what replaced it.</param>
     internal static List<Vertex> SplitEdges(GeometryData mesh, IEnumerable<Edge> edges, Action<Face, Face?>? rebuilt = null)
     {
