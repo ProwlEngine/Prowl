@@ -108,15 +108,7 @@ public class Mesh : Asset, ISerializable
         }
     }
 
-    private T[] CopyArray<T>(T[] source)
-    {
-        if (source == null)
-            return [];
-        var copy = new T[source.Length];
-        for (int i = 0; i < source.Length; i++)
-            copy[i] = source[i];
-        return copy;
-    }
+    private static T[] CopyArray<T>(T[] source) => source == null ? [] : (T[])source.Clone();
 
     /// <summary>
     /// Sets or gets the current vertices.
