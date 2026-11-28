@@ -62,6 +62,15 @@ public class TextureTests
     public void DataSize_CountsPartialEdgeBlocks(TextureFormat format, uint width, uint height, long expected)
         => Assert.Equal(expected, GraphicsFormats.DataSize(format, width, height));
 
+    [Theory]
+    [InlineData(TextureFormat.RGBA8, false, 13 * 7 * 4)]
+    [InlineData(TextureFormat.RGBA8, true, (13 * 7 + 6 * 3 + 3 * 1 + 1 * 1) * 4)]
+    [InlineData(TextureFormat.BC1, false, 4 * 2 * 8)]
+    [InlineData(TextureFormat.BC1, true, (4 * 2 + 2 * 1 + 1 + 1) * 8)]   // 13x7, 6x3, 3x1, 1x1, each block-padded
+    [InlineData(TextureFormat.BC7, true, (4 * 2 + 2 * 1 + 1 + 1) * 16)]
+    public void StoredSize_SumsEveryMipInTheStoredFormat(TextureFormat format, bool mipmaps, long expected)
+        => Assert.Equal(expected, new Texture2D(13, 7, format, mipmaps).StoredSize);
+
     [Fact]
     public void CompressedImage_KeepsItsFormatAndEveryMipThroughSerialization()
     {

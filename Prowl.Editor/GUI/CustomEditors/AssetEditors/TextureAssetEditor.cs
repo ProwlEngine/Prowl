@@ -103,8 +103,7 @@ public class TextureAssetEditor : ImportSettingsEditor
                 EditorGUI.StatChip(paper, $"{id}_st_size", $"{tex.Width} x {tex.Height}", font);
                 EditorGUI.StatChip(paper, $"{id}_st_fmt", tex.Srgb ? $"{tex.Format} sRGB" : tex.Format.ToString(), font);
                 EditorGUI.StatChip(paper, $"{id}_st_mip", tex.MipCount > 1 ? $"{tex.MipCount} Mips" : "No Mipmaps", font);
-                string sourcePath = Path.Combine(Project.Current?.AssetsPath ?? "", entry.Path);
-                long bytes = File.Exists(sourcePath) ? new FileInfo(sourcePath).Length : 0;
+                long bytes = tex.StoredSize;
                 string fileSize = bytes >= 1024 * 1024
                     ? $"{bytes / (1024f * 1024f):F1} MB"
                     : $"{bytes / 1024f:F0} KB";
