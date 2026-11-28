@@ -1,6 +1,10 @@
 // This file is part of the Prowl Game Engine
 // Licensed under the MIT License. See the LICENSE file in the project root for details.
 
+using System.Buffers.Binary;
+using System.Numerics;
+using System.Runtime.Intrinsics;
+
 using Prowl.Aperture.Decoders.Dds;
 
 namespace Prowl.Aperture.Encoders.Blocks;
@@ -23,14 +27,19 @@ internal sealed class Bc7BlockEncoder : IBlockEncoder
 
     private static readonly ModeInfo[] Modes = BuildModes();
 
-    /// <summary>The closest stored value to each byte, by stored width then by any, even or odd bottom bit.</summary>
+    // The closest stored value to each byte, by stored width then by any, even or odd bottom bit.
     private static readonly byte[] Nearest = BuildNearestTable();
 
-    /// <summary>For each index width, the index whose weight is nearest each weight from 0 to 64.</summary>
-    private static readonly byte[] LevelOfWeight = BuildLevelTable();
+    // For each group count less one, shape and group, a bit per pixel in that group.
+    private static readonly ushort[] GroupMasks = BuildGroupMasks();
 
-    /// <summary>A count, four channel sums and ten pairwise products per pixel.</summary>
-    private const int MomentStride = 15;
+    // For each index width and level k from 1, the least weight nearer level k than level k - 1:
+    // one more than half the sum of their two weights, rounded down.
+    private static readonly byte[] LevelSteps = BuildStepTable();
+
+    // Per pixel: a count, then four channel values from offset 4, then the full four by four
+    // table of pairwise products from offset 8, a row of four per channel.
+    private const int MomentStride = 24;
 
     // Single region modes come first so that blocks they already fit well can skip the rest.
     // Mode 7 is left out for opaque blocks, where mode 3 has the same layout at more precision.
@@ -101,8 +110,11 @@ internal sealed class Bc7BlockEncoder : IBlockEncoder
         for (int i = 0; i < 16; i++)
             opaque &= pixels[(i * 4) + 3] == 255;
 
+        // The laid out copies belong to the previous block until the first fit lays this one out.
+        s.Rotation = -1;
+
         int channels = opaque ? 3 : 4;
-        PrepareMoments(s, channels);
+        bool prepared = false;
         bool ranked2 = false, ranked3 = false;
 
         // Below this error a block is near enough lossless that splitting it is not worth trying.
@@ -142,6 +154,12 @@ internal sealed class Bc7BlockEncoder : IBlockEncoder
                 ref bool ranked = ref (m.Groups == 1 ? ref ranked2 : ref ranked3);
                 if (!ranked)
                 {
+                    if (!prepared)
+                    {
+                        PrepareMoments(s, channels);
+                        prepared = true;
+                    }
+
                     RankShapes(s, m.Groups, channels, ranking);
                     ranked = true;
                 }
@@ -201,19 +219,7 @@ internal sealed class Bc7BlockEncoder : IBlockEncoder
     private void Fit(Scratch s, Candidate c, int searchRounds, long limit)
     {
         ModeInfo m = Modes[c.Mode];
-
-        // A rotation swaps a colour channel with alpha before encoding; the decoder swaps it back.
-        for (int i = 0; i < 64; i++)
-            s.Pixels[i] = s.Source[i];
-
-        if (c.Rotation != 0)
-        {
-            for (int i = 0; i < 16; i++)
-            {
-                int channel = (i * 4) + c.Rotation - 1;
-                (s.Pixels[channel], s.Pixels[(i * 4) + 3]) = (s.Pixels[(i * 4) + 3], s.Pixels[channel]);
-            }
-        }
+        Rotate(s, c.Rotation);
 
         long error = 0;
 
@@ -221,7 +227,10 @@ internal sealed class Bc7BlockEncoder : IBlockEncoder
         {
             // Colour and alpha each get their own endpoints and their own indices.
             for (int i = 0; i < 16; i++)
+            {
                 s.Members[i] = i;
+                s.MemberMask[i] = -1;
+            }
 
             bool swapped = c.Selector != 0;
             error += FitGroup(s, 16, 0, 3, m.ColourFull, Parity.None, swapped ? m.AlphaIndexBits : m.IndexBits,
@@ -247,7 +256,9 @@ internal sealed class Bc7BlockEncoder : IBlockEncoder
                 int count = 0;
                 for (int i = 0; i < 16; i++)
                 {
-                    if (partitions[i] == group)
+                    bool member = partitions[i] == group;
+                    s.MemberMask[i] = member ? -1 : 0;
+                    if (member)
                         s.Members[count++] = i;
                 }
 
@@ -263,15 +274,40 @@ internal sealed class Bc7BlockEncoder : IBlockEncoder
             // Modes without alpha decode it as opaque.
             if (channels == 3)
             {
-                for (int i = 0; i < 16; i++)
+                Vector<int> sum = Vector<int>.Zero;
+                for (int at = 0; at < 16; at += Vector<int>.Count)
                 {
-                    int d = 255 - s.Pixels[(i * 4) + 3];
-                    error += d * d;
+                    Vector<int> d = new Vector<int>(255) - new Vector<int>(s.Planes, (3 * 16) + at);
+                    sum += d * d;
                 }
+
+                error += Vector.Sum(sum);
             }
         }
 
         c.Error = error;
+    }
+
+    /// <summary>
+    /// Lays the block out for the given rotation, which swaps a colour channel with alpha before
+    /// encoding; the decoder swaps it back. Fills both the per-pixel and per-channel copies.
+    /// </summary>
+    private static void Rotate(Scratch s, int rotation)
+    {
+        if (s.Rotation == rotation)
+            return;
+
+        s.Rotation = rotation;
+        for (int c = 0; c < 4; c++)
+        {
+            int from = rotation == 0 ? c : c == 3 ? rotation - 1 : c == rotation - 1 ? 3 : c;
+            for (int i = 0; i < 16; i++)
+            {
+                int value = s.Source[(i * 4) + from];
+                s.Pixels[(i * 4) + c] = value;
+                s.Planes[(c * 16) + i] = value;
+            }
+        }
     }
 
     /// <summary>
@@ -281,30 +317,22 @@ internal sealed class Bc7BlockEncoder : IBlockEncoder
     private long FitGroup(Scratch s, int count, int first, int channels, int bits, Parity parity, int indexBits,
                           int searchRounds, int[] endpoints, int at0, int at1, int[] indices)
     {
-        Span<float> mean = stackalloc float[4];
-        Span<float> axis = stackalloc float[4];
-        PrincipalAxis(s.Pixels, s.Members, count, first, channels, mean, axis);
+        Vector128<float> mask = ChannelMask(channels);
+        PrincipalAxis(s, count, first, channels, out Vector128<float> mean, out Vector128<float> axis);
 
         float low = float.MaxValue;
         float high = float.MinValue;
         for (int k = 0; k < count; k++)
         {
-            int p = s.Members[k] * 4;
-            float t = 0;
-            for (int c = 0; c < channels; c++)
-                t += (s.Pixels[p + first + c] - mean[c]) * axis[c];
-
+            float t = SumChannels((LoadPixel(s.Pixels, s.Members[k], first, mask) - mean) * axis, channels);
             low = Math.Min(low, t);
             high = Math.Max(high, t);
         }
 
         Span<float> a = stackalloc float[4];
         Span<float> b = stackalloc float[4];
-        for (int c = 0; c < channels; c++)
-        {
-            a[c] = mean[c] + (axis[c] * low);
-            b[c] = mean[c] + (axis[c] * high);
-        }
+        (mean + (axis * low)).CopyTo(a);
+        (mean + (axis * high)).CopyTo(b);
 
         Span<int> best0 = stackalloc int[4];
         Span<int> best1 = stackalloc int[4];
@@ -325,7 +353,7 @@ internal sealed class Bc7BlockEncoder : IBlockEncoder
             best = error;
             try0.CopyTo(best0);
             try1.CopyTo(best1);
-            CopyMembers(s, s.TrialIndices, indices, count);
+            CopyMembers(s, s.TrialIndices, indices);
         }
 
         // Step one stored value at a time, by two where a parity bit must stay put.
@@ -350,13 +378,13 @@ internal sealed class Bc7BlockEncoder : IBlockEncoder
                             continue;
 
                         target[c] = value;
-                        long error = Evaluate(s, count, first, channels, bits, indexBits, try0, try1, s.EvalIndices, best);
+                        long error = Evaluate(s, first, channels, bits, indexBits, try0, try1, s.EvalIndices, best);
                         if (error < best)
                         {
                             best = error;
                             try0.CopyTo(best0);
                             try1.CopyTo(best1);
-                            CopyMembers(s, s.EvalIndices, indices, count);
+                            CopyMembers(s, s.EvalIndices, indices);
                             improved = true;
                         }
                     }
@@ -414,13 +442,13 @@ internal sealed class Bc7BlockEncoder : IBlockEncoder
                 t1[c] = Nearest[row1 + ToByte(b[c])];
             }
 
-            long error = Evaluate(s, count, first, channels, bits, indexBits, t0, t1, s.EvalIndices, Math.Min(best, limit));
+            long error = Evaluate(s, first, channels, bits, indexBits, t0, t1, s.EvalIndices, Math.Min(best, limit));
             if (error < best && error < limit)
             {
                 best = error;
                 t0.CopyTo(q0);
                 t1.CopyTo(q1);
-                CopyMembers(s, s.EvalIndices, indices, count);
+                CopyMembers(s, s.EvalIndices, indices);
             }
         }
 
@@ -428,79 +456,127 @@ internal sealed class Bc7BlockEncoder : IBlockEncoder
     }
 
     /// <summary>
-    /// Picks the nearest palette entry for each member, stopping early once past <paramref name="limit"/>.
-    /// The palette lies along the line between the endpoints, so each pixel's projection onto that
-    /// line names the likely entry and only it and its neighbours are measured.
+    /// Picks the nearest palette entry for each member, writing every pixel's choice to
+    /// <paramref name="indices"/> (only members' entries mean anything) and returning the members'
+    /// squared error, or some error of at least <paramref name="limit"/> once it is clear the
+    /// endpoints cannot beat it. The palette lies along the line between the endpoints, so each
+    /// pixel's projection onto that line names the likely entry and only it and its neighbours are
+    /// measured, lowest first so that ties keep the lower entry. A vector of pixels is handled at
+    /// a time, with each pixel's candidate entries worked out in its own lane rather than looked up.
     /// </summary>
-    private static long Evaluate(Scratch s, int count, int first, int channels, int bits, int indexBits,
-                                 ReadOnlySpan<int> q0, ReadOnlySpan<int> q1, int[] indices, long limit)
+    private static long Evaluate(Scratch s, int first, int channels, int bits, int indexBits,
+                                 ReadOnlySpan<int> q0, ReadOnlySpan<int> q1, int[] indices, long limit) => channels switch
     {
-        ReadOnlySpan<byte> weights = Weights(indexBits);
-        ReadOnlySpan<byte> levelOf = LevelOfWeight.AsSpan(indexBits * 65, 65);
+        1 => Evaluate<OneChannel>(s, first, bits, indexBits, q0, q1, indices, limit),
+        3 => Evaluate<ThreeChannels>(s, first, bits, indexBits, q0, q1, indices, limit),
+        _ => Evaluate<FourChannels>(s, first, bits, indexBits, q0, q1, indices, limit),
+    };
+
+    /// <summary><see cref="Evaluate(Scratch, int, int, int, int, ReadOnlySpan{int}, ReadOnlySpan{int}, int[], long)"/> compiled for a fixed number of channels.</summary>
+    private static long Evaluate<TChannels>(Scratch s, int first, int bits, int indexBits,
+                                            ReadOnlySpan<int> q0, ReadOnlySpan<int> q1, int[] indices, long limit)
+        where TChannels : struct, IChannelCount
+    {
+        int channels = TChannels.Count;
         int top = (1 << indexBits) - 1;
-        Span<int> palette = stackalloc int[16 * 4];
-        Span<int> e0 = stackalloc int[4];
+        Span<int> low = stackalloc int[4];
         Span<int> d = stackalloc int[4];
+        low.Clear();
+        d.Clear();
         int dd = 0;
 
         for (int c = 0; c < channels; c++)
         {
-            int low = Expand(q0[c], bits);
-            int high = Expand(q1[c], bits);
-            e0[c] = low;
-            d[c] = high - low;
+            low[c] = Expand(q0[c], bits);
+            d[c] = Expand(q1[c], bits) - low[c];
             dd += d[c] * d[c];
-
-            for (int l = 0; l <= top; l++)
-                palette[(l * 4) + c] = ((low * (64 - weights[l])) + (high * weights[l]) + 32) >> 6;
         }
 
-        int[] pixels = s.Pixels;
-        long total = 0;
+        // Channels past the group's own stay zero and are never read.
+        Vector<int> low0 = new(low[0]), low1 = new(low[1]), low2 = new(low[2]), low3 = new(low[3]);
+        Vector<int> d0 = new(d[0]), d1 = new(d[1]), d2 = new(d[2]), d3 = new(d[3]);
 
-        for (int k = 0; k < count; k++)
+        // An entry is low + (high - low) * weight / 64, rounded: the same sum the decoder makes.
+        Vector<int> base0 = new((low[0] * 64) + 32), base1 = new((low[1] * 64) + 32);
+        Vector<int> base2 = new((low[2] * 64) + 32), base3 = new((low[3] * 64) + 32);
+
+        // Twice a pixel's weight, round(64 * dot / dd), passes the midpoint between levels k - 1
+        // and k exactly when 64 * dot reaches this; the nearest level counts the midpoints passed.
+        Span<int> thresholds = stackalloc int[16];
+        ReadOnlySpan<byte> steps = LevelSteps.AsSpan(indexBits * 16, 16);
+        for (int k = 1; k <= top; k++)
+            thresholds[k] = (steps[k] * dd) - (dd >> 1);
+
+        Vector<int> topv = new(top);
+        Vector<float> weightScale = new(64f / top);
+        Vector<float> rounding = new(0.5f);
+        Vector<int> total = Vector<int>.Zero;
+        int[] planes = s.Planes;
+
+        for (int at = 0; at < 16; at += Vector<int>.Count)
         {
-            int member = s.Members[k];
-            int p = (member * 4) + first;
+            Vector<int> member = new(s.MemberMask, at);
+            if (member == Vector<int>.Zero)
+                continue;
 
-            int guess = 0;
+            Vector<int> p0 = new(planes, (first * 16) + at);
+            Vector<int> p1 = channels > 1 ? new(planes, ((first + 1) * 16) + at) : default;
+            Vector<int> p2 = channels > 2 ? new(planes, ((first + 2) * 16) + at) : default;
+            Vector<int> p3 = channels > 3 ? new(planes, ((first + 3) * 16) + at) : default;
+
+            // The entry whose weight is nearest, then it and its neighbours in turn. With both
+            // endpoints the same every entry is too, and the first is the one kept.
+            Vector<int> nearest = Vector<int>.Zero;
             if (dd != 0)
             {
-                int dot = 0;
-                for (int c = 0; c < channels; c++)
-                    dot += (pixels[p + c] - e0[c]) * d[c];
+                Vector<int> dot = (p0 - low0) * d0;
+                if (channels > 1)
+                    dot += ((p1 - low1) * d1) + ((p2 - low2) * d2);
+                if (channels > 3)
+                    dot += (p3 - low3) * d3;
 
-                guess = levelOf[Math.Clamp(((dot * 64) + (dd >> 1)) / dd, 0, 64)];
+                Vector<int> scaled = dot << 6;
+                for (int k = 1; k <= top; k++)
+                    nearest -= Vector.GreaterThanOrEqual(scaled, new Vector<int>(thresholds[k]));
             }
 
-            int bestError = int.MaxValue;
-            int bestLevel = guess;
-            int from = Math.Max(0, guess - 1);
-            int to = dd != 0 ? Math.Min(top, guess + 1) : 0;
+            Vector<int> bestError = new(int.MaxValue);
+            Vector<int> bestLevel = Vector<int>.Zero;
 
-            for (int l = from; l <= to; l++)
+            for (int offset = -1; offset <= 1; offset++)
             {
-                int error = 0;
-                for (int c = 0; c < channels; c++)
+                Vector<int> level = nearest + new Vector<int>(offset);
+                Vector<int> valid = Vector.GreaterThanOrEqual(level, Vector<int>.Zero) & Vector.LessThanOrEqual(level, topv);
+                Vector<int> w = Truncate((Vector.ConvertToSingle(level) * weightScale) + rounding);
+
+                Vector<int> e0 = ((base0 + (d0 * w)) >> 6) - p0;
+                Vector<int> error = e0 * e0;
+                if (channels > 1)
                 {
-                    int diff = palette[(l * 4) + c] - pixels[p + c];
-                    error += diff * diff;
+                    Vector<int> e1 = ((base1 + (d1 * w)) >> 6) - p1;
+                    Vector<int> e2 = ((base2 + (d2 * w)) >> 6) - p2;
+                    error += (e1 * e1) + (e2 * e2);
                 }
 
-                if (error < bestError)
+                if (channels > 3)
                 {
-                    bestError = error;
-                    bestLevel = l;
+                    Vector<int> e3 = ((base3 + (d3 * w)) >> 6) - p3;
+                    error += e3 * e3;
                 }
+
+                Vector<int> better = valid & Vector.LessThan(error, bestError);
+                bestError = Vector.ConditionalSelect(better, error, bestError);
+                bestLevel = Vector.ConditionalSelect(better, level, bestLevel);
             }
 
-            indices[member] = bestLevel;
-            total += bestError;
-            if (total >= limit)
-                return total;
+            total += bestError & member;
+            bestLevel.CopyTo(indices, at);
+
+            if (at + Vector<int>.Count < 16 && Vector.Sum(total) >= limit)
+                break;
         }
 
-        return total;
+        return Vector.Sum(total);
     }
 
     /// <summary>
@@ -511,10 +587,9 @@ internal sealed class Bc7BlockEncoder : IBlockEncoder
                                      Span<float> a, Span<float> b)
     {
         ReadOnlySpan<byte> weights = Weights(indexBits);
-        Span<float> ax = stackalloc float[4];
-        Span<float> bx = stackalloc float[4];
-        ax.Clear();
-        bx.Clear();
+        Vector128<float> mask = ChannelMask(channels);
+        Vector128<float> ax = Vector128<float>.Zero;
+        Vector128<float> bx = Vector128<float>.Zero;
         float aa = 0, ab = 0, bb = 0;
 
         for (int k = 0; k < count; k++)
@@ -526,12 +601,9 @@ internal sealed class Bc7BlockEncoder : IBlockEncoder
             ab += v * w;
             bb += w * w;
 
-            for (int c = 0; c < channels; c++)
-            {
-                float x = s.Pixels[(member * 4) + first + c];
-                ax[c] += v * x;
-                bx[c] += w * x;
-            }
+            Vector128<float> x = LoadPixel(s.Pixels, member, first, mask);
+            ax += Vector128.Create(v) * x;
+            bx += Vector128.Create(w) * x;
         }
 
         float det = (aa * bb) - (ab * ab);
@@ -540,107 +612,93 @@ internal sealed class Bc7BlockEncoder : IBlockEncoder
 
         for (int c = 0; c < channels; c++)
         {
-            a[c] = Math.Clamp(((bb * ax[c]) - (ab * bx[c])) / det, 0, 255);
-            b[c] = Math.Clamp(((aa * bx[c]) - (ab * ax[c])) / det, 0, 255);
+            a[c] = Math.Clamp(((bb * ax.GetElement(c)) - (ab * bx.GetElement(c))) / det, 0, 255);
+            b[c] = Math.Clamp(((aa * bx.GetElement(c)) - (ab * ax.GetElement(c))) / det, 0, 255);
         }
 
         return true;
     }
 
     /// <summary>
-    /// Finds the mean and dominant direction of the members by power iteration on their covariance,
-    /// returning how far the members sit from the line that makes.
+    /// Finds the mean and dominant direction of the members by power iteration on their covariance.
+    /// Lane <c>c</c> of each result is channel <c>first + c</c>; lanes past the group's channels are zero.
+    /// Sums run over the members in order, one lane per channel, so they round exactly as a
+    /// channel-at-a-time loop would.
     /// </summary>
-    private static float PrincipalAxis(int[] pixels, int[] members, int count, int first, int channels,
-                                       Span<float> mean, Span<float> axis)
+    private static void PrincipalAxis(Scratch s, int count, int first, int channels,
+                                      out Vector128<float> mean, out Vector128<float> axis)
     {
-        mean.Clear();
-        axis.Clear();
+        Vector128<float> mask = ChannelMask(channels);
+        float[] pixels = s.Pixels;
+        int[] members = s.Members;
 
+        Vector128<float> sum = Vector128<float>.Zero;
         for (int k = 0; k < count; k++)
-        {
-            for (int c = 0; c < channels; c++)
-                mean[c] += pixels[(members[k] * 4) + first + c];
-        }
+            sum += LoadPixel(pixels, members[k], first, mask);
 
-        for (int c = 0; c < channels; c++)
-            mean[c] /= count;
+        mean = sum / Vector128.Create((float)count);
+        axis = Vector128<float>.Zero;
 
-        Span<float> cov = stackalloc float[16];
-        cov.Clear();
+        // The covariance comes out exactly symmetric, so its rows double as columns.
+        Covariance cov = default;
         for (int k = 0; k < count; k++)
-        {
-            int p = (members[k] * 4) + first;
-            for (int i = 0; i < channels; i++)
-            {
-                float di = pixels[p + i] - mean[i];
-                for (int j = i; j < channels; j++)
-                    cov[(i * 4) + j] += di * (pixels[p + j] - mean[j]);
-            }
-        }
+            cov.Add(LoadPixel(pixels, members[k], first, mask) - mean, channels);
 
-        float trace = 0;
-        int widest = 0;
-        for (int i = 0; i < channels; i++)
-        {
-            for (int j = 0; j < i; j++)
-                cov[(i * 4) + j] = cov[(j * 4) + i];
-
-            trace += cov[(i * 4) + i];
-            if (cov[(i * 4) + i] > cov[(widest * 4) + widest])
-                widest = i;
-        }
-
-        if (cov[(widest * 4) + widest] <= 0)
-            return 0;
+        int widest = cov.Widest(channels, out _);
+        if (cov.Row(widest).GetElement(widest) <= 0)
+            return;
 
         // Starting from the widest channel's column keeps the start off any axis orthogonal to
         // the answer, since that column is the covariance applied to that channel's direction.
-        Span<float> next = stackalloc float[4];
-        for (int i = 0; i < channels; i++)
-            axis[i] = cov[(i * 4) + widest];
+        axis = cov.Row(widest);
 
-        float eigenvalue = 0;
         for (int iteration = 0; iteration < 8; iteration++)
         {
-            float length = 0;
-            for (int i = 0; i < channels; i++)
-                length += axis[i] * axis[i];
-
-            length = MathF.Sqrt(length);
+            float length = MathF.Sqrt(SumChannels(axis * axis, channels));
             if (length < 1e-12f)
                 break;
 
-            for (int i = 0; i < channels; i++)
-                axis[i] /= length;
-
-            next.Clear();
-            for (int i = 0; i < channels; i++)
-            {
-                for (int j = 0; j < channels; j++)
-                    next[i] += cov[(i * 4) + j] * axis[j];
-            }
-
-            eigenvalue = 0;
-            for (int i = 0; i < channels; i++)
-                eigenvalue += next[i] * axis[i];
-
-            next[..channels].CopyTo(axis);
+            axis /= Vector128.Create(length);
+            axis = cov.Apply(axis, channels);
         }
 
-        float norm = 0;
-        for (int i = 0; i < channels; i++)
-            norm += axis[i] * axis[i];
-
-        norm = MathF.Sqrt(norm);
+        float norm = MathF.Sqrt(SumChannels(axis * axis, channels));
         if (norm > 0)
+            axis /= Vector128.Create(norm);
+    }
+
+    /// <summary>Rounds each lane toward zero; every caller's values are well inside the range of an int.</summary>
+    private static Vector<int> Truncate(Vector<float> value)
+#if NET9_0_OR_GREATER
+        => Vector.ConvertToInt32Native(value);
+#else
+        => Vector.ConvertToInt32(value);
+#endif
+
+    /// <summary>Loads one pixel's channels <paramref name="first"/> onward into the low lanes, zeroing the rest.</summary>
+    private static Vector128<float> LoadPixel(float[] pixels, int pixel, int first, Vector128<float> mask)
+        => first == 0
+            ? Vector128.LoadUnsafe(ref pixels[pixel * 4]) & mask
+            : Vector128.CreateScalar(pixels[(pixel * 4) + first]);
+
+    /// <summary>All ones in the lanes below <paramref name="channels"/>, zero above.</summary>
+    private static Vector128<float> ChannelMask(int channels)
+        => Vector128.LessThan(Vector128.Create(0, 1, 2, 3), Vector128.Create(channels)).AsSingle();
+
+    /// <summary>Adds the low <paramref name="channels"/> lanes in order, rounding as a scalar loop would.</summary>
+    private static float SumChannels(Vector128<float> v, int channels)
+    {
+        float sum = 0;
+        sum += v.ToScalar();
+        if (channels > 1)
         {
-            for (int i = 0; i < channels; i++)
-                axis[i] /= norm;
+            sum += v.GetElement(1);
+            sum += v.GetElement(2);
+            if (channels > 3)
+                sum += v.GetElement(3);
         }
 
-        // What is left after the principal axis: how far the members sit from a line.
-        return Math.Max(0, trace - eigenvalue);
+        return sum;
     }
 
     /// <summary>Each pixel's count, channels and pairwise products, so a group's covariance is a sum of rows.</summary>
@@ -648,134 +706,288 @@ internal sealed class Bc7BlockEncoder : IBlockEncoder
     {
         int[] m = s.Moments;
         int[] totals = s.Totals;
+        Array.Clear(m);
         Array.Clear(totals);
 
         for (int i = 0; i < 16; i++)
         {
             int at = i * MomentStride;
             m[at] = 1;
-            int k = at + 1 + channels;
 
             for (int a = 0; a < channels; a++)
             {
                 int x = s.Source[(i * 4) + a];
-                m[at + 1 + a] = x;
+                m[at + 4 + a] = x;
 
-                for (int b = a; b < channels; b++)
-                    m[k++] = x * s.Source[(i * 4) + b];
+                for (int b = 0; b < channels; b++)
+                    m[at + 8 + (a * 4) + b] = x * s.Source[(i * 4) + b];
             }
 
-            for (int t = 0; t < MomentStride; t++)
-                totals[t] += m[at + t];
+            for (int t = 0; t < MomentStride; t += 4)
+                (Vector128.Create(totals.AsSpan(t)) + Vector128.Create(m.AsSpan(at + t))).CopyTo(totals.AsSpan(t));
         }
     }
 
     /// <summary>
     /// Orders the shapes of a two or three group split by how far each group's pixels fall from
-    /// a line through them: the covariance's trace less its largest eigenvalue.
+    /// a line through them: the covariance's trace less its largest eigenvalue. Shapes are
+    /// estimated a vector at a time, one per lane; every lane rounds exactly as it would alone.
     /// </summary>
     private static void RankShapes(Scratch s, int groups, int channels, int[] ranking)
     {
-        ReadOnlySpan<byte> partitions = BlockTables.Partitions;
-        int terms = 1 + channels + ((channels * (channels + 1)) / 2);
-        Span<int> sums = stackalloc int[3 * MomentStride];
-        Span<float> cov = stackalloc float[16];
-        Span<float> v = stackalloc float[4];
-        Span<float> next = stackalloc float[4];
+        int[] sums = s.ShapeSums;
         int[] moments = s.Moments;
+        int[] totals = s.Totals;
+        ReadOnlySpan<ushort> masks = GroupMasks.AsSpan(groups * 64 * 3, 64 * 3);
 
         for (int shape = 0; shape < 64; shape++)
         {
-            ReadOnlySpan<byte> row = partitions.Slice(((groups * 64) + shape) * 16, 16);
-            sums.Clear();
+            Span<int> group0 = sums.AsSpan(shape * 3 * MomentStride, MomentStride);
+            Span<int> group1 = sums.AsSpan(((shape * 3) + 1) * MomentStride, MomentStride);
+            Span<int> group2 = sums.AsSpan(((shape * 3) + 2) * MomentStride, MomentStride);
+            SumMoments(moments, masks[(shape * 3) + 1], group1);
+            if (groups == 2)
+                SumMoments(moments, masks[(shape * 3) + 2], group2);
+            else
+                group2.Clear();
 
-            for (int i = 0; i < 16; i++)
+            // Group 0 is whatever the others leave.
+            for (int t = 0; t < MomentStride; t += 4)
             {
-                if (row[i] == 0)
-                    continue;
-
-                int to = row[i] * MomentStride;
-                int from = i * MomentStride;
-                for (int t = 0; t < terms; t++)
-                    sums[to + t] += moments[from + t];
+                Vector128<int> rest = Vector128.Create(group1[t..]) + Vector128.Create(group2[t..]);
+                (Vector128.Create(totals.AsSpan(t)) - rest).CopyTo(group0[t..]);
             }
+        }
 
-            for (int t = 0; t < terms; t++)
-            {
-                int rest = sums[MomentStride + t] + (groups == 2 ? sums[(2 * MomentStride) + t] : 0);
-                sums[t] = s.Totals[t] - rest;
-            }
+        if (channels == 3)
+            EstimateShapes<ThreeChannels>(s, groups);
+        else
+            EstimateShapes<FourChannels>(s, groups);
 
-            float estimate = 0;
+        for (int shape = 0; shape < 64; shape++)
+            ranking[shape] = shape;
+
+        s.Estimates.AsSpan().Sort(ranking.AsSpan());
+    }
+
+    /// <summary>Adds up the moments of the pixels whose bits are set in <paramref name="members"/>.</summary>
+    private static void SumMoments(int[] moments, int members, Span<int> to)
+    {
+        Vector128<int> a0 = default, a1 = default, a2 = default, a3 = default, a4 = default, a5 = default;
+
+        while (members != 0)
+        {
+            ReadOnlySpan<int> m = moments.AsSpan(BitOperations.TrailingZeroCount(members) * MomentStride, MomentStride);
+            members &= members - 1;
+            a0 += Vector128.Create(m);
+            a1 += Vector128.Create(m[4..]);
+            a2 += Vector128.Create(m[8..]);
+            a3 += Vector128.Create(m[12..]);
+            a4 += Vector128.Create(m[16..]);
+            a5 += Vector128.Create(m[20..]);
+        }
+
+        a0.CopyTo(to);
+        a1.CopyTo(to[4..]);
+        a2.CopyTo(to[8..]);
+        a3.CopyTo(to[12..]);
+        a4.CopyTo(to[16..]);
+        a5.CopyTo(to[20..]);
+    }
+
+    /// <summary>
+    /// Fills <see cref="Scratch.Estimates"/> from the summed moments of every shape's groups. Within
+    /// a lane this is a few power steps from the widest channel's column, then the trace less the
+    /// Rayleigh quotient. The quotient never exceeds the largest eigenvalue, so an unconverged
+    /// estimate only errs high. Where one shape would stop early its lane is simply left alone.
+    /// </summary>
+    private static void EstimateShapes<TChannels>(Scratch s, int groups)
+        where TChannels : struct, IChannelCount
+    {
+        int channels = TChannels.Count;
+        int width = Vector<float>.Count;
+        Span<int> lanes = stackalloc int[Vector<float>.Count];
+        Span<Vector<float>> sum = stackalloc Vector<float>[4];
+        Span<Vector<float>> cov = stackalloc Vector<float>[16];
+        Span<Vector<float>> v = stackalloc Vector<float>[4];
+        Span<Vector<float>> next = stackalloc Vector<float>[4];
+        Vector<float> zero = Vector<float>.Zero;
+
+        for (int first = 0; first < 64; first += width)
+        {
+            Vector<float> estimate = zero;
+
             for (int group = 0; group <= groups; group++)
             {
                 int at = group * MomentStride;
-                float n = sums[at];
-                float trace = 0;
-                int k = at + 1 + channels;
-                int widest = 0;
+                Vector<float> n = GatherSums(s.ShapeSums, first, at, lanes);
+                for (int a = 0; a < channels; a++)
+                    sum[a] = GatherSums(s.ShapeSums, first, at + 4 + a, lanes);
 
                 for (int a = 0; a < channels; a++)
                 {
                     for (int b = a; b < channels; b++)
                     {
-                        float value = sums[k++] - (sums[at + 1 + a] * (float)sums[at + 1 + b] / n);
-                        cov[(a * 4) + b] = value;
-                        cov[(b * 4) + a] = value;
+                        Vector<float> products = GatherSums(s.ShapeSums, first, at + 8 + (a * 4) + b, lanes);
+                        cov[(b * 4) + a] = cov[(a * 4) + b] = products - ((sum[a] * sum[b]) / n);
                     }
-
-                    trace += cov[(a * 4) + a];
-                    if (cov[(a * 4) + a] > cov[(widest * 4) + widest])
-                        widest = a;
                 }
 
-                if (cov[(widest * 4) + widest] <= 0)
+                // The widest channel, first on ties, and the sum of the variances.
+                Vector<float> trace = zero;
+                trace += cov[0];
+                Vector<float> most = cov[0];
+                Vector<int> widest = Vector<int>.Zero;
+                for (int a = 1; a < channels; a++)
+                {
+                    Vector<float> variance = cov[(a * 4) + a];
+                    trace += variance;
+                    Vector<int> wider = Vector.GreaterThan(variance, most);
+                    widest = Vector.ConditionalSelect(wider, new Vector<int>(a), widest);
+                    most = Vector.ConditionalSelect(wider, variance, most);
+                }
+
+                // Groups with no spread add nothing.
+                Vector<int> active = ~Vector.LessThanOrEqual(most, zero);
+                if (active == Vector<int>.Zero)
                     continue;
 
-                // A few power steps from the widest channel's column. The Rayleigh quotient never
-                // exceeds the largest eigenvalue, so an unconverged estimate only errs high.
                 for (int a = 0; a < channels; a++)
-                    v[a] = cov[(a * 4) + widest];
+                {
+                    v[a] = cov[a * 4];
+                    for (int b = 1; b < channels; b++)
+                        v[a] = Vector.ConditionalSelect(Vector.Equals(widest, new Vector<int>(b)), cov[(a * 4) + b], v[a]);
+                }
 
+                Vector<int> spread = active;
                 for (int iteration = 0; iteration < 3; iteration++)
                 {
-                    float length = 0;
+                    Multiply<TChannels>(cov, v, next);
+
+                    Vector<float> length = Vector.Max(zero, Vector.Abs(next[0]));
+                    for (int a = 1; a < channels; a++)
+                        length = Vector.Max(length, Vector.Abs(next[a]));
+
+                    active &= ~Vector.LessThanOrEqual(length, zero);
                     for (int a = 0; a < channels; a++)
-                    {
-                        float sum = 0;
-                        for (int b = 0; b < channels; b++)
-                            sum += cov[(a * 4) + b] * v[b];
-
-                        next[a] = sum;
-                        length = Math.Max(length, Math.Abs(sum));
-                    }
-
-                    if (length <= 0)
-                        break;
-
-                    for (int a = 0; a < channels; a++)
-                        v[a] = next[a] / length;
+                        v[a] = Vector.ConditionalSelect(active, next[a] / length, v[a]);
                 }
 
-                float vv = 0, vcv = 0;
+                Multiply<TChannels>(cov, v, next);
+                Vector<float> vv = zero, vcv = zero;
                 for (int a = 0; a < channels; a++)
                 {
-                    float sum = 0;
-                    for (int b = 0; b < channels; b++)
-                        sum += cov[(a * 4) + b] * v[b];
-
                     vv += v[a] * v[a];
-                    vcv += v[a] * sum;
+                    vcv += v[a] * next[a];
                 }
 
-                estimate += Math.Max(0, trace - (vv > 0 ? vcv / vv : 0));
+                Vector<float> quotient = Vector.ConditionalSelect(Vector.GreaterThan(vv, zero), vcv / vv, zero);
+                estimate += Vector.ConditionalSelect(spread, Vector.Max(zero, trace - quotient), zero);
             }
 
-            s.Estimates[shape] = estimate;
-            ranking[shape] = shape;
+            estimate.CopyTo(s.Estimates, first);
+        }
+    }
+
+    /// <summary>Lane by lane, the covariance times <paramref name="v"/>, each entry summed over channels in order.</summary>
+    private static void Multiply<TChannels>(ReadOnlySpan<Vector<float>> cov, ReadOnlySpan<Vector<float>> v, Span<Vector<float>> result)
+        where TChannels : struct, IChannelCount
+    {
+        for (int a = 0; a < TChannels.Count; a++)
+        {
+            Vector<float> total = Vector<float>.Zero;
+            for (int b = 0; b < TChannels.Count; b++)
+                total += cov[(b * 4) + a] * v[b];
+
+            result[a] = total;
+        }
+    }
+
+    /// <summary>One summed moment of one group, for the shapes starting at <paramref name="first"/>, one per lane.</summary>
+    private static Vector<float> GatherSums(int[] sums, int first, int offset, Span<int> lanes)
+    {
+        for (int j = 0; j < lanes.Length; j++)
+            lanes[j] = sums[((first + j) * 3 * MomentStride) + offset];
+
+        return Vector.ConvertToSingle(new Vector<int>(lanes));
+    }
+
+    /// <summary>
+    /// A symmetric covariance of up to four channels, one row per vector. Unused rows and lanes
+    /// stay zero. Lane sums run in channel order so that every result rounds as a loop over
+    /// channels would.
+    /// </summary>
+    private struct Covariance
+    {
+        /// <summary>The rows for each channel, in order.</summary>
+        public Vector128<float> R0, R1, R2, R3;
+
+        /// <summary>Adds the outer product of one pixel's offset from the mean.</summary>
+        public void Add(Vector128<float> d, int channels)
+        {
+            R0 += Vector128.Create(d.GetElement(0)) * d;
+            if (channels > 1)
+            {
+                R1 += Vector128.Create(d.GetElement(1)) * d;
+                R2 += Vector128.Create(d.GetElement(2)) * d;
+                if (channels > 3)
+                    R3 += Vector128.Create(d.GetElement(3)) * d;
+            }
         }
 
-        s.Estimates.AsSpan().Sort(ranking.AsSpan());
+        /// <summary>Row (and so column) <paramref name="i"/>.</summary>
+        public readonly Vector128<float> Row(int i) => i switch
+        {
+            0 => R0,
+            1 => R1,
+            2 => R2,
+            _ => R3,
+        };
+
+        /// <summary>The channel with the largest variance, first on ties, and the sum of the variances.</summary>
+        public readonly int Widest(int channels, out float trace)
+        {
+            float d0 = R0.ToScalar();
+            trace = 0;
+            trace += d0;
+            if (channels == 1)
+                return 0;
+
+            float d1 = R1.GetElement(1), d2 = R2.GetElement(2);
+            trace += d1;
+            trace += d2;
+            int widest = 0;
+            float most = d0;
+            if (d1 > most)
+                (widest, most) = (1, d1);
+            if (d2 > most)
+                (widest, most) = (2, d2);
+            if (channels > 3)
+            {
+                float d3 = R3.GetElement(3);
+                trace += d3;
+                if (d3 > most)
+                    widest = 3;
+            }
+
+            return widest;
+        }
+
+        /// <summary>The covariance times <paramref name="v"/>, each lane summed over channels in order.</summary>
+        public readonly Vector128<float> Apply(Vector128<float> v, int channels)
+        {
+            Vector128<float> result = Vector128<float>.Zero;
+            result += R0 * Vector128.Create(v.GetElement(0));
+            if (channels > 1)
+            {
+                result += R1 * Vector128.Create(v.GetElement(1));
+                result += R2 * Vector128.Create(v.GetElement(2));
+                if (channels > 3)
+                    result += R3 * Vector128.Create(v.GetElement(3));
+            }
+
+            return result;
+        }
     }
 
     /// <summary>Packs the candidate's mode, shape, endpoints and indices into the 128 bit block.</summary>
@@ -784,12 +996,12 @@ internal sealed class Bc7BlockEncoder : IBlockEncoder
         ModeInfo m = Modes[c.Mode];
         FixAnchors(c, m);
 
-        output[..16].Clear();
+        UInt128 block = 0;
         int at = 0;
-        WriteBits(output, ref at, 1 << c.Mode, c.Mode + 1);
-        WriteBits(output, ref at, c.Shape, m.ShapeBits);
-        WriteBits(output, ref at, c.Rotation, m.RotationBits);
-        WriteBits(output, ref at, c.Selector, m.SelectorBits);
+        WriteBits(ref block, ref at, 1 << c.Mode, c.Mode + 1);
+        WriteBits(ref block, ref at, c.Shape, m.ShapeBits);
+        WriteBits(ref block, ref at, c.Rotation, m.RotationBits);
+        WriteBits(ref block, ref at, c.Selector, m.SelectorBits);
 
         int endpoints = (m.Groups + 1) * 2;
         for (int channel = 0; channel < 4; channel++)
@@ -800,21 +1012,24 @@ internal sealed class Bc7BlockEncoder : IBlockEncoder
                 continue;
 
             for (int i = 0; i < endpoints; i++)
-                WriteBits(output, ref at, c.Endpoints[(i * 4) + channel] >> (full - precision), precision);
+                WriteBits(ref block, ref at, c.Endpoints[(i * 4) + channel] >> (full - precision), precision);
         }
 
         // Every channel of an endpoint carries the same bottom bit, so the red one stands for all.
         for (int j = 0; j < m.ParityBits; j++)
-            WriteBits(output, ref at, c.Endpoints[(j * endpoints / m.ParityBits) * 4] & 1, 1);
+            WriteBits(ref block, ref at, c.Endpoints[(j * endpoints / m.ParityBits) * 4] & 1, 1);
 
         for (int i = 0; i < 16; i++)
-            WriteBits(output, ref at, c.Primary[i], IsAnchor(m.Groups, c.Shape, i) ? m.IndexBits - 1 : m.IndexBits);
+            WriteBits(ref block, ref at, c.Primary[i], IsAnchor(m.Groups, c.Shape, i) ? m.IndexBits - 1 : m.IndexBits);
 
         if (m.AlphaIndexBits != 0)
         {
             for (int i = 0; i < 16; i++)
-                WriteBits(output, ref at, c.Secondary[i], i == 0 ? m.AlphaIndexBits - 1 : m.AlphaIndexBits);
+                WriteBits(ref block, ref at, c.Secondary[i], i == 0 ? m.AlphaIndexBits - 1 : m.AlphaIndexBits);
         }
+
+        BinaryPrimitives.WriteUInt64LittleEndian(output, (ulong)block);
+        BinaryPrimitives.WriteUInt64LittleEndian(output[8..], (ulong)(block >> 64));
     }
 
     /// <summary>
@@ -884,19 +1099,20 @@ internal sealed class Bc7BlockEncoder : IBlockEncoder
     }
 
     /// <summary>Writes the low <paramref name="count"/> bits of <paramref name="value"/> at bit <paramref name="at"/>, lowest first, and advances it.</summary>
-    private static void WriteBits(Span<byte> output, ref int at, int value, int count)
+    private static void WriteBits(ref UInt128 block, ref int at, int value, int count)
     {
-        for (int i = 0; i < count; i++, at++)
-        {
-            if (((value >> i) & 1) != 0)
-                output[at >> 3] |= (byte)(1 << (at & 7));
-        }
+        block |= (UInt128)(uint)(value & ((1 << count) - 1)) << at;
+        at += count;
     }
 
-    private static void CopyMembers(Scratch s, int[] from, int[] to, int count)
+    /// <summary>Copies the current members' entries of <paramref name="from"/> into <paramref name="to"/>.</summary>
+    private static void CopyMembers(Scratch s, int[] from, int[] to)
     {
-        for (int k = 0; k < count; k++)
-            to[s.Members[k]] = from[s.Members[k]];
+        for (int at = 0; at < 16; at += Vector<int>.Count)
+        {
+            Vector<int> member = new(s.MemberMask, at);
+            Vector.ConditionalSelect(member, new Vector<int>(from, at), new Vector<int>(to, at)).CopyTo(to, at);
+        }
     }
 
     private static ReadOnlySpan<byte> Weights(int bits) => bits switch
@@ -950,25 +1166,34 @@ internal sealed class Bc7BlockEncoder : IBlockEncoder
         return table;
     }
 
-    /// <summary>Builds <see cref="LevelOfWeight"/> for two, three and four bit indices.</summary>
-    private static byte[] BuildLevelTable()
+    /// <summary>Builds <see cref="GroupMasks"/> from the partition table.</summary>
+    private static ushort[] BuildGroupMasks()
     {
-        byte[] table = new byte[5 * 65];
+        ushort[] table = new ushort[3 * 64 * 3];
+
+        for (int groups = 0; groups < 3; groups++)
+        {
+            for (int shape = 0; shape < 64; shape++)
+            {
+                ReadOnlySpan<byte> row = BlockTables.Partitions.Slice(((groups * 64) + shape) * 16, 16);
+                for (int i = 0; i < 16; i++)
+                    table[(((groups * 64) + shape) * 3) + row[i]] |= (ushort)(1 << i);
+            }
+        }
+
+        return table;
+    }
+
+    /// <summary>Builds <see cref="LevelSteps"/> for two, three and four bit indices.</summary>
+    private static byte[] BuildStepTable()
+    {
+        byte[] table = new byte[5 * 16];
 
         for (int bits = 2; bits <= 4; bits++)
         {
             ReadOnlySpan<byte> weights = Weights(bits);
-            for (int w = 0; w <= 64; w++)
-            {
-                int best = 0;
-                for (int l = 1; l < weights.Length; l++)
-                {
-                    if (Math.Abs(weights[l] - w) < Math.Abs(weights[best] - w))
-                        best = l;
-                }
-
-                table[(bits * 65) + w] = (byte)best;
-            }
+            for (int k = 1; k < weights.Length; k++)
+                table[(bits * 16) + k] = (byte)(((weights[k - 1] + weights[k]) / 2) + 1);
         }
 
         return table;
@@ -1000,6 +1225,30 @@ internal sealed class Bc7BlockEncoder : IBlockEncoder
         return modes;
     }
 
+    /// <summary>A number of channels fixed at compile time, so that loops over them unroll.</summary>
+    private interface IChannelCount
+    {
+        static abstract int Count { get; }
+    }
+
+    /// <summary>Alpha on its own.</summary>
+    private readonly struct OneChannel : IChannelCount
+    {
+        public static int Count => 1;
+    }
+
+    /// <summary>Red, green and blue.</summary>
+    private readonly struct ThreeChannels : IChannelCount
+    {
+        public static int Count => 3;
+    }
+
+    /// <summary>All four channels.</summary>
+    private readonly struct FourChannels : IChannelCount
+    {
+        public static int Count => 4;
+    }
+
     /// <summary>One row of the mode table; the full widths include the parity bit where there is one.</summary>
     private readonly record struct ModeInfo(int Groups, int ShapeBits, int ParityBits, int RotationBits, int SelectorBits,
                                             int IndexBits, int AlphaIndexBits, int ColourBits, int AlphaBits,
@@ -1008,29 +1257,34 @@ internal sealed class Bc7BlockEncoder : IBlockEncoder
     /// <summary>One way of encoding the block: endpoints by endpoint then channel, at their full stored width.</summary>
     private sealed class Candidate
     {
-        public int Mode;
-        public int Shape;
-        public int Rotation;
-        public int Selector;
-        public long Error;
-        public readonly int[] Endpoints = new int[6 * 4];
-        public readonly int[] Primary = new int[16];
-        public readonly int[] Secondary = new int[16];
+        public int Mode; // Which of the eight modes, 0 to 7.
+        public int Shape; // The partition shape, for modes that split the block into groups.
+        public int Rotation; // Which colour channel swaps with alpha, 1 to 3, or 0 for none.
+        public int Selector; // For mode 4, whether colour takes the wider index set.
+        public long Error; // The squared error over the block, or long.MaxValue if abandoned.
+        public readonly int[] Endpoints = new int[6 * 4]; // Up to six endpoints of four channels each.
+        public readonly int[] Primary = new int[16]; // Each pixel's index, or its colour index in modes 4 and 5.
+        public readonly int[] Secondary = new int[16]; // Each pixel's alpha index in modes 4 and 5.
     }
 
+    /// <summary>One thread's working buffers, reused for every block it encodes.</summary>
     private sealed class Scratch
     {
-        public readonly int[] Source = new int[64];
-        public readonly int[] Pixels = new int[64];
-        public readonly int[] Members = new int[16];
-        public readonly int[] EvalIndices = new int[16];
-        public readonly int[] TrialIndices = new int[16];
-        public readonly float[] Estimates = new float[64];
-        public readonly int[] Moments = new int[16 * MomentStride];
-        public readonly int[] Totals = new int[MomentStride];
-        public readonly int[] Ranking2 = new int[64];
-        public readonly int[] Ranking3 = new int[64];
-        public Candidate Best = new();
-        public Candidate Trial = new();
+        public readonly int[] Source = new int[64]; // The block as given, pixel by pixel.
+        public readonly float[] Pixels = new float[64]; // The block as rotated for the current fit, pixel by pixel.
+        public readonly int[] Planes = new int[64]; // The same values channel by channel: all sixteen reds, then greens, blues and alphas.
+        public readonly int[] Members = new int[16]; // The pixels in the group being fitted, in order.
+        public readonly int[] MemberMask = new int[16]; // All ones for each pixel in the group being fitted, zero for the rest.
+        public int Rotation = -1; // The rotation Pixels and Planes are laid out for, or -1 for none yet.
+        public readonly int[] EvalIndices = new int[16]; // Indices from the latest evaluation, kept only if it wins.
+        public readonly int[] TrialIndices = new int[16]; // Indices from the latest least squares pass, kept only if it wins.
+        public readonly float[] Estimates = new float[64]; // Each shape's estimated spread from a line, sorted alongside its ranking.
+        public readonly int[] Moments = new int[16 * MomentStride]; // Each source pixel's moments, laid out as MomentStride describes.
+        public readonly int[] Totals = new int[MomentStride]; // The moments summed over the whole block.
+        public readonly int[] ShapeSums = new int[64 * 3 * MomentStride]; // For each shape and group, the summed moments of the group's pixels.
+        public readonly int[] Ranking2 = new int[64]; // Two group shapes, most promising first.
+        public readonly int[] Ranking3 = new int[64]; // Three group shapes, most promising first.
+        public Candidate Best = new(); // The best encoding found so far.
+        public Candidate Trial = new(); // The encoding being fitted; swapped with Best when it wins.
     }
 }
