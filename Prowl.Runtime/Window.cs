@@ -205,7 +205,11 @@ public static class Window
     public static bool IsVisible
     {
         get { return InternalWindow.IsVisible; }
-        set { InternalWindow.IsVisible = value; }
+        set
+        {
+            s_showOnStart = false;
+            InternalWindow.IsVisible = value;
+        }
     }
 
     public static nint Handle
@@ -214,6 +218,7 @@ public static class Window
     }
 
     private static bool isFocused = true;
+    private static bool s_showOnStart;
     private static DefaultInputHandler WindowInputHandler;
 
     public static bool IsFocused
@@ -227,6 +232,10 @@ public static class Window
         options.Title = title;
         options.Size = new Vector2D<int>(width, height);
         options.WindowState = startState;
+        // Start hidden during initialization so the OS never shows an unpainted window while graphics and assets load.
+        // Exclusive fullscreen claims the monitor at creation in GLFW, so only windowed states start hidden.
+        s_showOnStart = startState != WindowState.Fullscreen;
+        options.IsVisible = !s_showOnStart;
         s_mode = startState == WindowState.Fullscreen ? WindowMode.Fullscreen : WindowMode.Windowed;
         s_windowedPosition = options.Position;
         s_windowedSize = options.Size;
@@ -285,6 +294,13 @@ public static class Window
     {
         InternalWindow.Initialize();
         Load?.Invoke();
+
+        if (s_showOnStart && !InternalWindow.IsClosing)
+        {
+            s_showOnStart = false;
+            InternalWindow.IsVisible = true;
+            Graphics.PresentInitialClear();
+        }
 
         try { MainLoop(); }
         finally
@@ -348,6 +364,9 @@ public static class Window
 
     public static void OnLoad()
     {
+        if (OperatingSystem.IsWindows() && InternalWindow.Native?.Win32 is { Hwnd: not 0 } win32)
+            Win32WindowIcon.ApplyDarkChrome(win32.Hwnd);
+
         InternalInput = InternalWindow.CreateInput();
         WindowInputHandler = new DefaultInputHandler(InternalInput);
         Graphics.Initialize(InternalWindow, Application.VSync);
