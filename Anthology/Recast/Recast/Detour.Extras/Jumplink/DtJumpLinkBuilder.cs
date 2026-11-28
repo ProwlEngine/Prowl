@@ -10,7 +10,6 @@ namespace Prowl.Recast.Detour.Extras.Jumplink;
 
 public class DtJumpLinkBuilder
 {
-    private readonly DtEdgeExtractor edgeExtractor = new DtEdgeExtractor();
     private readonly DtEdgeSamplerFactory edgeSamplerFactory = new DtEdgeSamplerFactory();
     private readonly DtNavMeshGroundSampler groundSampler = new DtNavMeshGroundSampler();
     private readonly DtTrajectorySampler trajectorySampler = new DtTrajectorySampler();
@@ -22,7 +21,7 @@ public class DtJumpLinkBuilder
     public DtJumpLinkBuilder(IList<RcBuilderResult> results)
     {
         this.results = results;
-        edges = results.Select(r => edgeExtractor.ExtractEdges(r.Mesh)).ToList();
+        edges = results.Select(r => DtEdgeExtractor.ExtractEdges(r.Mesh)).ToList();
     }
 
     public List<DtJumpLink> Build(DtJumpLinkBuilderConfig acfg, DtJumpLinkType type)
@@ -50,7 +49,7 @@ public class DtJumpLinkBuilder
     }
 
 
-    private List<DtJumpLink> BuildJumpLinks(DtJumpLinkBuilderConfig acfg, DtEdgeSampler es, DtJumpSegment[] jumpSegments)
+    private static List<DtJumpLink> BuildJumpLinks(DtJumpLinkBuilderConfig acfg, DtEdgeSampler es, DtJumpSegment[] jumpSegments)
     {
         List<DtJumpLink> links = [];
         foreach (DtJumpSegment js in jumpSegments)

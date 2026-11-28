@@ -120,7 +120,7 @@ public class RcByteBuffer
         }
     }
 
-    public void PutFloat(float v)
+    public static void PutFloat(float v)
     {
         // if (_order == ByteOrder.BIG_ENDIAN)
         // {
@@ -134,7 +134,7 @@ public class RcByteBuffer
         // ?
     }
 
-    public void PutInt(int v)
+    public static void PutInt(int v)
     {
         // ?
     }

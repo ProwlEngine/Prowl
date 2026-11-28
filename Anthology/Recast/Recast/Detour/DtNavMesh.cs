@@ -129,7 +129,7 @@ public class DtNavMesh
         return EncodePolyId(tile.salt, it, 0);
     }
 
-    private int AllocLink(DtMeshTile tile)
+    private static int AllocLink(DtMeshTile tile)
     {
         if (tile.linksFreeList == DT_NULL_LINK)
             return DT_NULL_LINK;
@@ -139,7 +139,7 @@ public class DtNavMesh
         return linkIdx;
     }
 
-    private void FreeLink(DtMeshTile tile, int link)
+    private static void FreeLink(DtMeshTile tile, int link)
     {
         tile.links[link].next = tile.linksFreeList;
         tile.linksFreeList = link;
@@ -929,7 +929,7 @@ public class DtNavMesh
         return n;
     }
 
-    private bool OverlapSlabs(RcVec2f amin, RcVec2f amax, RcVec2f bmin, RcVec2f bmax, float px, float py)
+    private static bool OverlapSlabs(RcVec2f amin, RcVec2f amax, RcVec2f bmin, RcVec2f bmax, float px, float py)
     {
         // Check for horizontal overlap.
         // The segment is shrunken a little so that slabs which touch

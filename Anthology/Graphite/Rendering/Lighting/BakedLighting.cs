@@ -436,7 +436,7 @@ internal sealed class WorldProbes
 
     // Barycentrics of corners 1 to 3 by Cramer's rule over the edges from corner 0, solved in double once here. The shader
     // applies them to the point's offset from corner 0, taken high and low, so tetrahedra keep their precision anywhere.
-    private ProbeTetRecord Tet(LightProbeData data, int t)
+    private static ProbeTetRecord Tet(LightProbeData data, int t)
     {
         ReadOnlySpan<int> corners = data.Tetrahedra.AsSpan(t * 4, 4);
         ReadOnlySpan<int> neighbours = data.Neighbours.AsSpan(t * 4, 4);

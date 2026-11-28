@@ -72,7 +72,7 @@ public class BackendInfoVulkan
     /// <summary>Gets the VkImage behind a Texture.</summary>
     /// <param name="texture">Texture to get the VkImage for.</param>
     /// <returns>The VkImage handle.</returns>
-    public ulong GetVkImage(Texture texture)
+    public static ulong GetVkImage(Texture texture)
     {
         VkTexture vkTexture = Util.AssertSubtype<Texture, VkTexture>(texture);
         return vkTexture.OptimalDeviceImage.Handle;

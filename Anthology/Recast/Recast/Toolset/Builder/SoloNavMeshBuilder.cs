@@ -73,7 +73,7 @@ public class SoloNavMeshBuilder
         return new NavMeshBuildResult(cfg, RcImmutableArray.Create(rcResult), navMesh);
     }
 
-    private DtNavMesh BuildNavMesh(DtMeshData meshData, int vertsPerPoly)
+    private static DtNavMesh BuildNavMesh(DtMeshData meshData, int vertsPerPoly)
     {
         var mesh = new DtNavMesh();
         DtStatus status = mesh.Init(meshData, vertsPerPoly, 0);
@@ -85,14 +85,14 @@ public class SoloNavMeshBuilder
         return mesh;
     }
 
-    private RcBuilderResult BuildRecastResult(RcSampleInputGeomProvider geom, RcConfig cfg, bool keepInterResults)
+    private static RcBuilderResult BuildRecastResult(RcSampleInputGeomProvider geom, RcConfig cfg, bool keepInterResults)
     {
         RcBuilderConfig bcfg = new RcBuilderConfig(cfg, geom.GetMeshBoundsMin(), geom.GetMeshBoundsMax());
         RcBuilder rcBuilder = new RcBuilder();
         return rcBuilder.Build(geom, bcfg, keepInterResults);
     }
 
-    public DtMeshData BuildMeshData(RcSampleInputGeomProvider geom,
+    public static DtMeshData BuildMeshData(RcSampleInputGeomProvider geom,
         float cellSize, float cellHeight,
         float agentHeight, float agentRadius, float agentMaxClimb,
         RcBuilderResult result)

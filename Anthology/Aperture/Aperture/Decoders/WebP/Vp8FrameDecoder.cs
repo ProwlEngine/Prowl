@@ -280,7 +280,7 @@ internal sealed class Vp8FrameDecoder
         return true;
     }
 
-    private Vp8BoolDecoder[]? SplitPartitions(byte[] data, int from, int count)
+    private static Vp8BoolDecoder[]? SplitPartitions(byte[] data, int from, int count)
     {
         int at = from;
         int available = data.Length - from;

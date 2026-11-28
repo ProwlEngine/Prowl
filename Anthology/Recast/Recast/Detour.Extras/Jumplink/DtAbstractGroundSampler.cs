@@ -24,7 +24,7 @@ public abstract class DtAbstractGroundSampler : IDtGroundSampler
 
     public abstract void Sample(DtJumpLinkBuilderConfig acfg, RcBuilderResult result, DtEdgeSampler es);
 
-    protected void SampleGroundSegment(ComputeNavMeshHeight heightFunc, DtGroundSegment seg, int nsamples)
+    protected static void SampleGroundSegment(ComputeNavMeshHeight heightFunc, DtGroundSegment seg, int nsamples)
     {
         seg.gsamples = new DtGroundSample[nsamples];
 

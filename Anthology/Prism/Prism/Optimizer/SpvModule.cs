@@ -157,7 +157,7 @@ internal sealed class SpvModule
 
     /// <summary>UserMapOver with HashSet buckets (O(1) user removal), for passes that maintain the map by
     /// removing individual users. Reused/recycled on the next UserMapOverHash call.</summary>
-    public Dictionary<uint, HashSet<SpvInstr>> UserMapOverHash(IEnumerable<SpvInstr> instrs)
+    public static Dictionary<uint, HashSet<SpvInstr>> UserMapOverHash(IEnumerable<SpvInstr> instrs)
     {
         Stack<HashSet<SpvInstr>> pool = _hsetPool ??= new();
         Dictionary<uint, HashSet<SpvInstr>> map = _userScratchH ??= [];

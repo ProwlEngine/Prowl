@@ -82,7 +82,7 @@ internal static class PngImageReader
         try
         {
             int compressedLength = frame is null
-                ? chunks.CopyCompressedTo(data, compressed)
+                ? PngChunks.CopyCompressedTo(data, compressed)
                 : PngChunks.CopyFrameTo(data, frame, compressed);
             if (!TryInflate(compressed, compressedLength, raw, rawLength, out int produced, out bool excess))
             {

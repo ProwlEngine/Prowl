@@ -855,7 +855,7 @@ public sealed partial class Lowerer
     }
 
     // setLayoutQualifier's value checks: align is a power of two; a constant_id is below 2047 and unique.
-    void ValidateLayoutValues(Qualifiers q, HashSet<int> specIds)
+    static void ValidateLayoutValues(Qualifiers q, HashSet<int> specIds)
     {
         foreach (LayoutItem item in q.Layout)
             if (item.Name == "align" && item.Value is Literal al && ParseIntLiteral(al.Text) is var a && (a <= 0 || (a & (a - 1)) != 0))
@@ -2990,7 +2990,7 @@ public sealed partial class Lowerer
         catch (Exception ex) when (ex is IndexOutOfRangeException or ArgumentOutOfRangeException) { return null; }
     }
 
-    CVal? FoldConstBuiltin(Call c, List<CVal> args)
+    static CVal? FoldConstBuiltin(Call c, List<CVal> args)
     {
         // glslang folds integer abs/sign/min/max/clamp; the float folders below only handle the float
         // domain, so intercept the all-integer case here.
@@ -3043,7 +3043,7 @@ public sealed partial class Lowerer
     }
 
     // Integer-domain folds for abs/sign/min/max/clamp, honouring signedness for the comparisons.
-    CVal? IntFold(string name, List<CVal> args)
+    static CVal? IntFold(string name, List<CVal> args)
     {
         bool uns = IsUnsigned(BaseScalar(CValType(args[0])));
         long Min(long a, long b) => uns ? unchecked((long)Math.Min((ulong)a, (ulong)b)) : Math.Min(a, b);
@@ -3066,7 +3066,7 @@ public sealed partial class Lowerer
 
     // Applies a component-wise fold across scalar/vector arguments, broadcasting scalars. Integer-typed
     // arguments (min/max/clamp on ints) are left to lower normally rather than folded through double.
-    CVal? MapComponentwise(Func<double[], double> fold, List<CVal> args)
+    static CVal? MapComponentwise(Func<double[], double> fold, List<CVal> args)
     {
         // Only the floating built-ins fold through double; a bool selector (mix) is not among them.
         if (args.Any(a => !IsFloating(BaseScalar(CValType(a))))) return null;
@@ -3185,7 +3185,7 @@ public sealed partial class Lowerer
     };
 
     // outerProduct(c, r) is the matrix whose element [col][row] is c[row] * r[col].
-    CAgg? ConstOuterProduct(CAgg c, CAgg r)
+    static CAgg? ConstOuterProduct(CAgg c, CAgg r)
     {
         var ct = (VectorType)c.Type;
         var rt = (VectorType)r.Type;
@@ -3256,7 +3256,7 @@ public sealed partial class Lowerer
     }
 
     // Whole-value equality of two folded matrices, arrays or structs; null when a part does not fold.
-    bool? ConstEqual(CVal l, CVal r) => (l, r) switch
+    static bool? ConstEqual(CVal l, CVal r) => (l, r) switch
     {
         (CScalar a, CScalar b) => ScalarBinary("==", a, b) is CScalar eq ? eq.I != 0 : null,
         (CAgg a, CAgg b) when a.Parts.Count == b.Parts.Count => a.Parts.Zip(b.Parts).Aggregate((bool?)true, (all, p) => all == false ? false : ConstEqual(p.First, p.Second) is bool e ? all & e : null),
@@ -3274,7 +3274,7 @@ public sealed partial class Lowerer
 
     // Binary operator on folded values: scalar/scalar, component-wise vector, vector/scalar,
     // and matrix component-wise (matrix products fall through to null -> not folded).
-    CVal? ConstBinary(string op, CVal l, CVal r)
+    static CVal? ConstBinary(string op, CVal l, CVal r)
     {
         if (l is CScalar ls && r is CScalar rs) return ScalarBinary(op, ls, rs);
 
@@ -3313,7 +3313,7 @@ public sealed partial class Lowerer
     static CScalar MatrixElement(CAgg m, int column, int row) => (CScalar)((CAgg)m.Parts[column]).Parts[row];
 
     // Sums the pairwise products of two equal-length scalar runs; null if any step is not foldable.
-    CScalar? DotFold(int length, Func<int, CScalar> left, Func<int, CScalar> right)
+    static CScalar? DotFold(int length, Func<int, CScalar> left, Func<int, CScalar> right)
     {
         CScalar? sum = null;
         for (int i = 0; i < length; i++)
@@ -3325,7 +3325,7 @@ public sealed partial class Lowerer
         return sum;
     }
 
-    CAgg? ConstMatrixTimesVector(CAgg m, CAgg v)   // matCxR * vecC -> vecR
+    static CAgg? ConstMatrixTimesVector(CAgg m, CAgg v)   // matCxR * vecC -> vecR
     {
         var mt = (MatrixType)m.Type;
         if (((VectorType)v.Type).Size != mt.Columns) return null;
@@ -3338,7 +3338,7 @@ public sealed partial class Lowerer
         return new CAgg(new VectorType(mt.Component, mt.Rows), parts);
     }
 
-    CAgg? ConstVectorTimesMatrix(CAgg v, CAgg m)   // vecR * matCxR -> vecC
+    static CAgg? ConstVectorTimesMatrix(CAgg v, CAgg m)   // vecR * matCxR -> vecC
     {
         var mt = (MatrixType)m.Type;
         if (((VectorType)v.Type).Size != mt.Rows) return null;
@@ -3351,7 +3351,7 @@ public sealed partial class Lowerer
         return new CAgg(new VectorType(mt.Component, mt.Columns), parts);
     }
 
-    CAgg? ConstMatrixCompMult(CAgg a, CAgg b)   // component-wise product; both matrices must share dimensions
+    static CAgg? ConstMatrixCompMult(CAgg a, CAgg b)   // component-wise product; both matrices must share dimensions
     {
         var at = (MatrixType)a.Type;
         var bt = (MatrixType)b.Type;
@@ -3370,7 +3370,7 @@ public sealed partial class Lowerer
         return new CAgg(at, columns);
     }
 
-    CAgg? ConstMatrixTimesMatrix(CAgg a, CAgg b)   // matA(Ca,Ra) * matB(Cb,Rb) -> mat(Cb,Ra), needs Ca == Rb
+    static CAgg? ConstMatrixTimesMatrix(CAgg a, CAgg b)   // matA(Ca,Ra) * matB(Cb,Rb) -> mat(Cb,Ra), needs Ca == Rb
     {
         var at = (MatrixType)a.Type;
         var bt = (MatrixType)b.Type;
@@ -3389,7 +3389,7 @@ public sealed partial class Lowerer
         return new CAgg(new MatrixType(bt.Columns, at.Rows, at.Component), columns);
     }
 
-    CScalar? ScalarBinary(string op, CScalar l, CScalar r)
+    static CScalar? ScalarBinary(string op, CScalar l, CScalar r)
     {
         if (op is "&&" or "||" or "^^")
         {
@@ -3484,7 +3484,7 @@ public sealed partial class Lowerer
         return new CAgg(vec.Type, parts);
     }
 
-    CAgg? ZipScalars(CAgg a, CAgg b, string op)
+    static CAgg? ZipScalars(CAgg a, CAgg b, string op)
     {
         if (a.Parts.Count != b.Parts.Count) return null;
         var parts = new List<CVal>(a.Parts.Count);
@@ -3546,7 +3546,7 @@ public sealed partial class Lowerer
 
     static CScalar FirstScalar(CAgg a) => a.Parts[0] switch { CScalar s => s, CAgg inner => FirstScalar(inner), _ => throw new InvalidOperationException() };
 
-    CAgg? BuildConstVector(VectorType vt, List<CVal> args)
+    static CAgg? BuildConstVector(VectorType vt, List<CVal> args)
     {
         var comps = new List<CScalar>();
         int lastCount = 0;
@@ -3567,7 +3567,7 @@ public sealed partial class Lowerer
         return new CAgg(vt, [.. comps.Select(s => (CVal)ConvertConst(s, vt.Component))]);
     }
 
-    CVal? BuildConstMatrix(MatrixType mt, List<CVal> args)
+    static CVal? BuildConstMatrix(MatrixType mt, List<CVal> args)
     {
         var column = new VectorType(mt.Component, mt.Rows);
         CVal Columns(Func<int, int, CScalar> element) => new CAgg(mt, [.. Enumerable.Range(0, mt.Columns).Select(col =>
@@ -4330,7 +4330,7 @@ public sealed partial class Lowerer
     // line, and a body with no value-return at all does not return a value (glslang rejects both,
     // uncalled functions included). Path completeness is NOT checked here - that stays the lowering
     // path's concern - so a body with some value-return passes this check (no false rejects).
-    void CheckFunctionReturns(FunctionDef f)
+    static void CheckFunctionReturns(FunctionDef f)
     {
         bool sawValueReturn = false;
         int? voidReturnLine = null;
@@ -7739,7 +7739,7 @@ public sealed partial class Lowerer
     // A nested brace initializer has no type name of its own: GLSL 4.20 gives it the type of the member or
     // element it initializes. Resolve the whole initializer tree against the declared type before lowering,
     // so everything downstream sees ordinary constructor calls.
-    Expr ResolveInitializer(Expr e, GlslType target)
+    static Expr ResolveInitializer(Expr e, GlslType target)
     {
         if (e is not Call c) return e;
         IReadOnlyList<Expr> args = c.Args;

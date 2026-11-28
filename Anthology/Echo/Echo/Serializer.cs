@@ -244,8 +244,8 @@ public static class Serializer
         {
             EchoObject data = ExtractTypeEnvelope(value, target.GetType(), out _, out _);
             ISerializationFormat format = GetFormatForType(target.GetType());
-            if (format is Formatters.AnyObjectFormat anyFormat)
-                anyFormat.DeserializeInto(data, target, context);
+            if (format is Formatters.AnyObjectFormat)
+                AnyObjectFormat.DeserializeInto(data, target, context);
         }
         finally
         {

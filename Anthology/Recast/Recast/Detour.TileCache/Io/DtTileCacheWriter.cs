@@ -28,7 +28,6 @@ namespace Prowl.Recast.Detour.TileCache.Io;
 
 public class DtTileCacheWriter
 {
-    private readonly DtNavMeshParamWriter paramWriter = new DtNavMeshParamWriter();
     private readonly IDtTileCacheCompressorFactory _compFactory;
 
     public DtTileCacheWriter(IDtTileCacheCompressorFactory compFactory)
@@ -53,7 +52,7 @@ public class DtTileCacheWriter
         }
 
         RcIO.Write(stream, numTiles, order);
-        paramWriter.Write(stream, cache.GetNavMesh().GetParams(), order);
+        DtNavMeshParamWriter.Write(stream, cache.GetNavMesh().GetParams(), order);
         WriteCacheParams(stream, cache.GetParams(), order);
         for (int i = 0; i < cache.GetTileCount(); i++)
         {
@@ -70,7 +69,7 @@ public class DtTileCacheWriter
         }
     }
 
-    private void WriteCacheParams(BinaryWriter stream, in DtTileCacheParams option, RcByteOrder order)
+    private static void WriteCacheParams(BinaryWriter stream, in DtTileCacheParams option, RcByteOrder order)
     {
         RcIO.Write(stream, option.orig.X, order);
         RcIO.Write(stream, option.orig.Y, order);

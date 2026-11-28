@@ -61,7 +61,7 @@ public class RcDynamicUpdateTool : IRcToolable
         }
     }
 
-    private bool Hit(RcVec3f point, RcVec3f dir, float[] bounds)
+    private static bool Hit(RcVec3f point, RcVec3f dir, float[] bounds)
     {
         float cx = 0.5f * (bounds[0] + bounds[3]);
         float cy = 0.5f * (bounds[1] + bounds[4]);

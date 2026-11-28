@@ -245,7 +245,7 @@ public class RcCrowdTool : IRcToolable
         return isel;
     }
 
-    private void GetAgentBounds(DtCrowdAgent ag, ref RcVec3f bmin, ref RcVec3f bmax)
+    private static void GetAgentBounds(DtCrowdAgent ag, ref RcVec3f bmin, ref RcVec3f bmax)
     {
         RcVec3f p = ag.npos;
         float r = ag.option.radius;
@@ -302,7 +302,7 @@ public class RcCrowdTool : IRcToolable
         }
     }
 
-    private RcVec3f CalcVel(RcVec3f pos, RcVec3f tgt, float speed)
+    private static RcVec3f CalcVel(RcVec3f pos, RcVec3f tgt, float speed)
     {
         RcVec3f vel = RcVec3f.Subtract(tgt, pos);
         vel.Y = 0.0f;

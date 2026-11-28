@@ -241,7 +241,7 @@ public sealed class AnyObjectFormat : ISerializationFormat
     /// serializable fields without creating a new instance. Internal state (non-serialized
     /// fields, caches, GPU resources, etc.) is preserved.
     /// </summary>
-    public void DeserializeInto(EchoObject value, object target, SerializationContext context)
+    public static void DeserializeInto(EchoObject value, object target, SerializationContext context)
     {
         if (value.TagType != EchoType.Compound) return;
 

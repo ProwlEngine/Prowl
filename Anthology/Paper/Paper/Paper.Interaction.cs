@@ -582,7 +582,7 @@ public partial class Paper
     /// <summary>
     /// Tests if a point in local coordinates is within an element.
     /// </summary>
-    private bool IsPointOverElementData(in ElementData data, float localX, float localY)
+    private static bool IsPointOverElementData(in ElementData data, float localX, float localY)
     {
         return localX >= data.X &&
                 localX <= data.X + data.LayoutWidth &&
@@ -651,7 +651,7 @@ public partial class Paper
     /// Stops if the source element has StopPropagation set, if the event's
     /// StopPropagation() was called, or if a parent element has StopPropagation set.
     /// </summary>
-    private void BubbleEventToParents(in ElementHandle element, ElementEvent evt)
+    private static void BubbleEventToParents(in ElementHandle element, ElementEvent evt)
     {
         ref ElementData data = ref element.Data;
         bool drag = evt is DragEvent;
@@ -716,7 +716,7 @@ public partial class Paper
     /// <summary>
     /// Propagates an event to immediate hooked children of an element.
     /// </summary>
-    private void PropagateEventToHookedChildren(in ElementHandle element, Action<ElementHandle> eventHandler)
+    private static void PropagateEventToHookedChildren(in ElementHandle element, Action<ElementHandle> eventHandler)
     {
         ref ElementData data = ref element.Data;
 

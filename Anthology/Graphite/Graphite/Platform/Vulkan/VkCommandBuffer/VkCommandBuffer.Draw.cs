@@ -93,7 +93,7 @@ internal unsafe partial class VkCommandBuffer
         EndTemporaryStorage();
     }
 
-    private VkBuffer ResolveIndirectBuffer(DeviceBuffer indirectBuffer)
+    private static VkBuffer ResolveIndirectBuffer(DeviceBuffer indirectBuffer)
     {
         VkBuffer vkBuffer = Util.AssertSubtype<DeviceBuffer, VkBuffer>(indirectBuffer);
         return vkBuffer;

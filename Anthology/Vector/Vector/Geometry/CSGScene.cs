@@ -541,7 +541,7 @@ public sealed class CSGScene
 
     #region Bookkeeping
 
-    private SceneBrush Validate(CSGBrushHandle handle)
+    private static SceneBrush Validate(CSGBrushHandle handle)
     {
         if (handle == null || handle.Brush == null || !handle.Brush.Attached)
             throw new InvalidOperationException("The brush handle is not valid for this scene.");
@@ -612,7 +612,7 @@ public sealed class CSGScene
         return Validate(handle);
     }
 
-    internal SceneGroup Validate(CSGGroupHandle handle)
+    internal static SceneGroup Validate(CSGGroupHandle handle)
     {
         if (handle == null || handle.Group == null || !handle.Group.Attached)
             throw new InvalidOperationException("The group handle is not valid for this scene.");

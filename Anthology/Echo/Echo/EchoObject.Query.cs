@@ -137,7 +137,7 @@ public sealed partial class EchoObject
         return results;
     }
 
-    private void FindAllRecursive(EchoObject current, Func<EchoObject, bool> predicate, List<EchoObject> results)
+    private static void FindAllRecursive(EchoObject current, Func<EchoObject, bool> predicate, List<EchoObject> results)
     {
         if (predicate(current))
             results.Add(current);
@@ -163,7 +163,7 @@ public sealed partial class EchoObject
         return paths;
     }
 
-    private void GetPathsToRecursive(EchoObject current, string currentPath, Func<EchoObject, bool> predicate, List<string> paths)
+    private static void GetPathsToRecursive(EchoObject current, string currentPath, Func<EchoObject, bool> predicate, List<string> paths)
     {
         if (predicate(current))
             paths.Add(currentPath);

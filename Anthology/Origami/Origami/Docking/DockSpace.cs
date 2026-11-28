@@ -586,7 +586,7 @@ public class DockSpace
         fw.Position = new Float2(x, y);
     }
 
-    private void ResizeHandle(Paper paper, string id, FloatingWindow fw,
+    private static void ResizeHandle(Paper paper, string id, FloatingWindow fw,
                                float x, float y, float w, float h,
                                bool right, bool bottom, bool left, bool top)
     {
@@ -723,7 +723,7 @@ public class DockSpace
         }
     }
 
-    private DockZone GetZoneFromIndicator(Float2 mouse, float cx, float cy, OrigamiMetrics m, bool centerOnly = false)
+    private static DockZone GetZoneFromIndicator(Float2 mouse, float cx, float cy, OrigamiMetrics m, bool centerOnly = false)
     {
         float s = m.IndicatorSize, g = m.IndicatorGap, hs = s / 2;
         if (Hit(mouse, cx - hs, cy - hs, s, s)) return DockZone.Center;
@@ -812,7 +812,7 @@ public class DockSpace
         DrawDropPreview(paper, m);
     }
 
-    private void Ind(Paper paper, string id, float x, float y, float s, Color bg, Color bd, IOrigamiIcon? icon, FontFile? font)
+    private static void Ind(Paper paper, string id, float x, float y, float s, Color bg, Color bd, IOrigamiIcon? icon, FontFile? font)
     {
         Color inkNearWhite = Origami.Current.Ink.C500;
         var iconCol = Color.FromArgb(230, inkNearWhite.R, inkNearWhite.G, inkNearWhite.B);
@@ -1037,7 +1037,7 @@ public class DockSpace
         }
     }
 
-    private DockNode Cleanup(DockNode node)
+    private static DockNode Cleanup(DockNode node)
     {
         if (node.IsLeaf) return node;
         node.ChildA = Cleanup(node.ChildA!);

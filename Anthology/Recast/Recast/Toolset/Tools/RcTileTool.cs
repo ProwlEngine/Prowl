@@ -16,7 +16,7 @@ public class RcTileTool : IRcToolable
         return "Tiles";
     }
 
-    public void RemoveAllTiles(IRcInputGeomProvider geom, RcNavMeshBuildSettings settings, DtNavMesh navMesh)
+    public static void RemoveAllTiles(IRcInputGeomProvider geom, RcNavMeshBuildSettings settings, DtNavMesh navMesh)
     {
         if (null == settings || null == geom || navMesh == null)
             return;
@@ -61,7 +61,7 @@ public class RcTileTool : IRcToolable
         }
     }
 
-    public bool BuildTile(IRcInputGeomProvider geom, RcNavMeshBuildSettings settings, DtNavMesh navMesh, int tx, int ty, out long tileBuildTicks, out int tileTriCount, out int tileMemUsage)
+    public static bool BuildTile(IRcInputGeomProvider geom, RcNavMeshBuildSettings settings, DtNavMesh navMesh, int tx, int ty, out long tileBuildTicks, out int tileTriCount, out int tileMemUsage)
     {
         tileBuildTicks = 0;
         tileTriCount = 0; // ...
@@ -131,7 +131,7 @@ public class RcTileTool : IRcToolable
         return BuildTile(geom, settings, navMesh, tx, ty, out tileBuildTicks, out tileTriCount, out tileMemUsage);
     }
 
-    public bool RemoveTile(IRcInputGeomProvider geom, RcNavMeshBuildSettings settings, DtNavMesh navMesh, RcVec3f pos)
+    public static bool RemoveTile(IRcInputGeomProvider geom, RcNavMeshBuildSettings settings, DtNavMesh navMesh, RcVec3f pos)
     {
         if (null == settings || null == geom || navMesh == null)
             return false;

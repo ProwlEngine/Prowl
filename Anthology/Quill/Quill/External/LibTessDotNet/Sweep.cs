@@ -52,12 +52,12 @@ namespace LibTessDotNet
             internal bool _inside, _sentinel, _dirty, _fixUpperEdge;
         }
 
-        private ActiveRegion RegionBelow(ActiveRegion reg)
+        private static ActiveRegion RegionBelow(ActiveRegion reg)
         {
             return reg._nodeUp._prev._key;
         }
 
-        private ActiveRegion RegionAbove(ActiveRegion reg)
+        private static ActiveRegion RegionAbove(ActiveRegion reg)
         {
             return reg._nodeUp._next._key;
         }
@@ -149,7 +149,7 @@ namespace LibTessDotNet
             return reg;
         }
 
-        private ActiveRegion TopRightRegion(ActiveRegion reg)
+        private static ActiveRegion TopRightRegion(ActiveRegion reg)
         {
                 MeshUtils.Vertex dst = reg._eUp._Dst;
 
@@ -346,7 +346,7 @@ namespace LibTessDotNet
         /// splits the weight between its org and dst according to the
         /// relative distance to "isect".
         /// </summary>
-        private void VertexWeights(MeshUtils.Vertex isect, MeshUtils.Vertex org, MeshUtils.Vertex dst, out Real w0, out Real w1)
+        private static void VertexWeights(MeshUtils.Vertex isect, MeshUtils.Vertex org, MeshUtils.Vertex dst, out Real w0, out Real w1)
         {
                 float t1 = Geom.VertL1dist(org, isect);
                 float t2 = Geom.VertL1dist(dst, isect);

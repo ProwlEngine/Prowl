@@ -17,7 +17,7 @@ public class RcOffMeshConnectionTool : IRcToolable
         return "Off-Mesh Links";
     }
 
-    public void Add(IRcInputGeomProvider geom, RcNavMeshBuildSettings settings, RcVec3f start, RcVec3f end, bool bidir)
+    public static void Add(IRcInputGeomProvider geom, RcNavMeshBuildSettings settings, RcVec3f start, RcVec3f end, bool bidir)
     {
         if (null == geom)
             return;
@@ -27,7 +27,7 @@ public class RcOffMeshConnectionTool : IRcToolable
         geom.AddOffMeshConnection(start, end, settings.agentRadius, bidir, area, flags);
     }
 
-    public void Remove(IRcInputGeomProvider geom, RcNavMeshBuildSettings settings, RcVec3f p)
+    public static void Remove(IRcInputGeomProvider geom, RcNavMeshBuildSettings settings, RcVec3f p)
     {
         // Delete
         // Find nearest link end-point

@@ -1248,7 +1248,7 @@ public static partial class SpirVOptimizer
         Dfs(blocks[0]); post.Reverse();
 
         // Maintained user map (id -> instructions referencing it) over this function's instructions (pooled).
-        Dictionary<uint, HashSet<SpvInstr>> users = m.UserMapOverHash(blocks.SelectMany(b => b.Insts));
+        Dictionary<uint, HashSet<SpvInstr>> users = SpvModule.UserMapOverHash(blocks.SelectMany(b => b.Insts));
         void Index(SpvInstr ins) { ins.Classify(out int ri, out bool[] isId); for (int k = 0; k < ins.Operands.Length; k++) if (isId[k] && k != ri) (users.TryGetValue(ins.Operands[k], out HashSet<SpvInstr>? l) ? l : users[ins.Operands[k]] = []).Add(ins); }
         void Deindex(SpvInstr ins) { ins.Classify(out int ri, out bool[] isId); for (int k = 0; k < ins.Operands.Length; k++) if (isId[k] && k != ri && users.TryGetValue(ins.Operands[k], out HashSet<SpvInstr>? l)) l.Remove(ins); }
         // Each instruction's original result id: stamped, in Pos. Defs by id in a pooled table.

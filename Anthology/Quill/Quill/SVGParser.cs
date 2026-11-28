@@ -130,7 +130,7 @@ public class SvgElement
         return list;
     }
 
-    void AddChildren(SvgElement element, List<SvgElement> list)
+    static void AddChildren(SvgElement element, List<SvgElement> list)
     {
         list.Add(element);
         foreach (SvgElement child in element.Children)

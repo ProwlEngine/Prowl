@@ -547,7 +547,7 @@ public sealed class KcpTransport : Transport
         }
     }
 
-    internal SocketAddress CloneAddress(SocketAddress address) => Clone(address);
+    internal static SocketAddress CloneAddress(SocketAddress address) => Clone(address);
 
     /// <summary>The token a client checks a Reset against. Zeros, which clients never accept, without a reset key.</summary>
     private void WriteResetToken(uint sessionId, Span<byte> destination)

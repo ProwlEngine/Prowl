@@ -57,7 +57,7 @@ public static class LookAtSolver
         if (Float3.Length(toTarget) > Epsilon)
         {
             (float Yaw, float Pitch) from = frame.Angles(headW.rotation * headForward);
-            (float Yaw, float Pitch) to = frame.Clamp(frame.Angles(toTarget), maxAngle);
+            (float Yaw, float Pitch) to = BodyFrame.Clamp(frame.Angles(toTarget), maxAngle);
 
             float bodyTarget = weight * bodyWeight;
             float headTarget = weight * MathF.Max(bodyWeight, headWeight);
@@ -114,7 +114,7 @@ public static class LookAtSolver
             return;
 
         (float Yaw, float Pitch) from = frame.Angles(eyeW.rotation * ReferenceLocalForward(rig, index, referenceFrame));
-        (float Yaw, float Pitch) to = frame.Clamp(frame.Angles(toTarget), maxAngle);
+        (float Yaw, float Pitch) to = BodyFrame.Clamp(frame.Angles(toTarget), maxAngle);
         Quaternion before = frame.Rotation(from.Yaw, from.Pitch);
         Quaternion after = frame.Rotation(from.Yaw + WrapAngle(to.Yaw - from.Yaw) * fraction, from.Pitch + (to.Pitch - from.Pitch) * fraction);
         RotateBone(pose, index, after * Quaternion.Inverse(before));
@@ -184,7 +184,7 @@ public static class LookAtSolver
             return (yaw, pitch);
         }
 
-        public (float Yaw, float Pitch) Clamp((float Yaw, float Pitch) angles, float maxAngle)
+        public static (float Yaw, float Pitch) Clamp((float Yaw, float Pitch) angles, float maxAngle)
         {
             float maxPitch = MathF.Min(maxAngle, MathF.PI / 2f);
             return (Math.Clamp(angles.Yaw, -maxAngle, maxAngle), Math.Clamp(angles.Pitch, -maxPitch, maxPitch));

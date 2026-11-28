@@ -241,7 +241,7 @@ public class FontSystem
         }
     }
 
-    private IEnumerable<string> GetSystemFontPaths()
+    private static IEnumerable<string> GetSystemFontPaths()
     {
         // De-dupe final results
         var yielded = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
@@ -826,7 +826,7 @@ public class FontSystem
         layout.UpdateLayout(text ?? string.Empty, settings, this);
     }
 
-    LayoutCacheKey GenerateLayoutCacheKey(string text, TextLayoutSettings s)
+    static LayoutCacheKey GenerateLayoutCacheKey(string text, TextLayoutSettings s)
         => new LayoutCacheKey(text, s.PixelSize, s.LetterSpacing, s.WordSpacing, s.LineHeight,
                s.TabSize, s.WrapMode, s.Alignment, s.MaxWidth, s.Font?.GetHashCode() ?? 0,
                s.Quality, s.Customizer, s.NoLigatures);

@@ -148,7 +148,7 @@ public sealed partial class ShaderSession : CodeLanguageSession
     };
 
     /// <summary>The type of the expression ending just before a '.', such as light.color in light.color.rgb.</summary>
-    internal string? ReceiverType(ShaderIndex index, List<ShaderSymbol> visible, int dotOffset)
+    internal static string? ReceiverType(ShaderIndex index, List<ShaderSymbol> visible, int dotOffset)
     {
         int i = index.TokenAt(dotOffset);
         if (i < 0 || index.Token(i).Text != "." || index.Token(i).Offset != dotOffset) return null;
@@ -243,7 +243,7 @@ public sealed partial class ShaderSession : CodeLanguageSession
 
     #region Navigation
 
-    private CodeLocation Location(ShaderSymbol symbol)
+    private static CodeLocation Location(ShaderSymbol symbol)
     {
         ShaderIndex owner = symbol.Owner;
         (int line, int column) = LineColumn(owner.Text, symbol.Offset);

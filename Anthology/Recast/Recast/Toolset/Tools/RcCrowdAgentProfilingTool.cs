@@ -330,7 +330,7 @@ public class RcCrowdAgentProfilingTool : IRcToolable
         }
     }
 
-    private bool NeedsNewTarget(DtCrowdAgent ag)
+    private static bool NeedsNewTarget(DtCrowdAgent ag)
     {
         if (ag.targetState == DtMoveRequestState.DT_CROWDAGENT_TARGET_NONE
             || ag.targetState == DtMoveRequestState.DT_CROWDAGENT_TARGET_FAILED)

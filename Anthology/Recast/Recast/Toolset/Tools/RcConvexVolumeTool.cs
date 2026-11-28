@@ -75,7 +75,7 @@ public class RcConvexVolumeTool : IRcToolable
     }
 
 
-    public bool TryRemove(IRcInputGeomProvider geom, RcVec3f pos, out RcConvexVolume volume)
+    public static bool TryRemove(IRcInputGeomProvider geom, RcVec3f pos, out RcConvexVolume volume)
     {
         // Delete
         int nearestIndex = -1;

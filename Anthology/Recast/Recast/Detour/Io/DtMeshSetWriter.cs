@@ -25,7 +25,6 @@ namespace Prowl.Recast.Detour.Io;
 public class DtMeshSetWriter
 {
     private readonly DtMeshDataWriter writer = new DtMeshDataWriter();
-    private readonly DtNavMeshParamWriter paramWriter = new DtNavMeshParamWriter();
 
     public void Write(BinaryWriter stream, DtNavMesh mesh, RcByteOrder order, bool cCompatibility)
     {
@@ -33,7 +32,7 @@ public class DtMeshSetWriter
         WriteTiles(stream, mesh, order, cCompatibility);
     }
 
-    private void WriteHeader(BinaryWriter stream, DtNavMesh mesh, RcByteOrder order, bool cCompatibility)
+    private static void WriteHeader(BinaryWriter stream, DtNavMesh mesh, RcByteOrder order, bool cCompatibility)
     {
         RcIO.Write(stream, NavMeshSetHeader.NAVMESHSET_MAGIC, order);
         RcIO.Write(stream, cCompatibility ? NavMeshSetHeader.NAVMESHSET_VERSION : NavMeshSetHeader.NAVMESHSET_VERSION_RECAST4J, order);
@@ -50,7 +49,7 @@ public class DtMeshSetWriter
         }
 
         RcIO.Write(stream, numTiles, order);
-        paramWriter.Write(stream, mesh.GetParams(), order);
+        DtNavMeshParamWriter.Write(stream, mesh.GetParams(), order);
         if (!cCompatibility)
         {
             RcIO.Write(stream, mesh.GetMaxVertsPerPoly(), order);

@@ -49,7 +49,7 @@ public sealed partial class CodeEditor
         return i;
     }
 
-    internal string IndentOf(string line) => line.Substring(0, FirstNonBlank(line));
+    internal static string IndentOf(string line) => line.Substring(0, FirstNonBlank(line));
 
     internal string IndentUnit => Options.InsertSpaces ? new string(' ', Math.Max(1, Options.TabSize)) : "\t";
 

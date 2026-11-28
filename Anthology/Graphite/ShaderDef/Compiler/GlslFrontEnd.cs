@@ -582,7 +582,7 @@ internal sealed class GlslStageSource
 
         foreach (GlslDeclaration d in Declarations)
         {
-            switch (layout.Classify(d, Stage))
+            switch (GlslProgramLayout.Classify(d, Stage))
             {
                 case GlslUsage.LooseUniform:
                     d.Edited = true;
@@ -606,11 +606,11 @@ internal sealed class GlslStageSource
                     if (d.Kind == DeclKind.Block)
                     {
                         GlslResource block = layout.ResourceFor(d.BlockName!);
-                        edits.Add(AddLayout(d, layout.LayoutItemsFor(d, block)));
+                        edits.Add(AddLayout(d, GlslProgramLayout.LayoutItemsFor(d, block)));
                     }
                     else
                     {
-                        AddVariableLayouts(d, edits, member => layout.LayoutItemsFor(d, layout.ResourceFor(member.Name)));
+                        AddVariableLayouts(d, edits, member => GlslProgramLayout.LayoutItemsFor(d, layout.ResourceFor(member.Name)));
                     }
                     break;
 
@@ -942,7 +942,7 @@ internal sealed class GlslProgramLayout
     public GlslResource ResourceFor(string sourceName) => _byName[sourceName];
 
 
-    public GlslUsage Classify(GlslDeclaration d, GlslStage stage)
+    public static GlslUsage Classify(GlslDeclaration d, GlslStage stage)
     {
         if (d.Kind == DeclKind.Variable && d.Has("uniform"))
             return GlslStageSource.IsOpaque(d.TypeName!) ? GlslUsage.Resource : GlslUsage.LooseUniform;
@@ -1273,7 +1273,7 @@ internal sealed class GlslProgramLayout
     }
 
 
-    public List<string> LayoutItemsFor(GlslDeclaration d, GlslResource resource)
+    public static List<string> LayoutItemsFor(GlslDeclaration d, GlslResource resource)
     {
         List<string> items = [];
         if (!d.LayoutKeys.ContainsKey("set"))

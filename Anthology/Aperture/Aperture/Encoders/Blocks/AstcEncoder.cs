@@ -1388,7 +1388,7 @@ internal sealed class AstcEncoder : IBlockEncoder
         return true;
     }
 
-    private void Pack(Scratch s, Fit fit, AstcGrid grid, AstcMode mode, int endpointMode, int endpointRange)
+    private static void Pack(Scratch s, Fit fit, AstcGrid grid, AstcMode mode, int endpointMode, int endpointRange)
     {
         AstcBits bits = default;
         bits.Write(0, 11, mode.Bits);

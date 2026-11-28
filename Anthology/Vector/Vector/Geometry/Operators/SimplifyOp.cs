@@ -656,7 +656,7 @@ internal static class SimplifyOp
             return Math.Max(error, 0);
         }
 
-        private bool IntsDiffer(GeometryData.Element a, GeometryData.Element b, string name)
+        private static bool IntsDiffer(GeometryData.Element a, GeometryData.Element b, string name)
         {
             a.TryGetAttribute(name, out GeometryData.AttributeValue? va);
             b.TryGetAttribute(name, out GeometryData.AttributeValue? vb);

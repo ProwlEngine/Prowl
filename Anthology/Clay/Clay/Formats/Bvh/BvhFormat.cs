@@ -98,7 +98,7 @@ internal sealed class BvhFormat : IModelFormat
             // ROOT <name of skeleton>
             line = reader.ExpectLine();
             var rootParts = new Range[2];
-            rangeCount = reader.Split(line, rootParts);
+            rangeCount = BvhStreamReader.Split(line, rootParts);
             if (string.Equals(line[rootParts[0]], "MOTION", StringComparison.OrdinalIgnoreCase))
                 break;
             reader.ExpectToken("ROOT", line[rootParts[0]]);
@@ -114,7 +114,7 @@ internal sealed class BvhFormat : IModelFormat
         // Frames: 7840
         line = reader.ExpectLine();
         var framesParts = new Range[3];
-        rangeCount = reader.Split(line, framesParts);
+        rangeCount = BvhStreamReader.Split(line, framesParts);
         reader.ExpectToken("Frames:", line[framesParts[0]]);
         if (rangeCount != 2)
             throw new InvalidDataException($"Expected one value after 'Frames:' (line {reader.Line}).");
@@ -134,7 +134,7 @@ internal sealed class BvhFormat : IModelFormat
         // Frame Time: 0.033333
         line = reader.ExpectLine();
         var ftParts = new Range[4];
-        rangeCount = reader.Split(line, ftParts);
+        rangeCount = BvhStreamReader.Split(line, ftParts);
         reader.ExpectToken("Frame", line[ftParts[0]]);
         if (rangeCount != 3)
             throw new InvalidDataException($"Expected one value after 'Frame Time:' (line {reader.Line}).");
@@ -153,7 +153,7 @@ internal sealed class BvhFormat : IModelFormat
             string? dataLine = reader.ReadLine();
             if (dataLine is null)
                 break;
-            rangeCount = reader.Split(dataLine, channelParts);
+            rangeCount = BvhStreamReader.Split(dataLine, channelParts);
             if (rangeCount != totalChannelCount)
                 throw new InvalidDataException($"Expected {totalChannelCount} values per MOTION line (line {reader.Line}).");
 
@@ -290,7 +290,7 @@ internal sealed class BvhFormat : IModelFormat
         // OFFSET <X> <Y> <Z>
         line = reader.ExpectLine();
         var offsetParts = new Range[5];
-        int rangeCount = reader.Split(line, offsetParts);
+        int rangeCount = BvhStreamReader.Split(line, offsetParts);
         if (rangeCount != 4)
             throw new InvalidDataException($"Expected three values after OFFSET (line {reader.Line}).");
         reader.ExpectToken("OFFSET", line[offsetParts[0]]);
@@ -302,7 +302,7 @@ internal sealed class BvhFormat : IModelFormat
         // CHANNELS 6 Xposition Yposition Zposition Zrotation Yrotation Xrotation
         line = reader.ExpectLine();
         var channelsParts = new Range[9];
-        rangeCount = reader.Split(line, channelsParts);
+        rangeCount = BvhStreamReader.Split(line, channelsParts);
         if (rangeCount < 2 || rangeCount > 8)
             throw new InvalidDataException($"Expected 1-7 values after CHANNELS (line {reader.Line}).");
         reader.ExpectToken("CHANNELS", line[channelsParts[0]]);
@@ -325,7 +325,7 @@ internal sealed class BvhFormat : IModelFormat
             // JOINT LeftLeg | End Site
             line = reader.ExpectLine();
             var jointParts = new Range[2];
-            rangeCount = reader.Split(line, jointParts);
+            rangeCount = BvhStreamReader.Split(line, jointParts);
             if (string.Equals(line[jointParts[0]], "JOINT", StringComparison.OrdinalIgnoreCase))
             {
                 if (rangeCount < 2)
@@ -373,7 +373,7 @@ internal sealed class BvhFormat : IModelFormat
 
         // OFFSET <X> <Y> <Z>
         line = reader.ExpectLine();
-        int rangeCount = reader.Split(line, parts);
+        int rangeCount = BvhStreamReader.Split(line, parts);
         if (rangeCount != 4)
             throw new InvalidDataException($"Expected three values after OFFSET (line {reader.Line}).");
         reader.ExpectToken("OFFSET", line[parts[0]]);

@@ -54,7 +54,7 @@ internal sealed class BvhStreamReader(Stream stream) : IDisposable
     }
 
     /// <summary>Splits a line of text using BVH parsing rules.</summary>
-    internal int Split(ReadOnlySpan<char> source, Span<Range> destination)
+    internal static int Split(ReadOnlySpan<char> source, Span<Range> destination)
     {
         return MemoryExtensions.SplitAny(source, destination, " \t", StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries);
     }

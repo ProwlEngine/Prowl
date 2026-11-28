@@ -108,7 +108,7 @@ public class RcJumpLinkBuilderTool : IRcToolable
         }
     }
 
-    private void AddOffMeshLink(DtJumpLink link, IRcInputGeomProvider geom, float agentRadius)
+    private static void AddOffMeshLink(DtJumpLink link, IRcInputGeomProvider geom, float agentRadius)
     {
         int area = SampleAreaModifications.SAMPLE_POLYAREA_TYPE_JUMP_AUTO;
         int flags = SampleAreaModifications.SAMPLE_POLYFLAGS_JUMP;

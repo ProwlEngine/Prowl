@@ -437,7 +437,7 @@ namespace Prowl.Quill.External
 
             }
 
-            private int GetNeighbourFace(MeshUtils.Edge edge)
+            private static int GetNeighbourFace(MeshUtils.Edge edge)
             {
                 if (edge._Rface == null)
                     return MeshUtils.Undef;
@@ -629,7 +629,7 @@ namespace Prowl.Quill.External
                 }
             }
 
-            private Real SignedArea(ContourVertex[] vertices)
+            private static Real SignedArea(ContourVertex[] vertices)
             {
                 Real area = 0.0f;
 

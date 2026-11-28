@@ -103,7 +103,7 @@ public class DtTileCache
         }
     }
 
-    private bool Contains(List<long> a, long v)
+    private static bool Contains(List<long> a, long v)
     {
         return a.Contains(v);
     }
@@ -129,20 +129,20 @@ public class DtTileCache
     }
 
     /// Encodes an obstacle id.
-    private long EncodeObstacleId(int salt, int it)
+    private static long EncodeObstacleId(int salt, int it)
     {
         return ((long)salt << 16) | (long)it;
     }
 
     /// Decodes an obstacle salt.
-    private int DecodeObstacleIdSalt(long refs)
+    private static int DecodeObstacleIdSalt(long refs)
     {
         long saltMask = ((long)1 << 16) - 1;
         return (int)((refs >> 16) & saltMask);
     }
 
     /// Decodes an obstacle id.
-    private int DecodeObstacleIdObstacle(long refs)
+    private static int DecodeObstacleIdObstacle(long refs)
     {
         long tileMask = ((long)1 << 16) - 1;
         return (int)(refs & tileMask);
@@ -317,7 +317,7 @@ public class DtTileCache
         return true;
     }
 
-    private int Align4(int i)
+    private static int Align4(int i)
     {
         return (i + 3) & (~3);
     }

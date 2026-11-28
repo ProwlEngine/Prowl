@@ -187,7 +187,7 @@ public sealed class CSharpWorkspace : IDisposable
         lock (_lock) _solution = change(_solution);
     }
 
-    private DocumentInfo CreateInfo(DocumentId id, string path, SourceText text)
+    private static DocumentInfo CreateInfo(DocumentId id, string path, SourceText text)
     {
         bool isPath = Path.IsPathRooted(path);
         return DocumentInfo.Create(id, Path.GetFileName(path), sourceCodeKind: SourceCodeKind.Regular,

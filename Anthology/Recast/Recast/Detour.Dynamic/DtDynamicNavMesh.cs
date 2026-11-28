@@ -132,7 +132,7 @@ public class DtDynamicNavMesh
         return items;
     }
 
-    private void Process(IDtDaynmicTileJob item)
+    private static void Process(IDtDaynmicTileJob item)
     {
         foreach (DtDynamicTile tile in item.AffectedTiles())
         {
@@ -212,7 +212,7 @@ public class DtDynamicNavMesh
         return tiles;
     }
 
-    private bool IntersectsXZ(DtDynamicTile tile, float[] bounds)
+    private static bool IntersectsXZ(DtDynamicTile tile, float[] bounds)
     {
         return tile.voxelTile.boundsMin.X <= bounds[3] && tile.voxelTile.boundsMax.X >= bounds[0] &&
                tile.voxelTile.boundsMin.Z <= bounds[5] && tile.voxelTile.boundsMax.Z >= bounds[2];
@@ -260,7 +260,7 @@ public class DtDynamicNavMesh
             : null;
     }
 
-    private long LookupKey(long x, long z)
+    private static long LookupKey(long x, long z)
     {
         return (z << 32) | x;
     }

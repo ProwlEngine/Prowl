@@ -26,7 +26,7 @@ namespace Prowl.Recast.Detour.TileCache.Io;
 
 public class DtTileCacheLayerHeaderWriter
 {
-    public void Write(BinaryWriter stream, DtTileCacheLayerHeader header, RcByteOrder order, bool cCompatibility)
+    public static void Write(BinaryWriter stream, DtTileCacheLayerHeader header, RcByteOrder order, bool cCompatibility)
     {
         RcIO.Write(stream, header.magic, order);
         RcIO.Write(stream, header.version, order);

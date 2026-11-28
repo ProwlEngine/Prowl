@@ -68,7 +68,7 @@ public class DtMeshDataWriter
         WriteOffMeshCons(stream, data, order);
     }
 
-    private void WriteVerts(BinaryWriter stream, float[] verts, int count, RcByteOrder order)
+    private static void WriteVerts(BinaryWriter stream, float[] verts, int count, RcByteOrder order)
     {
         for (int i = 0; i < count * 3; i++)
         {
@@ -76,7 +76,7 @@ public class DtMeshDataWriter
         }
     }
 
-    private void WritePolys(BinaryWriter stream, DtMeshData data, RcByteOrder order, bool cCompatibility)
+    private static void WritePolys(BinaryWriter stream, DtMeshData data, RcByteOrder order, bool cCompatibility)
     {
         for (int i = 0; i < data.header.polyCount; i++)
         {
@@ -101,7 +101,7 @@ public class DtMeshDataWriter
         }
     }
 
-    private void WritePolyDetails(BinaryWriter stream, DtMeshData data, RcByteOrder order, bool cCompatibility)
+    private static void WritePolyDetails(BinaryWriter stream, DtMeshData data, RcByteOrder order, bool cCompatibility)
     {
         for (int i = 0; i < data.header.detailMeshCount; i++)
         {
@@ -116,7 +116,7 @@ public class DtMeshDataWriter
         }
     }
 
-    private void WriteDTris(BinaryWriter stream, DtMeshData data)
+    private static void WriteDTris(BinaryWriter stream, DtMeshData data)
     {
         for (int i = 0; i < data.header.detailTriCount * 4; i++)
         {
@@ -124,7 +124,7 @@ public class DtMeshDataWriter
         }
     }
 
-    private void WriteBVTree(BinaryWriter stream, DtMeshData data, RcByteOrder order, bool cCompatibility)
+    private static void WriteBVTree(BinaryWriter stream, DtMeshData data, RcByteOrder order, bool cCompatibility)
     {
         for (int i = 0; i < data.header.bvNodeCount; i++)
         {
@@ -153,7 +153,7 @@ public class DtMeshDataWriter
         }
     }
 
-    private void WriteOffMeshCons(BinaryWriter stream, DtMeshData data, RcByteOrder order)
+    private static void WriteOffMeshCons(BinaryWriter stream, DtMeshData data, RcByteOrder order)
     {
         for (int i = 0; i < data.header.offMeshConCount; i++)
         {

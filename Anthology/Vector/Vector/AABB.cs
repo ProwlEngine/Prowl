@@ -460,7 +460,7 @@ public struct AABB : IEquatable<AABB>, IFormattable, IBoundingShape
    /// </summary>
    /// <param name="faceIndex">Face index (0-5): -X, +X, -Y, +Y, -Z, +Z.</param>
    /// <returns>The face normal vector.</returns>
-   public Float3 GetFaceNormal(int faceIndex)
+   public static Float3 GetFaceNormal(int faceIndex)
    {
         return faceIndex switch
         {

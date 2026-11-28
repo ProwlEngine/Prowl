@@ -1607,7 +1607,7 @@ public sealed class ElementBuilder : StyleSetterBase<ElementBuilder>, IDisposabl
     /// <summary>
     /// Finds the start of the previous word from the current position
     /// </summary>
-    private int FindPreviousWordStart(string text, int position)
+    private static int FindPreviousWordStart(string text, int position)
     {
         if (string.IsNullOrEmpty(text) || position <= 0) return 0;
 
@@ -1631,7 +1631,7 @@ public sealed class ElementBuilder : StyleSetterBase<ElementBuilder>, IDisposabl
     /// <summary>
     /// Finds the end of the next word from the current position
     /// </summary>
-    private int FindNextWordEnd(string text, int position)
+    private static int FindNextWordEnd(string text, int position)
     {
         if (string.IsNullOrEmpty(text) || position >= text.Length) return text?.Length ?? 0;
 
@@ -1651,7 +1651,7 @@ public sealed class ElementBuilder : StyleSetterBase<ElementBuilder>, IDisposabl
     /// <summary>
     /// Finds the boundaries of the word at the given position
     /// </summary>
-    private (int start, int end) FindWordBoundaries(string text, int position)
+    private static (int start, int end) FindWordBoundaries(string text, int position)
     {
         if (string.IsNullOrEmpty(text) || position < 0 || position >= text.Length)
             return (position, position);

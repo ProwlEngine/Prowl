@@ -347,7 +347,7 @@ public sealed partial class CodeEditor
     private bool _typingNow, _editedSinceRequest;
     private CancellationTokenSource? _completionCts;
     private bool _completionUpdating;
-    private int CompletionRows => 10;
+    private static int CompletionRows => 10;
 
     public bool IsCompletionOpen => _completion != null;
 

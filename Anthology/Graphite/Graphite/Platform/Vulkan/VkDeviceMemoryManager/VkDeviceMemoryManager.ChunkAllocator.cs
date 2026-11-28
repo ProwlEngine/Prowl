@@ -174,7 +174,7 @@ internal unsafe partial class VkDeviceMemoryManager
             _allocatedBlocks.Add(block);
         }
 
-        private bool BlocksOverlap(VkMemoryBlock first, VkMemoryBlock second)
+        private static bool BlocksOverlap(VkMemoryBlock first, VkMemoryBlock second)
         {
             ulong firstStart = first.Offset;
             ulong firstEnd = first.Offset + first.Size;

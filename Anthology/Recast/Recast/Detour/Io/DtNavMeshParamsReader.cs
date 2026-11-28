@@ -4,7 +4,7 @@ namespace Prowl.Recast.Detour.Io;
 
 public class DtNavMeshParamsReader
 {
-    public DtNavMeshParams Read(RcByteBuffer bb)
+    public static DtNavMeshParams Read(RcByteBuffer bb)
     {
         DtNavMeshParams option = new DtNavMeshParams();
         option.orig.X = bb.GetFloat();

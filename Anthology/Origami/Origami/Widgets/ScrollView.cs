@@ -475,7 +475,7 @@ public sealed class ScrollViewBuilder
     // Scrollbar styling: square (unrounded) thumbs in a translucent light ink, so they stay legible
     // floating over the dark panel surfaces, lifting brighter/more opaque on hover. The corner spacer's
     // track colour is fully transparent so overlay bars float over the content.
-    private SDColor ScrollTrackColor() => SDColor.FromArgb(0, 0, 0, 0);
+    private static SDColor ScrollTrackColor() => SDColor.FromArgb(0, 0, 0, 0);
     private SDColor ScrollThumbColor() => _theme.Scrollbar;
     private SDColor ScrollThumbHoverColor() => _theme.ScrollbarHover;
 

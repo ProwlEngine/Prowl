@@ -238,7 +238,7 @@ public partial class FontFile
         return 0;
     }
 
-    private bool ApplySingle(List<GsubGlyph> buf, int i, FakePtr<byte> st)
+    private static bool ApplySingle(List<GsubGlyph> buf, int i, FakePtr<byte> st)
     {
         int format = ttUSHORT(st);
         int cov = stbtt__GetCoverageIndex(st + ttUSHORT(st + 2), buf[i].Glyph);
@@ -263,7 +263,7 @@ public partial class FontFile
 
     // GSUB LookupType 2 - Multiple substitution (one glyph -> sequence). Returns produced count,
     // or -1 if not applied.
-    private int ApplyMultiple(List<GsubGlyph> buf, int i, FakePtr<byte> st)
+    private static int ApplyMultiple(List<GsubGlyph> buf, int i, FakePtr<byte> st)
     {
         if (ttUSHORT(st) != 1)
             return -1;
@@ -290,7 +290,7 @@ public partial class FontFile
     }
 
     // GSUB LookupType 4 - Ligature substitution (sequence -> one glyph).
-    private bool ApplyLigature(List<GsubGlyph> buf, int i, FakePtr<byte> st)
+    private static bool ApplyLigature(List<GsubGlyph> buf, int i, FakePtr<byte> st)
     {
         if (ttUSHORT(st) != 1)
             return false;

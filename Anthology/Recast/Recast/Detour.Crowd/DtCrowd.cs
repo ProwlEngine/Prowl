@@ -360,7 +360,7 @@ public class DtCrowd
         }
     }
 
-    private bool RequestMoveTargetReplan(DtCrowdAgent ag, long refs, RcVec3f pos)
+    private static bool RequestMoveTargetReplan(DtCrowdAgent ag, long refs, RcVec3f pos)
     {
         ag.SetTarget(refs, pos);
         ag.targetReplan = true;
@@ -1529,7 +1529,7 @@ public class DtCrowd
         }
     }
 
-    private float Tween(float t, float t0, float t1)
+    private static float Tween(float t, float t0, float t1)
     {
         return Math.Clamp((t - t0) / (t1 - t0), 0.0f, 1.0f);
     }

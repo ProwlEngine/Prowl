@@ -53,7 +53,7 @@ public class DtObstacleAvoidanceDebugData
         m_nsamples = 0;
     }
 
-    void NormalizeArray(float[] arr, int n)
+    static void NormalizeArray(float[] arr, int n)
     {
         // Normalize penaly range.
         float minPen = float.MaxValue;

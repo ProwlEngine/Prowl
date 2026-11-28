@@ -308,7 +308,7 @@ public class RotationSubGizmo : ISubGizmo
     }
 
 
-    public Float3 QuatTransform(Quaternion rotation, Float3 point)
+    public static Float3 QuatTransform(Quaternion rotation, Float3 point)
     {
         float x = rotation.X * 2.0f;
         float y = rotation.Y * 2.0f;
@@ -497,7 +497,7 @@ public class ScaleSubGizmo : ISubGizmo
         }
     }
 
-    private float? DistanceFromOrigin2D(TransformGizmo _gizmo, Float2 cursorPos)
+    private static float? DistanceFromOrigin2D(TransformGizmo _gizmo, Float2 cursorPos)
     {
         Float2? gizmoPos = GizmoUtils.WorldToScreen(_gizmo.Viewport, (_gizmo.ViewProjection * _gizmo.Model), Float3.Zero);
         if (!gizmoPos.HasValue)

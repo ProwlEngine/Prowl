@@ -40,7 +40,7 @@ public abstract partial class GraphicsDevice
         for (int i = 0; i < graph.ResourceCount; i++)
         {
             FrameResource resource = graph.ResourceAt(i);
-            if (!execution.WroteTarget(resource) || resource.TargetFramebuffer!.OwningSwapchain is not { } swapchain)
+            if (!GraphExecution.WroteTarget(resource) || resource.TargetFramebuffer!.OwningSwapchain is not { } swapchain)
                 continue;
 
             presents ??= [];

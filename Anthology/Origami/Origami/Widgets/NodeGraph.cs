@@ -1862,7 +1862,7 @@ public sealed class NodeGraphBuilder
     }
 
     // Nearest port to a screen point, reusing this frame's resolved layouts (no rebuild).
-    private (string? node, string? port, bool output) HitTestPort(GraphState st, Float2 screen, Dictionary<string, NodeLayout> layouts)
+    private static (string? node, string? port, bool output) HitTestPort(GraphState st, Float2 screen, Dictionary<string, NodeLayout> layouts)
     {
         float zoom = st.Zoom, best = Math.Max(11f, PortHitR * zoom + 3f);
         string? bn = null, bp = null; bool bo = false;
@@ -2030,7 +2030,7 @@ public sealed class NodeGraphBuilder
 
     private static Float2 ScreenToGraphS(GraphState st, float sx, float sy)
         => new Float2((sx - st.ScreenX - st.PanX) / st.Zoom, (sy - st.ScreenY - st.PanY) / st.Zoom);
-    private Float2 ScreenToGraph(GraphState st, Float2 screen) => ScreenToGraphS(st, (float)screen.X, (float)screen.Y);
+    private static Float2 ScreenToGraph(GraphState st, Float2 screen) => ScreenToGraphS(st, (float)screen.X, (float)screen.Y);
 
     // ═══════════════════════════════════════════════════════════════════
     //  Canvas passes
@@ -2053,7 +2053,7 @@ public sealed class NodeGraphBuilder
         public bool ConnHitValid;
     }
 
-    private void PaintGridPass(Canvas canvas, Rect rect, in Snapshot s)
+    private static void PaintGridPass(Canvas canvas, Rect rect, in Snapshot s)
     {
         if (!s.ShowGrid) return;
         PaintGrid(canvas, (float)rect.Min.X, (float)rect.Min.Y, (float)rect.Size.X, (float)rect.Size.Y, in s);

@@ -290,7 +290,7 @@ public sealed class CompressedAnimationClip : AnimationClipBase
         return FloatTrack.From(values);
     }
 
-    private Transform3D Decode(BoneTrack track, int frame)
+    private static Transform3D Decode(BoneTrack track, int frame)
     {
         Quaternion rotation = track.RotationStatic
             ? track.StaticRotation

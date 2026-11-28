@@ -78,7 +78,7 @@ public class TileNavMeshBuilder
         return new NavMeshBuildResult(result.Cfg, result.RecastBuilderResults, tileNavMesh);
     }
 
-    public NavMeshBuildResult BuildRecastResult(IRcInputGeomProvider geom,
+    public static NavMeshBuildResult BuildRecastResult(IRcInputGeomProvider geom,
         int tileSize,
         RcPartition partitionType,
         float cellSize, float cellHeight,
@@ -162,7 +162,7 @@ public class TileNavMeshBuilder
         return 1 << polyBits;
     }
 
-    private int GetTileBits(IRcInputGeomProvider geom, float cellSize, int tileSize)
+    private static int GetTileBits(IRcInputGeomProvider geom, float cellSize, int tileSize)
     {
         RcRecast.CalcGridSize(geom.GetMeshBoundsMin(), geom.GetMeshBoundsMax(), cellSize, out int gw, out int gh);
         int tw = (gw + tileSize - 1) / tileSize;
@@ -171,7 +171,7 @@ public class TileNavMeshBuilder
         return tileBits;
     }
 
-    public int[] GetTiles(RcSampleInputGeomProvider geom, float cellSize, int tileSize)
+    public static int[] GetTiles(RcSampleInputGeomProvider geom, float cellSize, int tileSize)
     {
         RcRecast.CalcGridSize(geom.GetMeshBoundsMin(), geom.GetMeshBoundsMax(), cellSize, out int gw, out int gh);
         int tw = (gw + tileSize - 1) / tileSize;
