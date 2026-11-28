@@ -122,7 +122,7 @@ public class TextureImporter : AssetImporter
 
     /// <summary>
     /// The format a texture is stored in. Automatic keeps lookup tables exact and gives normal maps BC5, single channel
-    /// textures BC4, and everything else BC1, or BC7 when any pixel is translucent. No compression stores RGBA8, or R8
+    /// textures BC4, and everything else BC1, or BC3 when any pixel is translucent. No compression stores RGBA8, or R8
     /// for a single channel.
     /// </summary>
     public static TextureFormat FormatFor(TextureImportFormat format, TextureCompression compression, TextureImportType type, bool hasAlpha)
@@ -137,7 +137,7 @@ public class TextureImporter : AssetImporter
                 TextureImportType.LookupTable or TextureImportType.Lightmap => TextureFormat.RGBA8,
                 TextureImportType.NormalMap => TextureFormat.BC5,
                 TextureImportType.SingleChannel => TextureFormat.BC4,
-                _ => hasAlpha ? TextureFormat.BC7 : TextureFormat.BC1,
+                _ => hasAlpha ? TextureFormat.BC3 : TextureFormat.BC1,
             },
             TextureImportFormat.RGBA8 => TextureFormat.RGBA8,
             TextureImportFormat.R8 => TextureFormat.R8,
