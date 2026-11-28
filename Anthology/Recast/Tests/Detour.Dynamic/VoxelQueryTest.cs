@@ -18,14 +18,16 @@ freely, subject to the following restrictions:
 */
 
 using System;
+using System.Collections.Generic;
 using System.IO;
 using System.Threading.Tasks;
-using System.Collections.Generic;
+
+using Moq;
+
 using Prowl.Recast.Core;
 using Prowl.Recast.Core.Numerics;
 using Prowl.Recast.Detour.Dynamic.Io;
 using Prowl.Recast.Detour.Dynamic.Tests.Io;
-using Moq;
 
 namespace Prowl.Recast.Detour.Dynamic.Tests;
 

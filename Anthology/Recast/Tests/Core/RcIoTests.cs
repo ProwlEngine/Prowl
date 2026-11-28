@@ -20,7 +20,7 @@ public class RcIoTests
             RcIO.Write(bw, dataSize, RcByteOrder.LITTLE_ENDIAN);
 
             bw.Flush();
-            actual= ms.ToArray();
+            actual = ms.ToArray();
         }
 
         {

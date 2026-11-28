@@ -1,7 +1,8 @@
-using Prowl.Clay.Importer;
 using Prowl.Clay;
-using Prowl.Vector.Spatial;
+using Prowl.Clay.Importer;
 using Prowl.Vector;
+using Prowl.Vector.Spatial;
+
 using static Prowl.Motion.Tests.HumanoidTestRig;
 
 namespace Prowl.Motion.Tests;

@@ -1,5 +1,5 @@
-using Prowl.Vector.Spatial;
 using Prowl.Vector;
+using Prowl.Vector.Spatial;
 
 namespace Prowl.Motion.Tests;
 
@@ -49,7 +49,10 @@ public class LookAt_Tests
         Quaternion facing = Quaternion.AxisAngle(Up, facingDegrees * MathF.PI / 180f);
         Avatar avatar = new HumanoidTestRig
         {
-            Chest = false, UpperChest = false, Neck = false, Shoulders = false,
+            Chest = false,
+            UpperChest = false,
+            Neck = false,
+            Shoulders = false,
             ArmatureRotation = facing,
         }.BuildAvatar();
         HumanoidRig rig = avatar.Humanoid!;

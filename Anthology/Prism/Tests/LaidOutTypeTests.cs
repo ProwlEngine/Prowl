@@ -1,5 +1,6 @@
 using Prowl.Prism.Compiler;
 using Prowl.Prism.SpirV;
+
 using Xunit;
 
 namespace Prowl.Prism.Tests;
@@ -77,21 +78,21 @@ public sealed class LaidOutTypeTests
                 case OpVariable: types[inst[2]] = inst[1]; break;
                 case OpLoad: types[inst[2]] = inst[1]; break;
                 case OpAccessChain:
-                {
-                    uint reached = types.TryGetValue(inst[3], out uint basePointer) ? Reach(pointees.GetValueOrDefault(basePointer), inst[4..], constantIds: true) : 0;
-                    if (reached != 0 && reached != pointees.GetValueOrDefault(inst[1]))
-                        wrong.Add($"access chain %{inst[2]}");
-                    types[inst[2]] = inst[1];
-                    break;
-                }
+                    {
+                        uint reached = types.TryGetValue(inst[3], out uint basePointer) ? Reach(pointees.GetValueOrDefault(basePointer), inst[4..], constantIds: true) : 0;
+                        if (reached != 0 && reached != pointees.GetValueOrDefault(inst[1]))
+                            wrong.Add($"access chain %{inst[2]}");
+                        types[inst[2]] = inst[1];
+                        break;
+                    }
                 case OpCompositeExtract:
-                {
-                    uint reached = types.TryGetValue(inst[3], out uint composite) ? Reach(composite, inst[4..], constantIds: false) : 0;
-                    if (reached != 0 && reached != inst[1])
-                        wrong.Add($"extract %{inst[2]}");
-                    types[inst[2]] = inst[1];
-                    break;
-                }
+                    {
+                        uint reached = types.TryGetValue(inst[3], out uint composite) ? Reach(composite, inst[4..], constantIds: false) : 0;
+                        if (reached != 0 && reached != inst[1])
+                            wrong.Add($"extract %{inst[2]}");
+                        types[inst[2]] = inst[1];
+                        break;
+                    }
             }
             i += count;
         }

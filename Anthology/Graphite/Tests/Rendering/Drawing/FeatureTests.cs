@@ -152,7 +152,7 @@ public sealed class FeatureTests : IDisposable
 
         public override void Render(FeatureContext context)
         {
-            _properties.SetTexture("_Target", target == SceneTargets.Motion ? context.Motion! : context.Normals!, sampler);
+            _properties.SetTexture("_Target", SceneReads == SceneTargets.Motion ? context.Motion! : context.Normals!, sampler);
             context.Fullscreen(program, context.Get(context.GetViewState<State>().Copy), _properties);
         }
     }

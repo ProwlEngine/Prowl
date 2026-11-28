@@ -18,10 +18,11 @@ freely, subject to the following restrictions:
 */
 
 using System.IO;
+
+using Prowl.Recast;
 using Prowl.Recast.Core;
 using Prowl.Recast.Core.Numerics;
 using Prowl.Recast.Detour.Io;
-using Prowl.Recast;
 using Prowl.Recast.Geom;
 
 

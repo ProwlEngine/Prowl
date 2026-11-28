@@ -1,6 +1,7 @@
 ﻿using Prowl.Scaffold;
 
 namespace Scaffold.Tests;
+
 public class SpacingTests
 {
     [Fact]

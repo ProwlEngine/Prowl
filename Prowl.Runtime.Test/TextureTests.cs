@@ -6,8 +6,8 @@ using Prowl.Runtime.Resources;
 
 using Xunit;
 
-using GFilter = Prowl.Graphite.FilterMode;
 using GAddress = Prowl.Graphite.SamplerAddressMode;
+using GFilter = Prowl.Graphite.FilterMode;
 
 namespace Prowl.Runtime.Test;
 

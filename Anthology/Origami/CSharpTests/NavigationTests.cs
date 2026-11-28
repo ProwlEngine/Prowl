@@ -36,11 +36,11 @@ class User
     {
         var session = Open();
 
-        var types = await session.GetImplementationsAsync(At("IShape {", 1), default);
+        var types = await session.GetImplementationsAsync(At("IShape {", 1), TestContext.Current.CancellationToken);
         Assert.Contains(types, l => NameAt(l) == "Shape");
         Assert.Contains(types, l => NameAt(l) == "Circle");
 
-        var members = await session.GetImplementationsAsync(At("abstract float Area", 16), default);
+        var members = await session.GetImplementationsAsync(At("abstract float Area", 16), TestContext.Current.CancellationToken);
         Assert.Equal(2, members.Count(l => NameAt(l) == "Area"));
     }
 
@@ -49,11 +49,11 @@ class User
     {
         var session = Open();
 
-        var bases = await session.GetBaseDefinitionsAsync(At("override float Area() => 3f", 16), default);
+        var bases = await session.GetBaseDefinitionsAsync(At("override float Area() => 3f", 16), TestContext.Current.CancellationToken);
         var baseMember = Assert.Single(bases);
         Assert.True(baseMember.Start > At("abstract class Shape") && baseMember.Start < At("class Circle"));
 
-        var typeBases = await session.GetBaseDefinitionsAsync(At("class Circle", 7), default);
+        var typeBases = await session.GetBaseDefinitionsAsync(At("class Circle", 7), TestContext.Current.CancellationToken);
         Assert.Contains(typeBases, l => NameAt(l) == "Shape");
     }
 
@@ -61,7 +61,7 @@ class User
     public async Task TypeDefinitionOfLocal()
     {
         var session = Open();
-        var locations = await session.GetTypeDefinitionAsync(At("circle.Area", 1), default);
+        var locations = await session.GetTypeDefinitionAsync(At("circle.Area", 1), TestContext.Current.CancellationToken);
         var type = Assert.Single(locations);
         Assert.Equal("Circle", NameAt(type));
         Assert.Equal(At("class Circle", 6), type.Start);
@@ -71,7 +71,7 @@ class User
     public async Task CodeLensCountsReferences()
     {
         var session = Open();
-        var lenses = await session.GetCodeLensesAsync(0, Code.Length, default);
+        var lenses = await session.GetCodeLensesAsync(0, Code.Length, TestContext.Current.CancellationToken);
         var circle = Assert.Single(lenses, l => l.Offset == At("class Circle", 6));
         Assert.Equal("2 references", circle.Text);
         var area = Assert.Single(lenses, l => l.Offset == At("override float Area() => 3f", 15));
@@ -83,7 +83,7 @@ class User
     {
         string code = "class C { public string Name { get; init; } void M() { Name = Name + \"x\"; } }";
         var session = new RoslynCSharpSession(new CSharpWorkspace(CSharpWorkspace.GetPlatformReferences()), null, code);
-        var references = await session.FindReferencesAsync(code.IndexOf("Name", StringComparison.Ordinal), default);
+        var references = await session.FindReferencesAsync(code.IndexOf("Name", StringComparison.Ordinal), TestContext.Current.CancellationToken);
         Assert.Equal(3, references.Count);
         Assert.All(references, r => Assert.Equal("Name", code.Substring(r.Start, r.Length)));
     }

@@ -105,11 +105,11 @@ public class LibraryContextTests
         var session = Session(Rim);
         int at = At(Rim, "Graphite_SurfaceData i", 3);
 
-        var hover = await session.GetQuickInfoAsync(at, default);
+        var hover = await session.GetQuickInfoAsync(at, TestContext.Current.CancellationToken);
         Assert.NotNull(hover);
         Assert.Contains(hover!.Documentation, d => d.Contains("Graphite/Standard/Standard.glsl"));
 
-        var definition = await session.GetDefinitionAsync(at, default);
+        var definition = await session.GetDefinitionAsync(at, TestContext.Current.CancellationToken);
         var location = Assert.Single(definition);
         _output.WriteLine($"{location.Path} {location.Line}");
         Assert.Equal("Graphite/Standard/Standard.glsl", location.Path);

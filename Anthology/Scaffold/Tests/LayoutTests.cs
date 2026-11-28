@@ -1,6 +1,7 @@
 using Prowl.Scaffold;
 
 namespace Scaffold.Tests;
+
 public class LayoutTests
 {
     private static Style Box(float w, float h) => Style.Default with
@@ -74,12 +75,12 @@ public class LayoutTests
         var r = t.Create(Style.Default with { Padding = new LengthEdges(20) });
         var c = t.Create(Box(10, 10), r);
         t.Layout(r, new(100, 100));
-        t.SetStyle(r, t.GetStyle(r)with { Hidden = true });
+        t.SetStyle(r, t.GetStyle(r) with { Hidden = true });
         t.Layout(r, new(100, 100));
         Assert.Equal(0, t.Layout(r, new(100, 100)).ArrangedNodes);
         Assert.Equal(default, t.GetWorldRect(r));
         Assert.Equal(default, t.GetWorldRect(c));
-        t.SetStyle(r, t.GetStyle(r)with { Hidden = false });
+        t.SetStyle(r, t.GetStyle(r) with { Hidden = false });
         t.Layout(r, new(100, 100));
         RectIs(t, c, 20, 20, 10, 10);
     }
@@ -202,8 +203,8 @@ public class LayoutTests
     {
         var t = new LayoutTree();
         var r = t.Create(Style.Default with { Layout = LayoutMode.Row });
-        var a = t.Create(Box(0, 20)with { Width = Length.Stretch(), MaxWidth = 100 }, r);
-        var b = t.Create(Box(0, 20)with { Width = Length.Stretch(2) }, r);
+        var a = t.Create(Box(0, 20) with { Width = Length.Stretch(), MaxWidth = 100 }, r);
+        var b = t.Create(Box(0, 20) with { Width = Length.Stretch(2) }, r);
         t.Layout(r, new(600, 100));
         RectIs(t, a, 0, 0, 100, 20);
         RectIs(t, b, 100, 0, 500, 20);
@@ -214,8 +215,8 @@ public class LayoutTests
     {
         var t = new LayoutTree();
         var r = t.Create(Style.Default with { Layout = LayoutMode.Row });
-        var a = t.Create(Box(400, 20)with { Width = Length.Pixels(400).Shrinkable(), MinWidth = 250 }, r);
-        var b = t.Create(Box(200, 20)with { Width = Length.Pixels(200).Shrinkable() }, r);
+        var a = t.Create(Box(400, 20) with { Width = Length.Pixels(400).Shrinkable(), MinWidth = 250 }, r);
+        var b = t.Create(Box(200, 20) with { Width = Length.Pixels(200).Shrinkable() }, r);
         t.Layout(r, new(300, 100));
         RectIs(t, a, 0, 0, 250, 20);
         RectIs(t, b, 250, 0, 50, 20);
@@ -226,7 +227,7 @@ public class LayoutTests
     {
         var t = new LayoutTree();
         var r = t.Create(Style.Default);
-        var a = t.Create(Box(0, 20)with { Width = Length.Percentage(50) - Length.Pixels(8) }, r);
+        var a = t.Create(Box(0, 20) with { Width = Length.Percentage(50) - Length.Pixels(8) }, r);
         t.Layout(r, new(400, 100));
         RectIs(t, a, 0, 0, 192, 20);
         t.Layout(r, new(600, 100));
@@ -272,7 +273,7 @@ public class LayoutTests
         var a = t.Create(Box(1, 20), r);
         var b = t.Create(Box(1, 40), r);
         var c = t.Create(Box(1, 30), r);
-        var d = t.Create(Box(1, 10)with { Position = Position.Absolute, Left = 10, Right = 20, Bottom = 5 }, r);
+        var d = t.Create(Box(1, 10) with { Position = Position.Absolute, Left = 10, Right = 20, Bottom = 5 }, r);
         t.Layout(r, new(210, 100));
         RectIs(t, a, 0, 0, 100, 20);
         RectIs(t, b, 110, 0, 100, 40);
@@ -356,7 +357,7 @@ public class LayoutTests
         var child = t.Create(Box(10, 10), a);
         var b = t.Create(Box(20, 20), r);
         t.Layout(r, new(100, 100));
-        t.SetStyle(a, Box(50, 50)with { Hidden = true });
+        t.SetStyle(a, Box(50, 50) with { Hidden = true });
         t.Layout(r, new(100, 100));
         Assert.Equal(default, t.GetRect(child));
         RectIs(t, b, 0, 0, 20, 20);

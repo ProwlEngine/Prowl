@@ -160,7 +160,8 @@ public class ExternalAssetDropTests : IDisposable
 
         // mklink /J works unelevated; skip silently where it can't (the guard is attribute-based either way)
         var mklink = System.Diagnostics.Process.Start(new System.Diagnostics.ProcessStartInfo("cmd.exe",
-            $"/c mklink /J \"{Path.Combine(pack, "loop")}\" \"{pack}\"") { CreateNoWindow = true, UseShellExecute = false });
+            $"/c mklink /J \"{Path.Combine(pack, "loop")}\" \"{pack}\"")
+        { CreateNoWindow = true, UseShellExecute = false });
         mklink!.WaitForExit();
         if (!Directory.Exists(Path.Combine(pack, "loop"))) return;
 

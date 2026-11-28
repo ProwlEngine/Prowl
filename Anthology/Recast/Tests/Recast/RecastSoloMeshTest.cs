@@ -19,12 +19,13 @@ freely, subject to the following restrictions:
 
 using System;
 using System.IO;
+
 using Prowl.Recast.Core;
 using Prowl.Recast.Core.Numerics;
 using Prowl.Recast.Geom;
 
-using static Prowl.Recast.RcRecast;
 using static Prowl.Recast.RcAreas;
+using static Prowl.Recast.RcRecast;
 
 namespace Prowl.Recast.Tests;
 

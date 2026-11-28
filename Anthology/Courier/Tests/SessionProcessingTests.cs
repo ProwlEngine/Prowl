@@ -16,7 +16,8 @@ public class SessionProcessingTests
         using NetSession host = NetSession.CreateHost(transport,
             options: new NetSessionOptions
             {
-                ReassemblyTimeout = TimeSpan.FromMilliseconds(20), GoodbyeLinger = TimeSpan.FromMilliseconds(20)
+                ReassemblyTimeout = TimeSpan.FromMilliseconds(20),
+                GoodbyeLinger = TimeSpan.FromMilliseconds(20)
             });
         ProbeConnection connection = JoinPeer(transport, host);
         BeginPartialMessage(host, connection);

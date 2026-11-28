@@ -1,4 +1,5 @@
 using Prowl.Prism.Compiler;
+
 using Xunit;
 
 namespace Prowl.Prism.Tests;

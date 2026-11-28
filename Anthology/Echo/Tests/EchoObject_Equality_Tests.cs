@@ -18,8 +18,9 @@ public class EchoObject_Equality_Tests
     public void TestReferenceEquality()
     {
         var echo = new EchoObject(42);
-        Assert.True(echo.Equals(echo));
-        Assert.True(echo == echo);
+        EchoObject same = echo;
+        Assert.True(echo.Equals(same));
+        Assert.True(echo == same);
     }
 
     [Fact]

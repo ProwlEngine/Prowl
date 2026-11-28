@@ -118,7 +118,7 @@ public class GeometryLoopTests
 
         float cutAt = mesh.Vertices.Select(v => v.Point.X).Distinct().Single(x => x > 0.01f && x < 0.99f);
         Assert.True(Math.Abs(cutAt - 0.5f) > 0.2f);
-        Assert.Single(mesh.Vertices.Select(v => MathF.Round(v.Point.X, 3)).Distinct().Where(x => x > 0.01f && x < 0.99f));
+        Assert.Single(mesh.Vertices.Select(v => MathF.Round(v.Point.X, 3)).Distinct(), x => x > 0.01f && x < 0.99f);
     }
 
     [Fact]

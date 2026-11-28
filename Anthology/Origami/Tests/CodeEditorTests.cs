@@ -339,7 +339,7 @@ public class CodeFoldingTests
     public void Braces_FoldFromDeclarationLine()
     {
         string[] lines = { "class A", "{", "    void M()", "    {", "        x();", "    }", "}" };
-        var folds = CodeFolding.FromBraces(lines, CSharpLexer.Instance, default);
+        var folds = CodeFolding.FromBraces(lines, CSharpLexer.Instance, TestContext.Current.CancellationToken);
         Assert.Contains(folds, f => f.StartLine == 0 && f.EndLine == 6);
         Assert.Contains(folds, f => f.StartLine == 2 && f.EndLine == 5);
     }
@@ -348,7 +348,7 @@ public class CodeFoldingTests
     public void BracesInStringsAndComments_DoNotFold()
     {
         string[] lines = { "var s = \"{\";", "// {", "x();", "}" };
-        var folds = CodeFolding.FromBraces(lines, CSharpLexer.Instance, default);
+        var folds = CodeFolding.FromBraces(lines, CSharpLexer.Instance, TestContext.Current.CancellationToken);
         Assert.Empty(folds);
     }
 
@@ -356,7 +356,7 @@ public class CodeFoldingTests
     public void Regions_Fold()
     {
         string[] lines = { "#region Fields", "int a;", "#endregion" };
-        var folds = CodeFolding.FromBraces(lines, CSharpLexer.Instance, default);
+        var folds = CodeFolding.FromBraces(lines, CSharpLexer.Instance, TestContext.Current.CancellationToken);
         Assert.Contains(folds, f => f.StartLine == 0 && f.EndLine == 2 && f.Label == "#region Fields");
     }
 }
@@ -481,7 +481,7 @@ public class CodeEditorViewTests
     public void Folding_MapsRowsAroundHiddenLines()
     {
         var e = new CodeEditor("a\n{\nb\nc\n}\nd", new CSharpLanguage());
-        var folds = CodeFolding.FromBraces(e.Document.Snapshot(), CSharpLexer.Instance, default);
+        var folds = CodeFolding.FromBraces(e.Document.Snapshot(), CSharpLexer.Instance, TestContext.Current.CancellationToken);
         e.SetFolds(folds);
 
         e.Fold(0);

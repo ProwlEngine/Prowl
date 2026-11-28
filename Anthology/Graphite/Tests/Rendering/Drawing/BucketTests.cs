@@ -261,8 +261,18 @@ public sealed class BucketTests : IDisposable
         RenderableHandle far = Add(_triangle, glass, At(0, 0, 9));
         BucketSet.ItemDraw provided = new()
         {
-            Provided = true, Pass = 1, Object = 900, Program = 0, Page = 0, Topology = PrimitiveTopology.TriangleList, Mirrored = false,
-            Queue = 3000, SubMesh = 0, Chunks = [new BucketSet.ChunkRef(0, 0, 0, 3)], Depth = 1, Sort = new TransparentOrder(-1),
+            Provided = true,
+            Pass = 1,
+            Object = 900,
+            Program = 0,
+            Page = 0,
+            Topology = PrimitiveTopology.TriangleList,
+            Mirrored = false,
+            Queue = 3000,
+            SubMesh = 0,
+            Chunks = [new BucketSet.ChunkRef(0, 0, 0, 3)],
+            Depth = 1,
+            Sort = new TransparentOrder(-1),
         };
 
         Frame(Transparent);

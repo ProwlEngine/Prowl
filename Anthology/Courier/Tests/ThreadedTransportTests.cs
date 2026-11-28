@@ -221,7 +221,9 @@ public sealed class ThreadedTransportTests
     {
         KcpTransportOptions Options() => new()
         {
-            Port = 0, Timeout = TimeSpan.FromMilliseconds(300), PingInterval = TimeSpan.FromMilliseconds(20)
+            Port = 0,
+            Timeout = TimeSpan.FromMilliseconds(300),
+            PingInterval = TimeSpan.FromMilliseconds(20)
         };
         using ThreadedTransport host = new(new KcpTransport(Options()));
         using ThreadedTransport client = new(new KcpTransport(Options()));
@@ -279,7 +281,7 @@ public sealed class ThreadedTransportTests
         Assert.NotEqual(caller, inner.ReceiveThread);
 
         inner.Fail = true;
-        Assert.True(SpinWait.SpinUntil(() => Volatile.Read(ref inner.Failed), 1000));
+        Assert.True(SpinWait.SpinUntil(() => inner.Failed, 1000));
         Thread.Sleep(20);
         Assert.Throws<InvalidOperationException>(transport.Receive);
 

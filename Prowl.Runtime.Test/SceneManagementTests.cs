@@ -1,8 +1,8 @@
 // This file is part of the Prowl Game Engine
 // Licensed under the MIT License. See the LICENSE file in the project root for details.
 
-using Prowl.Runtime.Resources;
 using Prowl.Runtime.Rendering;
+using Prowl.Runtime.Resources;
 using Prowl.Runtime.UI;
 using Prowl.Vector;
 
@@ -1085,13 +1085,13 @@ public class SceneManagementTests : RuntimeTestBase
     private sealed class TeardownLog : Component
     {
         public static readonly List<string> Events = [];
-        public string Tag = "";
+        public string Label = "";
         public bool ThrowOnDispose;
-        public override void OnDisable() => Events.Add($"disable {Tag}");
-        public override void OnRemovedFromScene() => Events.Add($"removed {Tag}");
+        public override void OnDisable() => Events.Add($"disable {Label}");
+        public override void OnRemovedFromScene() => Events.Add($"removed {Label}");
         protected override void OnDispose()
         {
-            Events.Add($"dispose {Tag}");
+            Events.Add($"dispose {Label}");
             base.OnDispose();
             if (ThrowOnDispose) throw new InvalidOperationException("teardown test");
         }
@@ -1105,11 +1105,11 @@ public class SceneManagementTests : RuntimeTestBase
         Scene scene = CreateScene(enable: true);
         GameObject a = CreateGameObject("A");
         TeardownLog first = a.AddComponent<TeardownLog>();
-        first.Tag = "A";
+        first.Label = "A";
         first.ThrowOnDispose = true;
         GameObject b = CreateGameObject("B");
         TeardownLog second = b.AddComponent<TeardownLog>();
-        second.Tag = "B";
+        second.Label = "B";
         scene.Add(a);
         scene.Add(b);
 

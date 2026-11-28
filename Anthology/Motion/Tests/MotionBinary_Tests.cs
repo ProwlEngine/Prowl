@@ -1,7 +1,8 @@
 using System.IO;
 using System.Text;
-using Prowl.Vector.Spatial;
+
 using Prowl.Vector;
+using Prowl.Vector.Spatial;
 
 namespace Prowl.Motion.Tests;
 

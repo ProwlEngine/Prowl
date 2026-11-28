@@ -19,10 +19,9 @@ freely, subject to the following restrictions:
 
 using Prowl.Recast.Core.Numerics;
 
+using static Prowl.Recast.Detour.DtDetour;
+
 namespace Prowl.Recast.Detour.Tests;
-
-using static DtDetour;
-
 public class NavMeshBuilderTest
 {
     private DtMeshData nmd;

@@ -1,6 +1,7 @@
 using Prowl.Scaffold;
 
 namespace Scaffold.Tests;
+
 public class IncrementalLayoutTests
 {
     [Fact]
@@ -107,7 +108,7 @@ public class IncrementalLayoutTests
         tree.SetStyle(panel, panelStyle with { Hidden = true });
         tree.Layout(root, new(100, 100));
         var added = tree.Create(Style.Default with { Width = 20, Height = 20 }, panel);
-        tree.SetStyle(child, tree.GetStyle(child)with { Height = 15 });
+        tree.SetStyle(child, tree.GetStyle(child) with { Height = 15 });
         tree.Layout(root, new(100, 100));
         Assert.False(tree.IsDirty(added));
         Assert.Equal(default, tree.GetRect(child));

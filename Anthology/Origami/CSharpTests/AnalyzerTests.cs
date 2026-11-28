@@ -41,7 +41,11 @@ public class AnalyzerTests
         private static readonly DiagnosticDescriptor Rule = new("TEST002", "Throws", "Throws", "Test", DiagnosticSeverity.Warning, true);
         public override ImmutableArray<DiagnosticDescriptor> SupportedDiagnostics => ImmutableArray.Create(Rule);
         public override void Initialize(AnalysisContext context)
-            => context.RegisterSyntaxTreeAction(_ => throw new InvalidOperationException("boom"));
+        {
+            context.ConfigureGeneratedCodeAnalysis(GeneratedCodeAnalysisFlags.Analyze | GeneratedCodeAnalysisFlags.ReportDiagnostics);
+            context.EnableConcurrentExecution();
+            context.RegisterSyntaxTreeAction(_ => throw new InvalidOperationException("boom"));
+        }
     }
 
     [Fact]
@@ -53,7 +57,7 @@ public class AnalyzerTests
         };
         var session = new RoslynCSharpSession(workspace, null, "class Good { } class Bad { }");
 
-        var diagnostics = await session.GetDiagnosticsAsync(default);
+        var diagnostics = await session.GetDiagnosticsAsync(TestContext.Current.CancellationToken);
 
         var hit = Assert.Single(diagnostics, d => d.Id == "TEST001");
         Assert.Equal(CodeDiagnosticSeverity.Warning, hit.Severity);
@@ -69,7 +73,7 @@ public class AnalyzerTests
         };
         var session = new RoslynCSharpSession(workspace, null, "class C { void M() { undefinedName(); } }");
 
-        var diagnostics = await session.GetDiagnosticsAsync(default);
+        var diagnostics = await session.GetDiagnosticsAsync(TestContext.Current.CancellationToken);
 
         Assert.Contains(diagnostics, d => d.Id == "CS0103");
     }

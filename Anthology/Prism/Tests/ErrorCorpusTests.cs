@@ -1,6 +1,8 @@
 using System.Text.RegularExpressions;
+
 using Prowl.Prism.Compiler;
 using Prowl.Prism.Glsl;
+
 using Xunit;
 
 namespace Prowl.Prism.Tests;

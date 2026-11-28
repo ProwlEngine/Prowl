@@ -1,5 +1,6 @@
 using System;
 using System.Numerics;
+
 using Prowl.Recast.Core.Numerics;
 
 namespace Prowl.Recast.Core.Tests;

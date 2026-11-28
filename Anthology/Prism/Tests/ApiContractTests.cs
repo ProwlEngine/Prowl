@@ -1,10 +1,12 @@
 using System.Diagnostics;
 using System.Reflection;
 using System.Text;
+
 using Prowl.Prism.Compiler;
 using Prowl.Prism.Glsl;
 using Prowl.Prism.Optimizer;
 using Prowl.Prism.SpirV;
+
 using Xunit;
 
 namespace Prowl.Prism.Tests;
@@ -240,7 +242,7 @@ public sealed class ResourceUsageTests
             observed.Wait();
         });
         owner.Start();
-        compiled.Wait();
+        compiled.Wait(TestContext.Current.CancellationToken);
         GC.Collect(); GC.WaitForPendingFinalizers(); GC.Collect();
         bool alive = held!.IsAlive;
         observed.Set();

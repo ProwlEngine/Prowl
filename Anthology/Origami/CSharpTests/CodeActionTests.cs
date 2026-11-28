@@ -81,7 +81,7 @@ public class CodeActionTests
         var failures = new List<string>();
         foreach (var action in actions)
         {
-            try { if (action.Resolve != null) await action.Resolve(default); }
+            try { if (action.Resolve != null) await action.Resolve(TestContext.Current.CancellationToken); }
             catch (Exception e) { failures.Add(action.Title + ": " + e.Message); }
         }
         Assert.Empty(failures);

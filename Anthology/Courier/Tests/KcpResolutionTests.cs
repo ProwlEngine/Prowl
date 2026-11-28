@@ -19,7 +19,9 @@ public class KcpResolutionTests
     {
         KcpTransportOptions options = new()
         {
-            Port = 0, ConnectTimeout = TimeSpan.FromSeconds(3), HandshakeResendInterval = TimeSpan.FromMilliseconds(50)
+            Port = 0,
+            ConnectTimeout = TimeSpan.FromSeconds(3),
+            HandshakeResendInterval = TimeSpan.FromMilliseconds(50)
         };
         using KcpTransport host = new(options);
         host.Listen();
@@ -98,8 +100,8 @@ public class KcpResolutionTests
     public async Task HostNamesAndLiteralsResolveWithoutChangingAddressSemantics()
     {
         AddressFamily family = AddressFamily.InterNetworkV6;
-        Assert.NotNull(await KcpTransport.TryResolveAsync("localhost:7777", 0, family, default));
-        Assert.NotNull(await KcpTransport.TryResolveAsync("[::1]:7777", 0, family, default));
-        Assert.Null(await KcpTransport.TryResolveAsync("localhost:notaport", 0, family, default));
+        Assert.NotNull(await KcpTransport.TryResolveAsync("localhost:7777", 0, family, TestContext.Current.CancellationToken));
+        Assert.NotNull(await KcpTransport.TryResolveAsync("[::1]:7777", 0, family, TestContext.Current.CancellationToken));
+        Assert.Null(await KcpTransport.TryResolveAsync("localhost:notaport", 0, family, TestContext.Current.CancellationToken));
     }
 }

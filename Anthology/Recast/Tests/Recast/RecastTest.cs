@@ -19,10 +19,9 @@ freely, subject to the following restrictions:
 
 using Prowl.Recast.Core;
 
+using static Prowl.Recast.RcRecast;
+
 namespace Prowl.Recast.Tests;
-
-using static RcRecast;
-
 public class RecastTest
 {
     [Fact]

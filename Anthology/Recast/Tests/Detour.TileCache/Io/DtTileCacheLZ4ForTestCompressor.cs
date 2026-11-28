@@ -18,32 +18,32 @@ freely, subject to the following restrictions:
 3. This notice may not be removed or altered from any source distribution.
 */
 
-using Prowl.Recast.Core;
 using K4os.Compression.LZ4;
 
-namespace Prowl.Recast.Detour.TileCache.Tests.Io
+using Prowl.Recast.Core;
+
+namespace Prowl.Recast.Detour.TileCache.Tests.Io;
+
+public class DtTileCacheLZ4ForTestCompressor : IRcCompressor
 {
-    public class DtTileCacheLZ4ForTestCompressor : IRcCompressor
+    public static readonly DtTileCacheLZ4ForTestCompressor Shared = new();
+
+    private DtTileCacheLZ4ForTestCompressor()
     {
-        public static readonly DtTileCacheLZ4ForTestCompressor Shared = new();
+    }
 
-        private DtTileCacheLZ4ForTestCompressor()
-        {
-        }
+    public byte[] Decompress(byte[] buf)
+    {
+        return LZ4Pickler.Unpickle(buf);
+    }
 
-        public byte[] Decompress(byte[] buf)
-        {
-            return LZ4Pickler.Unpickle(buf);
-        }
+    public byte[] Decompress(byte[] buf, int offset, int len, int outputlen)
+    {
+        return LZ4Pickler.Unpickle(buf, offset, len);
+    }
 
-        public byte[] Decompress(byte[] buf, int offset, int len, int outputlen)
-        {
-            return LZ4Pickler.Unpickle(buf, offset, len);
-        }
-
-        public byte[] Compress(byte[] buf)
-        {
-            return LZ4Pickler.Pickle(buf);
-        }
+    public byte[] Compress(byte[] buf)
+    {
+        return LZ4Pickler.Pickle(buf);
     }
 }

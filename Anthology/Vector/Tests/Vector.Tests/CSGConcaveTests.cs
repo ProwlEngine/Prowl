@@ -331,7 +331,7 @@ public class CSGConcaveTests
             (Scaled(new Float3(6.694235f, 0.3f, 12.6450615f), 0.5f), CSGOperation.Subtractive),
             (Scaled(new Float3(6.4705153f, 0.3f, 12.340155f), 0.5f), CSGOperation.Subtractive));
 
-        Assert.Empty(output.Edges.Where(e => e.FaceCount == 1));
+        Assert.DoesNotContain(output.Edges, e => e.FaceCount == 1);
     }
 
     /// <summary>A pit placed a fraction of a millimetre from a wall, close enough to weld but far enough to be cut apart.</summary>
@@ -343,20 +343,20 @@ public class CSGConcaveTests
         GeometryData beside = Build(
             (Scaled(new Float3(51f, 0f, 36f), 1f), CSGOperation.Additive),
             (Scaled(new Float3(50.999733f, 0.3f, 37.341198f), 0.5f), CSGOperation.Subtractive));
-        Assert.Empty(beside.Edges.Where(e => e.FaceCount == 1));
+        Assert.DoesNotContain(beside.Edges, e => e.FaceCount == 1);
 
         GeometryData between = Build(
             (Scaled(new Float3(6f, 0f, 33f), 1f), CSGOperation.Additive),
             (Scaled(new Float3(6.23569f, 0.3f, 33.811516f), 0.5f), CSGOperation.Subtractive),
             (Scaled(new Float3(5.708025f, 0.3f, 34.284336f), 0.5f), CSGOperation.Subtractive));
-        Assert.Empty(between.Edges.Where(e => e.FaceCount == 1));
+        Assert.DoesNotContain(between.Edges, e => e.FaceCount == 1);
 
         // A pit whose front lies a hair inside the plane of a notch wall, across two overlapping brushes
         GeometryData flush = Build(
             (Scaled(new Float3(30f, 0f, 24f), 1f), CSGOperation.Additive),
             (Scaled(new Float3(31.5f, 0f, 24f), 1f), CSGOperation.Additive),
             (Scaled(new Float3(31.450562f, 0.3f, 24.999922f), 0.5f), CSGOperation.Subtractive));
-        Assert.Empty(flush.Edges.Where(e => e.FaceCount != 2));
+        Assert.DoesNotContain(flush.Edges, e => e.FaceCount != 2);
     }
 
     /// <summary>Edits patch the kept mesh, which ends up the same as assembling the whole scene again.</summary>
@@ -384,7 +384,7 @@ public class CSGConcaveTests
             Assert.NotEqual(version, patched.Version);
 
             var (faces, vertices, edges, volume) = (patched.Faces.Count, patched.Vertices.Count, patched.Edges.Count, patched.Volume());
-            Assert.Empty(patched.Edges.Where(e => e.FaceCount == 1));
+            Assert.DoesNotContain(patched.Edges, e => e.FaceCount == 1);
 
             scene.InvalidateOutput();
             GeometryData full = scene.Build();
@@ -416,7 +416,7 @@ public class CSGConcaveTests
 
         Assert.Equal(expected.Volume(), patched.Volume(), 4);
         Assert.Equal(expected.Faces.Count, patched.Faces.Count);
-        Assert.Empty(patched.Edges.Where(e => e.FaceCount != 2));
+        Assert.DoesNotContain(patched.Edges, e => e.FaceCount != 2);
     }
 
     /// <summary>A brush a hair away from another counts as touching it, so moving it away re-evaluates the other too.</summary>
@@ -431,7 +431,7 @@ public class CSGConcaveTests
         scene.SetTransform(block, Float4x4.CreateTranslation(new Float3(5f, 0f, 0f)));
         GeometryData moved = scene.Build();
 
-        Assert.Empty(moved.Edges.Where(e => e.FaceCount != 2));
+        Assert.DoesNotContain(moved.Edges, e => e.FaceCount != 2);
         Assert.Equal(2f * 2f * 0.5f + 0.5f, moved.Volume(), 3);
     }
 
@@ -454,6 +454,6 @@ public class CSGConcaveTests
 
         var floor = output.Faces.Where(f => f.Normal().Y > 0.99f && MathF.Abs(f.NeighborVertices()[0].Point.Y) < 1e-3f).ToList();
         Assert.True(floor.Count <= corners * 2, $"the floor came out in {floor.Count} pieces");
-        Assert.Empty(output.Edges.Where(e => e.FaceCount != 2));
+        Assert.DoesNotContain(output.Edges, e => e.FaceCount != 2);
     }
 }
