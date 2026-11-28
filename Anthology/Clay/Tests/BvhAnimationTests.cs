@@ -47,7 +47,7 @@ public sealed class BvhAnimationTests
 
         // Check the animation clip is as expected.
         AnimationClip animation = Assert.Single(model.AnimationClips);
-        Assert.Equal("Animation", animation.Name);
+        Assert.Equal("one_root", animation.Name);
         Assert.Equal(0, animation.StartTime);
         Assert.Equal(0.033333f, animation.EndTime);
         Assert.Equal(0.033333f, animation.Duration);
