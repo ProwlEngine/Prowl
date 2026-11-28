@@ -124,12 +124,26 @@ internal sealed partial class FramePipeline : IDisposable
         _voxels = new VoxelPass(InternalShaders.Compute(device, compiler, "Internal/VoxelClear.glsl", policy), InternalShaders.Compute(device, compiler, "Internal/VoxelPyramid.glsl", policy),
             InternalShaders.Compute(device, compiler, "Internal/VoxelCacheUpdate.glsl", policy, lit: true));
         _deform = new DeformPass(InternalShaders.Compute(device, compiler, "Internal/Deform.glsl", policy), geometry);
-        _gpuCull = new GpuCullPass(InternalShaders.Compute(device, compiler, "Internal/Cull.glsl", policy), geometry);
+        _gpuCull = new GpuCullPass(InternalShaders.Compute(device, compiler, "Internal/Cull.glsl", policy), InternalShaders.Compute(device, compiler, "Internal/CullLate.glsl", policy), geometry);
         SpatialBins = new SpatialBinPass(InternalShaders.Compute(device, compiler, "Internal/SpatialBins.glsl", policy, lit: true));
         _readback = new ReadbackStaging(device, report);
     }
 
     public GraphicsDevice Device => _device;
+
+    /// <summary>
+    /// Whether camera views that cull on the GPU also cull what is hidden: renderables in view last frame draw their depth
+    /// first, and the rest are tested against it before they draw.
+    /// </summary>
+    public bool OcclusionCulling { get; set; } = true;
+
+    /// <summary>
+    /// Whether camera views keep drawing what the GPU cull found when this was turned on, as their cameras move on, to see
+    /// what culling leaves out from elsewhere. Renderables the CPU culls are not frozen.
+    /// </summary>
+    public bool FreezeCulling { get; set; }
+
+    internal GpuCullPass GpuCull => _gpuCull;
     public GeometryPool Geometry { get; }
     public MaterialSystem Materials { get; }
     public GlobalRegistry Globals { get; }
@@ -946,6 +960,22 @@ internal sealed partial class FramePipeline : IDisposable
         }
     }
 
+    // A feature drawing the view's renderables before its late prepass would miss the ones only the late cull finds
+    private static bool DrawsBeforeLatePrepass(CameraFrame camera) => camera.Selected.Exists(static feature =>
+        (feature.Slot < RenderSlot.Prepass || feature.Slot == RenderSlot.Prepass && feature.Order < LatePrepassFeature.LateOrder)
+        && Array.Exists(feature.PassArray, static type => type != PassType.Prepass));
+
+    // A prepass setting its own fragment depth may write it nearer than its geometry, hiding what is behind it
+    private bool SetsDepthInPrepass(DrawList prepass)
+    {
+        foreach (DrawCall call in prepass.Calls)
+        {
+            if (DrawPrograms.WritesFragmentDepth(call.Program))
+                return true;
+        }
+        return false;
+    }
+
     // Opaque forward draws whose surfaces the prepass already drew test depth equal, so only the visible pixel shades
     private void DepthEqualAfterPrepass(DrawList forward)
     {
@@ -966,6 +996,8 @@ internal sealed partial class FramePipeline : IDisposable
         bool drawsPrepass = camera.Selected.Exists(static feature => feature is DrawPassFeature { Type: var type } && type == PassType.Prepass);
         LodView lod = shadow || view.Kind == ViewKind.Voxelization ? camera.OwnLod : LodView.Of(view, world.World.LodSnapshot, camera.LodState, time.Time, drawsPrepass);
         Array.Fill(camera.Roots, SpatialRoots.None);
+        camera.Occludes = false;
+        camera.CullFrozen = false;
         Array.Clear(camera.BinCounts);
         camera.BinSphereList.Clear();
         if (shadow)
@@ -978,6 +1010,7 @@ internal sealed partial class FramePipeline : IDisposable
             camera.Prepass.Clear();
             camera.Forward.Clear();
             camera.Transparent.Clear();
+            camera.PrepassLate.Clear();
             foreach ((PassType type, DrawList list) in camera.PassLists)
                 world.Buckets.Build(world.Buckets.Pass(type), frustum, list, camera.Sink.For(list));
         }
@@ -997,6 +1030,14 @@ internal sealed partial class FramePipeline : IDisposable
             world.Buckets.Build(1, frustum, camera.Forward, sink.For(camera.Forward), lit);
             if (drawsPrepass)
                 DepthEqualAfterPrepass(camera.Forward);
+            bool cameraKind = view.Kind is ViewKind.Game or ViewKind.SceneView or ViewKind.Preview or ViewKind.RenderTexture;
+            camera.Occludes = OcclusionCulling && view.OcclusionCulling && cameraKind && drawsPrepass && layers == 1 && camera.Prepass.Gpu != null
+                && (lit == null || view.EarlyDepth == EarlyDepth.All) && !DrawsBeforeLatePrepass(camera) && !SetsDepthInPrepass(camera.Prepass);
+            camera.CullFrozen = FreezeCulling && cameraKind;
+            if (camera.Occludes && !camera.CullFrozen)
+                world.Buckets.BuildLate(camera.PrepassLate, lit);
+            else
+                camera.PrepassLate.Clear();
             camera.Displaces = false;
             foreach ((PassType type, DrawList list) in camera.PassLists)
             {

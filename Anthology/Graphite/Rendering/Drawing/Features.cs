@@ -195,6 +195,9 @@ public readonly struct FeatureView
     internal bool ReadsHiZBeforeOpaques { get; private init; }
     internal bool ReadsHiZAfterOpaques { get; private init; }
 
+    /// <summary>Whether the view culls what is hidden this frame, drawing its prepass in an early and a late part.</summary>
+    internal bool Occludes { get; init; }
+
     /// <summary>A texture sized as a part of the colour's resolution, an array on layered views.</summary>
     public GraphTextureDesc Texture(PixelFormat format, float scale = 1)
         => SharedTexture(format, scale) with { ArrayLayers = LayerCount > 1 ? (uint)LayerCount : 0 };
@@ -736,6 +739,21 @@ public sealed class FeatureBuilder
         return exported;
     }
 
+    /// <summary>Declares what the late GPU cull of the view reads and the commands, instances and occlusion it writes.</summary>
+    internal void WriteLateCull()
+    {
+        CameraFrame camera = View.Camera;
+        View.Frame.Buffers.ReadWorld(FrameGraph, _graph, camera.World, BufferAccess.ShaderRead);
+        _graph.Read(FrameGraph.Import(camera.CullView.Buffer), BufferAccess.ShaderRead);
+        _graph.Read(FrameGraph.Import(camera.CullMaps.Buffer), BufferAccess.ShaderRead);
+        _graph.Read(FrameGraph.Import(camera.Records.Buffer), BufferAccess.ShaderRead);
+        _graph.Write(FrameGraph.Import(camera.Commands.Buffer), BufferAccess.ShaderRead | BufferAccess.ShaderWrite);
+        _graph.Write(FrameGraph.Import(camera.Instances.Buffer), BufferAccess.ShaderRead | BufferAccess.ShaderWrite);
+        if (camera.CullState != null)
+            _graph.Write(FrameGraph.Import(camera.CullState), BufferAccess.ShaderRead | BufferAccess.ShaderWrite);
+        _graph.Write(FrameGraph.Import(camera.Occlusion!), BufferAccess.ShaderRead | BufferAccess.ShaderWrite);
+    }
+
     /// <summary>Reads the scene's depth, normals, and roughness and metallic.</summary>
     public void ReadScene()
     {
@@ -1195,11 +1213,27 @@ public sealed class FeatureContext
     /// <summary>Draws the visible opaque renderables' depth prepass onto the current output.</summary>
     public void DrawPrepass() => Drawer.DrawList(Command, _pass.Camera.Prepass);
 
+    /// <summary>Draws the prepass of the renderables the late cull found in view onto the current output.</summary>
+    internal void DrawPrepassLate() => Drawer.DrawList(Command, _pass.Camera.PrepassLate);
+
+    /// <summary>Records the view's late GPU cull against its farthest depth pyramid.</summary>
+    internal void CullLate(Texture hiZ, Sampler point) => _pass.Frame.GpuCull.RecordLate(Command, _pass.Camera, hiZ, point);
+
     /// <summary>Draws the visible opaque renderables' forward pass onto the current output.</summary>
-    public void DrawOpaque() => Drawer.DrawList(Command, _pass.Camera.Forward);
+    public void DrawOpaque() => Drawer.DrawList(Command, AfterLateCull(_pass.Camera.Forward));
 
     /// <summary>Draws the visible transparent renderables back to front onto the current output.</summary>
-    public void DrawTransparent() => Drawer.DrawList(Command, _pass.Camera.Transparent);
+    public void DrawTransparent() => Drawer.DrawList(Command, AfterLateCull(_pass.Camera.Transparent));
+
+    // In a view that culls what is hidden, the lists but the early prepass are complete once the late prepass is drawn
+    private DrawList AfterLateCull(DrawList list)
+    {
+        RenderFeature feature = _pass.Feature;
+        bool early = feature.Slot < RenderSlot.Prepass || feature.Slot == RenderSlot.Prepass && feature.Order < LatePrepassFeature.LateOrder;
+        if (early && _pass.Camera.Occludes && list != _pass.Camera.Prepass)
+            throw new InvalidOperationException($"{_pass.Name} draws renderables before the late prepass of a view that culls what is hidden, which would miss the ones its late cull finds. Draw them after Prepass order {LatePrepassFeature.LateOrder}.");
+        return list;
+    }
 
     /// <summary>Draws the world's sky material onto the current output.</summary>
     public void DrawSky() => Drawer.DrawSky(Command);
@@ -1212,7 +1246,7 @@ public sealed class FeatureContext
     {
         if (Array.IndexOf(_pass.Feature.PassArray, type) < 0 || _pass.Camera.FindList(type) is not { } list)
             throw new InvalidOperationException($"{_pass.Name} draws the {type.Name} pass without declaring it in its Passes.");
-        Drawer.DrawList(Command, list);
+        Drawer.DrawList(Command, AfterLateCull(list));
     }
 
     /// <summary>Draws the cascades <see cref="FeatureBuilder.WriteCascades"/> declared into their depth textures.</summary>
@@ -1787,6 +1821,9 @@ internal static class FeatureSelection
             new VolumetricFogFeature(renderer),
             new VolumetricFogSkyFeature(renderer),
             new DrawPassFeature(PassType.Prepass, RenderSlot.Prepass, group: FeatureGroup.Prepass, runsOn: ViewKinds.All),
+            new OcclusionHiZFeature(resources),
+            new OcclusionCullFeature(resources),
+            new LatePrepassFeature(),
             new GBufferFeature(resources),
             new GBufferDecalsFeature(resources),
             new DisplacementFeature(renderer),

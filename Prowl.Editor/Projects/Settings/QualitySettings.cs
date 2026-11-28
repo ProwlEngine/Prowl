@@ -85,6 +85,7 @@ public class QualitySettings : ProjectSettingsBase
                 Origami.NumericField<float>(paper, $"{id}_cutoff_v", level.LightCutoff, v => { level.LightCutoff = MathF.Max(0.001f, v); Apply(); }).OnCommit(Changed).Show());
 
             EditorGUI.SettingsIntSlider(paper, $"{id}_probe", "Max Probe Resolution", level.MaxProbeResolution, 16, 2048, v => { level.MaxProbeResolution = v; Apply(); });
+            EditorGUI.SettingsToggle(paper, $"{id}_occlusion", "Occlusion Culling", level.OcclusionCulling, v => { level.OcclusionCulling = v; Changed(); });
 
             if (Levels.Count > 1)
             {

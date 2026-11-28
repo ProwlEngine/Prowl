@@ -364,6 +364,15 @@ public class SceneViewPanel : DockPanel
                             () => (_editorCamera?.DebugView ?? DebugViewMode.Lit) == mode);
                 });
 
+                if (Graphics.Renderer is { } renderer)
+                {
+                    b.Header(Loc.Get("scene.culling"));
+                    b.Toggle(Loc.Get("scene.occlusion_culling"),
+                        () => { if (_editorCamera != null) _editorCamera.Camera.OcclusionCulling = !_editorCamera.Camera.OcclusionCulling; },
+                        () => _editorCamera?.Camera.OcclusionCulling ?? true);
+                    b.Toggle(Loc.Get("scene.freeze_culling"), () => renderer.FreezeCulling = !renderer.FreezeCulling, () => renderer.FreezeCulling);
+                }
+
                 if (_editorCamera != null)
                 {
                     EditorCamera cam = _editorCamera;

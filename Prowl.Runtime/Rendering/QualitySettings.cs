@@ -47,6 +47,9 @@ public sealed class QualityLevel
     /// <summary>The largest cube any reflection probe or the sky probe captures, its own size capped to it.</summary>
     [Header("Reflections")] public int MaxProbeResolution = 256;
 
+    /// <summary>Whether cameras that ask for it skip what is hidden behind what they saw last frame, see <see cref="Camera.OcclusionCulling"/>.</summary>
+    [Header("Culling")] public bool OcclusionCulling = true;
+
     public QualityLevel Clone() => (QualityLevel)MemberwiseClone();
 }
 

@@ -121,6 +121,12 @@ public class Camera : Component
     /// <summary>Which surfaces a deferred camera draws depth for before its GBuffer, so hidden pixels are never kept.</summary>
     [ShowIf(nameof(IsDeferred))] public EarlyDepth EarlyDepth = EarlyDepth.All;
 
+    /// <summary>
+    /// Whether the camera skips what is hidden behind what it saw last frame, while the active quality level allows it.
+    /// Pays off where walls, buildings or terrain hide much of the scene. A deferred camera needs EarlyDepth All.
+    /// </summary>
+    public bool OcclusionCulling = true;
+
     [ShowIf(nameof(IsDeferred))] public DisplacementSettings Displacement = new();
 
     private bool UsesFxaa => AntiAliasing == AntiAliasingMode.FXAA;
@@ -497,6 +503,7 @@ public class Camera : Component
         view.Ldr = !HDR;
         view.Path = RenderingPath;
         view.EarlyDepth = EarlyDepth;
+        view.OcclusionCulling = OcclusionCulling && QualitySettings.Active.OcclusionCulling;
         view.TransparencySort = OverrideTransparencySort ? new TransparencySort(TransparencySortMode, TransparencySortAxis) : Graphics.TransparencySort;
         DisplacementSettings displacement = Displacement ?? new();
         view.DisplacementCell = displacement.Cell;

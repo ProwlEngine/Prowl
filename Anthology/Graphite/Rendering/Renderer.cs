@@ -47,6 +47,12 @@ public sealed class RendererOptions
     public bool GpuCulling = true;
 
     /// <summary>
+    /// Whether camera views that cull on the GPU also cull what is hidden behind what was in view last frame. Needs
+    /// <see cref="GpuCulling"/>, and a view that draws its prepass, see <see cref="Renderer.OcclusionCulling"/>.
+    /// </summary>
+    public bool OcclusionCulling = true;
+
+    /// <summary>
     /// When shader variants compile. Sync with Inline threading never draws a stand in, for golden images and tests.
     /// Players shipping only baked shaders pass a <see cref="BakedVariants"/> without a compiler as the compiler and use BakedOnly.
     /// </summary>
@@ -273,7 +279,7 @@ public sealed class Renderer : IDisposable
         _materials = new MaterialSystem(device, _store, Textures) { Reporter = Report };
         _globals = new GlobalRegistry(device, _store, Textures) { Reporter = Report };
         _programs.Reporter = Report;
-        _frame = new FramePipeline(device, _store, compiler, _uploader, _geometry, _materials, _globals, _programs, Resources, this, Report, _options.Compile) { ShadowFormat = _options.ShadowFormat };
+        _frame = new FramePipeline(device, _store, compiler, _uploader, _geometry, _materials, _globals, _programs, Resources, this, Report, _options.Compile) { ShadowFormat = _options.ShadowFormat, OcclusionCulling = _options.OcclusionCulling };
         FrameFeatures.Add(new DeformFeature());
         FrameFeatures.Add(new ReadbackFeature());
         _frame.Programs.ShadowBias = (_options.ShadowConstantBias, _options.ShadowSlopeBias);
@@ -663,6 +669,28 @@ public sealed class Renderer : IDisposable
 
     /// <summary>The counts of the last frame recorded. Any thread.</summary>
     public FrameStats LastFrameStats => _frame.LastStats;
+
+    /// <summary>
+    /// Whether camera views cull what is hidden: renderables in view last frame draw their depth first, the rest are
+    /// tested against it on the GPU and only those in view draw. Applies to mono camera views that cull on the GPU and
+    /// draw their prepass, deferred ones only with EarlyDepth All. Starts at <see cref="RendererOptions.OcclusionCulling"/>.
+    /// </summary>
+    public bool OcclusionCulling
+    {
+        get => _frame.OcclusionCulling;
+        set => _frame.OcclusionCulling = value;
+    }
+
+    /// <summary>
+    /// Freezes what camera views cull on the GPU: they keep drawing the renderables in view when it was turned on, with
+    /// the levels of detail picked then, as their cameras move on, to see from elsewhere what culling leaves out.
+    /// Renderables the CPU culls (deforming, transparent and providers' items) are culled as usual.
+    /// </summary>
+    public bool FreezeCulling
+    {
+        get => _frame.FreezeCulling;
+        set => _frame.FreezeCulling = value;
+    }
 
     /// <summary>Shader variants a draw waits on. Draws needing one use a stand in, or skip, until it is done. Any thread.</summary>
     public int ShaderCompilesPending => _frame.Programs.Compiling;

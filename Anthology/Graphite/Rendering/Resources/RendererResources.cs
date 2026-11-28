@@ -36,6 +36,7 @@ internal sealed class RendererResources : IDisposable
             _prefilterProgram = Fullscreen(device, _prefilter);
         SkyAmbientProgram = InternalShaders.Compute(device, compiler, "Internal/SkyAmbient.glsl", policy);
         ExposureProgram = InternalShaders.Compute(device, compiler, "Internal/Exposure.glsl", policy);
+        OcclusionHiZProgram = InternalShaders.Compute(device, compiler, "Internal/OcclusionHiZ.glsl", policy);
         BlendAttachmentDescription written = BlendAttachmentDescription.OverrideBlend;
         BlendAttachmentDescription kept = written with { ColorWriteMask = ColorWriteMask.None };
         ShadingModels = new ShadingModels(device, compiler, policy, report);
@@ -202,6 +203,9 @@ internal sealed class RendererResources : IDisposable
     public ResourceFactory Factory => _device.ResourceFactory;
     public FullscreenProgram HiZPackProgram { get; }
 
+    /// <summary>A view's farthest depth pyramid for occlusion culling, in one dispatch. See <see cref="OcclusionHiZFeature"/>.</summary>
+    public LazyCompute OcclusionHiZProgram { get; }
+
     private static GraphicsProgram Fullscreen(GraphicsDevice device, PassVariants variants)
     {
         ShaderDescription description = variants.Require();
@@ -250,6 +254,7 @@ internal sealed class RendererResources : IDisposable
         ShadingModels.Dispose();
         GBufferDecalsProgram.Dispose();
         HiZPackProgram.Dispose();
+        OcclusionHiZProgram.Dispose();
         Textures.Dispose();
         Noise.Dispose();
         Dfg.Dispose();

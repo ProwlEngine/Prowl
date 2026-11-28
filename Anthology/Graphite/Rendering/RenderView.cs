@@ -160,6 +160,12 @@ public sealed class RenderView : IDisposable
     /// <summary>Which GBuffer surfaces a deferred view's prepass draws first.</summary>
     public EarlyDepth EarlyDepth { get; set; }
 
+    /// <summary>
+    /// Whether the view culls what is hidden behind what it saw last frame, while <see cref="Renderer.OcclusionCulling"/>
+    /// is on. Only mono views that cull on the GPU and draw their prepass do, deferred ones with EarlyDepth All.
+    /// </summary>
+    public bool OcclusionCulling { get; set; } = true;
+
     /// <summary>What the view sorts transparent items back to front by.</summary>
     public TransparencySort TransparencySort { get; set; }
 
@@ -332,6 +338,7 @@ public sealed class RenderView : IDisposable
             LodTransition = LodTransition,
             Path = Path,
             EarlyDepth = EarlyDepth,
+            OcclusionCulling = OcclusionCulling,
             TransparencySort = TransparencySort,
             DisplacementCell = DisplacementCell,
             DisplacementCreaseBlend = DisplacementCreaseBlend,
@@ -377,6 +384,7 @@ internal struct ViewDesc
     public LodTransition? LodTransition;
     public RenderPath Path;
     public EarlyDepth EarlyDepth;
+    public bool OcclusionCulling;
     public TransparencySort TransparencySort;
     public int DisplacementCell;
     public int DisplacementCreaseBlend;

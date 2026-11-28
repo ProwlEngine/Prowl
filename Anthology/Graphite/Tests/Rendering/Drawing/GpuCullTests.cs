@@ -104,4 +104,184 @@ public sealed class GpuCullTests
         Assert.NotEqual(cpu[0], cpu[3]);
     }
 
+    // A red quad behind a white wall that covers the view, then the wall moved out of view. Returns each frame's picture
+    // and whether the red quad counted as in view after it.
+    private static List<(Float4[] Picture, bool RedInView)> RenderBehindWall(bool occlusion)
+    {
+        using RendererHarness harness = new();
+        harness.Renderer.OcclusionCulling = occlusion;
+        GpuMesh quad = harness.CreateQuad();
+        Material Unlit(Float4 color)
+        {
+            Material material = harness.Renderer.CreateMaterial(harness.Renderer.Standard.Unlit);
+            material.Surface = new SurfaceSettings(Cull: SurfaceCull.Off);
+            material.SetColor("base_color", color);
+            material.SetFloat("emission_luminance", 1f / RenderView.ExposureOf(0));
+            return material;
+        }
+        RenderableHandle wall = harness.World.Add(new RenderableDesc { Mesh = quad, Transform = Double4x4.CreateTranslation(new Double3(0, 0, 5)) * Double4x4.CreateScale(1.5) }, [Unlit(new Float4(1, 1, 1, 1))]);
+        RenderableHandle red = harness.World.Add(new RenderableDesc { Mesh = quad, Transform = Double4x4.CreateTranslation(new Double3(0, 0, 10)) * Double4x4.CreateScale(0.25) }, [Unlit(new Float4(1, 0, 0, 1))]);
+
+        RenderView view = harness.View();
+        List<(Float4[], bool)> frames = new();
+        void Frame()
+        {
+            Float4[] picture = harness.Frame(view);
+            bool inView = true;
+            if (harness.Renderer.Frame.Camera(view)?.Occlusion is { } occlusion)
+            {
+                DeviceBuffer staging = harness.Device.ResourceFactory.CreateBuffer(new BufferDescription(occlusion.SizeInBytes, BufferUsage.Staging));
+                harness.Device.Record(cmd => cmd.CopyBuffer(occlusion, 0, staging, 0, occlusion.SizeInBytes)).Wait();
+                inView = (harness.Device.Map<uint>(staging).ToArray()[red.Index] & 0x80000000u) != 0;
+                staging.Dispose();
+            }
+            frames.Add((picture, inView));
+        }
+        Frame();
+        Frame();
+        Frame();
+        harness.World.SetTransform(wall, Double4x4.CreateTranslation(new Double3(100, 0, 5)) * Double4x4.CreateScale(1.5));
+        Frame();
+        return frames;
+    }
+
+    [Fact]
+    public void OcclusionCulling_SkipsWhatIsHidden_AndDrawsItTheFrameItShows()
+    {
+        List<(Float4[] Picture, bool RedInView)> culled = RenderBehindWall(occlusion: true), all = RenderBehindWall(occlusion: false);
+        for (int f = 0; f < all.Count; f++)
+        {
+            for (int i = 0; i < Size * Size; i++)
+                Assert.True(all[f].Picture[i] == culled[f].Picture[i], $"frame {f} pixel {i % Size},{i / Size}: without {all[f].Picture[i]} with {culled[f].Picture[i]}");
+        }
+
+        // Hidden once the wall's depth is known, back in view the frame the wall leaves
+        Assert.False(culled[1].RedInView);
+        Assert.False(culled[2].RedInView);
+        Assert.True(culled[3].RedInView);
+        Assert.Contains(culled[3].Picture, p => p.X > 0.5f && p.Y < 0.5f);
+        Assert.DoesNotContain(culled[2].Picture, p => p.X > 0.5f && p.Y < 0.5f);
+    }
+
+    // A red quad of two chunks across the view, the lower one behind a white wall, then the wall moved out of view
+    private static List<Float4[]> RenderChunkBehindWall(bool occlusion)
+    {
+        using RendererHarness harness = new();
+        harness.Renderer.OcclusionCulling = occlusion;
+        GpuMesh chunked = Quad(harness, new Float4(1, 0, 0, 1), 0, split: 40);
+        Material Unlit()
+        {
+            Material material = harness.Renderer.CreateMaterial(harness.Renderer.Standard.Unlit);
+            material.Surface = new SurfaceSettings(Cull: SurfaceCull.Off);
+            material.SetColor("base_color", new Float4(1, 1, 1, 1));
+            material.SetFloat("emission_luminance", 1f / RenderView.ExposureOf(0));
+            return material;
+        }
+        RenderableHandle wall = harness.World.Add(new RenderableDesc { Mesh = harness.CreateQuad(), Transform = Double4x4.CreateTranslation(new Double3(0, -2.5, 5)) }, [Unlit()]);
+        harness.World.Add(new RenderableDesc { Mesh = chunked, Transform = Double4x4.CreateTranslation(new Double3(0, 0, 10)) * Double4x4.CreateScale(4) }, [Unlit()]);
+
+        RenderView view = harness.View();
+        List<Float4[]> frames = [harness.Frame(view), harness.Frame(view), harness.Frame(view)];
+        harness.World.SetTransform(wall, Double4x4.CreateTranslation(new Double3(100, 0, 5)));
+        frames.Add(harness.Frame(view));
+        frames.Add(harness.Frame(view));
+        return frames;
+    }
+
+    [Fact]
+    public void OcclusionCulling_OfAMeshOfSeveralChunks_DrawsWhatTheUnculledViewDraws()
+    {
+        List<Float4[]> culled = RenderChunkBehindWall(occlusion: true), all = RenderChunkBehindWall(occlusion: false);
+        for (int f = 0; f < all.Count; f++)
+        {
+            for (int i = 0; i < Size * Size; i++)
+                Assert.True(all[f][i] == culled[f][i], $"frame {f} pixel {i % Size},{i / Size}: without {all[f][i]} with {culled[f][i]}");
+        }
+
+        // The wall hides the lower part, which shows the frame the wall leaves
+        Assert.Contains(culled[2], p => p.X > 0.5f && p.Y > 0.5f);
+        Assert.NotEqual(culled[2], culled[3]);
+        Assert.DoesNotContain(culled[3], p => p.X > 0.5f && p.Y > 0.5f);
+    }
+
+    [Fact]
+    public void AViewThatTurnsOcclusionCullingOff_DoesNotCullWhatIsHidden()
+    {
+        using RendererHarness harness = new();
+        harness.World.Add(new RenderableDesc { Mesh = harness.CreateQuad(), Transform = Double4x4.CreateTranslation(new Double3(0, 0, 10)) },
+            [harness.Renderer.CreateMaterial(harness.Renderer.Standard.Unlit)]);
+        RenderView view = harness.View();
+        harness.Frame(view);
+        Assert.NotNull(harness.Renderer.Frame.Camera(view)!.Occlusion);
+
+        view.OcclusionCulling = false;
+        harness.Frame(view);
+        Assert.Null(harness.Renderer.Frame.Camera(view)!.Occlusion);
+    }
+
+    [Fact]
+    public void AViewWithAFeatureDrawingBeforeTheLatePrepass_DoesNotCullWhatIsHidden()
+    {
+        using RendererHarness harness = new();
+        harness.World.Add(new RenderableDesc { Mesh = harness.CreateQuad(), Transform = Double4x4.CreateTranslation(new Double3(0, 0, 10)) },
+            [harness.Renderer.CreateMaterial(harness.Renderer.Standard.Unlit)]);
+        RenderView view = harness.View();
+        view.Features = new ExtensionSet<RenderFeature> { new DrawPassFeature(PassType.Forward, RenderSlot.Culling) };
+        harness.Frame(view);
+        Assert.Null(harness.Renderer.Frame.Camera(view)!.Occlusion);
+    }
+
+    [Fact]
+    public void FreezeCulling_TurnedOnWithOcclusionCulling_DrawsWhatIsInView()
+    {
+        using RendererHarness harness = new();
+        harness.Renderer.OcclusionCulling = false;
+        Material material = harness.Renderer.CreateMaterial(harness.Renderer.Standard.Unlit);
+        material.Surface = new SurfaceSettings(Cull: SurfaceCull.Off);
+        material.SetColor("base_color", new Float4(1, 0, 0, 1));
+        material.SetFloat("emission_luminance", 1f / RenderView.ExposureOf(0));
+        harness.World.Add(new RenderableDesc { Mesh = harness.CreateQuad(), Transform = Double4x4.CreateTranslation(new Double3(0, 0, 10)) * Double4x4.CreateScale(0.25) }, [material]);
+        RenderView view = harness.View();
+        static bool Red(Float4[] picture) => Array.Exists(picture, p => p.X > 0.5f && p.Y < 0.5f);
+
+        Assert.True(Red(harness.Frame(view)));
+        harness.Renderer.OcclusionCulling = true;
+        harness.Renderer.FreezeCulling = true;
+        Assert.True(Red(harness.Frame(view)));
+        Assert.True(Red(harness.Frame(view)));
+    }
+
+    [Theory]
+    [InlineData(true)]
+    [InlineData(false)]
+    public void FreezeCulling_KeepsWhatWasInView_AsTheCameraMovesOn(bool occlusion)
+    {
+        using RendererHarness harness = new();
+        harness.Renderer.OcclusionCulling = occlusion;
+        GpuMesh quad = harness.CreateQuad();
+        Material material = harness.Renderer.CreateMaterial(harness.Renderer.Standard.Unlit);
+        material.Surface = new SurfaceSettings(Cull: SurfaceCull.Off);
+        material.SetColor("base_color", new Float4(1, 0, 0, 1));
+        material.SetFloat("emission_luminance", 1f / RenderView.ExposureOf(0));
+        harness.World.Add(new RenderableDesc { Mesh = quad, Transform = Double4x4.CreateTranslation(new Double3(0, 0, 10)) * Double4x4.CreateScale(0.25) }, [material]);
+        harness.World.Add(new RenderableDesc { Mesh = quad, Transform = Double4x4.CreateTranslation(new Double3(100, 0, 10)) * Double4x4.CreateScale(0.25) }, [material]);
+
+        RenderView view = harness.View();
+        Float4[] At(double x)
+        {
+            view.Camera = new ViewCamera(new ViewLayer { View = Float4x4.Identity, Projection = RendererHarness.Projection, Position = new Double3(x, 0, 0) });
+            return harness.Frame(view);
+        }
+        static bool Red(Float4[] picture) => Array.Exists(picture, p => p.X > 0.5f && p.Y < 0.5f);
+
+        Assert.True(Red(At(0)));
+        Assert.True(Red(At(0)));
+        harness.Renderer.FreezeCulling = true;
+        Assert.True(Red(At(0)));
+        Assert.False(Red(At(100)));
+        Assert.False(Red(At(100)));
+        harness.Renderer.FreezeCulling = false;
+        Assert.True(Red(At(100)));
+    }
+
 }

@@ -140,7 +140,7 @@ internal sealed class ViewGraph
         Camera.Info = Camera.Info.Culled(Camera.SceneColorUsed, Camera.SceneDepthUsed, Camera.BackDepthUsed, Camera.Shadows.FirstCascade() != null,
             Camera.BinCounts[SpatialIndex.DecalsSet] > 0, Camera.Displaces && Camera.Info.DisplacementCell > 0 && Camera.Selected.Exists(static feature => feature.Group == FeatureGroup.Displacement),
             Camera.Selected.Exists(static feature => feature.ReadsHiZ && feature.Slot < RenderSlot.OpaqueColor),
-            Camera.Selected.Exists(static feature => feature.ReadsHiZ && feature.Slot >= RenderSlot.OpaqueColor));
+            Camera.Selected.Exists(static feature => feature.ReadsHiZ && feature.Slot >= RenderSlot.OpaqueColor)) with { Occludes = Camera.Occludes && !Camera.CullFrozen };
         View = Camera.Info;
 
         Frame.SpatialBins.Add(this);

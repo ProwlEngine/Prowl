@@ -22,6 +22,9 @@ internal sealed class CameraView
 internal sealed class CameraFrame : IDisposable
 {
     public readonly DrawList Prepass = new();
+
+    /// <summary>The prepass of renderables the late cull finds in view, in a view that culls what is hidden.</summary>
+    public readonly DrawList PrepassLate = new();
     public readonly DrawList Forward = new();
     public readonly DrawList Transparent = new();
     public readonly SceneDrawer Drawer;
@@ -222,6 +225,25 @@ internal sealed class CameraFrame : IDisposable
     public DeviceBuffer? CullState;
     private readonly PersistentBuffer _cullState;
 
+    /// <summary>Whether the view culls what is hidden this frame, see Graphite/Internal/CullLate.glsl.</summary>
+    public bool Occludes;
+
+    /// <summary>Whether the GPU cull keeps the frustum, LOD origin and occlusion of the frame culling was frozen on.</summary>
+    public bool CullFrozen;
+    private bool _frozen, _occlusionValid;
+    private int _lastCullFrame = -1;
+    private readonly uint[] _frozenWords = new uint[FrozenWords];
+
+    // The cull view's frustum planes, camera and LOD origin, which a frozen cull keeps
+    private const int FrozenWords = 168;
+
+    /// <summary>Whether each renderable was in view after the last late cull, and what this frame's early cull left it, 4 bytes each.</summary>
+    public DeviceBuffer? Occlusion;
+    private readonly PersistentBuffer _occlusion;
+
+    /// <summary>The levels of the farthest depth pyramid occlusion culling tests against, and what its packed width is a multiple of.</summary>
+    public const int OcclusionLevels = 12;
+
     /// <summary>
     /// The view's lights, decals and probes binned by screen tile and depth, see <see cref="SpatialBinPass"/>, null while
     /// the view bins none: shadow and voxel views, views drawing no renderables and views seeing no such item.
@@ -264,7 +286,7 @@ internal sealed class CameraFrame : IDisposable
     public uint CullObjects;
     private uint[] _cullWords = new uint[CullViewWords];
     private uint[] _maps = [];
-    private const int CullViewWords = 184 + 8 * MaxCullLists, MaxCullLists = 8;
+    private const int CullViewWords = OcclusionWords + 24, OcclusionWords = 184 + 8 * MaxCullLists, MaxCullLists = 16;
 
     /// <summary>The buffers the view and its draws read, collected each frame.</summary>
     public readonly BufferSet Buffers = new();
@@ -405,7 +427,7 @@ internal sealed class CameraFrame : IDisposable
         Drawer = new SceneDrawer(frame, this);
         Build = new ViewGraph(frame, this, frame.Graph);
         View.ViewId = viewId;
-        Lists = [Prepass, Forward, Transparent];
+        Lists = [Prepass, Forward, Transparent, PrepassLate];
         ViewTable = new TableRing(device, ProgramCache.ViewLayout, $"View table {viewId}");
         _tables = new TableHost(device, frame.Store, $"Graphite.Camera{viewId}");
         Instances = _tables.Array("Instances");
@@ -417,6 +439,7 @@ internal sealed class CameraFrame : IDisposable
         CullView = _tables.Array("CullView");
         CullMaps = _tables.Array("CullMaps");
         _cullState = new PersistentBuffer(RenderResourceID.Intern($"Graphite.Camera{viewId}.CullState"), BufferUsage.StructuredBufferReadWrite);
+        _occlusion = new PersistentBuffer(RenderResourceID.Intern($"Graphite.Camera{viewId}.Occlusion"), BufferUsage.StructuredBufferReadWrite);
         BinSpheres = _tables.Array("BinSpheres");
         _spatialBins = new PersistentBuffer(RenderResourceID.Intern($"Graphite.Camera{viewId}.SpatialBins"), BufferUsage.StructuredBufferReadWrite, keepContents: false);
         _device = device;
@@ -540,6 +563,8 @@ internal sealed class CameraFrame : IDisposable
         Buffers.Add(CullMaps.Persistent);
         if (_cullState.Buffer != null)
             Buffers.Add(_cullState);
+        if (_occlusion.Buffer != null)
+            Buffers.Add(_occlusion);
         Buffers.Add(BinSpheres.Persistent);
         if (SpatialBins != null)
             Buffers.Add(SpatialBins);
@@ -598,7 +623,7 @@ internal sealed class CameraFrame : IDisposable
     public void ResetPassLists()
     {
         PassLists.Clear();
-        Lists.RemoveRange(3, Lists.Count - 3);
+        Lists.RemoveRange(4, Lists.Count - 4);
     }
 
     /// <summary>Queues the frame's commands, draw records, instances and view blocks, the lists one after another.</summary>
@@ -658,18 +683,38 @@ internal sealed class CameraFrame : IDisposable
     private void PrepareCull(Uploader uploader)
     {
         GpuCulls = false;
-        int lists = 0, maps = 0;
+        Occlusion = null;
+
+        // A freeze holds only over frames the view culls one after another, a gap starts a new one
+        if (!CullFrozen || _lastCullFrame != LastFrame - 1)
+            _frozen = false;
+        _lastCullFrame = LastFrame;
+
+        int lists = 0, maps = 0, dropped = 0;
         GpuSegment? first = null;
         foreach (DrawList list in Lists)
         {
-            if (list.Gpu is not { } segment || lists == MaxCullLists)
+            if (list.Gpu is not { } segment)
                 continue;
+            if (lists == MaxCullLists)
+            {
+                dropped++;
+                continue;
+            }
             first ??= segment;
             lists++;
             maps += segment.MapLength;
         }
+        if (dropped > 0)
+        {
+            _frame.Report(new RendererError("cull.lists", $"View {View.ViewId} draws {lists + dropped} pass lists the GPU culls, more than the {MaxCullLists} it fills, so the last {dropped} draw none of the renderables it culls.",
+                RendererErrorSeverity.Warning) { Key = $"cull.lists.{View.ViewId}" });
+        }
         if (first == null)
+        {
+            _occlusionValid = false;
             return;
+        }
 
         GpuCulls = true;
         CullStamp++;
@@ -701,6 +746,12 @@ internal sealed class CameraFrame : IDisposable
         (_cullWords[180], _cullWords[181], _cullWords[182], _cullWords[183]) = (objects, (uint)lists, CullStamp, keeps ? 1u : 0);
         CullObjects = objects;
 
+        if (CullFrozen && _frozen)
+            _frozenWords.CopyTo(_cullWords, 0);
+        else if (CullFrozen)
+            Array.Copy(_cullWords, _frozenWords, FrozenWords);
+        _frozen = CullFrozen;
+
         if (_maps.Length < Math.Max(maps, 1))
             _maps = new uint[Math.Max(maps, Math.Max(_maps.Length * 2, 64))];
         int slot = 0, mapBase = 0;
@@ -709,16 +760,37 @@ internal sealed class CameraFrame : IDisposable
             if (Lists[l].Gpu is not { } segment || slot == MaxCullLists)
                 continue;
             int at = 184 + slot * 8;
-            (_cullWords[at], _cullWords[at + 1]) = ((uint)segment.Pass, (uint)(CommandBases[l] + segment.FirstCommand));
+            uint role = !Occludes ? 0u : Lists[l] == Prepass ? 1u : Lists[l] == PrepassLate ? 2u : 0u;
+            (_cullWords[at], _cullWords[at + 1], _cullWords[at + 2]) = ((uint)segment.Pass, (uint)(CommandBases[l] + segment.FirstCommand), role);
             (_cullWords[at + 4], _cullWords[at + 5], _cullWords[at + 6]) = ((uint)mapBase, segment.Fades ? 1u : 0, segment.Fades ? (uint)(segment.MapLength / 2) : 0);
             Array.Copy(segment.Map, 0, _maps, mapBase, segment.MapLength);
             mapBase += segment.MapLength;
             slot++;
         }
 
+        CullState = keeps ? _cullState.Resolve(_device, _frame.Store, System.Numerics.BitOperations.RoundUpToPowerOf2(Math.Max(objects, 64)) * 16) : null;
+        DeviceBuffer? before = _occlusion.Buffer;
+        Occlusion = Occludes ? _occlusion.Resolve(_device, _frame.Store, System.Numerics.BitOperations.RoundUpToPowerOf2(Math.Max(objects, 64)) * 4) : null;
+
+        // What the occlusion words say holds only after a late cull filled them, and not in a buffer just made or grown
+        if (!Occludes || Occlusion != before)
+            _occlusionValid = false;
+        bool trusted = _occlusionValid;
+        if (Occludes && !CullFrozen)
+            _occlusionValid = true;
+
+        if (Occludes)
+        {
+            // Whether it is on and how a frozen cull reads the words, the pyramid's levels, the screen, and this frame's view projection without jitter
+            ViewBlock block = Blocks[0];
+            uint frozen = !CullFrozen ? 0u : trusted ? 1u : 2u;
+            (_cullWords[OcclusionWords], _cullWords[OcclusionWords + 1], _cullWords[OcclusionWords + 3]) = (1u, OcclusionLevels, frozen);
+            (floats[OcclusionWords + 4], floats[OcclusionWords + 5], floats[OcclusionWords + 6], floats[OcclusionWords + 7]) = (block.Screen.X, block.Screen.Y, block.Screen.Z, block.Screen.W);
+            Float4x4 viewProjection = Previous[0].ViewProjection;
+            MemoryMarshal.Cast<Float4x4, float>(new Span<Float4x4>(ref viewProjection)).CopyTo(floats[(OcclusionWords + 8)..]);
+        }
         CullView.Write<uint>(uploader, _cullWords);
         CullMaps.Write<uint>(uploader, _maps.AsSpan(0, Math.Max(maps, 1)));
-        CullState = keeps ? _cullState.Resolve(_device, _frame.Store, System.Numerics.BitOperations.RoundUpToPowerOf2(Math.Max(objects, 64)) * 16) : null;
     }
 
     public void Dispose()
@@ -739,6 +811,7 @@ internal sealed class CameraFrame : IDisposable
         foreach (GpuArray array in new[] { Instances, Records, Commands, ViewBlocks, SpatialRoots, Cascades, CullView, CullMaps, BinSpheres })
             array.Release();
         _cullState.Release(_frame.Store);
+        _occlusion.Release(_frame.Store);
         _spatialBins.Release(_frame.Store);
         foreach (SpatialView? view in Spatial)
             view?.Release();

@@ -228,12 +228,26 @@ internal sealed class DrawPrograms
     private readonly Dictionary<ushort, int> _prepassed = [];
 
     private readonly Dictionary<ushort, (bool Draws, bool Cutout)> _earlyDepth = [];
+    private readonly Dictionary<ushort, bool> _fragmentDepth = [];
 
     public DrawPrograms() => Freed += _ =>
     {
         _prepassed.Clear();
         _earlyDepth.Clear();
+        _fragmentDepth.Clear();
     };
+
+    /// <summary>Whether a program's pass sets its fragments' depth itself rather than taking its geometry's.</summary>
+    public bool WritesFragmentDepth(ushort id)
+    {
+        if (!_fragmentDepth.TryGetValue(id, out bool writes))
+        {
+            DrawProgram program = _programs[id];
+            writes = program.Shader.Definition.Passes![program.PassIndex].Source.Contains("gl_FragDepth", StringComparison.Ordinal);
+            _fragmentDepth[id] = writes;
+        }
+        return writes;
+    }
 
     public DrawProgram this[ushort id] => _programs[id];
 
@@ -1175,6 +1189,17 @@ internal sealed class BucketSet
         }
         segment.Words = (uint)words;
         segment.CommandCount = list.CommandCount - segment.FirstCommand;
+    }
+
+    /// <summary>
+    /// Fills the late prepass of a view that culls what is hidden: the prepass's GPU commands again, with instances of
+    /// their own, for the renderables its late cull finds in view.
+    /// </summary>
+    public void BuildLate(DrawList list, EarlyDepth? lit)
+    {
+        list.Clear();
+        if (_gpuView is { } view)
+            AppendGpu(0, list, view, lit);
     }
 
     /// <summary>
