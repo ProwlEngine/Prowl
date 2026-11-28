@@ -101,7 +101,7 @@ namespace LibTessDotNet
             return _head._next;
         }
 
-        public void Remove(Node node)
+        public static void Remove(Node node)
         {
             node._next._prev = node._prev;
             node._prev._next = node._next;

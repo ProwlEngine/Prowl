@@ -497,7 +497,7 @@ public class RNG
     /// </summary>
     public void Shuffle<T>(T[] array)
     {
-        if (array == null) throw new ArgumentNullException(nameof(array));
+        ArgumentNullException.ThrowIfNull(array);
 
         for (int i = array.Length - 1; i > 0; i--)
         {
@@ -511,7 +511,7 @@ public class RNG
     /// </summary>
     public T[] Shuffled<T>(T[] array)
     {
-        if (array == null) throw new ArgumentNullException(nameof(array));
+        ArgumentNullException.ThrowIfNull(array);
 
         T[] result = new T[array.Length];
         Array.Copy(array, result, array.Length);

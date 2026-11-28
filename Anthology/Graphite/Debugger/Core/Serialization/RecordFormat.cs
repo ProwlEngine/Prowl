@@ -20,7 +20,7 @@ internal sealed class RecordFormat : ISerializationFormat
         => ValueTypes.Contains(type) || (type.IsClass && !type.IsAbstract && type.Assembly == typeof(RecordFormat).Assembly && type.GetMethod("<Clone>$") != null) || IsPayload(type);
 
     internal static bool IsPayload(Type type)
-        => type.IsSerializable && type.GetMethod("PrintMembers", BindingFlags.NonPublic | BindingFlags.Instance) != null;
+        => type.IsDefined(typeof(SerializableAttribute), false) && type.GetMethod("PrintMembers", BindingFlags.NonPublic | BindingFlags.Instance) != null;
 
     public EchoObject Serialize(Type targetType, object value, SerializationContext context)
     {

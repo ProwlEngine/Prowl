@@ -267,7 +267,7 @@ public sealed class CSGScene
     public CSGBrushHandle AddTo(CSGGroupHandle? parent, GeometryData convexShape,
                                 CSGOperation operation = CSGOperation.Additive, Float4x4 transform = default)
     {
-        if (convexShape == null) throw new ArgumentNullException(nameof(convexShape));
+        ArgumentNullException.ThrowIfNull(convexShape);
         if (transform.Equals(default)) transform = Float4x4.Identity;
 
         SceneGroup group = ResolveGroup(parent);

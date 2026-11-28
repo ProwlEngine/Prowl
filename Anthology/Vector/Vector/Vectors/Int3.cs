@@ -64,7 +64,7 @@ public partial struct Int3 : IEquatable<Int3>, IFormattable
     public Int3(Int3 v) : this(v.X, v.Y, v.Z) { }
     public Int3(int[] array)
     {
-        if (array == null) throw new ArgumentNullException(nameof(array));
+        ArgumentNullException.ThrowIfNull(array);
         if (array.Length < 3) throw new ArgumentException("Array must contain at least 3 elements.", nameof(array));
         X = array[0];
         Y = array[1];

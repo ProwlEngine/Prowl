@@ -152,7 +152,7 @@ namespace Prowl.Quill.External
             /// If eDst == eOrg->Onext, the new vertex will have a single edge.
             /// If eDst == eOrg->Oprev, the old vertex will have a single edge.
             /// </summary>
-            public void Splice(MeshUtils.Edge eOrg, MeshUtils.Edge eDst)
+            public static void Splice(MeshUtils.Edge eOrg, MeshUtils.Edge eDst)
             {
                 if (eOrg == eDst)
                 {
@@ -200,7 +200,7 @@ namespace Prowl.Quill.External
             /// the newly created loop will contain eDel->Dst. If the deletion of eDel
             /// would create isolated vertices, those are deleted as well.
             /// </summary>
-            public void Delete(MeshUtils.Edge eDel)
+            public static void Delete(MeshUtils.Edge eDel)
             {
                 MeshUtils.Edge eDelSym = eDel._Sym;
 
@@ -258,7 +258,7 @@ namespace Prowl.Quill.External
             /// Creates a new edge such that eNew == eOrg.Lnext and eNew.Dst is a newly created vertex.
             /// eOrg and eNew will have the same left face.
             /// </summary>
-            public MeshUtils.Edge AddEdgeVertex(MeshUtils.Edge eOrg)
+            public static MeshUtils.Edge AddEdgeVertex(MeshUtils.Edge eOrg)
             {
                 MeshUtils.Edge eNew = MeshUtils.MakeEdge(eOrg);
                 MeshUtils.Edge eNewSym = eNew._Sym;
@@ -279,7 +279,7 @@ namespace Prowl.Quill.External
             /// The new vertex is eOrg.Dst == eNew.Org.
             /// eOrg and eNew will have the same left face.
             /// </summary>
-            public MeshUtils.Edge SplitEdge(MeshUtils.Edge eOrg)
+            public static MeshUtils.Edge SplitEdge(MeshUtils.Edge eOrg)
             {
                 MeshUtils.Edge eTmp = AddEdgeVertex(eOrg);
                 MeshUtils.Edge eNew = eTmp._Sym;
@@ -308,7 +308,7 @@ namespace Prowl.Quill.External
             /// If (eOrg->Lnext == eDst), the old face is reduced to a single edge.
             /// If (eOrg->Lnext->Lnext == eDst), the old face is reduced to two edges.
             /// </summary>
-            public MeshUtils.Edge Connect(MeshUtils.Edge eOrg, MeshUtils.Edge eDst)
+            public static MeshUtils.Edge Connect(MeshUtils.Edge eOrg, MeshUtils.Edge eDst)
             {
                 MeshUtils.Edge eNew = MeshUtils.MakeEdge(eOrg);
                 MeshUtils.Edge eNewSym = eNew._Sym;
@@ -349,7 +349,7 @@ namespace Prowl.Quill.External
             /// An entire mesh can be deleted by zapping its faces, one at a time,
             /// in any order. Zapped faces cannot be used in further mesh operations!
             /// </summary>
-            public void ZapFace(MeshUtils.Face fZap)
+            public static void ZapFace(MeshUtils.Face fZap)
             {
                 MeshUtils.Edge eStart = fZap._anEdge;
 

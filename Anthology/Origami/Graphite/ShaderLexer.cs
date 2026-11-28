@@ -144,7 +144,7 @@ public sealed class ShaderLexer : ICodeLexer
                 continue;
             }
 
-            Emit(tokens, pos, 1, "+-*/%=<>!&|^~?:".IndexOf(c) >= 0 ? CodeTokenKind.Operator : CodeTokenKind.Punctuation);
+            Emit(tokens, pos, 1, "+-*/%=<>!&|^~?:".Contains(c) ? CodeTokenKind.Operator : CodeTokenKind.Punctuation);
             prevSignificant = c;
             pos++;
         }

@@ -1031,8 +1031,9 @@ public class DockSpace
         Root = Cleanup(Root);
         for (int i = FloatingWindows.Count - 1; i >= 0; i--)
         {
-            FloatingWindows[i].Node = Cleanup(FloatingWindows[i].Node);
-            if (FloatingWindows[i].Node.IsLeaf && (FloatingWindows[i].Node.Tabs == null || FloatingWindows[i].Node.Tabs.Count == 0))
+            DockNode node = Cleanup(FloatingWindows[i].Node);
+            FloatingWindows[i].Node = node;
+            if (node.IsLeaf && (node.Tabs == null || node.Tabs.Count == 0))
                 FloatingWindows.RemoveAt(i);
         }
     }

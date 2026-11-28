@@ -538,7 +538,7 @@ public sealed partial class CodeEditor
         if (FilterText().Length == 0 && !comp.UserMoved && !comp.Explicit) return false;
         CodeCompletionItem item = comp.Filtered[comp.Selected].Item;
         string commit = Options.CompletionCommitCharacters ?? item.CommitCharacters ?? (Session != null ? ".,;()[]{}<>=" : "");
-        return commit.IndexOf(c) >= 0;
+        return commit.Contains(c);
     }
 
     private void CommitCompletion(char commitChar)

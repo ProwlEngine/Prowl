@@ -8,7 +8,7 @@ using Prowl.Vector;
 
 namespace Prowl.Graphite.Debugger;
 
-internal sealed class ReplayRestorePass(ReplayScope scope, IReadOnlyList<DeepPass> passes, int step)
+internal sealed class ReplayRestorePass(ReplayScope scope, int step)
 {
     private string Name => $"Replay restore {step}";
 

@@ -1347,7 +1347,7 @@ public sealed class ElementBuilder : StyleSetterBase<ElementBuilder>, IDisposabl
         /// Optional filter for character input. Return true to accept the character, false to reject it.
         /// When null, all non-control characters are accepted.
         /// </summary>
-        public Func<char, string, bool> CharFilter;
+        public Func<char, string, bool>? CharFilter;
 
         /// <summary>When true, all text is selected when the field gains focus.</summary>
         public bool SelectAllOnFocus;

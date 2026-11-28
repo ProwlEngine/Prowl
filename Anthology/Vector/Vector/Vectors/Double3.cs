@@ -65,7 +65,7 @@ public partial struct Double3 : IEquatable<Double3>, IFormattable
 
     public Double3(double[] array)
     {
-        if (array == null) throw new ArgumentNullException(nameof(array));
+        ArgumentNullException.ThrowIfNull(array);
         if (array.Length < 3) throw new ArgumentException("Array must contain at least 3 elements.", nameof(array));
         X = array[0];
         Y = array[1];

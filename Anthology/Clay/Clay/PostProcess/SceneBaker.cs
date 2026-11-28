@@ -68,9 +68,7 @@ internal static class SceneBaker
                 SkinIndex = src.SkinIndex,
                 CameraIndex = src.CameraIndex,
                 LightIndex = src.LightIndex,
-                Metadata = src.Metadata.Count == 0
-                    ? new Dictionary<string, object?>()
-                    : new Dictionary<string, object?>(src.Metadata),
+                Metadata = src.Metadata.ToDictionary(),
             };
             bakedNodes[i] = node;
             if (src.Parent is null)
@@ -137,12 +135,8 @@ internal static class SceneBaker
             FormatVersion = scene.FormatVersion,
             Generator = scene.Generator,
             Copyright = scene.Copyright,
-            RawExtensions = scene.RawExtensions.Count == 0
-                ? new Dictionary<string, System.Text.Json.JsonElement>()
-                : new Dictionary<string, System.Text.Json.JsonElement>(scene.RawExtensions),
-            Extras = scene.Extras.Count == 0
-                ? new Dictionary<string, object?>()
-                : new Dictionary<string, object?>(scene.Extras),
+            RawExtensions = scene.RawExtensions.ToDictionary(),
+            Extras = scene.Extras.ToDictionary(),
         };
 
         return new Model
@@ -643,9 +637,7 @@ internal static class SceneBaker
         Anisotropy = src.Anisotropy,
         Dispersion = src.Dispersion,
         DiffuseTransmission = src.DiffuseTransmission,
-        RawExtensions = src.RawExtensions.Count == 0
-            ? new Dictionary<string, System.Text.Json.JsonElement>()
-            : new Dictionary<string, System.Text.Json.JsonElement>(src.RawExtensions),
+        RawExtensions = src.RawExtensions.ToDictionary(),
     };
 
     private static MaterialTextureSlot? CopySlot(IntermediateTextureSlot? s) =>

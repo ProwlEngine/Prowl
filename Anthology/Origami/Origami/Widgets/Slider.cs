@@ -774,6 +774,6 @@ public sealed class SliderBuilder<T> where T : struct, INumber<T>
         T v = SliderInternal.TToValue<T>(valueT, _min, _max, _logarithmic);
         if (_step.HasValue) v = SliderInternal.Snap(v, _min, _step.Value);
         try { return v.ToString(_format, System.Globalization.CultureInfo.CurrentCulture); }
-        catch { return v.ToString(); }
+        catch { return v.ToString() ?? string.Empty; }
     }
 }

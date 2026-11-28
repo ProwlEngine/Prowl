@@ -67,7 +67,7 @@ public partial struct Float2 : IEquatable<Float2>, IFormattable
     public Float2(Float2 v) : this(v.X, v.Y) { }
     public Float2(float[] array)
     {
-        if (array == null) throw new ArgumentNullException(nameof(array));
+        ArgumentNullException.ThrowIfNull(array);
         if (array.Length < 2) throw new ArgumentException("Array must contain at least 2 elements.", nameof(array));
         X = array[0];
         Y = array[1];

@@ -43,7 +43,7 @@ public class BackendInfoVulkan
     public uint GraphicsQueueFamilyIndex => _gd.GraphicsQueueIndex;
 
     /// <summary>Index of the graphics queue within its family.</summary>
-    public uint GraphicsQueueIndex => 0;
+    public static uint GraphicsQueueIndex => 0;
 
     /// <summary>
     /// Held around every use of the graphics queue. Native code sharing the queue, such as an OpenXR runtime, must hold it

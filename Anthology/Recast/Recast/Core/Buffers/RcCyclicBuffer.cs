@@ -59,10 +59,7 @@ public class RcCyclicBuffer<T> : IEnumerable<T>
             throw new ArgumentException("RcCyclicBuffer cannot have negative or zero capacity.", nameof(capacity));
         }
 
-        if (items == null)
-        {
-            throw new ArgumentNullException(nameof(items));
-        }
+        ArgumentNullException.ThrowIfNull(items);
 
         if (items.Length > capacity)
         {

@@ -82,7 +82,7 @@ internal sealed class UvFlattener
             HalfEdge edge = _workMesh.Triangles[faceI].FirstEdge!;
             for (int side = 0; side < 3; ++side)
             {
-                _cornerToVar[_workMesh.IndexOf(edge)] = nextVar++;
+                _cornerToVar[edge.Index] = nextVar++;
                 edge = edge.Next!;
             }
         }
@@ -104,7 +104,7 @@ internal sealed class UvFlattener
             do
             {
                 if (!MeshOps.IsBorderEdge(edge))
-                    _initialAngle[_cornerToVar[_workMesh.IndexOf(edge)]] = MeshOps.CornerAngleAt(edge) * ratio;
+                    _initialAngle[_cornerToVar[edge.Index]] = MeshOps.CornerAngleAt(edge) * ratio;
                 edge = MeshOps.StepAroundVertex(edge);
             } while (edge != start);
         }
@@ -128,7 +128,7 @@ internal sealed class UvFlattener
             HalfEdge start = edge;
             do
             {
-                int varI = _cornerToVar[_workMesh.IndexOf(edge)];
+                int varI = _cornerToVar[edge.Index];
                 assembler.SetEntry(row, varI, 1.0 * _initialAngle[varI]);
                 _angleRhs[row] -= _initialAngle[varI];
                 edge = MeshOps.StepAroundVertex(edge);
@@ -143,7 +143,7 @@ internal sealed class UvFlattener
             HalfEdge edge = _workMesh.Triangles[faceI].FirstEdge!;
             for (int side = 0; side < 3; ++side)
             {
-                int varI = _cornerToVar[_workMesh.IndexOf(edge)];
+                int varI = _cornerToVar[edge.Index];
                 assembler.SetEntry(row, varI, 1.0 * _initialAngle[varI]);
                 _angleRhs[row] -= _initialAngle[varI];
                 edge = edge.Next!;
@@ -162,8 +162,8 @@ internal sealed class UvFlattener
             HalfEdge start = edge;
             do
             {
-                int nextVarI = _cornerToVar[_workMesh.IndexOf(edge.Next!)];
-                int prevVarI = _cornerToVar[_workMesh.IndexOf(edge.Previous!)];
+                int nextVarI = _cornerToVar[edge.Next!.Index];
+                int prevVarI = _cornerToVar[edge.Previous!.Index];
 
                 double aNext = _initialAngle[nextVarI];
                 double aPrev = _initialAngle[prevVarI];
@@ -254,9 +254,9 @@ internal sealed class UvFlattener
             HalfEdge edge = _workMesh.Triangles[faceI].FirstEdge!;
             int[] vertexIndex =
             {
-                _workMesh.IndexOf(edge.Apex!),
-                _workMesh.IndexOf(edge.Next!.Apex!),
-                _workMesh.IndexOf(edge.Next!.Next!.Apex!),
+                edge.Apex!.Index,
+                edge.Next!.Apex!.Index,
+                edge.Next!.Next!.Apex!.Index,
             };
             double[] vertexAngle = { _solvedAngle[3 * faceI + 0], _solvedAngle[3 * faceI + 1], _solvedAngle[3 * faceI + 2] };
             double[] vertexSin = { System.Math.Sin(vertexAngle[0]), System.Math.Sin(vertexAngle[1]), System.Math.Sin(vertexAngle[2]) };
@@ -334,9 +334,9 @@ internal sealed class UvFlattener
             HalfEdge e1 = e0.Next!;
             HalfEdge e2 = e1.Next!;
 
-            int s0 = _vertexBackMap[_region.Mesh.IndexOf(e0.Apex!)];
-            int s1 = _vertexBackMap[_region.Mesh.IndexOf(e1.Apex!)];
-            int s2 = _vertexBackMap[_region.Mesh.IndexOf(e2.Apex!)];
+            int s0 = _vertexBackMap[e0.Apex!.Index];
+            int s1 = _vertexBackMap[e1.Apex!.Index];
+            int s2 = _vertexBackMap[e2.Apex!.Index];
 
             chart.UVs[3 * faceI + 0] = new Double2(_uv[2 * s0 + 0], _uv[2 * s0 + 1]);
             chart.UVs[3 * faceI + 1] = new Double2(_uv[2 * s1 + 0], _uv[2 * s1 + 1]);

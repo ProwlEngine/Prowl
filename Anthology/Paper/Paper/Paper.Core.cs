@@ -835,10 +835,7 @@ public partial class Paper
     /// <returns>A builder for configuring the element</returns>
     public ElementBuilder Box(string stringID, int intID = 0, [CallerLineNumber] int lineID = 0)
     {
-        if (stringID == null)
-        {
-            throw new ArgumentNullException(nameof(stringID));
-        }
+        ArgumentNullException.ThrowIfNull(stringID);
 
         int storageHash = HashCode.Combine(CurrentParent.Data.ID, _IDStack.Peek(), stringID, intID, lineID);
 
@@ -927,8 +924,7 @@ public partial class Paper
     /// <summary> Registers a custom render action on the current parent element. The action receives the Canvas and the element's bounding Rect and executes before the element's children are drawn. Throws ArgumentException if renderAction is null. </summary>
     public void Draw(ref ElementHandle handle, Action<Canvas, Rect> renderAction)
     {
-        if (renderAction == null)
-            throw new ArgumentNullException(nameof(renderAction));
+        ArgumentNullException.ThrowIfNull(renderAction);
 
         handle.Data._renderCommands ??= TakeCommandList();
         handle.Data._renderCommands.Add(new ElementRenderCommand {
@@ -965,8 +961,7 @@ public partial class Paper
     /// <summary> Registers a custom render action on the current parent element. The action receives the Canvas and the element's bounding Rect and executes after the element's children are drawn. Throws ArgumentException if renderAction is null. </summary>
     public void DrawForeground(ref ElementHandle handle, Action<Canvas, Rect> renderAction)
     {
-        if (renderAction == null)
-            throw new ArgumentNullException(nameof(renderAction));
+        ArgumentNullException.ThrowIfNull(renderAction);
 
         handle.Data._foregroundRenderCommands ??= TakeCommandList();
         handle.Data._foregroundRenderCommands.Add(new ElementRenderCommand {

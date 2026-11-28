@@ -68,7 +68,7 @@ public partial struct Int4 : IEquatable<Int4>, IFormattable
     public Int4(Int4 v) : this(v.X, v.Y, v.Z, v.W) { }
     public Int4(int[] array)
     {
-        if (array == null) throw new ArgumentNullException(nameof(array));
+        ArgumentNullException.ThrowIfNull(array);
         if (array.Length < 4) throw new ArgumentException("Array must contain at least 4 elements.", nameof(array));
         X = array[0];
         Y = array[1];

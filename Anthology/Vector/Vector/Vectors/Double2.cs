@@ -60,7 +60,7 @@ public partial struct Double2 : IEquatable<Double2>, IFormattable
     public Double2(Double2 v) : this(v.X, v.Y) { }
     public Double2(double[] array)
     {
-        if (array == null) throw new ArgumentNullException(nameof(array));
+        ArgumentNullException.ThrowIfNull(array);
         if (array.Length < 2) throw new ArgumentException("Array must contain at least 2 elements.", nameof(array));
         X = array[0];
         Y = array[1];

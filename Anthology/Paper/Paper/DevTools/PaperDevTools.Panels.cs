@@ -103,7 +103,7 @@ public sealed partial class PaperDevTools
     {
         if (string.IsNullOrEmpty(d.Paragraph)) return "";
         string s = d.Paragraph.Replace("\n", " ");
-        return s.Length > 42 ? s.Substring(0, 42) + "..." : s;
+        return s.Length > 42 ? string.Concat(s.AsSpan(0, 42), "...") : s;
     }
 
     // Classifies what an element actually paints during the render pass (this is what the flame

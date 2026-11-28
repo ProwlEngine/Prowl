@@ -38,7 +38,7 @@ internal static partial class Win32WindowIcon
             if (brush != IntPtr.Zero)
             {
                 if (IntPtr.Size == 8) SetClassLongPtrW(hwnd, GCLP_HBRBACKGROUND, brush);
-                else _ = SetClassLongW(hwnd, GCLP_HBRBACKGROUND, (int)brush);
+                else _ = SetClassLongW(hwnd, GCLP_HBRBACKGROUND, brush.ToInt32());
             }
         }
         catch { }

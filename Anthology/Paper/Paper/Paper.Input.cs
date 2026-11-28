@@ -29,12 +29,12 @@ public partial class Paper
     public bool WantsPointerWrap { get; private set; }
 
     // Enums
-    public readonly PaperKey[] KeyValues = Enum.GetValues(typeof(PaperKey)).Cast<PaperKey>().ToArray();
+    public readonly PaperKey[] KeyValues = Enum.GetValues<PaperKey>();
     /// <summary> All defined PaperMouseBtn values, cached for iteration. </summary>
-    public readonly PaperMouseBtn[] MouseValues = Enum.GetValues(typeof(PaperMouseBtn)).Cast<PaperMouseBtn>().ToArray();
+    public readonly PaperMouseBtn[] MouseValues = Enum.GetValues<PaperMouseBtn>();
 
-    private static readonly int KeyCount = Enum.GetValues(typeof(PaperKey)).Length;
-    private static readonly int MouseCount = Enum.GetValues(typeof(PaperMouseBtn)).Length;
+    private static readonly int KeyCount = Enum.GetValues<PaperKey>().Length;
+    private static readonly int MouseCount = Enum.GetValues<PaperMouseBtn>().Length;
 
     // Events
     /// <summary> Raised when the pointer position is set. The Float2 parameter contains the new pointer coordinates. </summary>

@@ -77,7 +77,7 @@ public partial struct Float4 : IEquatable<Float4>, IFormattable
     public Float4(Float4 v) : this(v.X, v.Y, v.Z, v.W) { }
     public Float4(float[] array)
     {
-        if (array == null) throw new ArgumentNullException(nameof(array));
+        ArgumentNullException.ThrowIfNull(array);
         if (array.Length < 4) throw new ArgumentException("Array must contain at least 4 elements.", nameof(array));
         X = array[0];
         Y = array[1];

@@ -157,7 +157,7 @@ public sealed class CodeDocument
     public TextChange Replace(TextRange range, string text)
     {
         text ??= string.Empty;
-        if (text.IndexOf('\r') >= 0) text = text.Replace("\r\n", "\n").Replace('\r', '\n');
+        if (text.Contains('\r')) text = text.Replace("\r\n", "\n").Replace('\r', '\n');
 
         TextPosition start = Clamp(range.Start);
         TextPosition end = Clamp(range.End);
@@ -239,7 +239,7 @@ public sealed class CodeDocument
     {
         int nl = text.IndexOf('\n');
         if (nl > 0 && text[nl - 1] == '\r') return "\r\n";
-        if (nl < 0 && text.IndexOf('\r') >= 0) return "\r";
+        if (nl < 0 && text.Contains('\r')) return "\r";
         return "\n";
     }
 }

@@ -362,7 +362,7 @@ internal sealed unsafe partial class OpenXRSession : IDisposable
             PhysicalDevice = new VkHandle(vulkan.PhysicalDevice),
             Device = new VkHandle(vulkan.Device),
             QueueFamilyIndex = vulkan.GraphicsQueueFamilyIndex,
-            QueueIndex = vulkan.GraphicsQueueIndex,
+            QueueIndex = Prowl.Graphite.BackendInfoVulkan.GraphicsQueueIndex,
         };
         var createInfo = new SessionCreateInfo
         {

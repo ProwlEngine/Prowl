@@ -159,7 +159,7 @@ public partial class Canvas
     /// </summary>
     public bool DrawSnapshot(CanvasSnapshot snapshot, float x, float y)
     {
-        if (snapshot == null) throw new ArgumentNullException(nameof(snapshot));
+        ArgumentNullException.ThrowIfNull(snapshot);
 
         CanvasSnapshot s = snapshot;
         if (!s.IsValid || s.Owner != this)

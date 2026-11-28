@@ -47,7 +47,7 @@ public class ObjectPool<T> where T : class
     /// </summary>
     public void Return(T item)
     {
-        if (item == null) throw new ArgumentNullException(nameof(item));
+        ArgumentNullException.ThrowIfNull(item);
 
         // Only add to the pool if we're under the max size
         if (_maxSize <= 0 || _objects.Count < _maxSize)

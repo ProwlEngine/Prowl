@@ -90,8 +90,7 @@ public partial class FontFile
 
     public FontFile(Stream stream)
     {
-        if (stream == null)
-            throw new ArgumentNullException(nameof(stream));
+        ArgumentNullException.ThrowIfNull(stream);
 
         if (InitFontAtIndex(ReadFully(stream), 0) == 0)
             throw new InvalidDataException("Failed to initialize font");

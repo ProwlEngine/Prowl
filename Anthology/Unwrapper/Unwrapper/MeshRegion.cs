@@ -35,9 +35,9 @@ internal sealed class MeshRegion
             HalfEdge h1 = h0.Next!;
             HalfEdge h2 = h1.Next!;
 
-            if (vertexLookup.TryAdd(Mesh.IndexOf(h0.Apex!), 0)) vertexList.Add(Mesh.IndexOf(h0.Apex!));
-            if (vertexLookup.TryAdd(Mesh.IndexOf(h1.Apex!), 0)) vertexList.Add(Mesh.IndexOf(h1.Apex!));
-            if (vertexLookup.TryAdd(Mesh.IndexOf(h2.Apex!), 0)) vertexList.Add(Mesh.IndexOf(h2.Apex!));
+            if (vertexLookup.TryAdd(h0.Apex!.Index, 0)) vertexList.Add(h0.Apex!.Index);
+            if (vertexLookup.TryAdd(h1.Apex!.Index, 0)) vertexList.Add(h1.Apex!.Index);
+            if (vertexLookup.TryAdd(h2.Apex!.Index, 0)) vertexList.Add(h2.Apex!.Index);
         }
 
         // Number in ascending vertex order so the resulting indexing is stable across runs.
