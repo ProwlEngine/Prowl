@@ -31,22 +31,6 @@ public sealed class Texture2D : Texture, ISerializable
     /// <summary>The height of this <see cref="Texture2D"/>.</summary>
     public uint Height { get { EnsureLoaded(); return _height; } }
 
-    /// <summary>
-    /// Gets the number of bytes the image takes in its stored (possibly compressed) <see cref="Texture.Format"/>,
-    /// every mip level included and partial edge blocks counted whole. This is the size of the imported asset's
-    /// pixel data, not of the source file it came from.
-    /// </summary>
-    public long StoredSize { get { EnsureLoaded(); return ChainSize(FormatUnchecked, _width, _height, MipCountUnchecked); } }
-
-    /// <summary>Bytes a mip chain of the given format takes, each level halved down to 1x1 and partial edge blocks counted whole.</summary>
-    private static long ChainSize(TextureFormat format, uint width, uint height, uint mips)
-    {
-        long bytes = 0;
-        for (int mip = 0; mip < mips; mip++)
-            bytes += GraphicsFormats.DataSize(format, Math.Max(1u, width >> mip), Math.Max(1u, height >> mip));
-        return bytes;
-    }
-
     public Texture2D() : base(TextureFormat.RGBA8, false, WrapMode.Repeat) { }
 
     /// <summary>
@@ -261,10 +245,10 @@ public sealed class Texture2D : Texture, ISerializable
             throw new ArgumentOutOfRangeException(null, "Specified area is outside of the texture's storage");
     }
 
-    /// <summary>The stored mip chain, plus the RGBA8 chain the GPU holds when it can't sample the stored format. Never loads the texture.</summary>
     protected internal override long EstimateBytes()
-        => ChainSize(FormatUnchecked, _width, _height, MipCountUnchecked)
-            + (_expandedLevels != null ? ChainSize(TextureFormat.RGBA8, _width, _height, MipCountUnchecked) : 0);
+        => (long)((GraphicsFormats.DataSize(FormatUnchecked, _width, _height)
+            + (_expandedLevels != null ? GraphicsFormats.DataSize(TextureFormat.RGBA8, _width, _height) : 0))
+            * (MipCountUnchecked > 1 ? 4.0 / 3.0 : 1.0));
 
     public void Serialize(ref EchoObject compoundTag, SerializationContext ctx)
     {

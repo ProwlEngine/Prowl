@@ -103,7 +103,17 @@ public class TextureAssetEditor : ImportSettingsEditor
                 EditorGUI.StatChip(paper, $"{id}_st_size", $"{tex.Width} x {tex.Height}", font);
                 EditorGUI.StatChip(paper, $"{id}_st_fmt", tex.Srgb ? $"{tex.Format} sRGB" : tex.Format.ToString(), font);
                 EditorGUI.StatChip(paper, $"{id}_st_mip", tex.MipCount > 1 ? $"{tex.MipCount} Mips" : "No Mipmaps", font);
-                long bytes = tex.StoredSize;
+
+                // Bytes the imported texture takes in its stored (possibly compressed) format, every mip level included and partial edge blocks counted whole.
+                static long ImportedSize(Texture2D tex)
+                {
+                    long bytes = 0;
+                    for (int mip = 0; mip < tex.MipCount; mip++)
+                        bytes += GraphicsFormats.DataSize(tex.Format, Math.Max(1u, tex.Width >> mip), Math.Max(1u, tex.Height >> mip));
+                    return bytes;
+                }
+
+                long bytes = ImportedSize(tex);
                 string fileSize = bytes >= 1024 * 1024
                     ? $"{bytes / (1024f * 1024f):F1} MB"
                     : $"{bytes / 1024f:F0} KB";
