@@ -2,6 +2,7 @@
 
   <PropertyGroup>
     <TargetFrameworks>$(ProwlTargetFrameworksCompat)</TargetFrameworks>
+    <Nullable>disable</Nullable>
 
     <PackageId>Prowl.Recast</PackageId>
     <Title>Prowl.Recast</Title>

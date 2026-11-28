@@ -25,7 +25,6 @@ using Prowl.Recast.Core;
 using Prowl.Recast.Core.Numerics;
 using Prowl.Recast.Detour.Dynamic.Io;
 using Prowl.Recast.Detour.Dynamic.Tests.Io;
-using Prowl.Recast;
 using Moq;
 
 namespace Prowl.Recast.Detour.Dynamic.Tests;
@@ -40,7 +39,7 @@ public class VoxelQueryTest
     [Fact]
     public void ShouldTraverseTiles()
     {
-        var hfProvider = new Mock<Func<int, int, RcHeightfield>>();
+        var hfProvider = new Mock<Func<int, int, RcHeightfield?>>();
 
         // Given
         List<int> captorX = new();
@@ -48,7 +47,7 @@ public class VoxelQueryTest
 
         hfProvider
             .Setup(e => e.Invoke(It.IsAny<int>(), It.IsAny<int>()))
-            .Returns((RcHeightfield)null)
+            .Returns((RcHeightfield?)null)
             .Callback<int, int>((x, z) =>
             {
                 captorX.Add(x);
@@ -75,7 +74,7 @@ public class VoxelQueryTest
         RcVec3f start = new RcVec3f(7.4f, 0.5f, -64.8f);
         RcVec3f end = new RcVec3f(31.2f, 0.5f, -75.3f);
         bool isHit = query.Raycast(start, end, out var hit);
-        Assert.Equal(false, isHit);
+        Assert.False(isHit);
     }
 
     [Fact]
@@ -86,7 +85,7 @@ public class VoxelQueryTest
         RcVec3f start = new RcVec3f(32.3f, 0.5f, 47.9f);
         RcVec3f end = new RcVec3f(-31.2f, 0.5f, -29.8f);
         bool isHit = query.Raycast(start, end, out var hit);
-        Assert.Equal(true, isHit);
+        Assert.True(isHit);
         Assert.Equal(0.5263836f, hit, 1e-7f);
     }
 

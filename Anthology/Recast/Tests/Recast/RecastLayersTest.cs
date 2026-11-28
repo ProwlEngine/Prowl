@@ -51,7 +51,7 @@ public class RecastLayersTest
     public void TestDungeon()
     {
         RcHeightfieldLayerSet lset = Build("dungeon.obj", 3, 2);
-        Assert.Equal(1, lset.layers.Length);
+        Assert.Single(lset.layers);
         Assert.Equal(48, lset.layers[0].width);
         Assert.Equal(51, lset.layers[0].hmin);
         Assert.Equal(67, lset.layers[0].hmax);

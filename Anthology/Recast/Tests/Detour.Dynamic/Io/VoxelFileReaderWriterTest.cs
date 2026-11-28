@@ -47,7 +47,7 @@ public class VoxelFileReaderWriterTest
         Assert.Equal(2f, f.maxSimplificationError);
         Assert.Equal(2f, f.minRegionArea);
         Assert.Equal(12f, f.regionMergeArea);
-        Assert.Equal(1, f.tiles.Count);
+        Assert.Single(f.tiles);
         Assert.Equal(0.001f, f.tiles[0].cellHeight);
         Assert.Equal(810, f.tiles[0].width);
         Assert.Equal(810, f.tiles[0].depth);

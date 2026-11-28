@@ -11,7 +11,7 @@ internal static class SplitFaceOp
     /// <summary>Splits a face along the line between two of its vertices. Returns the second of the two new faces.</summary>
     internal static GeometryData.Face? SplitFace(GeometryData mesh, GeometryData.Face face, GeometryData.Vertex vert1, GeometryData.Vertex vert2, out GeometryData.Edge? newEdge)
     {
-        (GeometryData.Face _, GeometryData.Face? second) = SplitFaceBoth(mesh, face, vert1, vert2, out newEdge);
+        (GeometryData.Face? _, GeometryData.Face? second) = SplitFaceBoth(mesh, face, vert1, vert2, out newEdge);
         return second;
     }
 

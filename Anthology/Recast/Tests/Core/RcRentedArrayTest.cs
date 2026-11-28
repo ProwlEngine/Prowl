@@ -55,7 +55,7 @@ public class RcRentedArrayTest
             using var r1 = RcRentedArray.Shared.Rent<float>(1024);
             using var r2 = RcRentedArray.Shared.Rent<float>(1024);
 
-            Assert.Equal(true, r2.AsSpan() != r1.AsSpan());
+            Assert.True(r2.AsSpan() != r1.AsSpan());
         }
 
         // same
@@ -74,7 +74,7 @@ public class RcRentedArrayTest
 
             using var r2 = RcRentedArray.Shared.Rent<float>(1024);
 
-            Assert.Equal(true, r2.AsSpan() == r1Array);
+            Assert.True(r2.AsSpan() == r1Array);
         }
     }
 
@@ -87,8 +87,8 @@ public class RcRentedArrayTest
             r1[i] = 123;
         }
 
-        Assert.Equal(false, r1.IsDisposed);
+        Assert.False(r1.IsDisposed);
         r1.Dispose();
-        Assert.Equal(true, r1.IsDisposed);
+        Assert.True(r1.IsDisposed);
     }
 }

@@ -85,8 +85,8 @@ public class RcBinaryMinHeapTest
         var result = minHeap.Modify(node7); // Modify value 7 to 1
         var result2 = minHeap.Modify(new Node(4));
 
-        Assert.Equal(true, result);
-        Assert.Equal(false, result2);
+        Assert.True(result);
+        Assert.False(result2);
         Assert.Equal(1, minHeap.Top().Value);
         AssertHeapProperty(minHeap.ToArray());
     }

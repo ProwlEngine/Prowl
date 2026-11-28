@@ -53,7 +53,7 @@ public class RecastTileMeshTest
         TestBuild("dungeon.obj");
     }
 
-    public void TestBuild(string filename)
+    private void TestBuild(string filename)
     {
         IRcInputGeomProvider geom = RcSampleInputGeomProvider.LoadFile(filename);
         RcBuilder builder = new RcBuilder();
@@ -133,6 +133,6 @@ public class RecastTileMeshTest
 
     private RcBuilderResult GetTile(List<RcBuilderResult> tiles, int x, int z)
     {
-        return tiles.FirstOrDefault(tile => tile.TileX == x && tile.TileZ == z);
+        return tiles.First(tile => tile.TileX == x && tile.TileZ == z);
     }
 }
