@@ -41,7 +41,7 @@ public class NavMeshBuilderTest
         Assert.Equal(118, nmd.detailMeshes.Length);
         Assert.Equal(291, nmd.detailTris.Length / 4);
         Assert.Equal(60, nmd.detailVerts.Length / 3);
-        Assert.Equal(1, nmd.offMeshCons.Length);
+        Assert.Single(nmd.offMeshCons);
         Assert.Equal(118, nmd.header.offMeshBase);
         Assert.Equal(236, nmd.bvTree.Length);
         Assert.True(nmd.bvTree.Length >= nmd.header.bvNodeCount);

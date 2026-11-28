@@ -61,10 +61,10 @@ public class TileCacheReaderTest
         Assert.Equal(1, header.detailMeshCount);
         Assert.Equal(0, header.detailVertCount);
         Assert.Equal(2, header.detailTriCount);
-        Assert.Equal(1, data.polys.Length);
+        Assert.Single(data.polys);
         Assert.Equal(3 * 4, data.verts.Length);
-        Assert.Equal(1, data.detailMeshes.Length);
-        Assert.Equal(0, data.detailVerts.Length);
+        Assert.Single(data.detailMeshes);
+        Assert.Empty(data.detailVerts);
         Assert.Equal(4 * 2, data.detailTris.Length);
         Assert.Equal(-2.269517f, data.verts[1], 0.0001f);
         Assert.Equal(28.710686f, data.verts[6], 0.0001f);
@@ -86,7 +86,7 @@ public class TileCacheReaderTest
         Assert.Equal(7, data.polys.Length);
         Assert.Equal(3 * 10, data.verts.Length);
         Assert.Equal(7, data.detailMeshes.Length);
-        Assert.Equal(0, data.detailVerts.Length);
+        Assert.Empty(data.detailVerts);
         Assert.Equal(4 * 10, data.detailTris.Length);
         Assert.Equal(0.330483f, data.verts[1], 0.0001f);
         Assert.Equal(43.110687f, data.verts[6], 0.0001f);
@@ -104,7 +104,7 @@ public class TileCacheReaderTest
         Assert.Equal(12, data.polys.Length);
         Assert.Equal(3 * 33, data.verts.Length);
         Assert.Equal(12, data.detailMeshes.Length);
-        Assert.Equal(0, data.detailVerts.Length);
+        Assert.Empty(data.detailVerts);
         Assert.Equal(4 * 25, data.detailTris.Length);
         Assert.Equal(1.130483f, data.verts[1], 0.0001f);
         Assert.Equal(5.610685f, data.verts[6], 0.0001f);
@@ -122,7 +122,7 @@ public class TileCacheReaderTest
         Assert.Equal(5, data.polys.Length);
         Assert.Equal(3 * 15, data.verts.Length);
         Assert.Equal(5, data.detailMeshes.Length);
-        Assert.Equal(0, data.detailVerts.Length);
+        Assert.Empty(data.detailVerts);
         Assert.Equal(4 * 11, data.detailTris.Length);
         Assert.Equal(10.330483f, data.verts[1], 0.0001f);
         Assert.Equal(10.110685f, data.verts[6], 0.0001f);
@@ -162,7 +162,7 @@ public class TileCacheReaderTest
         Assert.Equal(8, data.polys.Length);
         Assert.Equal(3 * 18, data.verts.Length);
         Assert.Equal(8, data.detailMeshes.Length);
-        Assert.Equal(0, data.detailVerts.Length);
+        Assert.Empty(data.detailVerts);
         Assert.Equal(4 * 14, data.detailTris.Length);
         Assert.Equal(14.997294f, data.verts[1], 0.0001f);
         Assert.Equal(15.484785f, data.verts[6], 0.0001f);
@@ -180,7 +180,7 @@ public class TileCacheReaderTest
         Assert.Equal(3, data.polys.Length);
         Assert.Equal(3 * 8, data.verts.Length);
         Assert.Equal(3, data.detailMeshes.Length);
-        Assert.Equal(0, data.detailVerts.Length);
+        Assert.Empty(data.detailVerts);
         Assert.Equal(4 * 6, data.detailTris.Length);
         Assert.Equal(13.597294f, data.verts[1], 0.0001f);
         Assert.Equal(17.584785f, data.verts[6], 0.0001f);
@@ -198,7 +198,7 @@ public class TileCacheReaderTest
         Assert.Equal(10, data.polys.Length);
         Assert.Equal(3 * 20, data.verts.Length);
         Assert.Equal(10, data.detailMeshes.Length);
-        Assert.Equal(0, data.detailVerts.Length);
+        Assert.Empty(data.detailVerts);
         Assert.Equal(4 * 18, data.detailTris.Length);
         Assert.Equal(6.197294f, data.verts[1], 0.0001f);
         Assert.Equal(-22.315216f, data.verts[6], 0.0001f);
@@ -213,10 +213,10 @@ public class TileCacheReaderTest
         Assert.Equal(1, header.detailMeshCount);
         Assert.Equal(0, header.detailVertCount);
         Assert.Equal(3, header.detailTriCount);
-        Assert.Equal(1, data.polys.Length);
+        Assert.Single(data.polys);
         Assert.Equal(3 * 5, data.verts.Length);
-        Assert.Equal(1, data.detailMeshes.Length);
-        Assert.Equal(0, data.detailVerts.Length);
+        Assert.Single(data.detailMeshes);
+        Assert.Empty(data.detailVerts);
         Assert.Equal(4 * 3, data.detailTris.Length);
         Assert.Equal(10.197294f, data.verts[1], 0.0001f);
         Assert.Equal(48.484783f, data.verts[6], 0.0001f);
