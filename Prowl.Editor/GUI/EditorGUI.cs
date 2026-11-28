@@ -38,7 +38,7 @@ public static class EditorGUI
     public static int RowFilterMatches { get; set; }
 
     public static void Row(Paper paper, string id, string label, Action drawControl,
-        bool separator = false, float? labelWidth = null, bool compact = false, float minHeight = 0f)
+        bool separator = false, float? labelWidth = null, bool compact = false, float minHeight = 0f, string? tooltip = null)
     {
         if (RowFilter != null)
         {
@@ -54,7 +54,7 @@ public static class EditorGUI
             // padding) so hand-drawn rows line up with the reflection-drawn PropertyGrid. Compact rows
             // rely on their host column's Gap instead, so they take no bottom margin.
             DrawRowLine(paper, id, label, drawControl, m, labelWidth, compact, minHeight,
-                vpad: 0, bottomMargin: compact ? 0f : m.SpacingLarge);
+                vpad: 0, bottomMargin: compact ? 0f : m.SpacingLarge, tooltip);
             return;
         }
 
@@ -62,13 +62,13 @@ public static class EditorGUI
         using (paper.Column(id).Height(UnitValue.Auto).Margin(0, 0, 0, m.Spacing).Enter())
         {
             DrawRowLine(paper, $"{id}_r", label, drawControl, m, labelWidth, compact, minHeight,
-                vpad: m.PaddingSmall, bottomMargin: 0);
+                vpad: m.PaddingSmall, bottomMargin: 0, tooltip);
             paper.Box($"{id}_d").Height(1).BackgroundColor(EditorTheme.BorderSoft).IsNotInteractable();
         }
     }
 
     private static void DrawRowLine(Paper paper, string id, string label, Action drawControl,
-        OrigamiMetrics m, float? labelWidth, bool compact, float minHeight, float vpad, float bottomMargin)
+        OrigamiMetrics m, float? labelWidth, bool compact, float minHeight, float vpad, float bottomMargin, string? tooltip)
     {
         Scribe.FontFile? font = EditorTheme.DefaultFont;
         float rh = minHeight > 0f ? minHeight : m.RowHeight;
@@ -82,10 +82,16 @@ public static class EditorGUI
             .Margin(0, 0, 0, bottomMargin).Enter())
         {
             if (!string.IsNullOrEmpty(label) && font != null)
-                paper.Box($"{id}_l").Width(labelWidth ?? m.LabelWidth).Height(rh)
-                    .Margin(0, 0, UnitValue.StretchOne, UnitValue.StretchOne).IsNotInteractable()
+            {
+                var labelBox = paper.Box($"{id}_l").Width(labelWidth ?? m.LabelWidth).Height(rh)
+                    .Margin(0, 0, UnitValue.StretchOne, UnitValue.StretchOne)
                     .Text(label, font).TextColor(labelColor).FontSize(labelSize)
                     .Alignment(TextAlignment.MiddleLeft).TextTruncate();
+                if (tooltip != null)
+                    labelBox.Tooltip(tooltip);
+                else
+                    labelBox.IsNotInteractable();
+            }
 
             // The control sizes to its widget and centers via stretch margins. (A forced MinHeight here
             // used to top-align the widget while the label stayed centered, so they didn't line up.)
@@ -119,18 +125,18 @@ public static class EditorGUI
 
     /// <summary>A settings-window row (label + control with a bottom divider by default).</summary>
     public static void SettingsRow(Paper paper, string id, string label, Action drawControl,
-        bool separator = true, float? labelWidth = null, bool compact = false, float minHeight = 0f)
-        => Row(paper, id, label, drawControl, separator, labelWidth, compact, minHeight);
+        bool separator = true, float? labelWidth = null, bool compact = false, float minHeight = 0f, string? tooltip = null)
+        => Row(paper, id, label, drawControl, separator, labelWidth, compact, minHeight, tooltip);
 
     /// <summary>A label + pill-toggle settings row (respects the label gutter).</summary>
     public static void SettingsToggle(Paper paper, string id, string label, bool value,
-        Action<bool> setter, bool separator = true, bool compact = false)
+        Action<bool> setter, bool separator = true, bool compact = false, string? tooltip = null)
         => SettingsRow(paper, id, label, () =>
         {
             using (paper.Row($"{id}_tw").Height(Origami.Current.Metrics.RowHeight)
                 .Margin(0, 0, UnitValue.StretchOne, UnitValue.StretchOne).Enter())
                 Origami.Switch(paper, $"{id}_sw", value, setter).NoLabel().Show();
-        }, separator, compact: compact);
+        }, separator, compact: compact, tooltip: tooltip);
 
     /// <summary>A label + slider settings row. The value is rounded to 2 decimals before
     /// <paramref name="setter"/> is called; <paramref name="format"/> controls the readout.</summary>
@@ -162,9 +168,9 @@ public static class EditorGUI
             Origami.IntSlider(paper, $"{id}_v", value, v => { setter(v); EditorRegistries.SaveSettings(); }, min, max).Show());
 
     /// <summary> A label + enum dropdown settings row. Calls EditorRegistries.SaveSettings() on change. </summary>
-    public static void SettingsEnumDropdown<T>(Paper paper, string id, string label, T value, Action<T> setter) where T : struct, Enum
+    public static void SettingsEnumDropdown<T>(Paper paper, string id, string label, T value, Action<T> setter, string? tooltip = null) where T : struct, Enum
         => Row(paper, id, label, () =>
-            Origami.EnumDropdown(paper, $"{id}_v", value, v => { setter(v); EditorRegistries.SaveSettings(); }).Show());
+            Origami.EnumDropdown(paper, $"{id}_v", value, v => { setter(v); EditorRegistries.SaveSettings(); }).Show(), tooltip: tooltip);
 
     /// <summary> A checkbox with a right-aligned label settings row. Calls EditorRegistries.SaveSettings() on change. </summary>
     public static void SettingsCheckbox(Paper paper, string id, string label, bool value, Action<bool> setter)

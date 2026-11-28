@@ -18,6 +18,7 @@ internal sealed class RendererResources : IDisposable
     private GraphicsProgram? _prefilterProgram;
     private readonly GraphicsDevice _device;
     private readonly PixelFormat[]?[] _sceneTargets = new PixelFormat[18][];
+    private readonly Func<PixelFormat, bool> _drawable;
 
     public RendererResources(GraphicsDevice device, IShaderCompiler? compiler, CompilePolicy policy = CompilePolicy.Sync, Action<RendererError>? report = null)
     {
@@ -56,16 +57,9 @@ internal sealed class RendererResources : IDisposable
         LinearRepeat = factory.CreateSampler(SamplerDescription.Linear);
         Textures = new RendererTextures(device, LinearRepeat);
 
-        SceneFormats = ViewGraph.SceneFormats(format => device.GetPixelFormatSupport(format, TextureType.Texture2D, TextureUsage.RenderTarget | TextureUsage.Sampled));
-        OpaqueHdrFormat = device.GetPixelFormatSupport(PixelFormat.R11_G11_B10_Float, TextureType.Texture2D, TextureUsage.RenderTarget | TextureUsage.Sampled)
-            ? PixelFormat.R11_G11_B10_Float : SceneFormats[0];
-        OpaqueDisplayFormat = device.GetPixelFormatSupport(PixelFormat.R10_G10_B10_A2_UNorm, TextureType.Texture2D, TextureUsage.RenderTarget | TextureUsage.Sampled)
-            ? PixelFormat.R10_G10_B10_A2_UNorm : OpaqueHdrFormat;
-        GBufferFormats =
-        [
-            PixelFormat.R8_G8_B8_A8_UNorm_SRgb, SceneFormats[SceneTarget.Normals], PixelFormat.R8_G8_B8_A8_UNorm, PixelFormat.R8_G8_B8_A8_UNorm,
-            OpaqueHdrFormat, OpaqueHdrFormat, SceneFormats[SceneTarget.Motion],
-        ];
+        _drawable = format => device.GetPixelFormatSupport(format, TextureType.Texture2D, TextureUsage.RenderTarget | TextureUsage.Sampled);
+        SceneFormats = ViewGraph.SceneFormats(_drawable);
+        SetOpaqueHdr(PixelFormat.R11_G11_B10_Float);
         SupportsGBuffer = device.Limits.MaxColorAttachments >= GBufferFeature.TargetCount;
         SceneDepthFormat = ViewGraph.SceneDepth(format => device.GetPixelFormatSupport(format, TextureType.Texture2D, TextureUsage.DepthStencil | TextureUsage.Sampled));
 
@@ -122,16 +116,35 @@ internal sealed class RendererResources : IDisposable
     public PixelFormat SceneDepthFormat { get; }
 
     /// <summary>The formats of a GBuffer's targets, in the order of <see cref="GBufferTarget"/>.</summary>
-    public PixelFormat[] GBufferFormats { get; }
+    public PixelFormat[] GBufferFormats { get; private set; } = [];
 
     /// <summary>Whether the device draws to as many targets as a GBuffer has. Deferred views draw forward where it does not.</summary>
     public bool SupportsGBuffer { get; }
 
     /// <summary>The HDR colour format of views that keep no alpha, half the size of the scene's where the device draws to it.</summary>
-    public PixelFormat OpaqueHdrFormat { get; }
+    public PixelFormat OpaqueHdrFormat { get; private set; }
 
     /// <summary>The format of display encoded colour on views that keep no alpha, 10 bits a channel where the device draws to it.</summary>
-    public PixelFormat OpaqueDisplayFormat { get; }
+    public PixelFormat OpaqueDisplayFormat { get; private set; }
+
+    /// <summary>
+    /// Makes format the HDR colour of views that keep no alpha and of the GBuffer's baked and emission targets, the
+    /// scene's colour format where the device does not draw to it. Between frames.
+    /// </summary>
+    public void SetOpaqueHdr(PixelFormat format)
+    {
+        format = _drawable(format) ? format : SceneFormats[0];
+        if (format == OpaqueHdrFormat && GBufferFormats.Length > 0)
+            return;
+        OpaqueHdrFormat = format;
+        OpaqueDisplayFormat = _drawable(PixelFormat.R10_G10_B10_A2_UNorm) ? PixelFormat.R10_G10_B10_A2_UNorm : format;
+        GBufferFormats =
+        [
+            PixelFormat.R8_G8_B8_A8_UNorm_SRgb, SceneFormats[SceneTarget.Normals], PixelFormat.R8_G8_B8_A8_UNorm, PixelFormat.R8_G8_B8_A8_UNorm,
+            format, format, SceneFormats[SceneTarget.Motion],
+        ];
+        Array.Clear(_sceneTargets);
+    }
 
     /// <summary>The first count scene formats with the colour in the given one, made once each.</summary>
     public PixelFormat[] SceneTargetFormats(int count, PixelFormat color)

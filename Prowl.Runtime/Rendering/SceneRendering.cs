@@ -63,6 +63,7 @@ public sealed class SceneRendering : IDisposable
     private readonly Action<Mesh> _onMeshChanged;
     private int _lightingVersion = -1;
     private int _qualityVersion = -1;
+    private int _graphicsVersion = -1;
     private int _sortingLayersVersion = -1;
 
     /// <summary>
@@ -104,6 +105,29 @@ public sealed class SceneRendering : IDisposable
     {
         _voxels = desc;
         _voxelsFrame = Graphics.FrameIndex;
+    }
+
+    private static void SyncProjectSettings(RenderWorld world)
+    {
+        ShadowSettings shadows = Graphics.Shadows, worldShadows = world.Shadows;
+        worldShadows.PageSize = shadows.PageSize;
+        worldShadows.TexelsPerPixel = shadows.TexelsPerPixel;
+        worldShadows.MinTileSize = shadows.MinTileSize;
+        worldShadows.MaxResizesPerFrame = shadows.MaxResizesPerFrame;
+        worldShadows.LocalDistance = shadows.LocalDistance;
+        worldShadows.MinScreenRadius = shadows.MinScreenRadius;
+        worldShadows.DrawMilliseconds = shadows.DrawMilliseconds;
+
+        LodSettings lod = Graphics.Lod, worldLod = world.Lod;
+        worldLod.Transition = lod.Transition;
+        worldLod.FadeSeconds = lod.FadeSeconds;
+        worldLod.Bias = lod.Bias;
+        worldLod.FinestLevel = lod.FinestLevel;
+        worldLod.Hysteresis = lod.Hysteresis;
+        worldLod.ShadowOffset = lod.ShadowOffset;
+        worldLod.CaptureOffset = lod.CaptureOffset;
+        worldLod.VoxelOffset = lod.VoxelOffset;
+        worldLod.ReferenceHeight = lod.ReferenceHeight;
     }
 
     private void SyncVoxels(RenderWorld world)
@@ -204,13 +228,16 @@ public sealed class SceneRendering : IDisposable
         _spareUserSets.Clear();
     }
 
-    // Wakes the members drawing a mesh edited since the last sync, and every member after a lightmap rebake, a quality change or a sorting layer change
+    // Wakes the members drawing a mesh edited since the last sync, and every member after a lightmap rebake, a quality or
+    // graphics settings change or a sorting layer change
     internal void WakeChanged()
     {
-        if (_scene.BakedLightingVersion != _lightingVersion || QualitySettings.Version != _qualityVersion || TagLayerManager.SortingLayersVersion != _sortingLayersVersion)
+        if (_scene.BakedLightingVersion != _lightingVersion || QualitySettings.Version != _qualityVersion
+            || Graphics.SettingsVersion != _graphicsVersion || TagLayerManager.SortingLayersVersion != _sortingLayersVersion)
         {
             _lightingVersion = _scene.BakedLightingVersion;
             _qualityVersion = QualitySettings.Version;
+            _graphicsVersion = Graphics.SettingsVersion;
             _sortingLayersVersion = TagLayerManager.SortingLayersVersion;
             UnparkAll();
         }
@@ -257,6 +284,7 @@ public sealed class SceneRendering : IDisposable
         SyncEnvironment(world);
         SyncProbes(world);
         SyncVoxels(world);
+        SyncProjectSettings(world);
         Epoch++;
         RenderStats.AddSceneSync(System.Diagnostics.Stopwatch.GetElapsedTime(start).TotalMilliseconds, synced, _parked.Count);
     }

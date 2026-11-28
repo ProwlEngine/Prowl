@@ -81,11 +81,8 @@ public class QualitySettings : ProjectSettingsBase
                 Origami.NumericField<float>(paper, $"{id}_sdist_v", level.ShadowDistance, v => { level.ShadowDistance = MathF.Max(0.01f, v); Apply(); }).OnCommit(Changed).Show());
             EditorGUI.SettingsEnumDropdown(paper, $"{id}_casc", "Shadow Cascades", level.ShadowCascades, v => { level.ShadowCascades = v; Apply(); });
             EditorGUI.SettingsEnumDropdown(paper, $"{id}_sres", "Max Shadow Resolution", level.MaxShadowResolution, v => { level.MaxShadowResolution = v; Apply(); });
-            EditorGUI.Row(paper, $"{id}_cutoff", "Light Cutoff (lux)", () =>
-                Origami.NumericField<float>(paper, $"{id}_cutoff_v", level.LightCutoff, v => { level.LightCutoff = MathF.Max(0.001f, v); Apply(); }).OnCommit(Changed).Show());
 
             EditorGUI.SettingsIntSlider(paper, $"{id}_probe", "Max Probe Resolution", level.MaxProbeResolution, 16, 2048, v => { level.MaxProbeResolution = v; Apply(); });
-            EditorGUI.SettingsToggle(paper, $"{id}_occlusion", "Occlusion Culling", level.OcclusionCulling, v => { level.OcclusionCulling = v; Changed(); });
 
             if (Levels.Count > 1)
             {

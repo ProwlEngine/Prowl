@@ -36,7 +36,28 @@ internal sealed partial class Release_1_0 : MigrationRelease
         new("Camera background, depth and target saved behind properties", ctx => RenameSettings(ctx, s_cameraRenames)),
         new("The scene asset renamed to SceneAsset, as Scene now names the live world", ctx => ctx.RewriteEcho(SceneAssetName)),
         new("CSG brushes saved as their points and faces instead of planes", ctx => ctx.RewriteEchoAssets(BrushesAsPoints)),
+        new("Cameras that set their own HDR, rendering path or early depth keep them over the project's Graphics settings", ctx => ctx.RewriteEchoAssets(CameraRenderingOverride)),
     ];
+
+    // RenderPath.Deferred and EarlyDepth.All, the camera defaults the project's Graphics settings now hold
+    private const long DeferredPath = 1, AllEarlyDepth = 0;
+
+    /// <summary>A camera whose HDR, rendering path or early depth differs from the defaults turns OverrideRendering on.</summary>
+    internal static EchoObject? CameraRenderingOverride(EchoObject echo)
+    {
+        bool changed = false;
+        ForEachCompound(echo, tag =>
+        {
+            if (TypeName(tag) != CameraType || tag.TryGet("OverrideRendering", out _)) return;
+            bool own = (tag.TryGet("HDR", out EchoObject? hdr) && !hdr!.BoolValue)
+                || (tag.TryGet("RenderingPath", out EchoObject? path) && path!.LongValue != DeferredPath)
+                || (tag.TryGet("EarlyDepth", out EchoObject? early) && early!.LongValue != AllEarlyDepth);
+            if (!own) return;
+            tag["OverrideRendering"] = new EchoObject(true);
+            changed = true;
+        });
+        return changed ? echo : null;
+    }
 
     private static readonly Dictionary<string, (string From, string To)[]> s_cameraRenames = new()
     {

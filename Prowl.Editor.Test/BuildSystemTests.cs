@@ -1873,6 +1873,72 @@ public class BuildSystemTests : IDisposable
         finally { Graphics.TransparencySort = default; }
     }
 
+    [Fact]
+    public void ProjectOcclusionCulling_ReachesThePlayer()
+    {
+        var settings = new GraphicsSettings { OcclusionCulling = false };
+
+        string dir = Path.Combine(_root, "Settings");
+        Directory.CreateDirectory(dir);
+        EchoObject echo = Prowl.Echo.Serializer.Serialize(typeof(GraphicsSettings), settings, Prowl.Echo.TypeMode.None);
+        File.WriteAllText(Path.Combine(dir, PlayerSettingsFiles.Graphics + ".yaml"), echo.WriteToYaml());
+
+        Graphics.OcclusionCulling = true;
+        try
+        {
+            PlayerSettingsLoader.Apply(dir);
+
+            Assert.False(Graphics.OcclusionCulling);
+        }
+        finally { Graphics.OcclusionCulling = true; }
+    }
+
+    [Fact]
+    public void ProjectGraphicsSettings_ReachThePlayer()
+    {
+        var settings = new GraphicsSettings
+        {
+            RenderingPath = Graphite.Rendering.RenderPath.Forward,
+            EarlyDepth = Graphite.Rendering.EarlyDepth.AlphaCut,
+            HDR = false,
+            VSync = VSyncMode.Adaptive,
+            TargetFrameRate = 90,
+            ColorPrecision = Graphite.Rendering.ColorPrecision.Full,
+            ShadowPrecision = Graphite.Rendering.DepthPrecision.Depth32,
+            ReflectionPrecision = Graphite.Rendering.ColorPrecision.Compact,
+            LightCutoff = 0.5f,
+        };
+        settings.Shadows.PageSize = 4096;
+        settings.Lod.Transition = Graphite.Rendering.LodTransition.Pop;
+
+        string dir = Path.Combine(_root, "Settings");
+        Directory.CreateDirectory(dir);
+        EchoObject echo = Prowl.Echo.Serializer.Serialize(typeof(GraphicsSettings), settings, Prowl.Echo.TypeMode.None);
+        File.WriteAllText(Path.Combine(dir, PlayerSettingsFiles.Graphics + ".yaml"), echo.WriteToYaml());
+
+        try
+        {
+            PlayerSettingsLoader.Apply(dir);
+
+            Assert.Equal(Graphite.Rendering.RenderPath.Forward, Graphics.RenderingPath);
+            Assert.Equal(Graphite.Rendering.EarlyDepth.AlphaCut, Graphics.EarlyDepth);
+            Assert.False(Graphics.HDR);
+            Assert.Equal(VSyncMode.Adaptive, Application.GameVSync);
+            Assert.Equal(90, Application.GameTargetFrameRate);
+            Assert.Equal(4096, Graphics.Shadows.PageSize);
+            Assert.Equal(Graphite.Rendering.LodTransition.Pop, Graphics.Lod.Transition);
+            Assert.Equal(Graphite.Rendering.ColorPrecision.Full, Graphics.ColorPrecision);
+            Assert.Equal(Graphite.Rendering.DepthPrecision.Depth32, Graphics.ShadowPrecision);
+            Assert.Equal(Graphite.Rendering.ColorPrecision.Compact, Graphics.ReflectionPrecision);
+            Assert.Equal(0.5f, Graphics.LightCutoff);
+        }
+        finally
+        {
+            new GraphicsSettings().Apply();
+            Application.TargetFrameRate = 0;
+        }
+    }
+
     // ---------------------------------------------------------------- BuildTargetProviderScanTests
 
     public const string Family = "test-only";

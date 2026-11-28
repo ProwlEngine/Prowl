@@ -107,6 +107,22 @@ public sealed partial class LightingTests
     }
 
     [Fact]
+    public void ShadowAndColorPrecision_ChangedBetweenFrames_DrawTheSameShadow()
+    {
+        AssertNear(0, LitInShadow(m => m.SetFloat("base_metalness", 1)), "opaque metal");
+        Float4[] before = Frame();
+
+        _renderer.ShadowPrecision = DepthPrecision.Depth32;
+        _renderer.ColorPrecision = ColorPrecision.Full;
+        Frame();
+        Float4[] after = Frame();
+        Assert.Equal(PixelFormat.R16_G16_B16_A16_Float, _renderer.Resources.OpaqueHdrFormat);
+
+        for (int i = 0; i < before.Length; i++)
+            Assert.True(MathF.Abs(before[i].X - after[i].X) <= 2e-4f + 0.01f * MathF.Abs(before[i].X), $"pixel {i}: {before[i].X} before the change, {after[i].X} after");
+    }
+
+    [Fact]
     public void AClearGlassPane_CastsOnlyItsSpecularShare()
     {
         float lit = LitInShadow(m =>

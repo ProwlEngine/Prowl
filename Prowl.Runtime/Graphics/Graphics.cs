@@ -55,6 +55,100 @@ public static class Graphics
     /// <summary>How cameras sort transparent renderers unless they override it. Set from the project's Graphics settings.</summary>
     public static TransparencySort TransparencySort { get; set; }
 
+    /// <summary>
+    /// Whether cameras skip what is hidden behind what they saw last frame. Set from the project's Graphics settings. Pays
+    /// off where walls, buildings or terrain hide much of the scene. A deferred camera needs EarlyDepth All.
+    /// </summary>
+    public static bool OcclusionCulling
+    {
+        get => s_occlusionCulling;
+        set
+        {
+            s_occlusionCulling = value;
+            if (Renderer != null)
+                Renderer.OcclusionCulling = value;
+        }
+    }
+
+    private static bool s_occlusionCulling = true;
+
+    /// <summary>
+    /// The precision of HDR colour on cameras that keep no alpha, and of the GBuffer's baked and emission targets. Set
+    /// from the project's Graphics settings, taking effect next frame.
+    /// </summary>
+    public static ColorPrecision ColorPrecision
+    {
+        get => s_colorPrecision;
+        set
+        {
+            s_colorPrecision = value;
+            if (Renderer != null)
+                Renderer.ColorPrecision = value;
+        }
+    }
+
+    /// <summary>The depth precision of shadow maps. Set from the project's Graphics settings, taking effect next frame.</summary>
+    public static DepthPrecision ShadowPrecision
+    {
+        get => s_shadowPrecision;
+        set
+        {
+            s_shadowPrecision = value;
+            if (Renderer != null)
+                Renderer.ShadowPrecision = value;
+        }
+    }
+
+    /// <summary>The precision of reflection probe and sky probe cubes, which capture again when it changes.</summary>
+    public static ColorPrecision ReflectionPrecision
+    {
+        get => s_reflectionPrecision;
+        set
+        {
+            s_reflectionPrecision = value;
+            if (Renderer != null)
+                Renderer.ReflectionPrecision = value;
+        }
+    }
+
+    /// <summary>
+    /// The illuminance in lux where a local light's automatic range ends. Higher cuts lights shorter and cheaper. Set
+    /// from the project's Graphics settings.
+    /// </summary>
+    public static float LightCutoff
+    {
+        get => s_lightCutoff;
+        set
+        {
+            if (s_lightCutoff == value) return;
+            s_lightCutoff = value;
+            SettingsVersion++;
+        }
+    }
+
+    private static float s_lightCutoff = 0.25f;
+
+    /// <summary>Moves every time a setting that renderers sync from changes, so scenes sync them again.</summary>
+    public static int SettingsVersion { get; private set; }
+
+    private static ColorPrecision s_colorPrecision = ColorPrecision.Compact, s_reflectionPrecision = ColorPrecision.Full;
+    private static DepthPrecision s_shadowPrecision = DepthPrecision.Depth16;
+
+    /// <summary>How cameras light opaque surfaces unless they override it. Set from the project's Graphics settings.</summary>
+    public static RenderPath RenderingPath { get; set; } = RenderPath.Deferred;
+
+    /// <summary>Which surfaces deferred cameras draw depth for before their GBuffer unless they override it.</summary>
+    public static EarlyDepth EarlyDepth { get; set; } = EarlyDepth.All;
+
+    /// <summary>Whether cameras render into 16 bit float colour unless they override it.</summary>
+    public static bool HDR { get; set; } = true;
+
+    /// <summary>How every scene's local light shadows are stored and sized. Set from the project's Graphics settings.</summary>
+    public static ShadowSettings Shadows { get; set; } = new();
+
+    /// <summary>Every scene's LOD rules. Set from the project's Graphics settings.</summary>
+    public static LodSettings Lod { get; set; } = new();
+
     /// <summary>The largest width or height a texture may have.</summary>
     public static uint MaxTextureSize => 16384;
 
@@ -194,7 +288,13 @@ public static class Graphics
 
     private static void CreateRenderer()
     {
-        Renderer = new Renderer(Device!, ShaderCompiler);
+        Renderer = new Renderer(Device!, ShaderCompiler)
+        {
+            OcclusionCulling = s_occlusionCulling,
+            ColorPrecision = s_colorPrecision,
+            ShadowPrecision = s_shadowPrecision,
+            ReflectionPrecision = s_reflectionPrecision,
+        };
         Renderer.Error += error =>
         {
             if (error.Severity == RendererErrorSeverity.Warning) Debug.LogWarning($"[Graphite] {error.Message}");

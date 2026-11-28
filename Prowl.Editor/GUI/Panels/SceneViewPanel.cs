@@ -366,10 +366,11 @@ public class SceneViewPanel : DockPanel
 
                 if (Graphics.Renderer is { } renderer)
                 {
+                    bool occlusion = Graphics.OcclusionCulling;
                     b.Header(Loc.Get("scene.culling"));
                     b.Toggle(Loc.Get("scene.occlusion_culling"),
-                        () => { if (_editorCamera != null) _editorCamera.Camera.OcclusionCulling = !_editorCamera.Camera.OcclusionCulling; },
-                        () => _editorCamera?.Camera.OcclusionCulling ?? true);
+                        () => { if (_editorCamera != null) _editorCamera.Camera.SkipsOcclusionCulling = !_editorCamera.Camera.SkipsOcclusionCulling; },
+                        () => occlusion && !(_editorCamera?.Camera.SkipsOcclusionCulling ?? false), occlusion);
                     b.Toggle(Loc.Get("scene.freeze_culling"), () => renderer.FreezeCulling = !renderer.FreezeCulling, () => renderer.FreezeCulling);
                 }
 

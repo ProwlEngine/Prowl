@@ -2011,10 +2011,10 @@ public partial class EditorApplication : Game
             _maximizedBeforePlay = maximizedBefore;
         }
 
-        // The editor's vsync and frame limit are its preference, not the game's, so play starts
-        // unpaced and whatever the game's own code sets from here is what it runs at.
-        Application.VSync = VSyncMode.Mailbox;
-        Application.TargetFrameRate = 0;
+        // The editor's vsync and frame limit are its preference, not the game's, so play starts paced as the project
+        // says and whatever the game's own code sets from here is what it runs at.
+        Application.VSync = Application.GameVSync;
+        Application.TargetFrameRate = Application.GameTargetFrameRate;
 
         Runtime.Debug.Log("Entered play mode.");
     }

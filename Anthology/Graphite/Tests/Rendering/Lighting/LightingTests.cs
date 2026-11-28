@@ -1432,6 +1432,26 @@ public sealed partial class LightingTests : IDisposable
     }
 
     [Fact]
+    public void ReflectionPrecision_ChangedBetweenFrames_CapturesTheProbeAgain()
+    {
+        Room(new Double3(0, 0, 10), 20, _ => new Float3(0.8f, 0.5f, 0.2f), standardUnlit: true);
+        _world.AddReflectionProbe(RoomProbe(new Double3(-10, 0, 10), new Float3(20, 40, 40)));
+        Frame();
+        Float4 wall = Frame()[Size * Size / 2 + Size / 2];
+        Vector3 direct = new(wall.X, wall.Y, wall.Z);
+        _world.Add(new RenderableDesc { Mesh = _quad, Transform = Double4x4.CreateTranslation(_origin + new Double3(0, 0, QuadDepth)), LayerMask = 2 }, [Reflector()]);
+        Frame();
+        Frame();
+        AssertMatches(p => p.X < 0 ? direct : s_skyColor, Frame());
+
+        _renderer.ReflectionPrecision = ColorPrecision.Compact;
+        Frame();
+        Frame();
+        AssertMatches(p => p.X < 0 ? direct : s_skyColor, Frame());
+        Assert.Equal(PixelFormat.R11_G11_B10_Float, _world.Reflections.Sky!.Persistent.Texture!.ColorTextures[0].Format);
+    }
+
+    [Fact]
     public void BoxProjection_ReflectsTheWallEachRayReallyHits()
     {
         Float3[] colors = [new(1, 0, 0), new(0, 1, 0), new(0, 0, 1), new(1, 1, 0), new(0, 1, 1), new(1, 0, 1)];

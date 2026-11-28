@@ -296,7 +296,7 @@ internal sealed class WorldReflections : IDisposable
     private readonly GraphicsDevice _device;
     private readonly IMaterialResources _resources;
     private readonly Action<RendererError> _report;
-    private readonly ReflectionSettings _settings;
+    private ReflectionSettings _settings;
     private readonly RenderStore _store;
     private int _worldId;
     private bool _skyCaptured;
@@ -350,6 +350,7 @@ internal sealed class WorldReflections : IDisposable
         _resources = resources;
         _report = report;
         _settings = settings;
+        Format = settings.Format;
         Regions = new SpatialIndex<ReflectionProbeRecord>(tables, SpatialIndex.ProbesSet, Pack, report);
         SkyAmbient = device.ResourceFactory.CreateBuffer(new BufferDescription(112, BufferUsage.StructuredBufferReadWrite));
         SkyAmbient.Name = "Sky ambient";
@@ -357,6 +358,9 @@ internal sealed class WorldReflections : IDisposable
 
     /// <summary>The captured probes, in regions with a tree each.</summary>
     public SpatialIndex<ReflectionProbeRecord> Regions { get; }
+
+    /// <summary>The format of the sky and realtime probe cubes, which capture again in it at the next plan when it changes.</summary>
+    public PixelFormat Format { get; set; }
 
     /// <summary>The prefiltered sky. Null until the first capture.</summary>
     public Target? Sky { get; private set; }
@@ -532,6 +536,8 @@ internal sealed class WorldReflections : IDisposable
         _frame = frame;
 
         Captures.Clear();
+        if (Format != _settings.Format)
+            ChangeFormat();
         foreach (Scratch scratch in _scratchUsed)
             _scratch[scratch.Cube.Width].Push(scratch);
         _scratchUsed.Clear();
@@ -806,6 +812,35 @@ internal sealed class WorldReflections : IDisposable
         _jobs.Add(job);
         _working[index] = true;
         return job;
+    }
+
+    // Every cube in the old format goes, the sky's, the realtime probes' and the capture scratch, so they capture again.
+    // Bakes underway start over.
+    private void ChangeFormat()
+    {
+        _settings = _settings with { Format = Format };
+        foreach (Job job in _jobs)
+        {
+            _working[job.Index] = false;
+            if (job.Bake != null)
+                _bakes.Add((job.Index, _generations[job.Index], job.Bake));
+        }
+        _jobs.Clear();
+        _joining.Clear();
+        foreach (Scratch scratch in _scratchAll)
+            _store.Retire(scratch);
+        _scratchAll.Clear();
+        _scratch.Clear();
+        _scratchUsed.Clear();
+        Sky?.Persistent.Release(_store);
+        Sky = null;
+        for (int i = 0; i < _targets.Length; i++)
+        {
+            if (_targets[i] != null)
+                ReleaseTarget(i);
+            if (_alive[i] && _probes[i].Mode == ReflectionProbeMode.Realtime)
+                Uncapture(i);
+        }
     }
 
     private void StopJob(int index)

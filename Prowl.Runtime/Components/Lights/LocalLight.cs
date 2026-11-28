@@ -29,14 +29,14 @@ public abstract class LocalLight : Light
     /// <summary>The luminous intensity in candela along the light's brightest direction, a far field estimate for area lights.</summary>
     public abstract float AxisCandela { get; }
 
-    /// <summary>Where the light's brightest channel falls below the quality level's <see cref="QualityLevel.LightCutoff"/>.</summary>
+    /// <summary>Where the light's brightest channel falls below the project's <see cref="Graphics.LightCutoff"/>.</summary>
     public float AutomaticRange
     {
         get
         {
             Color color = FinalColor;
             float peak = Maths.Max(color.R, Maths.Max(color.G, color.B));
-            return Maths.Sqrt(Maths.Max(AxisCandela * peak, 0f) / Maths.Max(QualitySettings.Active.LightCutoff, 1e-4f));
+            return Maths.Sqrt(Maths.Max(AxisCandela * peak, 0f) / Maths.Max(Graphics.LightCutoff, 1e-4f));
         }
     }
 

@@ -18,6 +18,26 @@ public enum RenderThreading
     Inline,
 }
 
+/// <summary>How much of a colour target's range and precision its format keeps.</summary>
+public enum ColorPrecision : byte
+{
+    /// <summary>R11G11B10 float: half the memory of full, no alpha, a little less precise.</summary>
+    Compact,
+
+    /// <summary>RGBA16 float.</summary>
+    Full,
+}
+
+/// <summary>How many bits a depth target keeps.</summary>
+public enum DepthPrecision : byte
+{
+    /// <summary>16 bit unsigned normalized: half the memory.</summary>
+    Depth16,
+
+    /// <summary>32 bit float.</summary>
+    Depth32,
+}
+
 public sealed class RendererOptions
 {
     public RenderThreading Threading = RenderThreading.RenderThread;
@@ -31,8 +51,11 @@ public sealed class RendererOptions
     /// <summary>The hardware constant offset every shadow caster draws with, in depth steps.</summary>
     public float ShadowConstantBias = 2;
 
-    /// <summary>The depth format of shadow maps, D16_UNorm (half the memory) or D32_Float.</summary>
-    public PixelFormat ShadowFormat = PixelFormat.D16_UNorm;
+    /// <summary>The depth precision of shadow maps, see <see cref="Renderer.ShadowPrecision"/>.</summary>
+    public DepthPrecision ShadowPrecision = DepthPrecision.Depth16;
+
+    /// <summary>The precision of HDR colour where no alpha is kept, see <see cref="Renderer.ColorPrecision"/>.</summary>
+    public ColorPrecision ColorPrecision = ColorPrecision.Compact;
 
     /// <summary>Words of vertex data per geometry page.</summary>
     public uint PageVertexWords = GeometryPool.DefaultPageVertexWords;
@@ -58,8 +81,8 @@ public sealed class RendererOptions
     /// </summary>
     public CompilePolicy Compile = CompilePolicy.Async;
 
-    /// <summary>Format of reflection probe and sky probe cubes. B10G11R11 halves their memory, alpha is never used.</summary>
-    public PixelFormat ReflectionFormat = PixelFormat.R16_G16_B16_A16_Float;
+    /// <summary>The precision of reflection probe and sky probe cubes, see <see cref="Renderer.ReflectionPrecision"/>.</summary>
+    public ColorPrecision ReflectionPrecision = ColorPrecision.Full;
 
     /// <summary>GGX samples per prefiltered texel of every mip but the sharpest.</summary>
     public int PrefilterSamples = 64;
@@ -279,7 +302,11 @@ public sealed class Renderer : IDisposable
         _materials = new MaterialSystem(device, _store, Textures) { Reporter = Report };
         _globals = new GlobalRegistry(device, _store, Textures) { Reporter = Report };
         _programs.Reporter = Report;
-        _frame = new FramePipeline(device, _store, compiler, _uploader, _geometry, _materials, _globals, _programs, Resources, this, Report, _options.Compile) { ShadowFormat = _options.ShadowFormat, OcclusionCulling = _options.OcclusionCulling };
+        _frame = new FramePipeline(device, _store, compiler, _uploader, _geometry, _materials, _globals, _programs, Resources, this, Report, _options.Compile) { OcclusionCulling = _options.OcclusionCulling };
+        ColorPrecision = _options.ColorPrecision;
+        ShadowPrecision = _options.ShadowPrecision;
+        ReflectionPrecision = _options.ReflectionPrecision;
+        ApplyPrecision();
         FrameFeatures.Add(new DeformFeature());
         FrameFeatures.Add(new ReadbackFeature());
         _frame.Programs.ShadowBias = (_options.ShadowConstantBias, _options.ShadowSlopeBias);
@@ -359,7 +386,7 @@ public sealed class Renderer : IDisposable
         _frameDone.Wait();
         try
         {
-            RenderWorld world = new(Device, _store, this, Textures, new ReflectionSettings(_options.ReflectionFormat, _options.PrefilterSamples, _options.SmallestProbeMip, _options.ProbeTexelsPerFrame));
+            RenderWorld world = new(Device, _store, this, Textures, new ReflectionSettings(ReflectionFormat(), _options.PrefilterSamples, _options.SmallestProbeMip, _options.ProbeTexelsPerFrame));
             (GlobalProperties globals, int region) = _globals.AddWorld();
             world.Globals = globals;
             _worlds[world] = new WorldFrame(world, new BucketSet(world.Render, _programs, _options.GpuCulling), region, _programs);
@@ -545,6 +572,7 @@ public sealed class Renderer : IDisposable
         bool queued = false;
         try
         {
+            ApplyPrecision();
             RaiseBakes();
             RaiseReadbacks();
             RemoveWorlds();
@@ -680,6 +708,35 @@ public sealed class Renderer : IDisposable
         get => _frame.OcclusionCulling;
         set => _frame.OcclusionCulling = value;
     }
+
+    /// <summary>
+    /// The precision of HDR colour on views that keep no alpha, and of the GBuffer's baked and emission targets. Like the
+    /// other precisions it takes effect at the next SubmitFrame: pipelines are built for the new targets as they are
+    /// first drawn, and targets kept over frames are made again. Starts at <see cref="RendererOptions.ColorPrecision"/>.
+    /// Host thread.
+    /// </summary>
+    public ColorPrecision ColorPrecision { get; set; }
+
+    /// <summary>The depth precision of shadow pages and cascades, which draw again when it changes. Host thread.</summary>
+    public DepthPrecision ShadowPrecision { get; set; }
+
+    /// <summary>The precision of reflection probe and sky probe cubes, which capture again when it changes. Host thread.</summary>
+    public ColorPrecision ReflectionPrecision { get; set; }
+
+    // Puts the precisions into effect while the render thread waits
+    private void ApplyPrecision()
+    {
+        Resources.SetOpaqueHdr(ColorPrecision == ColorPrecision.Compact ? PixelFormat.R11_G11_B10_Float : PixelFormat.R16_G16_B16_A16_Float);
+        _frame.ShadowFormat = ShadowPrecision == DepthPrecision.Depth32 ? PixelFormat.D32_Float : PixelFormat.D16_UNorm;
+        PixelFormat reflection = ReflectionFormat();
+        foreach (WorldFrame world in _worlds.Values)
+            world.World.Reflections.Format = reflection;
+    }
+
+    // Compact where the device draws and samples it, else full
+    private PixelFormat ReflectionFormat()
+        => ReflectionPrecision == ColorPrecision.Compact && Device.GetPixelFormatSupport(PixelFormat.R11_G11_B10_Float, TextureType.Texture2D, TextureUsage.RenderTarget | TextureUsage.Sampled)
+            ? PixelFormat.R11_G11_B10_Float : PixelFormat.R16_G16_B16_A16_Float;
 
     /// <summary>
     /// Freezes what camera views cull on the GPU: they keep drawing the renderables in view when it was turned on, with

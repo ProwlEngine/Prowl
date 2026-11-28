@@ -219,10 +219,10 @@ public class LightEditor : CustomEditor
 
     private static void ReachRow(Paper paper, string id, LocalLight light)
     {
-        string cutoff = QualitySettings.Active.LightCutoff.ToString("0.###", CultureInfo.InvariantCulture);
+        string cutoff = Graphics.LightCutoff.ToString("0.###", CultureInfo.InvariantCulture);
         string help = light.OverrideRange
             ? "Set by hand. The light stops at this distance."
-            : $"Worked out from intensity: where the light falls below {cutoff} lux, the light cutoff in Quality settings.";
+            : $"Worked out from intensity: where the light falls below {cutoff} lux, the light cutoff in Graphics settings.";
         Row(paper, $"{id}_reach", "Reach", help, () =>
         {
             if (light.OverrideRange)

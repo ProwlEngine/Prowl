@@ -212,6 +212,24 @@ public static class PlayerSettingsLoader
             TransparencySortMode mode = settings.TryGet("TransparencySortMode", out EchoObject? modeProp) ? Serializer.Deserialize<TransparencySortMode>(modeProp) : TransparencySortMode.Default;
             Float3 axis = settings.TryGet("TransparencySortAxis", out EchoObject? axisProp) ? Serializer.Deserialize<Float3>(axisProp) : new Float3(0, 1, 0);
             Graphics.TransparencySort = new TransparencySort(mode, axis);
+            Graphics.OcclusionCulling = !settings.TryGet("OcclusionCulling", out EchoObject? occlusionProp) || occlusionProp!.BoolValue;
+
+            if (settings.TryGet("RenderingPath", out EchoObject? path)) Graphics.RenderingPath = Serializer.Deserialize<RenderPath>(path);
+            if (settings.TryGet("EarlyDepth", out EchoObject? early)) Graphics.EarlyDepth = Serializer.Deserialize<EarlyDepth>(early);
+            if (settings.TryGet("HDR", out EchoObject? hdr)) Graphics.HDR = hdr!.BoolValue;
+            if (settings.TryGet("LightCutoff", out EchoObject? cutoff)) Graphics.LightCutoff = cutoff!.FloatValue;
+
+            if (settings.TryGet("VSync", out EchoObject? vsync)) Application.GameVSync = Serializer.Deserialize<VSyncMode>(vsync);
+            if (settings.TryGet("TargetFrameRate", out EchoObject? rate)) Application.GameTargetFrameRate = rate!.IntValue;
+            Application.VSync = Application.GameVSync;
+            Application.TargetFrameRate = Application.GameTargetFrameRate;
+
+            if (settings.TryGet("ColorPrecision", out EchoObject? color)) Graphics.ColorPrecision = Serializer.Deserialize<ColorPrecision>(color);
+            if (settings.TryGet("ShadowPrecision", out EchoObject? shadowDepth)) Graphics.ShadowPrecision = Serializer.Deserialize<DepthPrecision>(shadowDepth);
+            if (settings.TryGet("ReflectionPrecision", out EchoObject? reflection)) Graphics.ReflectionPrecision = Serializer.Deserialize<ColorPrecision>(reflection);
+
+            if (settings.TryGet("Shadows", out EchoObject? shadows)) Graphics.Shadows = Serializer.Deserialize<ShadowSettings>(shadows) ?? new();
+            if (settings.TryGet("Lod", out EchoObject? lod)) Graphics.Lod = Serializer.Deserialize<LodSettings>(lod) ?? new();
         }
         catch (Exception ex) { Debug.LogWarning($"[PlayerSettings] Failed to apply graphics: {ex.Message}"); }
     }

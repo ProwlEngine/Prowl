@@ -185,6 +185,27 @@ public class ProjectMigrationTests : IDisposable
     }
 
     [Fact]
+    public void CamerasWithTheirOwnRenderingSettings_OverrideTheProjectDefaults()
+    {
+        string scene = WriteAsset("Cams.scene", Scene(
+            OldComponent("Camera", Guid.NewGuid(), ("RenderingPath", new EchoObject(0L))),
+            OldComponent("Camera", Guid.NewGuid(), ("HDR", new EchoObject(false))),
+            OldComponent("Camera", Guid.NewGuid(), ("EarlyDepth", new EchoObject(1L))),
+            OldComponent("Camera", Guid.NewGuid(), ("HDR", new EchoObject(true)),
+                ("RenderingPath", new EchoObject(1L)),
+                ("EarlyDepth", new EchoObject(0L)))), "SceneImporter");
+        WriteProwlFile("1.0", appliedSteps: Array.FindIndex(new Release_1_0().Steps, s => s.Name.StartsWith("Cameras that set their own")));
+
+        ProjectMigration.Migrate(Project.Open(_root));
+
+        EchoObject cameras = Item(scene);
+        for (int i = 0; i < 3; i++)
+            Assert.True(cameras[i]["OverrideRendering"].BoolValue);
+        Assert.False(cameras[3].TryGet("OverrideRendering", out _));
+        Assert.Null(Release_1_0.CameraRenderingOverride(EchoObject.ReadFromString(File.ReadAllText(scene))));
+    }
+
+    [Fact]
     public void PrefabOverridesOnRenamedSettings_FollowTheRename()
     {
         Guid light = Guid.NewGuid(), renderer = Guid.NewGuid(), unrelated = Guid.NewGuid();

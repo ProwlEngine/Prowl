@@ -863,6 +863,9 @@ internal sealed class WorldShadows(TableHost tables, int worldId)
     public readonly ShadowPlanner Planner = new();
     public int PageSize;
 
+    /// <summary>The depth format the pages were made in.</summary>
+    public PixelFormat PageFormat;
+
     /// <summary>The shrinks and static copies this frame's plan queued, which the world's passes record.</summary>
     public readonly List<ShadowShrink> Shrinks = [];
     public readonly List<ShadowCopy> Copies = [];
@@ -1102,8 +1105,20 @@ internal sealed partial class FramePipeline
     /// <summary>The materials whose draws or records changed this frame, whose casters' lights draw again.</summary>
     public List<Material> ChangedMaterials { get; set; } = [];
 
-    /// <summary>The depth format of shadow pages and cascades.</summary>
-    public PixelFormat ShadowFormat { get; init; } = PixelFormat.D16_UNorm;
+    /// <summary>The depth format of shadow pages and cascades, which are made again when it changes. Between frames.</summary>
+    public PixelFormat ShadowFormat
+    {
+        get => _shadowFormat;
+        set
+        {
+            if (_shadowFormat == value)
+                return;
+            _shadowFormat = value;
+            _blitShadows = null;
+        }
+    }
+
+    private PixelFormat _shadowFormat = PixelFormat.D16_UNorm;
 
     /// <summary>The comparison sampler every shadow read goes through: linear, clamped, lit where the receiver is nearer.</summary>
     public Sampler ShadowSampler => _shadowSampler ??= _device.ResourceFactory.CreateSampler(SamplerDescription.Linear with
@@ -1164,13 +1179,14 @@ internal sealed partial class FramePipeline
         shadows.Shrinks.Clear();
         shadows.Copies.Clear();
         shadows.ScratchTiles?.Reset(shadows.ScratchTiles.Size);
-        if (shadows.PageSize != pageSize)
+        if (shadows.PageSize != pageSize || shadows.PageFormat != ShadowFormat)
         {
             foreach ((int index, LightShadow light) in shadows.Lights)
                 ReleaseShadow(shadows, index, light, keepState: true);
             RetirePages(shadows, shadows.Pages, all: true);
             RetirePages(shadows, shadows.StaticPages, all: true);
             shadows.PageSize = pageSize;
+            shadows.PageFormat = ShadowFormat;
         }
         foreach (ShadowPage page in shadows.AllPages())
         {
@@ -2159,6 +2175,11 @@ internal sealed partial class FramePipeline
             }
             if (cascade.World != camera.World.World)
                 cascade.Valid = false;
+            if (cascade.Texture is { Texture.DepthTexture: { } made } && made.Format != ShadowFormat)
+            {
+                cascade.Texture.Release(_store);
+                cascade.Texture = null;
+            }
             if (cascade.Texture == null)
             {
                 cascade.Texture = new PersistentTexture(RenderResourceID.Intern($"Graphite.Camera{camera.View.ViewId}/Cascade{slot}.{c}"), ShadowRecorder.Desc((int)resolution, ShadowFormat), MaterialPropertyType.Texture2D);

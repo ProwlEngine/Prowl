@@ -80,6 +80,12 @@ public static class Application
         }
     }
 
+    /// <summary>The vsync a game starts with, in a build and as play mode starts. Set from the project's Graphics settings.</summary>
+    public static VSyncMode GameVSync { get; set; } = VSyncMode.Mailbox;
+
+    /// <summary>The frame rate a game starts paced to, 0 for unlimited. Set from the project's Graphics settings.</summary>
+    public static int GameTargetFrameRate { get; set; }
+
     /// <summary>Blocks until the next frame is due. The run loops call this, once per frame.</summary>
     internal static void WaitForNextFrame()
     {

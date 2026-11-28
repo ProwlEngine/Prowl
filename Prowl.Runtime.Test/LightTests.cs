@@ -169,7 +169,7 @@ public class LightTests : RuntimeTestBase
     [Fact]
     public void Range_IsAutomatic_FromTheAxisCandelaAndTheCutoff()
     {
-        float cutoff = QualitySettings.Active.LightCutoff;
+        float cutoff = Graphics.LightCutoff;
         Assert.Equal(0.25f, cutoff);
 
         PointLight point = Make<PointLight>();
@@ -204,21 +204,20 @@ public class LightTests : RuntimeTestBase
     }
 
     [Fact]
-    public void Range_FollowsTheQualityLevelsCutoff()
+    public void Range_FollowsTheProjectsCutoff()
     {
         PointLight point = Make<PointLight>();
         point.UseTemperature = false;
         point.Intensity = 800f;
-        QualityLevel level = QualitySettings.Active;
-        float before = level.LightCutoff;
+        float before = Graphics.LightCutoff;
         try
         {
-            level.LightCutoff = 2f;
+            Graphics.LightCutoff = 2f;
             Assert.Equal(20f, point.Range, 3);
         }
         finally
         {
-            level.LightCutoff = before;
+            Graphics.LightCutoff = before;
         }
     }
 

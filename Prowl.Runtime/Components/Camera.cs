@@ -104,28 +104,29 @@ public class Camera : Component
     [ShowIf(nameof(UsesSmaa))] public SmaaSettings Smaa = new();
     [ShowIf(nameof(UsesTaa))] public TaaSettings Taa = new();
 
+    /// <summary>Uses this camera's own HDR, rendering path and early depth instead of the project's Graphics settings.</summary>
+    public bool OverrideRendering;
+
     /// <summary>
     /// Renders into 16 bit float colour, which a <see cref="Rendering.Tonemapping"/> volume component maps to the display.
     /// Off renders into 8 bit sRGB, where light above 1 clips.
     /// </summary>
-    public bool HDR = true;
+    [ShowIf(nameof(OverrideRendering))] public bool HDR = true;
 
     /// <summary>
     /// How the camera lights opaque surfaces. Deferred keeps them in a GBuffer and lights each pixel once, which
     /// screen space reflections, ambient occlusion and global illumination need. Forward lights them as they draw.
     /// </summary>
-    public RenderPath RenderingPath = RenderPath.Deferred;
-
-    private bool IsDeferred => RenderingPath == RenderPath.Deferred;
+    [ShowIf(nameof(OverrideRendering))] public RenderPath RenderingPath = RenderPath.Deferred;
 
     /// <summary>Which surfaces a deferred camera draws depth for before its GBuffer, so hidden pixels are never kept.</summary>
-    [ShowIf(nameof(IsDeferred))] public EarlyDepth EarlyDepth = EarlyDepth.All;
+    [ShowIf(nameof(OverridesDeferred))] public EarlyDepth EarlyDepth = EarlyDepth.All;
 
-    /// <summary>
-    /// Whether the camera skips what is hidden behind what it saw last frame, while the active quality level allows it.
-    /// Pays off where walls, buildings or terrain hide much of the scene. A deferred camera needs EarlyDepth All.
-    /// </summary>
-    public bool OcclusionCulling = true;
+    /// <summary>The rendering path the camera draws with, its own or the project's.</summary>
+    public RenderPath ActiveRenderingPath => OverrideRendering ? RenderingPath : Graphics.RenderingPath;
+
+    private bool IsDeferred => ActiveRenderingPath == RenderPath.Deferred;
+    private bool OverridesDeferred => OverrideRendering && RenderingPath == RenderPath.Deferred;
 
     [ShowIf(nameof(IsDeferred))] public DisplacementSettings Displacement = new();
 
@@ -242,6 +243,9 @@ public class Camera : Component
     internal bool HasCustomAspect => _customAspect;
     private Float4x4 _projectionMatrix;
     private bool _customProjectionMatrix;
+
+    /// <summary>Draws what occlusion culling would skip, for an editor view comparing with and without it.</summary>
+    [SerializeIgnore, NonSerialized, NotHeld] internal bool SkipsOcclusionCulling;
 
     [SerializeIgnore, NonSerialized, NotHeld] private readonly List<RenderView> _views = [];
     [SerializeIgnore, NonSerialized, NotHeld] private RenderView? _stereoView;
@@ -500,10 +504,10 @@ public class Camera : Component
         view.Viewport = stereo || into != null ? new Float4(0, 0, 1, 1) : ClampViewport(ViewportRect);
         view.RenderScale = Maths.Clamp(RenderScale * QualitySettings.Active.RenderScale, 0.1f, 2.0f);
         view.EV100 = EV100;
-        view.Ldr = !HDR;
-        view.Path = RenderingPath;
-        view.EarlyDepth = EarlyDepth;
-        view.OcclusionCulling = OcclusionCulling && QualitySettings.Active.OcclusionCulling;
+        view.Ldr = !(OverrideRendering ? HDR : Graphics.HDR);
+        view.Path = ActiveRenderingPath;
+        view.EarlyDepth = OverrideRendering ? EarlyDepth : Graphics.EarlyDepth;
+        view.OcclusionCulling = !SkipsOcclusionCulling;
         view.TransparencySort = OverrideTransparencySort ? new TransparencySort(TransparencySortMode, TransparencySortAxis) : Graphics.TransparencySort;
         DisplacementSettings displacement = Displacement ?? new();
         view.DisplacementCell = displacement.Cell;
