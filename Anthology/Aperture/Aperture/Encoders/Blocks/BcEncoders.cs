@@ -369,41 +369,50 @@ internal sealed class Bc1BlockEncoder(TextureEncodeQuality quality, bool fourCol
         PowerIteration(xx, xy, xz, yy, yz, zz, axis);
     }
 
-    internal static void PowerIteration(float xx, float xy, float xz, float yy, float yz, float zz, Span<float> axis)
+    private static void PowerIteration(float xx, float xy, float xz, float yy, float yz, float zz, Span<float> axis)
     {
-        float vx = xx >= yy && xx >= zz ? 1 : 0;
-        float vy = vx == 0 && yy >= zz ? 1 : 0;
-        float vz = vx == 0 && vy == 0 ? 1 : 0;
+        float best = 0f;
+        axis[0] = axis[1] = axis[2] = 0.57735f;
 
-        // Starting from the row of the largest diagonal entry avoids a start orthogonal to the answer.
-        float rx = vx * xx + vy * xy + vz * xz;
-        float ry = vx * xy + vy * yy + vz * yz;
-        float rz = vx * xz + vy * yz + vz * zz;
-
-        for (int i = 0; i < 8; i++)
+        Span<float> columns = [xx, xy, xz, xy, yy, yz, xz, yz, zz];
+        for (int start = 0; start < 3; start++)
         {
-            float nx = (rx * xx) + (ry * xy) + (rz * xz);
-            float ny = (rx * xy) + (ry * yy) + (rz * yz);
-            float nz = (rx * xz) + (ry * yz) + (rz * zz);
-            float length = MathF.Max(MathF.Max(MathF.Abs(nx), MathF.Abs(ny)), MathF.Abs(nz));
-            if (length < 1e-12f)
-                break;
+            float rx = columns[start * 3];
+            float ry = columns[(start * 3) + 1];
+            float rz = columns[(start * 3) + 2];
 
-            rx = nx / length;
-            ry = ny / length;
-            rz = nz / length;
+            for (int i = 0; i < 8; i++)
+            {
+                float nx = (rx * xx) + (ry * xy) + (rz * xz);
+                float ny = (rx * xy) + (ry * yy) + (rz * yz);
+                float nz = (rx * xz) + (ry * yz) + (rz * zz);
+                float length = MathF.Max(MathF.Max(MathF.Abs(nx), MathF.Abs(ny)), MathF.Abs(nz));
+                if (length < 1e-12f)
+                    break;
+
+                rx = nx / length;
+                ry = ny / length;
+                rz = nz / length;
+            }
+
+            float norm = MathF.Sqrt((rx * rx) + (ry * ry) + (rz * rz));
+            if (norm < 1e-12f)
+                continue;
+
+            rx /= norm;
+            ry /= norm;
+            rz /= norm;
+
+            float variance = (rx * rx * xx) + (ry * ry * yy) + (rz * rz * zz)
+                + (2f * ((rx * ry * xy) + (rx * rz * xz) + (ry * rz * yz)));
+            if (variance > best)
+            {
+                best = variance;
+                axis[0] = rx;
+                axis[1] = ry;
+                axis[2] = rz;
+            }
         }
-
-        float norm = MathF.Sqrt((rx * rx) + (ry * ry) + (rz * rz));
-        if (norm < 1e-12f)
-        {
-            axis[0] = axis[1] = axis[2] = 0.57735f;
-            return;
-        }
-
-        axis[0] = rx / norm;
-        axis[1] = ry / norm;
-        axis[2] = rz / norm;
     }
 
     private static ushort Pack(ReadOnlySpan<float> colour)

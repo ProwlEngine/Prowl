@@ -4,7 +4,7 @@
 namespace Prowl.Aperture.Tests;
 
 /// <summary>
-/// Tests for the BVH importer.
+/// Tests for the <see cref="Decoders.DdsDecoder"/> class.
 /// </summary>
 public sealed class DdsDecoderTests
 {
