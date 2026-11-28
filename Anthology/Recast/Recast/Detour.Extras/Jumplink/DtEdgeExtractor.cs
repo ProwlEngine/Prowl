@@ -8,7 +8,7 @@ using static Prowl.Recast.RcRecast;
 namespace Prowl.Recast.Detour.Extras.Jumplink;
 public class DtEdgeExtractor
 {
-    public DtJumpEdge[] ExtractEdges(RcPolyMesh mesh)
+    public static DtJumpEdge[] ExtractEdges(RcPolyMesh mesh)
     {
         List<DtJumpEdge> edges = [];
         if (mesh != null)

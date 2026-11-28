@@ -476,7 +476,7 @@ public sealed class KcpConnection : Connection
             return;
         }
 
-        _pathCandidate = _transport.CloneAddress(candidate);
+        _pathCandidate = KcpTransport.CloneAddress(candidate);
         RandomNumberGenerator.Fill(_pathToken);
         _pathChallengedMs = now;
         _transport.SendSession(this, KcpPacketType.PathChallenge, ReadOnlySpan<byte>.Empty, _pathToken, _pathCandidate);

@@ -85,7 +85,7 @@ public class DtJumpSegmentBuilder
         return jumpSegments;
     }
 
-    private void Fill(DtEdgeSampler es, int[][] sampleGrid, Queue<int[]> queue, float agentClimb, int region)
+    private static void Fill(DtEdgeSampler es, int[][] sampleGrid, Queue<int[]> queue, float agentClimb, int region)
     {
         while (queue.TryDequeue(out int[] ij))
         {
@@ -119,7 +119,7 @@ public class DtJumpSegmentBuilder
         }
     }
 
-    private void AddNeighbour(DtEdgeSampler es, Queue<int[]> queue, float agentClimb, float h, int i, int j)
+    private static void AddNeighbour(DtEdgeSampler es, Queue<int[]> queue, float agentClimb, float h, int i, int j)
     {
         DtGroundSample q = es.end[j].gsamples[i];
         if (q.validTrajectory && MathF.Abs(q.p.Y - h) < agentClimb)

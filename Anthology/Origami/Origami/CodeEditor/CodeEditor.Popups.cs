@@ -347,7 +347,7 @@ public sealed partial class CodeEditor
     private bool _typingNow, _editedSinceRequest;
     private CancellationTokenSource? _completionCts;
     private bool _completionUpdating;
-    private int CompletionRows => 10;
+    private static int CompletionRows => 10;
 
     public bool IsCompletionOpen => _completion != null;
 
@@ -538,7 +538,7 @@ public sealed partial class CodeEditor
         if (FilterText().Length == 0 && !comp.UserMoved && !comp.Explicit) return false;
         CodeCompletionItem item = comp.Filtered[comp.Selected].Item;
         string commit = Options.CompletionCommitCharacters ?? item.CommitCharacters ?? (Session != null ? ".,;()[]{}<>=" : "");
-        return commit.IndexOf(c) >= 0;
+        return commit.Contains(c);
     }
 
     private void CommitCompletion(char commitChar)

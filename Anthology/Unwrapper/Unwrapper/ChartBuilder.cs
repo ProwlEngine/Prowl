@@ -396,19 +396,19 @@ internal sealed class ChartBuilder
         for (int n = 0; n < 3; ++n)
         {
             MeshFace? neighbour = edge.Twin!.Face;
-            if (neighbour is not null && _faceToChart[_workMesh.IndexOf(neighbour)] == -1)
+            if (neighbour is not null && _faceToChart[neighbour.Index] == -1)
             {
                 HalfEdge neighEdge = neighbour.FirstEdge!;
                 for (int side = 0; side < 3; ++side)
                 {
-                    EdgeAttribute info = _workMesh.EdgeAttributes[_workMesh.IndexOf(neighEdge)];
+                    EdgeAttribute info = _workMesh.EdgeAttributes[neighEdge.Index];
                     if (!info.IsCrease)
                     {
                         // Seam edges get a penalty so chart growth prefers to follow them.
                         double weight = info.IsUvSeam ? 2.0 : 1.0;
                         MeshFace? check = neighEdge.Twin!.Face;
-                        if (check is not null && _faceToChart[_workMesh.IndexOf(check)] != -1)
-                            EnqueueFace(_workMesh.IndexOf(neighbour), _faceToChart[_workMesh.IndexOf(check)], weight);
+                        if (check is not null && _faceToChart[check.Index] != -1)
+                            EnqueueFace(neighbour.Index, _faceToChart[check.Index], weight);
                     }
                     neighEdge = neighEdge.Next!;
                 }
@@ -577,8 +577,8 @@ internal sealed class ChartBuilder
             {
                 if (!MeshOps.IsBorderEdge(edge) && !MeshOps.IsBorderEdge(edge.Twin!))
                 {
-                    int chart1 = _faceToChart[_workMesh.IndexOf(edge.Face!)];
-                    int chart2 = _faceToChart[_workMesh.IndexOf(edge.Twin!.Face!)];
+                    int chart1 = _faceToChart[edge.Face!.Index];
+                    int chart2 = _faceToChart[edge.Twin!.Face!.Index];
 
                     int a = System.Math.Min(chart1, chart2);
                     int b = System.Math.Max(chart1, chart2);
@@ -592,7 +592,7 @@ internal sealed class ChartBuilder
                             byKey[key] = slot;
                             output.Add(NewBoundary(chart1, chart2));
                         }
-                        if (_workMesh.EdgeAttributes[_workMesh.IndexOf(edge)].IsCrease)
+                        if (_workMesh.EdgeAttributes[edge.Index].IsCrease)
                             output[slot].HasCrease = true;
                     }
                 }

@@ -54,7 +54,7 @@ public class RcCapsuleGizmo : IRcGizmoMeshFilter
         }
     }
 
-    private RcVec3f GetSideVector(RcVec3f axis)
+    private static RcVec3f GetSideVector(RcVec3f axis)
     {
         var side = new RcVec3f(1, 0, 0);
         if (axis.X > 0.8)

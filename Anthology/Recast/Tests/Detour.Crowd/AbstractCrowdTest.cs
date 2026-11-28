@@ -20,6 +20,7 @@ freely, subject to the following restrictions:
 
 using System;
 using System.Collections.Generic;
+
 using Prowl.Recast.Core.Numerics;
 
 namespace Prowl.Recast.Detour.Crowd.Tests;

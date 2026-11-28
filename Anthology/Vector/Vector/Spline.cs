@@ -452,7 +452,7 @@ public struct Spline : IEquatable<Spline>, IFormattable
         return Slerp(CustomUpVectors[index], CustomUpVectors[index + 1], localT);
     }
 
-    private Float3 Slerp(Float3 a, Float3 b, float t)
+    private static Float3 Slerp(Float3 a, Float3 b, float t)
     {
         // Spherical linear interpolation
         float dot = Maths.Clamp(Float3.Dot(a, b), -1.0f, 1.0f);

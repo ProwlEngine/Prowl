@@ -374,10 +374,13 @@ internal static class DropdownInternal
             // List
             if (filtered.Count == 0)
             {
-                paper.Box($"{p.Id}_empty")
-                    .Height(listH)
-                    .Alignment(TextAlignment.MiddleCenter)
-                    .Text(p.EmptyText, font).TextColor(ink.C300).FontSize(p.Theme.Metrics.FontSize);
+                if (font != null)
+                {
+                    paper.Box($"{p.Id}_empty")
+                        .Height(listH)
+                        .Alignment(TextAlignment.MiddleCenter)
+                        .Text(p.EmptyText, font).TextColor(ink.C300).FontSize(p.Theme.Metrics.FontSize);
+                }
             }
             else
             {

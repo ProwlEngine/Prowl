@@ -90,8 +90,7 @@ public partial class FontFile
 
     public FontFile(Stream stream)
     {
-        if (stream == null)
-            throw new ArgumentNullException(nameof(stream));
+        ArgumentNullException.ThrowIfNull(stream);
 
         if (InitFontAtIndex(ReadFully(stream), 0) == 0)
             throw new InvalidDataException("Failed to initialize font");
@@ -571,7 +570,7 @@ public partial class FontFile
 
     #region Private Methods
 
-    private uint FindTable(FakePtr<byte> data, uint fontstart, string tag)
+    private static uint FindTable(FakePtr<byte> data, uint fontstart, string tag)
     {
         int available = data.Length;
         // The offset table is 12 bytes (table count is the u16 at +4). Bail on truncated data
@@ -606,7 +605,7 @@ public partial class FontFile
         return Encoding.BigEndianUnicode.GetString(buffer);
     }
 
-    private FontStyle ParseStyle(string styleName)
+    private static FontStyle ParseStyle(string styleName)
     {
         string s = styleName?.ToLowerInvariant() ?? string.Empty;
         bool bold = s.Contains("bold");
@@ -1416,7 +1415,7 @@ public partial class FontFile
     }
 
     // GPOS PairPos (LookupType 2) - returns value1.xAdvance for the (glyph1, glyph2) pair, or 0.
-    private int PairPosAdvance(FakePtr<byte> table, int glyph1, int glyph2)
+    private static int PairPosAdvance(FakePtr<byte> table, int glyph1, int glyph2)
     {
         int posFormat = ttUSHORT(table);
         int coverageIndex = stbtt__GetCoverageIndex(table + ttUSHORT(table + 2), glyph1);

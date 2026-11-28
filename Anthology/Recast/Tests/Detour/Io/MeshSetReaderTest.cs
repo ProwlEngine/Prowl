@@ -18,6 +18,7 @@ freely, subject to the following restrictions:
 */
 
 using System.IO;
+
 using Prowl.Recast.Core;
 using Prowl.Recast.Detour.Io;
 
@@ -54,7 +55,7 @@ public class MeshSetReaderTest
 
         nneis = mesh.GetTilesAt(6, 2, tiles, MAX_NEIS);
         Assert.Equal(1, nneis);
-        Assert.Equal(1, tiles[0].data.polys.Length);
+        Assert.Single(tiles[0].data.polys);
         Assert.Equal(4 * 3, tiles[0].data.verts.Length);
 
         nneis = mesh.GetTilesAt(7, 6, tiles, MAX_NEIS);

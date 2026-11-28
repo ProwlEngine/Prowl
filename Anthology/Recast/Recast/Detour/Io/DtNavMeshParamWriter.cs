@@ -6,7 +6,7 @@ namespace Prowl.Recast.Detour.Io;
 
 public class DtNavMeshParamWriter
 {
-    public void Write(BinaryWriter stream, in DtNavMeshParams option, RcByteOrder order)
+    public static void Write(BinaryWriter stream, in DtNavMeshParams option, RcByteOrder order)
     {
         RcIO.Write(stream, option.orig.X, order);
         RcIO.Write(stream, option.orig.Y, order);

@@ -90,9 +90,6 @@ public sealed class LabelBuilder
     private float _letterSpacingEm;
     private bool _uppercase;
 
-    // Leading vector-draw hook (used for semantic dots and any glyph-less icon,
-    // since OrigamiIcons ships empty strings by default).
-    private Action<Canvas, Rect>? _leadingDraw;
     private IOrigamiIcon? _leadingIconObj;
     private float _leadingDrawWidth;
     private bool _dot;
@@ -350,9 +347,9 @@ public sealed class LabelBuilder
         string text = _uppercase ? _text.ToUpperInvariant() : _text;
 
         // A semantic dot is just a synthesised leading vector-draw (variant-coloured circle).
-        Action<Canvas, Rect>? leadingDraw = _leadingDraw;
+        Action<Canvas, Rect>? leadingDraw = null;
         float leadingDrawWidth = _leadingDrawWidth;
-        if (_leadingIconObj != null && leadingDraw == null)
+        if (_leadingIconObj != null)
         {
             IOrigamiIcon icon = _leadingIconObj;
             leadingDraw = (cv, r) => icon.Draw(cv, r, textColor);

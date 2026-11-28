@@ -254,7 +254,7 @@ public sealed class FoldoutBuilder
                         _paper.Box("badge")
                             .Width(UnitValue.Auto).Height(headH)
                             .Margin(metrics.BadgePadLeft, padX, 0, 0)
-                            .Text(_badge, _theme.Font)
+                            .Text(_badge!, _theme.Font)
                             .TextColor(badgeCol)
                             .FontSize(metrics.FontSize - 1f)
                             .Alignment(TextAlignment.MiddleRight);

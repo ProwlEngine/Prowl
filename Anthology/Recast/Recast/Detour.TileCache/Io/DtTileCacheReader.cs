@@ -28,7 +28,6 @@ namespace Prowl.Recast.Detour.TileCache.Io;
 
 public class DtTileCacheReader
 {
-    private readonly DtNavMeshParamsReader paramReader = new DtNavMeshParamsReader();
     private readonly IDtTileCacheCompressorFactory _compFactory;
 
     public DtTileCacheReader(IDtTileCacheCompressorFactory compFactory)
@@ -70,7 +69,7 @@ public class DtTileCacheReader
 
         bool cCompatibility = header.version == DtTileCacheSetHeader.TILECACHESET_VERSION;
         header.numTiles = bb.GetInt();
-        header.meshParams = paramReader.Read(bb);
+        header.meshParams = DtNavMeshParamsReader.Read(bb);
         header.cacheParams = ReadCacheParams(bb, cCompatibility);
         DtNavMesh mesh = new DtNavMesh();
         mesh.Init(header.meshParams, maxVertPerPoly);
@@ -98,7 +97,7 @@ public class DtTileCacheReader
         return tc;
     }
 
-    private DtTileCacheParams ReadCacheParams(RcByteBuffer bb, bool cCompatibility)
+    private static DtTileCacheParams ReadCacheParams(RcByteBuffer bb, bool cCompatibility)
     {
         DtTileCacheParams option = new DtTileCacheParams();
 

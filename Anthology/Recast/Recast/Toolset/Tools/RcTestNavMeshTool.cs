@@ -161,7 +161,7 @@ public class RcTestNavMeshTool : IRcToolable
         return DtStatus.DT_SUCCESS;
     }
 
-    public DtStatus FindStraightPath(DtNavMeshQuery navQuery, long startRef, long endRef, RcVec3f startPt, RcVec3f endPt, IDtQueryFilter filter, bool enableRaycast,
+    public static DtStatus FindStraightPath(DtNavMeshQuery navQuery, long startRef, long endRef, RcVec3f startPt, RcVec3f endPt, IDtQueryFilter filter, bool enableRaycast,
         Span<long> polys, out int npolys, Span<DtStraightPath> straightPath, out int straightPathCount, int maxStraightPath, int straightPathOptions)
     {
         npolys = 0;
@@ -192,7 +192,7 @@ public class RcTestNavMeshTool : IRcToolable
         return DtStatus.DT_SUCCESS;
     }
 
-    public DtStatus InitSlicedFindPath(DtNavMeshQuery navQuery, long startRef, long endRef, RcVec3f startPos, RcVec3f endPos, IDtQueryFilter filter, bool enableRaycast)
+    public static DtStatus InitSlicedFindPath(DtNavMeshQuery navQuery, long startRef, long endRef, RcVec3f startPos, RcVec3f endPos, IDtQueryFilter filter, bool enableRaycast)
     {
         if (startRef == 0 || endRef == 0)
         {
@@ -202,7 +202,7 @@ public class RcTestNavMeshTool : IRcToolable
         return navQuery.InitSlicedFindPath(startRef, endRef, startPos, endPos, filter, enableRaycast ? DtFindPathOptions.DT_FINDPATH_ANY_ANGLE : 0);
     }
 
-    public DtStatus UpdateSlicedFindPath(DtNavMeshQuery navQuery, int maxIter, long endRef, RcVec3f startPos, RcVec3f endPos,
+    public static DtStatus UpdateSlicedFindPath(DtNavMeshQuery navQuery, int maxIter, long endRef, RcVec3f startPos, RcVec3f endPos,
         Span<long> polys, out int npolys, int maxPolys, Span<DtStraightPath> straightPath, out int straightPathCount, int maxStraightPath)
     {
         npolys = 0;
@@ -236,7 +236,7 @@ public class RcTestNavMeshTool : IRcToolable
     }
 
 
-    public DtStatus Raycast(DtNavMeshQuery navQuery, long startRef, long endRef, RcVec3f startPos, RcVec3f endPos, IDtQueryFilter filter,
+    public static DtStatus Raycast(DtNavMeshQuery navQuery, long startRef, long endRef, RcVec3f startPos, RcVec3f endPos, IDtQueryFilter filter,
         Span<long> path, out int npath, Span<DtStraightPath> straightPath, out int straightPathCount, int maxStraightPath, ref RcVec3f hitPos, ref RcVec3f hitNormal, ref bool hitResult)
     {
         npath = 0;
@@ -284,7 +284,7 @@ public class RcTestNavMeshTool : IRcToolable
         return status;
     }
 
-    public DtStatus FindDistanceToWall(DtNavMeshQuery navQuery, long startRef, RcVec3f spos, float maxRadius, IDtQueryFilter filter,
+    public static DtStatus FindDistanceToWall(DtNavMeshQuery navQuery, long startRef, RcVec3f spos, float maxRadius, IDtQueryFilter filter,
         ref float hitDist, ref RcVec3f hitPos, ref RcVec3f hitNormal)
     {
         if (0 == startRef)
@@ -381,7 +381,7 @@ public class RcTestNavMeshTool : IRcToolable
         return status;
     }
 
-    public DtStatus FindRandomPointAroundCircle(DtNavMeshQuery navQuery, long startRef, long endRef, RcVec3f spos, RcVec3f epos, IDtQueryFilter filter, bool constrainByCircle, int count,
+    public static DtStatus FindRandomPointAroundCircle(DtNavMeshQuery navQuery, long startRef, long endRef, RcVec3f spos, RcVec3f epos, IDtQueryFilter filter, bool constrainByCircle, int count,
         ref List<RcVec3f> points)
     {
         if (startRef == 0 || endRef == 0)

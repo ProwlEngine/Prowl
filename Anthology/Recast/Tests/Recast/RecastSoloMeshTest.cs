@@ -19,14 +19,15 @@ freely, subject to the following restrictions:
 
 using System;
 using System.IO;
+
 using Prowl.Recast.Core;
 using Prowl.Recast.Core.Numerics;
 using Prowl.Recast.Geom;
 
-namespace Prowl.Recast.Tests;
+using static Prowl.Recast.RcAreas;
+using static Prowl.Recast.RcRecast;
 
-using static RcRecast;
-using static RcAreas;
+namespace Prowl.Recast.Tests;
 
 public class RecastSoloMeshTest
 {
@@ -81,7 +82,7 @@ public class RecastSoloMeshTest
         TestBuild("nav_test.obj", RcPartition.LAYERS, 0, 19, 32, 310, 150, 150, 773, 526);
     }
 
-    public void TestBuild(string filename, RcPartition partitionType, int expDistance, int expRegions,
+    private void TestBuild(string filename, RcPartition partitionType, int expDistance, int expRegions,
         int expContours, int expVerts, int expPolys, int expDetMeshes, int expDetVerts, int expDetTris)
     {
         m_partitionType = partitionType;
@@ -265,7 +266,7 @@ public class RecastSoloMeshTest
         try
         {
             string path = Path.Combine("test-output", filename);
-            Directory.CreateDirectory(Path.GetDirectoryName(path));
+            Directory.CreateDirectory(Path.GetDirectoryName(path)!);
             using StreamWriter fw = new StreamWriter(path);
             for (int v = 0; v < mesh.nverts; v++)
             {
@@ -305,7 +306,7 @@ public class RecastSoloMeshTest
         try
         {
             string filePath = Path.Combine("test-output", filename);
-            Directory.CreateDirectory(Path.GetDirectoryName(filePath));
+            Directory.CreateDirectory(Path.GetDirectoryName(filePath)!);
             using StreamWriter fw = new StreamWriter(filePath);
             for (int v = 0; v < dmesh.nverts; v++)
             {

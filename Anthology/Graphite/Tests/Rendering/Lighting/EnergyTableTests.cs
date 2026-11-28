@@ -40,45 +40,45 @@ public sealed class EnergyTableTests
     public void Dfg_IsWhatTheGeneratorBakes()
     {
         foreach (int j in s_dfgRoughness)
-        foreach (int i in s_dfgPoints)
-        {
-            var want = EnergyTables.Dfg(EnergyTables.NdotVAt(i, EnergyTables.DfgSize), EnergyTables.Axis(j, EnergyTables.DfgSize), EnergyTables.BakeSamples, EnergyTables.SampleVisible);
-            Vector3 got = DfgTexel(i, j);
-            Assert.Equal(EnergyTables.Half(want.Scale), EnergyTables.Half(got.X));
-            Assert.Equal(EnergyTables.Half(want.Bias), EnergyTables.Half(got.Y));
-            Assert.Equal(EnergyTables.Half(want.F82), EnergyTables.Half(got.Z));
-        }
+            foreach (int i in s_dfgPoints)
+            {
+                var want = EnergyTables.Dfg(EnergyTables.NdotVAt(i, EnergyTables.DfgSize), EnergyTables.Axis(j, EnergyTables.DfgSize), EnergyTables.BakeSamples, EnergyTables.SampleVisible);
+                Vector3 got = DfgTexel(i, j);
+                Assert.Equal(EnergyTables.Half(want.Scale), EnergyTables.Half(got.X));
+                Assert.Equal(EnergyTables.Half(want.Bias), EnergyTables.Half(got.Y));
+                Assert.Equal(EnergyTables.Half(want.F82), EnergyTables.Half(got.Z));
+            }
 
         foreach (int z in new[] { 0, 7, 20, 45, 63 })
-        foreach (int j in new[] { 0, 5, 15 })
-        foreach (int i in new[] { 1, 12, 31 })
-        {
-            var wantAnisotropic = EnergyTables.AnisotropicDfg(EnergyTables.NdotVAt(i, EnergyTables.AnisotropicNdotV), EnergyTables.Axis(j, EnergyTables.AnisotropicRoughness),
-                EnergyTables.AnisotropyAt(z / EnergyTables.AnisotropicAzimuths), EnergyTables.AzimuthAt(z % EnergyTables.AnisotropicAzimuths), EnergyTables.BakeSamples);
-            Vector3 gotAnisotropic = AnisotropicTexel(i, j, z);
-            Assert.Equal(EnergyTables.Half(wantAnisotropic.Scale), EnergyTables.Half(gotAnisotropic.X));
-            Assert.Equal(EnergyTables.Half(wantAnisotropic.Bias), EnergyTables.Half(gotAnisotropic.Y));
-            Assert.Equal(EnergyTables.Half(wantAnisotropic.F82), EnergyTables.Half(gotAnisotropic.Z));
-        }
+            foreach (int j in new[] { 0, 5, 15 })
+                foreach (int i in new[] { 1, 12, 31 })
+                {
+                    var wantAnisotropic = EnergyTables.AnisotropicDfg(EnergyTables.NdotVAt(i, EnergyTables.AnisotropicNdotV), EnergyTables.Axis(j, EnergyTables.AnisotropicRoughness),
+                        EnergyTables.AnisotropyAt(z / EnergyTables.AnisotropicAzimuths), EnergyTables.AzimuthAt(z % EnergyTables.AnisotropicAzimuths), EnergyTables.BakeSamples);
+                    Vector3 gotAnisotropic = AnisotropicTexel(i, j, z);
+                    Assert.Equal(EnergyTables.Half(wantAnisotropic.Scale), EnergyTables.Half(gotAnisotropic.X));
+                    Assert.Equal(EnergyTables.Half(wantAnisotropic.Bias), EnergyTables.Half(gotAnisotropic.Y));
+                    Assert.Equal(EnergyTables.Half(wantAnisotropic.F82), EnergyTables.Half(gotAnisotropic.Z));
+                }
 
         foreach (int k in s_dielectricIor)
-        foreach (int j in s_dielectricRoughness)
-        foreach (int i in s_dielectricPoints)
-            Assert.Equal(EnergyTables.Half(EnergyTables.DielectricAt(i, j, k, EnergyTables.BakeSamples, EnergyTables.SampleVisible)), EnergyTables.Half(DielectricTexel(i, j, k)));
+            foreach (int j in s_dielectricRoughness)
+                foreach (int i in s_dielectricPoints)
+                    Assert.Equal(EnergyTables.Half(EnergyTables.DielectricAt(i, j, k, EnergyTables.BakeSamples, EnergyTables.SampleVisible)), EnergyTables.Half(DielectricTexel(i, j, k)));
     }
 
     [Fact]
     public void Dfg_MatchesNormalSampledIntegration()
     {
         foreach (int j in s_dfgRoughness)
-        foreach (int i in s_dfgPoints)
-        {
-            var want = EnergyTables.Dfg(EnergyTables.NdotVAt(i, EnergyTables.DfgSize), EnergyTables.Axis(j, EnergyTables.DfgSize), VerifySamples, EnergyTables.SampleNormal);
-            Vector3 got = DfgTexel(i, j);
-            Near(want.Scale, got.X, TableTolerance, $"scale at ({i}, {j})");
-            Near(want.Bias, got.Y, TableTolerance, $"bias at ({i}, {j})");
-            Near(want.F82, got.Z, TableTolerance, $"F82 at ({i}, {j})");
-        }
+            foreach (int i in s_dfgPoints)
+            {
+                var want = EnergyTables.Dfg(EnergyTables.NdotVAt(i, EnergyTables.DfgSize), EnergyTables.Axis(j, EnergyTables.DfgSize), VerifySamples, EnergyTables.SampleNormal);
+                Vector3 got = DfgTexel(i, j);
+                Near(want.Scale, got.X, TableTolerance, $"scale at ({i}, {j})");
+                Near(want.Bias, got.Y, TableTolerance, $"bias at ({i}, {j})");
+                Near(want.F82, got.Z, TableTolerance, $"F82 at ({i}, {j})");
+            }
     }
 
     private static readonly ushort[] s_anisotropic = EnergyTables.EmbeddedAnisotropic();
@@ -96,26 +96,26 @@ public sealed class EnergyTableTests
     public void AnisotropicDfg_BetweenTexels_MatchesFreshIntegration()
     {
         foreach (double a in new[] { 0.2, 0.5, 0.75, 0.95 })
-        foreach (double azimuth in new[] { 0.1, 0.45, 0.8 })
-        foreach (double r in new[] { 0.12, 0.37, 0.63, 0.9 })
-        foreach (double mu in new[] { 0.21, 0.5, 0.83 })
-        {
-            var want = EnergyTables.AnisotropicDfg(mu, r, a, azimuth * Math.PI / 2, 1 << 15);
-            Vector3 got = EnergyTables.LookupAnisotropic(s_anisotropic, mu, r, a, azimuth);
-            string at = $"mu {mu} r {r} a {a} azimuth {azimuth}";
-            Near(want.Scale + want.Bias, got.X + got.Y, AnisotropicInterpolationTolerance, $"E1 at {at}");
-            Near(want.Bias, got.Y, AnisotropicInterpolationTolerance, $"bias at {at}");
-            Near(want.F82, got.Z, AnisotropicInterpolationTolerance, $"F82 at {at}");
-        }
+            foreach (double azimuth in new[] { 0.1, 0.45, 0.8 })
+                foreach (double r in new[] { 0.12, 0.37, 0.63, 0.9 })
+                    foreach (double mu in new[] { 0.21, 0.5, 0.83 })
+                    {
+                        var want = EnergyTables.AnisotropicDfg(mu, r, a, azimuth * Math.PI / 2, 1 << 15);
+                        Vector3 got = EnergyTables.LookupAnisotropic(s_anisotropic, mu, r, a, azimuth);
+                        string at = $"mu {mu} r {r} a {a} azimuth {azimuth}";
+                        Near(want.Scale + want.Bias, got.X + got.Y, AnisotropicInterpolationTolerance, $"E1 at {at}");
+                        Near(want.Bias, got.Y, AnisotropicInterpolationTolerance, $"bias at {at}");
+                        Near(want.F82, got.Z, AnisotropicInterpolationTolerance, $"F82 at {at}");
+                    }
     }
 
     [Fact]
     public void DielectricE_MatchesNormalSampledIntegration()
     {
         foreach (int k in s_dielectricIor)
-        foreach (int j in s_dielectricRoughness)
-        foreach (int i in s_dielectricPoints)
-            Near(EnergyTables.DielectricAt(i, j, k, VerifySamples, EnergyTables.SampleNormal), DielectricTexel(i, j, k), TableTolerance, $"E at ({i}, {j}, {k})");
+            foreach (int j in s_dielectricRoughness)
+                foreach (int i in s_dielectricPoints)
+                    Near(EnergyTables.DielectricAt(i, j, k, VerifySamples, EnergyTables.SampleNormal), DielectricTexel(i, j, k), TableTolerance, $"E at ({i}, {j}, {k})");
     }
 
     [Fact]
@@ -132,28 +132,28 @@ public sealed class EnergyTableTests
         }
 
         foreach (double azimuth in new[] { 0, 0.3, 1 })
-        foreach (double r in new[] { 0, 0.2, 0.55, 1 })
-        foreach (double muIsotropic in new[] { 0.05, 0.3, 0.7, 1 })
-        {
-            Vector3 want = EnergyTables.LookupDfg(s_dfg, muIsotropic, r), got = EnergyTables.LookupAnisotropic(s_anisotropic, muIsotropic, r, 0, azimuth);
-            Near(want.X, got.X, AnisotropicInterpolationTolerance, $"scale at muIsotropic {muIsotropic} r {r} azimuth {azimuth}");
-            Near(want.Y, got.Y, AnisotropicInterpolationTolerance, $"bias at muIsotropic {muIsotropic} r {r} azimuth {azimuth}");
-            Near(want.Z, got.Z, AnisotropicInterpolationTolerance, $"F82 at muIsotropic {muIsotropic} r {r} azimuth {azimuth}");
-        }
+            foreach (double r in new[] { 0, 0.2, 0.55, 1 })
+                foreach (double muIsotropic in new[] { 0.05, 0.3, 0.7, 1 })
+                {
+                    Vector3 want = EnergyTables.LookupDfg(s_dfg, muIsotropic, r), got = EnergyTables.LookupAnisotropic(s_anisotropic, muIsotropic, r, 0, azimuth);
+                    Near(want.X, got.X, AnisotropicInterpolationTolerance, $"scale at muIsotropic {muIsotropic} r {r} azimuth {azimuth}");
+                    Near(want.Y, got.Y, AnisotropicInterpolationTolerance, $"bias at muIsotropic {muIsotropic} r {r} azimuth {azimuth}");
+                    Near(want.Z, got.Z, AnisotropicInterpolationTolerance, $"F82 at muIsotropic {muIsotropic} r {r} azimuth {azimuth}");
+                }
 
         const int dielectricSize = EnergyTables.DielectricSize;
         for (int j = 0; j < dielectricSize; j++)
-        for (int i = 0; i < dielectricSize; i++)
-            Assert.Equal(0, DielectricTexel(i, j, 0));
+            for (int i = 0; i < dielectricSize; i++)
+                Assert.Equal(0, DielectricTexel(i, j, 0));
         Assert.Equal(0, EnergyTables.LookupDielectric(s_dielectric, 0.5, 0.5, 1.0));
         Assert.Equal(0, EnergyTables.LookupDielectric(s_dielectric, 0.5, 0.5, 0.7));
 
         for (int k = 1; k < dielectricSize - 1; k++)
-        for (int i = 0; i < dielectricSize; i++)
-        {
-            double wantFresnel = EnergyTables.Fresnel(EnergyTables.NdotVAt(i, dielectricSize), EnergyTables.EtaOfSqrtF0(EnergyTables.Axis(k, dielectricSize)));
-            Near(wantFresnel, DielectricTexel(i, 0, k), 1e-3 * wantFresnel + 1e-6, $"E at ({i}, 0, {k})");
-        }
+            for (int i = 0; i < dielectricSize; i++)
+            {
+                double wantFresnel = EnergyTables.Fresnel(EnergyTables.NdotVAt(i, dielectricSize), EnergyTables.EtaOfSqrtF0(EnergyTables.Axis(k, dielectricSize)));
+                Near(wantFresnel, DielectricTexel(i, 0, k), 1e-3 * wantFresnel + 1e-6, $"E at ({i}, 0, {k})");
+            }
     }
 
     [Fact]
@@ -162,31 +162,31 @@ public sealed class EnergyTableTests
         const int n = EnergyTables.DfgSize, m = EnergyTables.DielectricSize;
         const double slack = 1e-3;
         for (int i = 0; i < n; i++)
-        for (int j = 0; j < n; j++)
-        {
-            Vector3 t = DfgTexel(i, j);
-            float E1 = t.X + t.Y;
-            Assert.True(t.X >= 0 && t.Y >= 0 && t.Z >= 0 && E1 <= 1 + slack, $"({i}, {j}) holds {t}");
-            // Toward grazing, height correlated Smith masking brings E1 back up to 1 as the lobe widens
-            if (j > 0 && EnergyTables.Axis(i, n) >= 0.2)
-                Assert.True(E1 <= DfgTexel(i, j - 1).X + DfgTexel(i, j - 1).Y + slack, $"E1 grows with roughness at ({i}, {j})");
-        }
+            for (int j = 0; j < n; j++)
+            {
+                Vector3 t = DfgTexel(i, j);
+                float E1 = t.X + t.Y;
+                Assert.True(t.X >= 0 && t.Y >= 0 && t.Z >= 0 && E1 <= 1 + slack, $"({i}, {j}) holds {t}");
+                // Toward grazing, height correlated Smith masking brings E1 back up to 1 as the lobe widens
+                if (j > 0 && EnergyTables.Axis(i, n) >= 0.2)
+                    Assert.True(E1 <= DfgTexel(i, j - 1).X + DfgTexel(i, j - 1).Y + slack, $"E1 grows with roughness at ({i}, {j})");
+            }
 
         double[] white = new double[m * m];
         for (int j = 0; j < m; j++)
-        for (int i = 0; i < m; i++)
-            white[j * m + i] = EnergyTables.Albedo(EnergyTables.NdotVAt(i, m), EnergyTables.Axis(j, m), _ => 1, 1 << 12, EnergyTables.SampleVisible);
+            for (int i = 0; i < m; i++)
+                white[j * m + i] = EnergyTables.Albedo(EnergyTables.NdotVAt(i, m), EnergyTables.Axis(j, m), _ => 1, 1 << 12, EnergyTables.SampleVisible);
 
         for (int k = 0; k < m; k++)
-        for (int j = 0; j < m; j++)
-        for (int i = 0; i < m; i++)
-        {
-            double E = DielectricTexel(i, j, k);
-            Assert.True(E >= 0 && E <= white[j * m + i] + slack, $"E at ({i}, {j}, {k}) is {E}, white GGX {white[j * m + i]}");
-            // Fresnel itself stops growing with the IOR near grazing
-            if (k > 0 && EnergyTables.Axis(i, m) >= 0.2)
-                Assert.True(E >= DielectricTexel(i, j, k - 1) - slack * 0.1, $"E falls with the IOR at ({i}, {j}, {k})");
-        }
+            for (int j = 0; j < m; j++)
+                for (int i = 0; i < m; i++)
+                {
+                    double E = DielectricTexel(i, j, k);
+                    Assert.True(E >= 0 && E <= white[j * m + i] + slack, $"E at ({i}, {j}, {k}) is {E}, white GGX {white[j * m + i]}");
+                    // Fresnel itself stops growing with the IOR near grazing
+                    if (k > 0 && EnergyTables.Axis(i, m) >= 0.2)
+                        Assert.True(E >= DielectricTexel(i, j, k - 1) - slack * 0.1, $"E falls with the IOR at ({i}, {j}, {k})");
+                }
     }
 
     [Fact]
@@ -194,22 +194,22 @@ public sealed class EnergyTableTests
     {
         (double F0, double Tint)[] metals = [(0.95, 1.0), (0.9, 0.8), (0.55, 0.6), (0.2, 0.3), (0.04, 0.0)];
         foreach ((double F0, double tint) in metals)
-        foreach (double r in (double[])[0.05, 0.3, 0.6, 1.0])
-        foreach (double mu in (double[])[0.1, 0.4, 0.8, 1.0])
-        {
-            double want = EnergyTables.Albedo(mu, r, c => EnergyTables.F82(c, F0, tint), 1 << 16, EnergyTables.SampleVisible);
-            Vector3 dfg = EnergyTables.LookupDfg(s_dfg, mu, r);
-            double got = F0 * dfg.X + dfg.Y - EnergyTables.F82Tint(F0, tint) * dfg.Z;
-            Near(want, got, TableTolerance, $"F0 {F0} tint {tint} r {r} NdotV {mu}");
-        }
+            foreach (double r in (double[])[0.05, 0.3, 0.6, 1.0])
+                foreach (double mu in (double[])[0.1, 0.4, 0.8, 1.0])
+                {
+                    double want = EnergyTables.Albedo(mu, r, c => EnergyTables.F82(c, F0, tint), 1 << 16, EnergyTables.SampleVisible);
+                    Vector3 dfg = EnergyTables.LookupDfg(s_dfg, mu, r);
+                    double got = F0 * dfg.X + dfg.Y - EnergyTables.F82Tint(F0, tint) * dfg.Z;
+                    Near(want, got, TableTolerance, $"F0 {F0} tint {tint} r {r} NdotV {mu}");
+                }
     }
 
     [Fact]
     public void MetalFavg_IsTheHemisphericalAverageOfF82()
     {
         foreach (double F0 in (double[])[0.04, 0.5, 0.95])
-        foreach (double tint in (double[])[0.0, 0.5, 1.0])
-            Near(EnergyTables.Favg(c => EnergyTables.F82(c, F0, tint)), EnergyTables.MetalFavg(F0, tint), 1e-6, $"F0 {F0} tint {tint}");
+            foreach (double tint in (double[])[0.0, 0.5, 1.0])
+                Near(EnergyTables.Favg(c => EnergyTables.F82(c, F0, tint)), EnergyTables.MetalFavg(F0, tint), 1e-6, $"F0 {F0} tint {tint}");
     }
 
     // Kulla and Conty's fit stays within 0.0066 of the exact average from eta 1 to 5
@@ -224,8 +224,8 @@ public sealed class EnergyTableTests
     public void TurquinMetal_GivesAWhiteMetalAnAlbedoOfOne()
     {
         for (double r = 0; r <= 1; r += 0.05)
-        for (double mu = 0.02; mu <= 1; mu += 0.07)
-            Near(1, EnergyTables.TurquinMetal(EnergyTables.LookupDfg(s_dfg, mu, r), 1, 1, 1), 1e-5, $"r {r} NdotV {mu}");
+            for (double mu = 0.02; mu <= 1; mu += 0.07)
+                Near(1, EnergyTables.TurquinMetal(EnergyTables.LookupDfg(s_dfg, mu, r), 1, 1, 1), 1e-5, $"r {r} NdotV {mu}");
     }
 
     [Fact]

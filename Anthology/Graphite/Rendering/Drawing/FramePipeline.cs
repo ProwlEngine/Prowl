@@ -420,7 +420,7 @@ internal sealed partial class FramePipeline : IDisposable
         _planned.Add(new PlannedInstance(capture ? PlannedKind.Capture : PlannedKind.Host, world, camera, view.Name ?? camera.DefaultName(capture)));
     }
 
-    private void ResolveScreenLighting(CameraFrame camera, CameraShape shape, uint width, uint height)
+    private static void ResolveScreenLighting(CameraFrame camera, CameraShape shape, uint width, uint height)
     {
         uint w = Math.Max(1u, (uint)(width * shape.ScreenFraction)), h = Math.Max(1u, (uint)(height * shape.ScreenFraction));
         camera.EnsureScreenLighting(shape.HasScreenLighting, shape.ScreenIrradiance, w, h, (uint)(shape.Layers > 1 ? shape.Layers : 0));

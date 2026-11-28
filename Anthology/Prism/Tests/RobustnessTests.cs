@@ -1,9 +1,11 @@
 using System.Text;
+
 using Prowl.Prism;
 using Prowl.Prism.Compiler;
 using Prowl.Prism.Glsl;
 using Prowl.Prism.Optimizer;
 using Prowl.Prism.SpirV;
+
 using Xunit;
 
 namespace Prowl.Prism.Tests;

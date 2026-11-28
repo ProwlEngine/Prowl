@@ -324,7 +324,9 @@ public class InputActionTests
         InputAction lean = map.AddAction("Lean", InputActionType.Value);
         lean.AddBinding(new AxisCompositeBinding(InputBinding.CreateKeyBinding(KeyCode.E), InputBinding.CreateKeyBinding(KeyCode.Q))
         {
-            Interaction = InputInteractionType.Hold, HoldDuration = 0.25f, PressPoint = 0.7f
+            Interaction = InputInteractionType.Hold,
+            HoldDuration = 0.25f,
+            PressPoint = 0.7f
         });
 
         EchoObject saved = EchoObject.NewCompound();

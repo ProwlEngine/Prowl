@@ -89,7 +89,7 @@ public sealed class AnimationCurve : IReadOnlyList<Keyframe>
     /// <summary>Creates a curve with the given component count from the given keys.</summary>
     public AnimationCurve(int dimension, IEnumerable<Keyframe> keys) : this(dimension)
     {
-        if (keys is null) throw new ArgumentNullException(nameof(keys));
+        ArgumentNullException.ThrowIfNull(keys);
         foreach (Keyframe key in keys)
             AddKey(key);
     }
@@ -149,8 +149,8 @@ public sealed class AnimationCurve : IReadOnlyList<Keyframe>
     /// <param name="interpolation">Interpolation applied to every key.</param>
     public static AnimationCurve FromPacked(int dimension, float[] times, float[] values, float[]? inTangents, float[]? outTangents, CurveInterpolation interpolation)
     {
-        if (times is null) throw new ArgumentNullException(nameof(times));
-        if (values is null) throw new ArgumentNullException(nameof(values));
+        ArgumentNullException.ThrowIfNull(times);
+        ArgumentNullException.ThrowIfNull(values);
 
         var curve = new AnimationCurve(dimension);
         int count = times.Length;
@@ -182,8 +182,8 @@ public sealed class AnimationCurve : IReadOnlyList<Keyframe>
     /// <param name="interleaved">Sampler output containing <c>3 * dimension</c> floats per key.</param>
     public static AnimationCurve FromGltfCubicSpline(int dimension, float[] times, float[] interleaved)
     {
-        if (times is null) throw new ArgumentNullException(nameof(times));
-        if (interleaved is null) throw new ArgumentNullException(nameof(interleaved));
+        ArgumentNullException.ThrowIfNull(times);
+        ArgumentNullException.ThrowIfNull(interleaved);
 
         int count = times.Length;
         if (interleaved.Length != count * dimension * 3)
@@ -322,7 +322,7 @@ public sealed class AnimationCurve : IReadOnlyList<Keyframe>
     /// <summary>Replaces every key on the curve. The supplied keys do not need to be sorted.</summary>
     public void SetKeys(IEnumerable<Keyframe> keys)
     {
-        if (keys is null) throw new ArgumentNullException(nameof(keys));
+        ArgumentNullException.ThrowIfNull(keys);
         Clear();
         foreach (Keyframe key in keys)
             AddKey(key);

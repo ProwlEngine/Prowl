@@ -1178,7 +1178,7 @@ public sealed class Preprocessor
     {
         // A byte-order mark is not part of the shader, and glslang reads CR, LF and CRLF line endings alike.
         if (source.Length > 0 && source[0] == '\uFEFF') source = source[1..];
-        if (source.IndexOf('\r') >= 0) source = source.Replace("\r\n", "\n").Replace('\r', '\n');
+        if (source.Contains('\r')) source = source.Replace("\r\n", "\n").Replace('\r', '\n');
         if (source.IndexOf('\\') < 0) return source;   // nothing to join
         var sb = new System.Text.StringBuilder(source.Length);
         int pending = 0, line = 1, lineStart = 0;

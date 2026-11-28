@@ -19,6 +19,7 @@ freely, subject to the following restrictions:
 */
 
 using System.Collections.Generic;
+
 using Prowl.Recast.Core;
 using Prowl.Recast.Core.Collections;
 using Prowl.Recast.Core.Numerics;

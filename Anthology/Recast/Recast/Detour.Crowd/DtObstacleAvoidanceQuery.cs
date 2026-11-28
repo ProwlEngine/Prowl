@@ -154,7 +154,7 @@ public class DtObstacleAvoidanceQuery
         }
     }
 
-    private bool SweepCircleCircle(RcVec3f c0, float r0, RcVec3f v, RcVec3f c1, float r1, out float tmin, out float tmax)
+    private static bool SweepCircleCircle(RcVec3f c0, float r0, RcVec3f v, RcVec3f c1, float r1, out float tmin, out float tmax)
     {
         const float EPS = 0.0001f;
 
@@ -183,7 +183,7 @@ public class DtObstacleAvoidanceQuery
         return true;
     }
 
-    private bool IsectRaySeg(RcVec3f ap, RcVec3f u, RcVec3f bp, RcVec3f bq, ref float t)
+    private static bool IsectRaySeg(RcVec3f ap, RcVec3f u, RcVec3f bp, RcVec3f bq, ref float t)
     {
         RcVec3f v = RcVec3f.Subtract(bq, bp);
         RcVec3f w = RcVec3f.Subtract(ap, bp);
@@ -365,7 +365,7 @@ public class DtObstacleAvoidanceQuery
 
     // vector normalization that ignores the y-component.
     [MethodImpl(MethodImplOptions.AggressiveInlining)]
-    void DtNormalize2D(Span<float> v)
+    static void DtNormalize2D(Span<float> v)
     {
         float d = MathF.Sqrt(v[0] * v[0] + v[2] * v[2]);
         if (d == 0)
@@ -377,7 +377,7 @@ public class DtObstacleAvoidanceQuery
 
     // vector normalization that ignores the y-component.
     [MethodImpl(MethodImplOptions.AggressiveInlining)]
-    RcVec3f DtRotate2D(ReadOnlySpan<float> v, float ang)
+    static RcVec3f DtRotate2D(ReadOnlySpan<float> v, float ang)
     {
         RcVec3f dest = new RcVec3f();
         float c = MathF.Cos(ang);

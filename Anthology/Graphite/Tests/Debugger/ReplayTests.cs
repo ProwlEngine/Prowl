@@ -1,12 +1,14 @@
 using System;
 using System.IO;
 using System.Linq;
+
 using Prowl.Echo;
 using Prowl.Graphite.Debugger.Serialization;
 using Prowl.Graphite.Debugger.Trace;
 using Prowl.Graphite.Debugging;
 using Prowl.Graphite.ShaderDef;
 using Prowl.Graphite.ShaderDef.Compiler;
+
 using Xunit;
 
 namespace Prowl.Graphite.Debugger.Tests;

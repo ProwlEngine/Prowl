@@ -27,7 +27,6 @@ namespace Prowl.Recast.Detour.Io;
 public class DtMeshSetReader
 {
     private readonly DtMeshDataReader meshReader = new DtMeshDataReader();
-    private readonly DtNavMeshParamsReader paramReader = new DtNavMeshParamsReader();
 
     public DtNavMesh Read(BinaryReader @is, int maxVertPerPoly)
     {
@@ -74,7 +73,7 @@ public class DtMeshSetReader
         return mesh;
     }
 
-    private NavMeshSetHeader ReadHeader(RcByteBuffer bb, int maxVertsPerPoly)
+    private static NavMeshSetHeader ReadHeader(RcByteBuffer bb, int maxVertsPerPoly)
     {
         NavMeshSetHeader header = new NavMeshSetHeader
         {
@@ -99,7 +98,7 @@ public class DtMeshSetReader
         }
 
         header.numTiles = bb.GetInt();
-        header.option = paramReader.Read(bb);
+        header.option = DtNavMeshParamsReader.Read(bb);
         header.maxVertsPerPoly = maxVertsPerPoly;
         if (header.version == NavMeshSetHeader.NAVMESHSET_VERSION_RECAST4J)
         {
@@ -140,7 +139,7 @@ public class DtMeshSetReader
         }
     }
 
-    private long Convert32BitRef(int refs, in DtNavMeshParams option)
+    private static long Convert32BitRef(int refs, in DtNavMeshParams option)
     {
         int m_tileBits = DtUtils.Ilog2(DtUtils.NextPow2(option.maxTiles));
         int m_polyBits = DtUtils.Ilog2(DtUtils.NextPow2(option.maxPolys));

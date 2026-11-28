@@ -534,7 +534,7 @@ public sealed partial class LightingTests : IDisposable
         }
         Float4[] crowded = Perspective();
 
-        Assert.True(alone.Any(p => p.X > 0.01f));
+        Assert.Contains(alone, p => p.X > 0.01f);
         for (int i = 0; i < alone.Length; i++)
             Assert.True(MathF.Abs(alone[i].X - crowded[i].X) <= 1e-5f + 1e-4f * alone[i].X, $"pixel {i}: {alone[i].X} alone, {crowded[i].X} among 1521 regions");
     }
@@ -1792,8 +1792,18 @@ public sealed partial class LightingTests : IDisposable
 
             Vector3 surface = -v * 5;
             Vector3 at = surface + center;
-            LightDesc light = new() { Type = type, Position = new Double3(at.X, at.Y, at.Z), Direction = new Float3(axis.X, axis.Y, axis.Z), Up = new Float3(up.X, up.Y, up.Z),
-                SourceRadius = radius, Size = new Float2(size.X, size.Y), Range = 1e6f, Intensity = 1, Color = new Float3(1, 1, 1) };
+            LightDesc light = new()
+            {
+                Type = type,
+                Position = new Double3(at.X, at.Y, at.Z),
+                Direction = new Float3(axis.X, axis.Y, axis.Z),
+                Up = new Float3(up.X, up.Y, up.Z),
+                SourceRadius = radius,
+                Size = new Float2(size.X, size.Y),
+                Range = 1e6f,
+                Intensity = 1,
+                Color = new Float3(1, 1, 1)
+            };
             float estimate = Area(light, surface, n, Vector3.One, 1, roughness).X;
 
             const int steps = 300;

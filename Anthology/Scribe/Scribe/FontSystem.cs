@@ -241,7 +241,7 @@ public class FontSystem
         }
     }
 
-    private IEnumerable<string> GetSystemFontPaths()
+    private static IEnumerable<string> GetSystemFontPaths()
     {
         // De-dupe final results
         var yielded = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
@@ -325,7 +325,7 @@ public class FontSystem
 
     public AtlasGlyph? GetOrCreateGlyph(int codepoint, FontFile font, FontQuality quality)
     {
-        if(font == null) throw new ArgumentNullException(nameof(font));
+        ArgumentNullException.ThrowIfNull(font);
 
         // An unset/default FontQuality (0) is not a valid rasterization size, so callers that
         // build TextLayoutSettings without specifying Quality would otherwise get no glyphs.
@@ -363,7 +363,7 @@ public class FontSystem
     /// </summary>
     public AtlasGlyph? GetOrCreateGlyphByIndex(int glyphIndex, FontFile font, FontQuality quality)
     {
-        if (font == null) throw new ArgumentNullException(nameof(font));
+        ArgumentNullException.ThrowIfNull(font);
         if ((int)quality <= 0) quality = FontQuality.Normal;
         if (glyphIndex <= 0) return null;
         return GetOrAddGlyph(font, glyphIndex, quality);
@@ -822,11 +822,11 @@ public class FontSystem
     /// </summary>
     public void UpdateLayout(TextLayout layout, string text, TextLayoutSettings settings)
     {
-        if (layout == null) throw new ArgumentNullException(nameof(layout));
+        ArgumentNullException.ThrowIfNull(layout);
         layout.UpdateLayout(text ?? string.Empty, settings, this);
     }
 
-    LayoutCacheKey GenerateLayoutCacheKey(string text, TextLayoutSettings s)
+    static LayoutCacheKey GenerateLayoutCacheKey(string text, TextLayoutSettings s)
         => new LayoutCacheKey(text, s.PixelSize, s.LetterSpacing, s.WordSpacing, s.LineHeight,
                s.TabSize, s.WrapMode, s.Alignment, s.MaxWidth, s.Font?.GetHashCode() ?? 0,
                s.Quality, s.Customizer, s.NoLigatures);

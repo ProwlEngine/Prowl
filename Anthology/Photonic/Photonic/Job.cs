@@ -199,7 +199,7 @@ public sealed class Job
     /// Walk every seam edge of every instance in atlas pixel space, sampling both of its sides at
     /// matching points. Built once after rasterisation; the sample pairs are all the seam fixer needs.
     /// </summary>
-    private Imaging.SeamFixer.Sample[][] BuildSeamSamples(TargetWorkspace[] workspaces, BakeInstance[] instances)
+    private static Imaging.SeamFixer.Sample[][] BuildSeamSamples(TargetWorkspace[] workspaces, BakeInstance[] instances)
     {
         var cache = new System.Collections.Generic.Dictionary<(BakeMesh, string), Rasterization.UvSeamFinder.SeamSegment[]>();
         var perTarget = new Imaging.SeamFixer.Sample[workspaces.Length][];

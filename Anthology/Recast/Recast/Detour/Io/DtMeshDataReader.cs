@@ -126,7 +126,7 @@ public class DtMeshDataReader
         return is32Bit ? LINK_SIZEOF32BIT : LINK_SIZEOF;
     }
 
-    private float[] ReadVerts(RcByteBuffer buf, int count)
+    private static float[] ReadVerts(RcByteBuffer buf, int count)
     {
         float[] verts = new float[count * 3];
         for (int i = 0; i < verts.Length; i++)
@@ -137,7 +137,7 @@ public class DtMeshDataReader
         return verts;
     }
 
-    private DtPoly[] ReadPolys(RcByteBuffer buf, DtMeshHeader header, int maxVertPerPoly)
+    private static DtPoly[] ReadPolys(RcByteBuffer buf, DtMeshHeader header, int maxVertPerPoly)
     {
         DtPoly[] polys = new DtPoly[header.polyCount];
         for (int i = 0; i < polys.Length; i++)
@@ -166,7 +166,7 @@ public class DtMeshDataReader
         return polys;
     }
 
-    private DtPolyDetail[] ReadPolyDetails(RcByteBuffer buf, DtMeshHeader header, bool cCompatibility)
+    private static DtPolyDetail[] ReadPolyDetails(RcByteBuffer buf, DtMeshHeader header, bool cCompatibility)
     {
         DtPolyDetail[] polys = new DtPolyDetail[header.detailMeshCount];
         for (int i = 0; i < polys.Length; i++)
@@ -185,7 +185,7 @@ public class DtMeshDataReader
         return polys;
     }
 
-    private int[] ReadDTris(RcByteBuffer buf, DtMeshHeader header)
+    private static int[] ReadDTris(RcByteBuffer buf, DtMeshHeader header)
     {
         int[] tris = new int[4 * header.detailTriCount];
         for (int i = 0; i < tris.Length; i++)
@@ -196,7 +196,7 @@ public class DtMeshDataReader
         return tris;
     }
 
-    private DtBVNode[] ReadBVTree(RcByteBuffer buf, DtMeshHeader header)
+    private static DtBVNode[] ReadBVTree(RcByteBuffer buf, DtMeshHeader header)
     {
         DtBVNode[] nodes = new DtBVNode[header.bvNodeCount];
         for (int i = 0; i < nodes.Length; i++)
@@ -229,7 +229,7 @@ public class DtMeshDataReader
         return nodes;
     }
 
-    private DtOffMeshConnection[] ReadOffMeshCons(RcByteBuffer buf, DtMeshHeader header)
+    private static DtOffMeshConnection[] ReadOffMeshCons(RcByteBuffer buf, DtMeshHeader header)
     {
         DtOffMeshConnection[] cons = new DtOffMeshConnection[header.offMeshConCount];
         for (int i = 0; i < cons.Length; i++)

@@ -1,4 +1,5 @@
 using System;
+
 using Prowl.Graphite.Vk;
 
 using Xunit;

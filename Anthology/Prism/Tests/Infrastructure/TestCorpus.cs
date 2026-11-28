@@ -1,9 +1,10 @@
 using System.Reflection;
 using System.Text;
-using Prowl.Prism.Compiler;
-using Prowl.Prism.SpirV;
 using System.Text.Json;
 using System.Text.Json.Serialization;
+
+using Prowl.Prism.Compiler;
+using Prowl.Prism.SpirV;
 
 namespace Prowl.Prism.Tests;
 
@@ -29,17 +30,30 @@ public static class TestCorpus
 
     static readonly Dictionary<string, ShaderStage> StageByExtension = new(StringComparer.OrdinalIgnoreCase)
     {
-        ["vert"] = ShaderStage.Vertex, ["frag"] = ShaderStage.Fragment, ["comp"] = ShaderStage.Compute,
-        ["geom"] = ShaderStage.Geometry, ["tesc"] = ShaderStage.TessControl, ["tese"] = ShaderStage.TessEvaluation,
-        ["mesh"] = ShaderStage.Mesh, ["task"] = ShaderStage.Task, ["rgen"] = ShaderStage.RayGen,
-        ["rint"] = ShaderStage.Intersection, ["rahit"] = ShaderStage.AnyHit, ["rchit"] = ShaderStage.ClosestHit,
-        ["rmiss"] = ShaderStage.Miss, ["rcall"] = ShaderStage.Callable,
+        ["vert"] = ShaderStage.Vertex,
+        ["frag"] = ShaderStage.Fragment,
+        ["comp"] = ShaderStage.Compute,
+        ["geom"] = ShaderStage.Geometry,
+        ["tesc"] = ShaderStage.TessControl,
+        ["tese"] = ShaderStage.TessEvaluation,
+        ["mesh"] = ShaderStage.Mesh,
+        ["task"] = ShaderStage.Task,
+        ["rgen"] = ShaderStage.RayGen,
+        ["rint"] = ShaderStage.Intersection,
+        ["rahit"] = ShaderStage.AnyHit,
+        ["rchit"] = ShaderStage.ClosestHit,
+        ["rmiss"] = ShaderStage.Miss,
+        ["rcall"] = ShaderStage.Callable,
     };
 
     static readonly Dictionary<string, SpirVVersion> VersionByFolder = new(StringComparer.OrdinalIgnoreCase)
     {
-        ["Spirv 1.0"] = SpirVVersion.V1_0, ["Spirv 1.1"] = SpirVVersion.V1_1, ["Spirv 1.2"] = SpirVVersion.V1_2,
-        ["Spirv 1.3"] = SpirVVersion.V1_3, ["Spirv 1.4"] = SpirVVersion.V1_4, ["Spirv 1.5"] = SpirVVersion.V1_5,
+        ["Spirv 1.0"] = SpirVVersion.V1_0,
+        ["Spirv 1.1"] = SpirVVersion.V1_1,
+        ["Spirv 1.2"] = SpirVVersion.V1_2,
+        ["Spirv 1.3"] = SpirVVersion.V1_3,
+        ["Spirv 1.4"] = SpirVVersion.V1_4,
+        ["Spirv 1.5"] = SpirVVersion.V1_5,
     };
 
     public static IReadOnlyList<Snippet> All { get; }

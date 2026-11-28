@@ -922,11 +922,11 @@ public class KcpTransportTests
     [Fact]
     public async Task ResolvesHostNamesAndIpv6Literals()
     {
-        Assert.NotNull(await KcpTransport.TryResolveAsync("localhost:7777", 0, AddressFamily.InterNetworkV6, default));
-        Assert.NotNull(await KcpTransport.TryResolveAsync("[::1]:7777", 0, AddressFamily.InterNetworkV6, default));
-        Assert.NotNull(await KcpTransport.TryResolveAsync("127.0.0.1", 7777, AddressFamily.InterNetwork, default));
-        Assert.Null(await KcpTransport.TryResolveAsync("[::1]:7777", 0, AddressFamily.InterNetwork, default));
-        Assert.Null(await KcpTransport.TryResolveAsync("localhost:notaport", 0, AddressFamily.InterNetworkV6, default));
+        Assert.NotNull(await KcpTransport.TryResolveAsync("localhost:7777", 0, AddressFamily.InterNetworkV6, TestContext.Current.CancellationToken));
+        Assert.NotNull(await KcpTransport.TryResolveAsync("[::1]:7777", 0, AddressFamily.InterNetworkV6, TestContext.Current.CancellationToken));
+        Assert.NotNull(await KcpTransport.TryResolveAsync("127.0.0.1", 7777, AddressFamily.InterNetwork, TestContext.Current.CancellationToken));
+        Assert.Null(await KcpTransport.TryResolveAsync("[::1]:7777", 0, AddressFamily.InterNetwork, TestContext.Current.CancellationToken));
+        Assert.Null(await KcpTransport.TryResolveAsync("localhost:notaport", 0, AddressFamily.InterNetworkV6, TestContext.Current.CancellationToken));
     }
 
     [Fact]

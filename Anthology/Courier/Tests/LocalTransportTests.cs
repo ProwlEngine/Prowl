@@ -79,7 +79,9 @@ public class LocalTransportTests
         LocalNetwork network = new();
         using LocalTransport host = new(network, "host")
         {
-            MaxConnections = 2, MaxInboxPackets = 1, MaxPacketsPerReceive = 1
+            MaxConnections = 2,
+            MaxInboxPackets = 1,
+            MaxPacketsPerReceive = 1
         };
         using LocalTransport client = new(network, "client");
         host.Listen();

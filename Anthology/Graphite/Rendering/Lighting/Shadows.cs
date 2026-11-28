@@ -1532,7 +1532,7 @@ internal sealed partial class FramePipeline
     }
 
     // The tiles of the light seen longest ago that no view sees now. Returns whether one gave its tiles back.
-    private bool EvictUnseen(WorldShadows shadows)
+    private static bool EvictUnseen(WorldShadows shadows)
     {
         int oldest = -1;
         foreach ((int index, LightShadow other) in shadows.Lights)
@@ -1762,7 +1762,7 @@ internal sealed partial class FramePipeline
     }
 
     // Room in the scratch page for a light's faces at their new size, the static copy's as well when it keeps one
-    private bool ReserveScratch(WorldShadows shadows, LightShadow light, int size, int pageSize)
+    private static bool ReserveScratch(WorldShadows shadows, LightShadow light, int size, int pageSize)
     {
         if (shadows.ScratchTiles == null || shadows.ScratchTiles.Size != pageSize / 2)
             shadows.ScratchTiles = new ShadowTileAllocator(pageSize / 2);
@@ -1827,7 +1827,7 @@ internal sealed partial class FramePipeline
     }
 
     // A light's tiles go back to their pages and its faces read as unshadowed; its cameras go too unless it keeps its state
-    private void ReleaseShadow(WorldShadows shadows, int index, LightShadow light, bool keepState)
+    private static void ReleaseShadow(WorldShadows shadows, int index, LightShadow light, bool keepState)
     {
         for (int f = 0; f < 6; f++)
         {

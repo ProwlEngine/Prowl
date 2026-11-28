@@ -204,7 +204,7 @@ public sealed partial class ShaderSession
     private static readonly string[] GlslPragmaGlobalTypes = ["float", "int", "ivec2", "ivec3", "ivec4", "vec2", "vec3", "vec4", "mat4", "sampler2D", "sampler2DArray", "sampler3D", "samplerCube", "samplerCubeArray"];
 
     // The ShaderDef wrapper: what can be typed depends on the enclosing block and the command on the line.
-    private IEnumerable<CodeCompletionItem> WrapperCompletions(ShaderIndex index, int offset, int wordStart)
+    private static IEnumerable<CodeCompletionItem> WrapperCompletions(ShaderIndex index, int offset, int wordStart)
     {
         string text = index.Text;
         var stack = new Stack<string>();

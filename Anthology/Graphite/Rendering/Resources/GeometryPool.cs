@@ -289,7 +289,7 @@ internal sealed class GeometryPool(GraphicsDevice device, RenderStore store, uin
         if (_streamWrites.Count == 0)
             return 0;
         HashSet<GpuMesh> waiting = [with(placedNow)];
-        foreach ((GpuMesh? mesh, MeshLayout _) in _pending)
+        foreach ((GpuMesh mesh, MeshLayout? _) in _pending)
             waiting.Add(mesh);
         long bytes = 0;
         int kept = 0;

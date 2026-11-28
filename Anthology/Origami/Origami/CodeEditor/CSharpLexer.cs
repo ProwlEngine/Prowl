@@ -217,7 +217,7 @@ with(StringComparer.Ordinal),         "class", "struct", "interface", "enum", "r
             return ModeCode;
         }
 
-        private static bool IsOperator(char c) => "+-*/%=<>!&|^~?:".IndexOf(c) >= 0;
+        private static bool IsOperator(char c) => "+-*/%=<>!&|^~?:".Contains(c);
 
         private bool IsStringPrefix(int pos)
         {
@@ -312,7 +312,7 @@ with(StringComparer.Ordinal),         "class", "struct", "interface", "enum", "r
                     else pos = save;
                 }
             }
-            while (pos < _s.Length && "uUlLfFdDmM".IndexOf(_s[pos]) >= 0) pos++;
+            while (pos < _s.Length && "uUlLfFdDmM".Contains(_s[pos])) pos++;
             Emit(start, pos - start, CodeTokenKind.Number);
         }
 

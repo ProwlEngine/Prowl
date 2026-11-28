@@ -273,7 +273,7 @@ internal sealed class FbxAsciiReader
         parent.Children.Add(node);
     }
 
-    private bool TryNormalizeArrayNode(FbxNode outer, List<Tok> outerTokens, FbxNode? compound)
+    private static bool TryNormalizeArrayNode(FbxNode outer, List<Tok> outerTokens, FbxNode? compound)
     {
         if (compound is null) return false;
         if (outerTokens.Count != 1) return false;

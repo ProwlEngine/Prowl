@@ -151,7 +151,7 @@ internal sealed partial class GraphExecution
         throw new InvalidOperationException("The pass has no attachment write to that resource.");
     }
 
-    private TargetLoadStoreOps OpsFor(FramePass pass, in ResourceAccess access, FrameResource resource, int passIndex)
+    private static TargetLoadStoreOps OpsFor(FramePass pass, in ResourceAccess access, FrameResource resource, int passIndex)
     {
         TargetLoadStoreOps ops = TargetLoadStoreOps.ForLifetime(persistent: true);
         if (resource.FirstWriter == passIndex && IsFirstWriteOf(pass, access))
@@ -215,5 +215,5 @@ internal sealed partial class GraphExecution
         return capture;
     }
 
-    public bool WroteTarget(FrameResource resource) => resource.IsTarget && resource.Written;
+    public static bool WroteTarget(FrameResource resource) => resource.IsTarget && resource.Written;
 }

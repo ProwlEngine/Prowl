@@ -18,37 +18,38 @@ freely, subject to the following restrictions:
 */
 
 using System;
-using Prowl.Recast.Core;
+
 using K4os.Compression.LZ4;
 
-namespace Prowl.Recast.Detour.Dynamic.Tests.Io
+using Prowl.Recast.Core;
+
+namespace Prowl.Recast.Detour.Dynamic.Tests.Io;
+
+public class DtVoxelTileLZ4ForTestCompressor : IRcCompressor
 {
-    public class DtVoxelTileLZ4ForTestCompressor : IRcCompressor
+    public static readonly DtVoxelTileLZ4ForTestCompressor Shared = new();
+
+    private DtVoxelTileLZ4ForTestCompressor()
     {
-        public static readonly DtVoxelTileLZ4ForTestCompressor Shared = new();
+    }
 
-        private DtVoxelTileLZ4ForTestCompressor()
-        {
-        }
+    public byte[] Decompress(byte[] data)
+    {
+        int compressedSize = RcByteUtils.GetIntBE(data, 0);
+        return LZ4Pickler.Unpickle(data.AsSpan(4, compressedSize));
+    }
 
-        public byte[] Decompress(byte[] data)
-        {
-            int compressedSize = RcByteUtils.GetIntBE(data, 0);
-            return LZ4Pickler.Unpickle(data.AsSpan(4, compressedSize));
-        }
+    public byte[] Decompress(byte[] buf, int offset, int len, int outputlen)
+    {
+        return LZ4Pickler.Unpickle(buf, offset, len);
+    }
 
-        public byte[] Decompress(byte[] buf, int offset, int len, int outputlen)
-        {
-            return LZ4Pickler.Unpickle(buf, offset, len);
-        }
-
-        public byte[] Compress(byte[] data)
-        {
-            byte[] compressed = LZ4Pickler.Pickle(data, LZ4Level.L12_MAX);
-            byte[] result = new byte[4 + compressed.Length];
-            RcByteUtils.PutInt(compressed.Length, result, 0, RcByteOrder.BIG_ENDIAN);
-            RcArrays.Copy(compressed, 0, result, 4, compressed.Length);
-            return result;
-        }
+    public byte[] Compress(byte[] data)
+    {
+        byte[] compressed = LZ4Pickler.Pickle(data, LZ4Level.L12_MAX);
+        byte[] result = new byte[4 + compressed.Length];
+        RcByteUtils.PutInt(compressed.Length, result, 0, RcByteOrder.BIG_ENDIAN);
+        RcArrays.Copy(compressed, 0, result, 4, compressed.Length);
+        return result;
     }
 }

@@ -76,7 +76,7 @@ internal sealed class ViewGraph
 
     private uint Layers => Shape.Layers > 1 ? (uint)Shape.Layers : 0;
 
-    public RenderResourceID IdOf(RenderFeature feature, string name)
+    public static RenderResourceID IdOf(RenderFeature feature, string name)
         => RenderResourceID.Intern($"{feature.GetType().Name}.{feature.Id}/{name}");
 
     public GraphTextureDesc ColorDesc(in FeatureView view)

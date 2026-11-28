@@ -99,10 +99,7 @@ public sealed partial class LayoutTree
 
     public LayoutTree(int capacity = 128)
     {
-        if (capacity < 0)
-        {
-            throw new ArgumentOutOfRangeException(nameof(capacity));
-        }
+        ArgumentOutOfRangeException.ThrowIfNegative(capacity);
 
         _nodes = new Node[Math.Max(1, capacity)];
     }
@@ -110,10 +107,7 @@ public sealed partial class LayoutTree
     public void Reserve(int capacity)
     {
         CheckMutation();
-        if (capacity < 0)
-        {
-            throw new ArgumentOutOfRangeException(nameof(capacity));
-        }
+        ArgumentOutOfRangeException.ThrowIfNegative(capacity);
 
         if (capacity > Capacity)
         {

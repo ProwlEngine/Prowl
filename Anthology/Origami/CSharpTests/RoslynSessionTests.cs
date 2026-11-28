@@ -35,7 +35,7 @@ public class RoslynSessionTests
     public async Task CompletionAfterDotListsMembers()
     {
         var (session, caret) = Open("using System;\nclass C\n{\n    void M()\n    {\n        Console.$$\n    }\n}");
-        var list = await session.GetCompletionsAsync(caret, new CodeCompletionTrigger(CodeCompletionTriggerKind.Character, '.'), default);
+        var list = await session.GetCompletionsAsync(caret, new CodeCompletionTrigger(CodeCompletionTriggerKind.Character, '.'), TestContext.Current.CancellationToken);
 
         Assert.NotNull(list);
         Assert.Contains(list!.Items, i => i.Label == "WriteLine");
@@ -46,7 +46,7 @@ public class RoslynSessionTests
     public async Task CompletionIsNotTriggeredBySpace()
     {
         var (session, caret) = Open("class C\n{\n    void M()\n    {\n        int x = 1 $$\n    }\n}");
-        var list = await session.GetCompletionsAsync(caret, new CodeCompletionTrigger(CodeCompletionTriggerKind.Character, ' '), default);
+        var list = await session.GetCompletionsAsync(caret, new CodeCompletionTrigger(CodeCompletionTriggerKind.Character, ' '), TestContext.Current.CancellationToken);
         Assert.Null(list);
     }
 
@@ -54,10 +54,10 @@ public class RoslynSessionTests
     public async Task CompletionDescriptionHasSignature()
     {
         var (session, caret) = Open("using System;\nclass C\n{\n    void M()\n    {\n        Console.$$\n    }\n}");
-        var list = await session.GetCompletionsAsync(caret, CodeCompletionTrigger.Invoke, default);
+        var list = await session.GetCompletionsAsync(caret, CodeCompletionTrigger.Invoke, TestContext.Current.CancellationToken);
         var item = list!.Items.First(i => i.Label == "WriteLine");
 
-        var description = await session.GetCompletionDescriptionAsync(item, default);
+        var description = await session.GetCompletionDescriptionAsync(item, TestContext.Current.CancellationToken);
 
         Assert.NotNull(description);
         Assert.NotEmpty(description!.Signature);
@@ -72,7 +72,7 @@ public class RoslynSessionTests
         int lineLength = document.GetLineLength(5);
         int caret = document.GetText("\n").IndexOf("Wr", StringComparison.Ordinal) + 2;
 
-        var list = await session.GetCompletionsAsync(caret, CodeCompletionTrigger.Invoke, default);
+        var list = await session.GetCompletionsAsync(caret, CodeCompletionTrigger.Invoke, TestContext.Current.CancellationToken);
         var item = list!.Items.First(i => i.Label == "WriteLine");
 
         session.OnTextChanged(document.Insert(new TextPosition(5, lineLength), "it"));
@@ -90,7 +90,7 @@ public class RoslynSessionTests
     public async Task QuickInfoOnType()
     {
         var (session, caret) = Open("class C\n{\n    System.Text.String$$Builder sb;\n}");
-        var info = await session.GetQuickInfoAsync(caret, default);
+        var info = await session.GetQuickInfoAsync(caret, TestContext.Current.CancellationToken);
 
         Assert.NotNull(info);
         Assert.Contains("StringBuilder", string.Concat(info!.Signature.Select(p => p.Text)));
@@ -101,7 +101,7 @@ public class RoslynSessionTests
     {
         string code = "using System;\nclass C\n{\n    void M()\n    {\n        Math.Max(1, $$);\n    }\n}";
         var (session, caret) = Open(code);
-        var help = await session.GetSignatureHelpAsync(caret, default);
+        var help = await session.GetSignatureHelpAsync(caret, TestContext.Current.CancellationToken);
 
         Assert.NotNull(help);
         Assert.NotEmpty(help!.Signatures);
@@ -118,7 +118,7 @@ public class RoslynSessionTests
     public async Task SignatureHelpNamedArgument()
     {
         var (session, caret) = Open("class C\n{\n    void Go(int a, string b) { }\n    void M()\n    {\n        Go(b: $$);\n    }\n}");
-        var help = await session.GetSignatureHelpAsync(caret, default);
+        var help = await session.GetSignatureHelpAsync(caret, TestContext.Current.CancellationToken);
 
         Assert.NotNull(help);
         Assert.Equal(1, help!.ActiveParameter);
@@ -128,7 +128,7 @@ public class RoslynSessionTests
     public async Task SignatureHelpForConstructor()
     {
         var (session, caret) = Open("class P\n{\n    /// <summary>Makes a P.</summary>\n    public P(int x, int y) { }\n    void M()\n    {\n        var p = new P($$\n    }\n}");
-        var help = await session.GetSignatureHelpAsync(caret, default);
+        var help = await session.GetSignatureHelpAsync(caret, TestContext.Current.CancellationToken);
 
         Assert.NotNull(help);
         Assert.Equal(0, help!.ActiveParameter);
@@ -140,7 +140,7 @@ public class RoslynSessionTests
     {
         string code = "class C\n{\n    void M()\n    {\n        int x = missing;\n    }\n}";
         var (session, _) = Open(code);
-        var diagnostics = await session.GetDiagnosticsAsync(default);
+        var diagnostics = await session.GetDiagnosticsAsync(TestContext.Current.CancellationToken);
 
         var d = Assert.Single(diagnostics, d => d.Id == "CS0103");
         Assert.Equal(CodeDiagnosticSeverity.Error, d.Severity);
@@ -153,7 +153,7 @@ public class RoslynSessionTests
     {
         string code = "class Foo\n{\n    Foo other;\n}";
         var (session, _) = Open(code);
-        var spans = await session.GetClassificationsAsync(0, code.Length, default);
+        var spans = await session.GetClassificationsAsync(0, code.Length, TestContext.Current.CancellationToken);
 
         int usage = code.LastIndexOf("Foo", StringComparison.Ordinal);
         Assert.Contains(spans, s => s.Start == usage && s.Length == 3 && s.Kind == CodeTokenKind.Class);
@@ -165,7 +165,7 @@ public class RoslynSessionTests
     {
         string code = "class C\n{\n    void M()\n    {\n        Lo$$cal();\n        void Local() { }\n    }\n}";
         var (session, caret) = Open(code);
-        var locations = await session.GetDefinitionAsync(caret, default);
+        var locations = await session.GetDefinitionAsync(caret, TestContext.Current.CancellationToken);
 
         var location = Assert.Single(locations);
         Assert.True(location.IsCurrentDocument);
@@ -180,12 +180,12 @@ public class RoslynSessionTests
         workspace.AddOrUpdateDocument(helperPath, "public static class Helper\n{\n    public static void Run() { }\n}");
         var (session, caret) = Open("class C\n{\n    void M() => Helper.R$$un();\n}", workspace);
 
-        var location = Assert.Single(await session.GetDefinitionAsync(caret, default));
+        var location = Assert.Single(await session.GetDefinitionAsync(caret, TestContext.Current.CancellationToken));
         Assert.False(location.IsCurrentDocument);
         Assert.Equal(helperPath, location.Path);
         Assert.Equal(2, location.Line);
 
-        var diagnostics = await session.GetDiagnosticsAsync(default);
+        var diagnostics = await session.GetDiagnosticsAsync(TestContext.Current.CancellationToken);
         Assert.DoesNotContain(diagnostics, d => d.Severity == CodeDiagnosticSeverity.Error);
     }
 
@@ -193,7 +193,7 @@ public class RoslynSessionTests
     public async Task DefinitionOfMetadataSymbol()
     {
         var (session, caret) = Open("class C\n{\n    void M() => System.Console.Write$$Line();\n}");
-        var location = Assert.Single(await session.GetDefinitionAsync(caret, default));
+        var location = Assert.Single(await session.GetDefinitionAsync(caret, TestContext.Current.CancellationToken));
         Assert.Null(location.Path);
         Assert.Contains("Console.WriteLine", location.Display);
     }
@@ -205,11 +205,11 @@ public class RoslynSessionTests
         var (session, _) = Open(code);
         int offset = code.IndexOf("value", StringComparison.Ordinal);
 
-        var references = await session.FindReferencesAsync(offset, default);
+        var references = await session.FindReferencesAsync(offset, TestContext.Current.CancellationToken);
         Assert.Equal(3, references.Count);
         Assert.Contains(references, r => r.Display == "    int value;");
 
-        var highlights = await session.GetHighlightsAsync(offset, default);
+        var highlights = await session.GetHighlightsAsync(offset, TestContext.Current.CancellationToken);
         Assert.Equal(3, highlights.Count);
     }
 
@@ -218,7 +218,7 @@ public class RoslynSessionTests
     {
         string code = "class C\n{\n    int value;\n    void M() { value = 1; }\n}";
         var (session, _) = Open(code);
-        var result = await session.RenameAsync(code.IndexOf("value", StringComparison.Ordinal), "count", default);
+        var result = await session.RenameAsync(code.IndexOf("value", StringComparison.Ordinal), "count", TestContext.Current.CancellationToken);
 
         Assert.NotNull(result);
         Assert.Equal("class C\n{\n    int count;\n    void M() { count = 1; }\n}", Apply(code, result!.Edits));
@@ -230,7 +230,7 @@ public class RoslynSessionTests
     {
         string code = "class C\n{\n    int value;\n}";
         var (session, _) = Open(code);
-        Assert.Null(await session.RenameAsync(code.IndexOf("value", StringComparison.Ordinal), "class", default));
+        Assert.Null(await session.RenameAsync(code.IndexOf("value", StringComparison.Ordinal), "class", TestContext.Current.CancellationToken));
     }
 
     [Fact]
@@ -239,7 +239,7 @@ public class RoslynSessionTests
         string code = "class C\n{\n    void M()\n    {\n        var sb = new StringBuilder();\n    }\n}";
         var (session, _) = Open(code);
         int at = code.IndexOf("StringBuilder", StringComparison.Ordinal);
-        var actions = await session.GetCodeActionsAsync(at, 0, default);
+        var actions = await session.GetCodeActionsAsync(at, 0, TestContext.Current.CancellationToken);
 
         var addUsing = Assert.Single(actions, a => a.Title == "using System.Text;");
         Assert.True(addUsing.IsQuickFix);
@@ -254,7 +254,7 @@ public class RoslynSessionTests
     {
         string code = "// Header\n\nusing System;\nusing System.Threading;\n\nclass C\n{\n    StringBuilder sb;\n}";
         var (session, _) = Open(code);
-        var actions = await session.GetCodeActionsAsync(code.IndexOf("StringBuilder", StringComparison.Ordinal), 0, default);
+        var actions = await session.GetCodeActionsAsync(code.IndexOf("StringBuilder", StringComparison.Ordinal), 0, TestContext.Current.CancellationToken);
 
         var addUsing = Assert.Single(actions, a => a.Title == "using System.Text;");
         Assert.StartsWith("// Header\n\nusing System;\nusing System.Text;\nusing System.Threading;\n", Apply(code, addUsing.Edits));
@@ -265,7 +265,7 @@ public class RoslynSessionTests
     {
         string code = "class C\n{\n    void M(int[] items)\n    {\n        var x = items.Select(i => i);\n    }\n}";
         var (session, _) = Open(code);
-        var actions = await session.GetCodeActionsAsync(code.IndexOf("Select", StringComparison.Ordinal), 0, default);
+        var actions = await session.GetCodeActionsAsync(code.IndexOf("Select", StringComparison.Ordinal), 0, TestContext.Current.CancellationToken);
         Assert.Contains(actions, a => a.Title == "using System.Linq;");
     }
 
@@ -274,7 +274,7 @@ public class RoslynSessionTests
     {
         string code = "class C\n{\nvoid M()\n{\nint x=1;\n}\n}";
         var (session, _) = Open(code);
-        var edits = await session.FormatAsync(0, -1, default);
+        var edits = await session.FormatAsync(0, -1, TestContext.Current.CancellationToken);
 
         Assert.NotEmpty(edits);
         string formatted = Apply(code, edits);
@@ -288,7 +288,7 @@ public class RoslynSessionTests
         var workspace = new CSharpWorkspace(s_references.Value);
         workspace.SetOptions(o => o.WithChangedOption(Microsoft.CodeAnalysis.CSharp.Formatting.CSharpFormattingOptions.NewLinesForBracesInMethods, false));
         var (session, _) = Open(code, workspace);
-        var edits = await session.FormatAsync(0, -1, default);
+        var edits = await session.FormatAsync(0, -1, TestContext.Current.CancellationToken);
 
         Assert.Contains("void M() {", Apply(code, edits));
     }
@@ -298,7 +298,7 @@ public class RoslynSessionTests
     {
         string code = "using System.Text;\nusing System.Linq;\nusing System;\n\nclass C\n{\n    int[] M() => new[] { 1 }.ToArray();\n    string N() => String.Empty;\n}";
         var (session, _) = Open(code);
-        var edits = await session.OrganizeUsingsAsync(default);
+        var edits = await session.OrganizeUsingsAsync(TestContext.Current.CancellationToken);
 
         string organized = Apply(code, edits);
         Assert.StartsWith("using System;\nusing System.Linq;\n\nclass C", organized);
@@ -310,7 +310,7 @@ public class RoslynSessionTests
         string code = "class C\n{\n    void M()\n    {\n        int a=1;\n        int b=2;$$\n    }\n}";
         var (session, caret) = Open(code);
         code = code.Replace("$$", "");
-        var edits = await session.FormatOnTypeAsync(caret, ';', default);
+        var edits = await session.FormatOnTypeAsync(caret, ';', TestContext.Current.CancellationToken);
 
         Assert.Equal("class C\n{\n    void M()\n    {\n        int a=1;\n        int b = 2;\n    }\n}", Apply(code, edits));
     }
@@ -321,7 +321,7 @@ public class RoslynSessionTests
         string code = "class C\n{\n    int f=0;\n    void M()\n    {\n        if(f>0){\nf=1;\n        }$$\n    }\n}";
         var (session, caret) = Open(code);
         code = code.Replace("$$", "");
-        var edits = await session.FormatOnTypeAsync(caret, '}', default);
+        var edits = await session.FormatOnTypeAsync(caret, '}', TestContext.Current.CancellationToken);
 
         Assert.Equal("class C\n{\n    int f=0;\n    void M()\n    {\n        if (f > 0)\n        {\n            f = 1;\n        }\n    }\n}", Apply(code, edits));
     }
@@ -331,7 +331,7 @@ public class RoslynSessionTests
     {
         string code = "class C\n{\n    string s = \"a;$$\";\n}";
         var (session, caret) = Open(code);
-        Assert.Empty(await session.FormatOnTypeAsync(caret, ';', default));
+        Assert.Empty(await session.FormatOnTypeAsync(caret, ';', TestContext.Current.CancellationToken));
     }
 
     [Fact]
@@ -345,7 +345,7 @@ public class RoslynSessionTests
         Assert.Equal(document.GetText("\n"), Text(session));
 
         int caret = document.GetText("\n").IndexOf("Console.", StringComparison.Ordinal) + "Console.".Length;
-        var list = await session.GetCompletionsAsync(caret, new CodeCompletionTrigger(CodeCompletionTriggerKind.Character, '.'), default);
+        var list = await session.GetCompletionsAsync(caret, new CodeCompletionTrigger(CodeCompletionTriggerKind.Character, '.'), TestContext.Current.CancellationToken);
         Assert.NotNull(list);
         Assert.Contains(list!.Items, i => i.Label == "WriteLine");
         Assert.Equal(caret, list.SpanStart);
@@ -376,6 +376,6 @@ public class RoslynSessionTests
 
         session.Dispose();
         var document = Assert.Single(workspace.Project.Documents);
-        Assert.Equal("class Script { }", document.GetTextAsync().Result.ToString());
+        Assert.Equal("class Script { }", document.GetTextAsync(TestContext.Current.CancellationToken).Result.ToString());
     }
 }

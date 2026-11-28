@@ -1,4 +1,5 @@
 using System;
+
 using Prowl.Recast.Core.Numerics;
 
 namespace Prowl.Recast.Detour.Tests;

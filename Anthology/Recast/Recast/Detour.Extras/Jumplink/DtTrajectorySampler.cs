@@ -33,7 +33,7 @@ public class DtTrajectorySampler
         }
     }
 
-    private bool SampleTrajectory(DtJumpLinkBuilderConfig acfg, RcHeightfield solid, RcVec3f pa, RcVec3f pb, IDtTrajectory tra)
+    private static bool SampleTrajectory(DtJumpLinkBuilderConfig acfg, RcHeightfield solid, RcVec3f pa, RcVec3f pb, IDtTrajectory tra)
     {
         float cs = Math.Min(acfg.cellSize, acfg.cellHeight);
         float d = RcVec.Dist2D(pa, pb) + MathF.Abs(pa.Y - pb.Y);
@@ -51,7 +51,7 @@ public class DtTrajectorySampler
         return true;
     }
 
-    private bool CheckHeightfieldCollision(RcHeightfield solid, float x, float ymin, float ymax, float z)
+    private static bool CheckHeightfieldCollision(RcHeightfield solid, float x, float ymin, float ymax, float z)
     {
         int w = solid.width;
         int h = solid.height;
@@ -87,7 +87,7 @@ public class DtTrajectorySampler
         return false;
     }
 
-    private bool OverlapRange(float amin, float amax, float bmin, float bmax)
+    private static bool OverlapRange(float amin, float amax, float bmin, float bmax)
     {
         return (amin > bmax || amax < bmin) ? false : true;
     }

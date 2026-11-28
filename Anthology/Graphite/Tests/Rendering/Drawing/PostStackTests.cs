@@ -105,7 +105,7 @@ public sealed class PostStackTests : IDisposable
         static Float3 MulColumns(float[] m, Float3 v) => new(m[0] * v.X + m[3] * v.Y + m[6] * v.Z, m[1] * v.X + m[4] * v.Y + m[7] * v.Z, m[2] * v.X + m[5] * v.Y + m[8] * v.Z);
         Float3 mapped = op switch
         {
-            TonemapOperator.Reinhard => c *(Luminance(c) * (1 + Luminance(c) / 4) / (1 + Luminance(c)) / MathF.Max(Luminance(c), 1e-5f)),
+            TonemapOperator.Reinhard => c * (Luminance(c) * (1 + Luminance(c) / 4) / (1 + Luminance(c)) / MathF.Max(Luminance(c), 1e-5f)),
             TonemapOperator.RomBinDaHouse => Map(c, x => MathF.Exp(-1 / (2.72f * x + 0.15f))),
             TonemapOperator.Uncharted2 => Map(c, x =>
             {

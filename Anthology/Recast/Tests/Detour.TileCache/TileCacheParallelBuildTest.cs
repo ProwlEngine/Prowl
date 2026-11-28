@@ -62,8 +62,8 @@ public class TileCacheParallelBuildTest : AbstractTileCacheTest
         int compared = 0;
         for (int t = 0; t < a.GetMaxTiles(); t++)
         {
-            DtMeshData da = a.GetTile(t)?.data;
-            DtMeshData db = b.GetTile(t)?.data;
+            DtMeshData? da = a.GetTile(t)?.data;
+            DtMeshData? db = b.GetTile(t)?.data;
             if (da?.header == null && db?.header == null) continue;
 
             Assert.NotNull(da?.header);
@@ -226,7 +226,7 @@ public class TileCacheParallelBuildTest : AbstractTileCacheTest
         DtMeshData fresh = tc.BuildTileMeshData(east, new DtTileCacheBuildScratch());
 
         Assert.Equal(fresh == null, reused == null);
-        if (fresh == null) return;
+        if (fresh == null || reused == null) return;
         Assert.Equal(fresh.header.vertCount, reused.header.vertCount);
         Assert.Equal(fresh.header.polyCount, reused.header.polyCount);
         Assert.Equal(fresh.verts, reused.verts);
@@ -261,8 +261,8 @@ public class TileCacheParallelBuildTest : AbstractTileCacheTest
 
         for (int t = 0; t < shared.GetNavMesh().GetMaxTiles(); t++)
         {
-            DtMeshData da = shared.GetNavMesh().GetTile(t)?.data;
-            DtMeshData db = fresh.GetNavMesh().GetTile(t)?.data;
+            DtMeshData? da = shared.GetNavMesh().GetTile(t)?.data;
+            DtMeshData? db = fresh.GetNavMesh().GetTile(t)?.data;
             if (da?.header == null && db?.header == null) continue;
             Assert.NotNull(da?.header);
             Assert.NotNull(db?.header);

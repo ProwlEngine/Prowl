@@ -339,7 +339,7 @@ internal readonly ref struct PngChunks
     }
 
     /// <summary>Copies every image data payload into one contiguous buffer.</summary>
-    public int CopyCompressedTo(ReadOnlySpan<byte> data, Span<byte> destination)
+    public static int CopyCompressedTo(ReadOnlySpan<byte> data, Span<byte> destination)
     {
         int written = 0;
         int offset = 8;

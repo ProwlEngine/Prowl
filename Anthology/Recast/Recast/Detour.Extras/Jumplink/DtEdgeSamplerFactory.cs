@@ -19,7 +19,7 @@ public class DtEdgeSamplerFactory
     }
 
 
-    private DtEdgeSampler InitEdgeJumpSampler(DtJumpLinkBuilderConfig acfg, DtJumpEdge edge)
+    private static DtEdgeSampler InitEdgeJumpSampler(DtJumpLinkBuilderConfig acfg, DtJumpEdge edge)
     {
         DtEdgeSampler es = new DtEdgeSampler(edge, new DtJumpTrajectory(acfg.jumpHeight));
         es.start.height = acfg.agentClimb * 2;
@@ -49,7 +49,7 @@ public class DtEdgeSamplerFactory
         return es;
     }
 
-    private DtEdgeSampler InitClimbDownSampler(DtJumpLinkBuilderConfig acfg, DtJumpEdge edge)
+    private static DtEdgeSampler InitClimbDownSampler(DtJumpLinkBuilderConfig acfg, DtJumpEdge edge)
     {
         DtEdgeSampler es = new DtEdgeSampler(edge, new DtClimbTrajectory());
         es.start.height = acfg.agentClimb * 2;
@@ -69,14 +69,14 @@ public class DtEdgeSamplerFactory
         return es;
     }
 
-    private void Vadd(float[] dest, float[] v1, float[] v2)
+    private static void Vadd(float[] dest, float[] v1, float[] v2)
     {
         dest[0] = v1[0] + v2[0];
         dest[1] = v1[1] + v2[1];
         dest[2] = v1[2] + v2[2];
     }
 
-    private void Vadd(ref RcVec3f dest, RcVec3f v1, RcVec3f v2)
+    private static void Vadd(ref RcVec3f dest, RcVec3f v1, RcVec3f v2)
     {
         dest.X = v1.X + v2.X;
         dest.Y = v1.Y + v2.Y;
@@ -84,14 +84,14 @@ public class DtEdgeSamplerFactory
     }
 
 
-    private void Trans2d(float[] dst, float[] ax, float[] ay, float[] pt)
+    private static void Trans2d(float[] dst, float[] ax, float[] ay, float[] pt)
     {
         dst[0] = ax[0] * pt[0] + ay[0] * pt[1];
         dst[1] = ax[1] * pt[0] + ay[1] * pt[1];
         dst[2] = ax[2] * pt[0] + ay[2] * pt[1];
     }
 
-    private void Trans2d(ref RcVec3f dst, RcVec3f ax, RcVec3f ay, RcVec2f pt)
+    private static void Trans2d(ref RcVec3f dst, RcVec3f ax, RcVec3f ay, RcVec2f pt)
     {
         dst.X = ax.X * pt.X + ay.X * pt.Y;
         dst.Y = ax.Y * pt.X + ay.Y * pt.Y;

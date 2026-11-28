@@ -82,7 +82,7 @@ public sealed class Replayer
         foreach (DeepPass p in passes)
         {
             if (p == passes[0] || steps.Contains(p.Index))
-                new ReplayRestorePass(scope, passes, p.Index).Add(graph);
+                new ReplayRestorePass(scope, p.Index).Add(graph);
 
             new ReplayPass($"Replay {p.Index} {p.Name}", scope, p, p == pass ? eventIndex : null, p == pass ? slice : null).Add(graph);
         }

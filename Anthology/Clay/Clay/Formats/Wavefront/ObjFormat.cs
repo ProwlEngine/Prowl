@@ -435,7 +435,7 @@ internal sealed class ObjFormat : IModelFormat
             }
         }
 
-        private List<Color> EnsureColorListFor(IntermediateMesh mesh)
+        private static List<Color> EnsureColorListFor(IntermediateMesh mesh)
         {
             var list = new List<Color>(mesh.Positions.Count);
             for (int i = 0; i + 1 < mesh.Positions.Count; i++)
@@ -443,7 +443,7 @@ internal sealed class ObjFormat : IModelFormat
             return list;
         }
 
-        private List<Float3> EnsureNormalListFor(IntermediateMesh mesh)
+        private static List<Float3> EnsureNormalListFor(IntermediateMesh mesh)
         {
             // Backfill with placeholders for any vertices that were added before normals appeared.
             var list = new List<Float3>(mesh.Positions.Count);
@@ -452,7 +452,7 @@ internal sealed class ObjFormat : IModelFormat
             return list;
         }
 
-        private List<Float2> EnsureUVListFor(IntermediateMesh mesh)
+        private static List<Float2> EnsureUVListFor(IntermediateMesh mesh)
         {
             var list = new List<Float2>(mesh.Positions.Count);
             for (int i = 0; i + 1 < mesh.Positions.Count; i++)

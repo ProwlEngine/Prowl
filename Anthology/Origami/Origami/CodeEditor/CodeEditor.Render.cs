@@ -1145,7 +1145,7 @@ public sealed partial class CodeEditor
             {
                 if (t.Kind == CodeTokenKind.Plain) continue;
                 int c0 = Math.Min(t.Start, text.Length);
-                int vis0 = text.IndexOf('\t') >= 0 ? VisualColumn(line, c0) : c0;
+                int vis0 = text.Contains('\t') ? VisualColumn(line, c0) : c0;
                 if (vis0 >= maxCols) break;
                 int vis1 = Math.Min(maxCols, vis0 + t.Length);
                 Color32 c = pal[t.Kind];

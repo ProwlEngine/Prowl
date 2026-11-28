@@ -150,7 +150,7 @@ public class DtVoxelTile
         return hf;
     }
 
-    private byte[] SerializeSpans(RcHeightfield heightfield, RcByteOrder order)
+    private static byte[] SerializeSpans(RcHeightfield heightfield, RcByteOrder order)
     {
         int[] counts = new int[heightfield.width * heightfield.height];
         int totalCount = 0;
@@ -189,7 +189,7 @@ public class DtVoxelTile
         return data;
     }
 
-    private byte[] ToByteArray(RcByteBuffer buf, int width, int height, RcByteOrder order)
+    private static byte[] ToByteArray(RcByteBuffer buf, int width, int height, RcByteOrder order)
     {
         byte[] data;
         if (buf.Order() == order)

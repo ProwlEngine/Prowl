@@ -158,7 +158,7 @@ public partial class GeometryData
                 int slot = _element.Slot;
                 for (int c = 0; c < store.Columns.Count; c++)
                 {
-                    if (store.TryGet(store.Columns[c], slot, out AttributeValue? value))
+                    if (GeometryData.AttributeStore.TryGet(store.Columns[c], slot, out AttributeValue? value))
                         yield return new KeyValuePair<string, AttributeValue>(store.Columns[c].Name, value);
                 }
             }
@@ -221,7 +221,7 @@ public partial class GeometryData
         }
 
         // A declared attribute always has a value: the default is put in place the first time it is asked for, so it can be changed in place
-        public bool TryGet(AttributeColumn column, int slot, [System.Diagnostics.CodeAnalysis.MaybeNullWhen(false)] out AttributeValue value)
+        public static bool TryGet(AttributeColumn column, int slot, [System.Diagnostics.CodeAnalysis.MaybeNullWhen(false)] out AttributeValue value)
         {
             value = slot < column.Values.Length ? column.Values[slot] : null;
             if (value != null) return true;

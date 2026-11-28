@@ -18,9 +18,9 @@ freely, subject to the following restrictions:
 3. This notice may not be removed or altered from any source distribution.
 */
 
+using Prowl.Recast;
 using Prowl.Recast.Core;
 using Prowl.Recast.Detour.TileCache.Io.Compress;
-using Prowl.Recast;
 using Prowl.Recast.Geom;
 
 namespace Prowl.Recast.Detour.TileCache.Tests;

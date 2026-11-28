@@ -243,7 +243,7 @@ public class RcBuilder
     /*
      * Step 2. Filter walkable surfaces.
      */
-    private void FilterHeightfield(RcContext ctx, RcHeightfield solid, RcConfig cfg)
+    private static void FilterHeightfield(RcContext ctx, RcHeightfield solid, RcConfig cfg)
     {
         // Once all geometry is rasterized, we do initial pass of filtering to
         // remove unwanted overhangs caused by the conservative rasterization
@@ -267,7 +267,7 @@ public class RcBuilder
     /*
      * Step 3. Partition walkable surface to simple regions.
      */
-    private RcCompactHeightfield BuildCompactHeightfield(RcContext ctx, IRcInputGeomProvider geom, RcConfig cfg, RcHeightfield solid)
+    private static RcCompactHeightfield BuildCompactHeightfield(RcContext ctx, IRcInputGeomProvider geom, RcConfig cfg, RcHeightfield solid)
     {
         // Compact the heightfield so that it is faster to handle from now on.
         // This will result more cache coherent data as well as the neighbours

@@ -1,5 +1,6 @@
 using System;
 using System.Collections.Generic;
+
 using Prowl.Recast.Core.Buffers;
 
 namespace Prowl.Recast.Core.Tests;
@@ -29,8 +30,8 @@ public class RcRentedArrayTest
             {
                 int length = Math.Max(2, (int)(rand.Next() * 2048));
                 var values = RandomValues(length);
-                using var array = RcRentedArray.Shared.Rent<int>(length);
-                using var array2 = RcRentedArray.Shared.Rent<int>(length);
+                using var array = RcRentedArray.Rent<int>(length);
+                using var array2 = RcRentedArray.Rent<int>(length);
 
                 for (int i = 0; i < array.Length; ++i)
                 {
@@ -52,10 +53,10 @@ public class RcRentedArrayTest
     {
         // not same
         {
-            using var r1 = RcRentedArray.Shared.Rent<float>(1024);
-            using var r2 = RcRentedArray.Shared.Rent<float>(1024);
+            using var r1 = RcRentedArray.Rent<float>(1024);
+            using var r2 = RcRentedArray.Rent<float>(1024);
 
-            Assert.Equal(true, r2.AsSpan() != r1.AsSpan());
+            Assert.True(r2.AsSpan() != r1.AsSpan());
         }
 
         // same
@@ -64,7 +65,7 @@ public class RcRentedArrayTest
             Span<float> r1Array;
 
             {
-                using var r1 = RcRentedArray.Shared.Rent<float>(1024);
+                using var r1 = RcRentedArray.Rent<float>(1024);
                 r1Array = r1.AsSpan();
                 for (int i = 0; i < r1.Length; ++i)
                 {
@@ -72,23 +73,23 @@ public class RcRentedArrayTest
                 }
             }
 
-            using var r2 = RcRentedArray.Shared.Rent<float>(1024);
+            using var r2 = RcRentedArray.Rent<float>(1024);
 
-            Assert.Equal(true, r2.AsSpan() == r1Array);
+            Assert.True(r2.AsSpan() == r1Array);
         }
     }
 
     [Fact]
     public void TestDispose()
     {
-        using var r1 = RcRentedArray.Shared.Rent<float>(1024);
+        using var r1 = RcRentedArray.Rent<float>(1024);
         for (int i = 0; i < r1.Length; ++i)
         {
             r1[i] = 123;
         }
 
-        Assert.Equal(false, r1.IsDisposed);
+        Assert.False(r1.IsDisposed);
         r1.Dispose();
-        Assert.Equal(true, r1.IsDisposed);
+        Assert.True(r1.IsDisposed);
     }
 }

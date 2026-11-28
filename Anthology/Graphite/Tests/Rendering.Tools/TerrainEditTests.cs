@@ -123,7 +123,7 @@ public sealed class TerrainEditTests
         data.Apply(new TerrainEdit(TerrainBrush.Crater, new Double2(60, 60), 10, 6));
         Assert.True(data.TryGetHeight(new Double2(60, 60), out double crater));
         data.Unload(new TerrainPageKey(0, 0, 0));
-        data.SetInterest([new Double3(1000, 0, 1000)], 1).Wait();
+        data.SetInterest([new Double3(1000, 0, 1000)], 1).Wait(TestContext.Current.CancellationToken);
         Assert.True(data.TryGetHeight(new Double2(60, 60), out double again));
         Assert.Equal(crater, again);
     }

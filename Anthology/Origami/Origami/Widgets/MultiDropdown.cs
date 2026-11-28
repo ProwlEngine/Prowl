@@ -152,10 +152,12 @@ public sealed class MultiDropdownBuilder<T>
             .Rounded(_theme.Metrics.Rounding)
             .OnClick(e =>
             {
+                if (_disabled) return;
                 bool cur = _paper.GetElementStorage(trigHandle, DropdownInternal.KeyOpen, false);
                 _paper.SetElementStorage(trigHandle, DropdownInternal.KeyOpen, !cur);
                 if (!cur) _paper.SetElementStorage(trigHandle, DropdownInternal.KeySearch, string.Empty);
-            });
+            })
+            .Cursor(_disabled ? PaperCursor.NotAllowed : PaperCursor.Pointer);
 
         using (trigger.Enter())
         {
@@ -178,7 +180,7 @@ public sealed class MultiDropdownBuilder<T>
                     foreach (T? item in _selected)
                     {
                         T? captured = item;
-                        MultiChip($"{_id}_chip_{ci}", disp(item), () => { _selected.Remove(captured); _setter(_selected.ToList()); });
+                        MultiChip($"{_id}_chip_{ci}", disp(item), () => { if (_disabled) return; _selected.Remove(captured); _setter(_selected.ToList()); });
                         ci++;
                     }
                 }

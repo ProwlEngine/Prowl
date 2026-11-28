@@ -73,7 +73,7 @@ public partial struct Float3 : IEquatable<Float3>, IFormattable
 
     public Float3(float[] array)
     {
-        if (array == null) throw new ArgumentNullException(nameof(array));
+        ArgumentNullException.ThrowIfNull(array);
         if (array.Length < 3) throw new ArgumentException("Array must contain at least 3 elements.", nameof(array));
         X = array[0];
         Y = array[1];

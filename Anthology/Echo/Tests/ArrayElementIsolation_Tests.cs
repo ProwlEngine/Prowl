@@ -3,32 +3,31 @@
 
 using Xunit;
 
-namespace Prowl.Echo.Test
+namespace Prowl.Echo.Test;
+
+public class ArrayElementIsolation_Tests
 {
-    public class ArrayElementIsolation_Tests
+    // Serializes fine but throws on the way back in, standing in for one corrupt element.
+    private sealed class ThrowsOnDeserialize : ISerializable
     {
-        // Serializes fine but throws on the way back in, standing in for one corrupt element.
-        private sealed class ThrowsOnDeserialize : ISerializable
-        {
-            // Writes a body so the value is a definition, not an empty reference stub, and its
-            // Deserialize actually runs on the way back in.
-            public void Serialize(ref EchoObject compound, SerializationContext ctx)
-                => compound["Marker"] = new EchoObject(1);
-            public void Deserialize(EchoObject value, SerializationContext ctx)
-                => throw new InvalidOperationException("boom");
-        }
+        // Writes a body so the value is a definition, not an empty reference stub, and its
+        // Deserialize actually runs on the way back in.
+        public void Serialize(ref EchoObject compound, SerializationContext ctx)
+            => compound["Marker"] = new EchoObject(1);
+        public void Deserialize(EchoObject value, SerializationContext ctx)
+            => throw new InvalidOperationException("boom");
+    }
 
-        [Fact]
-        public void OneThrowingElement_KeepsItAndTheRest()
-        {
-            object[] source = { "a", new ThrowsOnDeserialize(), "c" };
-            var clone = Serializer.Deserialize<object[]>(Serializer.Serialize(source));
+    [Fact]
+    public void OneThrowingElement_KeepsItAndTheRest()
+    {
+        object[] source = { "a", new ThrowsOnDeserialize(), "c" };
+        var clone = Serializer.Deserialize<object[]>(Serializer.Serialize(source));
 
-            Assert.NotNull(clone);
-            Assert.Equal(3, clone!.Length);
-            Assert.Equal("a", clone[0]);
-            Assert.IsType<ThrowsOnDeserialize>(clone[1]);
-            Assert.Equal("c", clone[2]);
-        }
+        Assert.NotNull(clone);
+        Assert.Equal(3, clone!.Length);
+        Assert.Equal("a", clone[0]);
+        Assert.IsType<ThrowsOnDeserialize>(clone[1]);
+        Assert.Equal("c", clone[2]);
     }
 }

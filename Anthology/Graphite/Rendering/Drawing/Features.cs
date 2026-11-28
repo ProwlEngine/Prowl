@@ -1464,13 +1464,13 @@ internal sealed class FeaturePass
     public TextureHandle? Output;
 
     /// <summary>The id of the colour this feature writes in the view.</summary>
-    public RenderResourceID ColorId => _colorId.IsValid ? _colorId : _colorId = View.IdOf(Feature, "Color");
+    public RenderResourceID ColorId => _colorId.IsValid ? _colorId : _colorId = ViewGraph.IdOf(Feature, "Color");
 
     /// <summary>The id of a texture this feature declares in the view, interned the first time it is asked for.</summary>
     public RenderResourceID IdOf(string kind, string name, int index)
     {
         if (!_ids.TryGetValue((kind, name, index), out RenderResourceID id))
-            _ids[(kind, name, index)] = id = View.IdOf(Feature, index < 0 ? $"{kind}.{name}" : $"{kind}.{name}{index}");
+            _ids[(kind, name, index)] = id = ViewGraph.IdOf(Feature, index < 0 ? $"{kind}.{name}" : $"{kind}.{name}{index}");
         return id;
     }
 

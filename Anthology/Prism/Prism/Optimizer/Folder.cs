@@ -279,7 +279,7 @@ internal sealed class Folder
     }
 
     // fold.cpp OperateWords / Unary / Binary / TernaryOperate -- exact.
-    bool OperateWords(int opcode, uint[] w, out uint result)
+    static bool OperateWords(int opcode, uint[] w, out uint result)
     {
         result = 0;
         switch (w.Length)
@@ -291,7 +291,7 @@ internal sealed class Folder
         }
     }
     static bool ToBool(uint x) => x != 0;
-    bool UnaryOperate(int op, uint a, out uint r)
+    static bool UnaryOperate(int op, uint a, out uint r)
     {
         r = 0;
         switch (op)
@@ -302,7 +302,7 @@ internal sealed class Folder
             default: return false;
         }
     }
-    bool BinaryOperate(int op, uint a, uint b, out uint r)
+    static bool BinaryOperate(int op, uint a, uint b, out uint r)
     {
         r = 0;
         switch (op)
@@ -466,7 +466,7 @@ internal sealed class Folder
 
     // Rewrite `inst` in place to OpCopyObject of `srcId` (an existing value). Used by simplification rules that
     // reduce an instruction to one of its operands (x+0 -> x). No new id.
-    bool ToCopy(SpvInstr inst, uint srcId) { inst.Opcode = OpCopyObject; inst.Operands = [inst.Operands[0], inst.ResultId, srcId]; return true; }
+    static bool ToCopy(SpvInstr inst, uint srcId) { inst.Opcode = OpCopyObject; inst.Operands = [inst.Operands[0], inst.ResultId, srcId]; return true; }
 
     // Constant helpers for folding_rules (return existing-or-created constant ids, or 0/false).
     public bool AsFloat32(uint id, out float v) { v = 0; if (!ScalarWord(id, out uint w)) return false; if (Def(TypeOf(id)) is not { Opcode: OpTypeFloat }) return false; if (TypeWidth(TypeOf(id)) != 32) return false; v = F32(w); return true; }
@@ -1185,11 +1185,11 @@ internal sealed class Folder
 
     // In-operand indexing (GetSingleWordInOperand / NumInOperands / SetInOperands), matching spirv-opt: the
     // operand words after the result-type (if any) and result-id (if any).
-    int InStart(SpvInstr inst) { inst.Classify(out int ri, out _); return ri >= 0 ? ri + 1 : 0; }
-    uint InOp(SpvInstr inst, int i) => inst.Operands[InStart(inst) + i];
-    int NumIn(SpvInstr inst) => inst.Operands.Length - InStart(inst);
-    void SetIn(SpvInstr inst, params uint[] words) { int s = InStart(inst); inst.Operands = [.. inst.Operands[..s], .. words]; }
-    void SetOp(SpvInstr inst, int op, params uint[] words) { int s = InStart(inst); uint[] head = inst.Operands[..s]; inst.Opcode = op; inst.Operands = [.. head, .. words]; }
+    static int InStart(SpvInstr inst) { inst.Classify(out int ri, out _); return ri >= 0 ? ri + 1 : 0; }
+    static uint InOp(SpvInstr inst, int i) => inst.Operands[InStart(inst) + i];
+    static int NumIn(SpvInstr inst) => inst.Operands.Length - InStart(inst);
+    static void SetIn(SpvInstr inst, params uint[] words) { int s = InStart(inst); inst.Operands = [.. inst.Operands[..s], .. words]; }
+    static void SetOp(SpvInstr inst, int op, params uint[] words) { int s = InStart(inst); uint[] head = inst.Operands[..s]; inst.Opcode = op; inst.Operands = [.. head, .. words]; }
 
     // The def of `id` if it is a constant (mirrors spirv-opt's constants[i]); 0 if not.
     uint ConstOrZero(uint id) => IsConst(id) ? id : 0;
@@ -1481,7 +1481,7 @@ internal sealed class Folder
 
     // ---- Composite extract / construct ----
 
-    bool HaveSameIndexesExceptForLast(SpvInstr a, SpvInstr b)
+    static bool HaveSameIndexesExceptForLast(SpvInstr a, SpvInstr b)
     {
         if (NumIn(a) != NumIn(b)) return false;
         int first = a.Opcode == OpCompositeInsert ? 2 : 1;

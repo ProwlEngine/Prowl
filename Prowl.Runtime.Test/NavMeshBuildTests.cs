@@ -5,10 +5,9 @@ using System;
 using System.Collections.Generic;
 using System.Runtime.CompilerServices;
 
+using Prowl.Echo;
 using Prowl.Recast.Core;
 using Prowl.Recast.Detour;
-
-using Prowl.Echo;
 using Prowl.Runtime;
 using Prowl.Runtime.Resources;
 using Prowl.Vector;

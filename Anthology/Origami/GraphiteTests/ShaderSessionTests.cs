@@ -125,7 +125,7 @@ public class ShaderSessionTests
     {
         const string text = "void main() { }\nx).a.b.";
         var session = Session(text, ShaderFileKind.Glsl);
-        var completion = session.GetCompletionsAsync(text.Length, new CodeCompletionTrigger(CodeCompletionTriggerKind.Character, '.'), default);
+        var completion = session.GetCompletionsAsync(text.Length, new CodeCompletionTrigger(CodeCompletionTriggerKind.Character, '.'), TestContext.Current.CancellationToken);
 
         Assert.Same(completion, await Task.WhenAny(completion, Task.Delay(5000)));
         Assert.Null(await completion);
@@ -173,7 +173,7 @@ public class ShaderSessionTests
         var session = Session(text, ShaderFileKind.Glsl, workspace);
 
         Assert.Contains("Helper", await Labels(session, At(text, "Helper")));
-        var definition = await session.GetDefinitionAsync(At(text, "Helper", 2), default);
+        var definition = await session.GetDefinitionAsync(At(text, "Helper", 2), TestContext.Current.CancellationToken);
         Assert.Single(definition);
         Assert.Equal("Common.glsl", definition[0].Path);
     }
@@ -183,11 +183,11 @@ public class ShaderSessionTests
     {
         var session = Session(Blur);
         int use = At(Blur, "halfpixel * spread", 2);
-        var definition = await session.GetDefinitionAsync(use, default);
+        var definition = await session.GetDefinitionAsync(use, TestContext.Current.CancellationToken);
         Assert.Single(definition);
         Assert.Equal(At(Blur, "halfpixel;"), definition[0].Start);
 
-        var references = await session.FindReferencesAsync(use, default);
+        var references = await session.FindReferencesAsync(use, TestContext.Current.CancellationToken);
         Assert.Equal(2, references.Count);
     }
 
@@ -196,7 +196,7 @@ public class ShaderSessionTests
     {
         string text = Blur.Replace("uniform vec2 halfpixel;", "uniform vec2 halfpixel;\n uniform float _Strength;").Replace("return s.color;", "return s.color * _Strength;");
         var session = Session(text);
-        var references = await session.FindReferencesAsync(At(text, "_Strength(", 2), default);
+        var references = await session.FindReferencesAsync(At(text, "_Strength(", 2), TestContext.Current.CancellationToken);
         _output.WriteLine(string.Join(", ", references.Select(r => r.Start)));
         Assert.Equal(3, references.Count);
     }
@@ -205,7 +205,7 @@ public class ShaderSessionTests
     public async Task RenameLocalStaysInItsFunction()
     {
         var session = Session(Blur);
-        var result = await session.RenameAsync(At(Blur, "uv - halfpixel"), "coord", default);
+        var result = await session.RenameAsync(At(Blur, "uv - halfpixel"), "coord", TestContext.Current.CancellationToken);
         Assert.NotNull(result);
         Assert.Equal(2, result!.Edits.Count);
     }
@@ -214,15 +214,15 @@ public class ShaderSessionTests
     public async Task HoverShowsBuiltinAndUserSignatures()
     {
         var session = Session(Blur);
-        var builtin = await session.GetQuickInfoAsync(At(Blur, "texture(src", 2), default);
+        var builtin = await session.GetQuickInfoAsync(At(Blur, "texture(src", 2), TestContext.Current.CancellationToken);
         Assert.NotNull(builtin);
         Assert.Contains("texture", string.Concat(builtin!.Signature.Select(p => p.Text)));
 
-        var user = await session.GetQuickInfoAsync(At(Blur, "Down(vUV", 1), default);
+        var user = await session.GetQuickInfoAsync(At(Blur, "Down(vUV", 1), TestContext.Current.CancellationToken);
         Assert.NotNull(user);
         Assert.Contains("vec4 Down(vec2 uv, float spread)", string.Concat(user!.Signature.Select(p => p.Text)));
 
-        var command = await session.GetQuickInfoAsync(At(Blur, "Cull Off", 1), default);
+        var command = await session.GetQuickInfoAsync(At(Blur, "Cull Off", 1), TestContext.Current.CancellationToken);
         Assert.NotNull(command);
     }
 
@@ -231,7 +231,7 @@ public class ShaderSessionTests
     {
         string text = Blur.Replace("target = Down(vUV, 1.0);", "target = Down(vUV, ");
         var session = Session(text);
-        var help = await session.GetSignatureHelpAsync(At(text, "Down(vUV, ", 10), default);
+        var help = await session.GetSignatureHelpAsync(At(text, "Down(vUV, ", 10), TestContext.Current.CancellationToken);
         Assert.NotNull(help);
         Assert.Equal(1, help!.ActiveParameter);
         Assert.Contains(help.Signatures, s => string.Concat(s.Parts.Select(p => p.Text)) == "vec4 Down(vec2 uv, float spread)");
@@ -240,7 +240,7 @@ public class ShaderSessionTests
     [Fact]
     public async Task ValidShaderHasNoErrors()
     {
-        var diagnostics = await Session(Blur).GetDiagnosticsAsync(default);
+        var diagnostics = await Session(Blur).GetDiagnosticsAsync(TestContext.Current.CancellationToken);
         foreach (var d in diagnostics) _output.WriteLine($"{d.Severity} {d.Start}: {d.Message}");
         Assert.DoesNotContain(diagnostics, d => d.Severity == CodeDiagnosticSeverity.Error);
     }
@@ -249,7 +249,7 @@ public class ShaderSessionTests
     public async Task GlslErrorUnderlinesTheMember()
     {
         string text = Blur.Replace("return s.color;", "return s.colour;");
-        var diagnostics = await Session(text).GetDiagnosticsAsync(default);
+        var diagnostics = await Session(text).GetDiagnosticsAsync(TestContext.Current.CancellationToken);
         foreach (var d in diagnostics) _output.WriteLine($"{d.Severity} {d.Start} {d.Length}: {d.Message}");
         var error = Assert.Single(diagnostics, d => d.Severity == CodeDiagnosticSeverity.Error);
         Assert.Equal(At(text, "colour"), error.Start);
@@ -260,7 +260,7 @@ public class ShaderSessionTests
     public async Task GlslErrorUnderlinesTheUnknownName()
     {
         string text = Blur.Replace("target = Down(vUV, 1.0);", "target = Down(vUV, strength);");
-        var diagnostics = await Session(text).GetDiagnosticsAsync(default);
+        var diagnostics = await Session(text).GetDiagnosticsAsync(TestContext.Current.CancellationToken);
         foreach (var d in diagnostics) _output.WriteLine($"{d.Severity} {d.Start} {d.Length}: {d.Message}");
         var error = Assert.Single(diagnostics, d => d.Severity == CodeDiagnosticSeverity.Error);
         Assert.Equal(At(text, "strength"), error.Start);
@@ -272,7 +272,7 @@ public class ShaderSessionTests
     {
         var workspace = new ShaderWorkspace((name, from) => name == "Broken.glsl" ? new ShaderSource("Broken.glsl", "float Helper()\n{\n    return nope;\n}\n") : null);
         string text = Blur.Replace("#pragma variant Upsample", "#include \"Broken.glsl\"");
-        var diagnostics = await Session(text, workspace: workspace).GetDiagnosticsAsync(default);
+        var diagnostics = await Session(text, workspace: workspace).GetDiagnosticsAsync(TestContext.Current.CancellationToken);
         foreach (var d in diagnostics) _output.WriteLine($"{d.Severity} {d.Start} {d.Length}: {d.Message}");
         var error = Assert.Single(diagnostics, d => d.Severity == CodeDiagnosticSeverity.Error);
         Assert.Equal(At(text, "Broken.glsl"), error.Start);
@@ -283,7 +283,7 @@ public class ShaderSessionTests
     public async Task WrapperErrorIsReported()
     {
         string text = Blur.Replace("Cull Off", "Cull Sideways");
-        var diagnostics = await Session(text).GetDiagnosticsAsync(default);
+        var diagnostics = await Session(text).GetDiagnosticsAsync(TestContext.Current.CancellationToken);
         foreach (var d in diagnostics) _output.WriteLine($"{d.Severity} {d.Start}: {d.Message}");
         Assert.Contains(diagnostics, d => d.Severity == CodeDiagnosticSeverity.Error);
     }
@@ -292,7 +292,7 @@ public class ShaderSessionTests
     public async Task MissingIncludeIsReported()
     {
         string text = "#include \"Nope.glsl\"\nvoid main() { }\n";
-        var diagnostics = await Session(text, ShaderFileKind.Glsl).GetDiagnosticsAsync(default);
+        var diagnostics = await Session(text, ShaderFileKind.Glsl).GetDiagnosticsAsync(TestContext.Current.CancellationToken);
         Assert.Contains(diagnostics, d => d.Id == "include" && d.Start == 10);
     }
 
@@ -300,7 +300,7 @@ public class ShaderSessionTests
     public async Task GlslFileSyntaxError()
     {
         string text = "void main()\n{\n    float x = ;\n}\n";
-        var diagnostics = await Session(text, ShaderFileKind.Glsl).GetDiagnosticsAsync(default);
+        var diagnostics = await Session(text, ShaderFileKind.Glsl).GetDiagnosticsAsync(TestContext.Current.CancellationToken);
         foreach (var d in diagnostics) _output.WriteLine($"{d.Severity} {d.Start}: {d.Message}");
         var error = Assert.Single(diagnostics, d => d.Severity == CodeDiagnosticSeverity.Error);
         Assert.Equal(text.IndexOf(" ;", StringComparison.Ordinal) + 1, error.Start);

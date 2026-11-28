@@ -1550,7 +1550,7 @@ public class DtNavMeshQuery
         return DtStatus.DT_SUCCESS | details;
     }
 
-    protected DtStatus AppendVertex(RcVec3f pos, byte flags, long refs, Span<DtStraightPath> straightPath, ref int straightPathCount, int maxStraightPath)
+    protected static DtStatus AppendVertex(RcVec3f pos, byte flags, long refs, Span<DtStraightPath> straightPath, ref int straightPathCount, int maxStraightPath)
     {
         if (straightPathCount > 0 && RcVec.Equal(straightPath[straightPathCount - 1].pos, pos))
         {
@@ -2136,7 +2136,7 @@ public class DtNavMeshQuery
     }
 
     // Returns portal points between two polygons.
-    protected DtStatus GetPortalPoints(long from, DtPoly fromPoly, DtMeshTile fromTile,
+    protected static DtStatus GetPortalPoints(long from, DtPoly fromPoly, DtMeshTile fromTile,
         long to, DtPoly toPoly, DtMeshTile toTile,
         out RcVec3f left, out RcVec3f right)
     {
@@ -3277,7 +3277,7 @@ public class DtNavMeshQuery
     }
 
 
-    protected void InsertInterval(Span<DtSegInterval> ints, ref int nints, int maxInts, int tmin, int tmax, long refs)
+    protected static void InsertInterval(Span<DtSegInterval> ints, ref int nints, int maxInts, int tmin, int tmax, long refs)
     {
         if (nints + 1 > maxInts)
             return;

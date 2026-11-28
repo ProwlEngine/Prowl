@@ -309,7 +309,7 @@ namespace Prowl.Quill.External
             /// to the fan is a simple orientation test.  By making the fan as large
             /// as possible, we restore the invariant (check it yourself).
             /// </summary>
-            private void TessellateMonoRegion(MeshUtils.Face face)
+            private static void TessellateMonoRegion(MeshUtils.Face face)
             {
                 // All edges are oriented CCW around the boundary of the region.
                 // First, find the half-edge whose origin vertex is rightmost.
@@ -333,7 +333,7 @@ namespace Prowl.Quill.External
                         while (lo._Lnext != up && (Geom.EdgeGoesLeft(lo._Lnext)
                             || Geom.EdgeSign(lo._Org, lo._Dst, lo._Lnext._Dst) <= 0.0f))
                         {
-                            lo = _mesh.Connect(lo._Lnext, lo)._Sym;
+                            lo = Mesh.Connect(lo._Lnext, lo)._Sym;
                         }
                         lo = lo._Lprev;
                     }
@@ -343,7 +343,7 @@ namespace Prowl.Quill.External
                         while (lo._Lnext != up && (Geom.EdgeGoesRight(up._Lprev)
                             || Geom.EdgeSign(up._Dst, up._Org, up._Lprev._Org) >= 0.0f))
                         {
-                            up = _mesh.Connect(up, up._Lprev)._Sym;
+                            up = Mesh.Connect(up, up._Lprev)._Sym;
                         }
                         up = up._Lnext;
                     }
@@ -354,7 +354,7 @@ namespace Prowl.Quill.External
                 Debug.Assert(lo._Lnext != up);
                 while (lo._Lnext._Lnext != up)
                 {
-                    lo = _mesh.Connect(lo._Lnext, lo)._Sym;
+                    lo = Mesh.Connect(lo._Lnext, lo)._Sym;
                 }
             }
 
@@ -393,7 +393,7 @@ namespace Prowl.Quill.External
                     next = f._next;
                     if (!f._inside)
                     {
-                        _mesh.ZapFace(f);
+                        Mesh.ZapFace(f);
                     }
                 }
             }
@@ -430,14 +430,14 @@ namespace Prowl.Quill.External
                         }
                         else
                         {
-                            _mesh.Delete(e);
+                            Mesh.Delete(e);
                         }
                     }
                 }
 
             }
 
-            private int GetNeighbourFace(MeshUtils.Edge edge)
+            private static int GetNeighbourFace(MeshUtils.Edge edge)
             {
                 if (edge._Rface == null)
                     return MeshUtils.Undef;
@@ -629,7 +629,7 @@ namespace Prowl.Quill.External
                 }
             }
 
-            private Real SignedArea(ContourVertex[] vertices)
+            private static Real SignedArea(ContourVertex[] vertices)
             {
                 Real area = 0.0f;
 
@@ -670,13 +670,13 @@ namespace Prowl.Quill.External
                     if (e == null)
                     {
                         e = _mesh.MakeEdge();
-                        _mesh.Splice(e, e._Sym);
+                        Mesh.Splice(e, e._Sym);
                     }
                     else
                     {
                         // Create a new vertex and edge which immediately follow e
                         // in the ordering around the left face.
-                        _mesh.SplitEdge(e);
+                        Mesh.SplitEdge(e);
                         e = e._Lnext;
                     }
 

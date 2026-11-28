@@ -181,7 +181,7 @@ sealed class PreciseAnalysis
         _ => false,
     };
 
-    (string Field, TypeName Type)[] Fields(IReadOnlyList<Field> members) =>
+    static (string Field, TypeName Type)[] Fields(IReadOnlyList<Field> members) =>
         [.. members.SelectMany(m => m.Declarators.Select(dc => (dc.Name, new TypeName(m.Type.Name, Depth(m.Type.Array) + dc.Array.Count))))];
 
     string NewId(string name) => $"{_nextId++}({name})";

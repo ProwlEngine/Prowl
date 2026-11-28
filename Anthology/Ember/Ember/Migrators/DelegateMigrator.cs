@@ -46,7 +46,7 @@ public sealed class DelegateMigrator : IValueMigrator
                 : Single(previous, context);
         }
 
-        private Allocation Multicast(Delegate previous, Delegate[] invocations, MigrationContext context)
+        private static Allocation Multicast(Delegate previous, Delegate[] invocations, MigrationContext context)
         {
             var migrated = new List<Delegate>(invocations.Length);
 

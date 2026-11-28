@@ -2988,10 +2988,9 @@ public static class DtTileCacheBuilder
     {
         using var ms = new MemoryStream();
         using var bw = new BinaryWriter(ms);
-        DtTileCacheLayerHeaderWriter hw = new DtTileCacheLayerHeaderWriter();
         try
         {
-            hw.Write(bw, layer.header, order, cCompatibility);
+            DtTileCacheLayerHeaderWriter.Write(bw, layer.header, order, cCompatibility);
             int gridSize = layer.header.width * layer.header.height;
             byte[] buffer = new byte[gridSize * 3];
             for (int i = 0; i < gridSize; i++)
@@ -3015,10 +3014,9 @@ public static class DtTileCacheBuilder
     {
         using var ms = new MemoryStream();
         using var bw = new BinaryWriter(ms);
-        DtTileCacheLayerHeaderWriter hw = new DtTileCacheLayerHeaderWriter();
         try
         {
-            hw.Write(bw, header, order, cCompatibility);
+            DtTileCacheLayerHeaderWriter.Write(bw, header, order, cCompatibility);
             int gridSize = header.width * header.height;
             byte[] buffer = new byte[gridSize * 3];
             for (int i = 0; i < gridSize; i++)

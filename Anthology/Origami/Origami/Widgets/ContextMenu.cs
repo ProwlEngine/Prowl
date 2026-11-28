@@ -461,7 +461,7 @@ public static class ContextMenu
         }
 
         /// <summary>Draws the label portion of the menu item.</summary>
-        protected ElementBuilder DrawLabel(Paper paper, int index, Scribe.FontFile font, string label, Color color, float size)
+        protected static ElementBuilder DrawLabel(Paper paper, int index, Scribe.FontFile font, string label, Color color, float size)
         {
             return paper.Box("l", index)
                 .Size(UnitValue.Auto, RowHeight)

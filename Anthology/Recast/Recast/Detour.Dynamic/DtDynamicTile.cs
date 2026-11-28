@@ -130,7 +130,7 @@ public class DtDynamicTile
         }
     }
 
-    private DtNavMeshCreateParams NavMeshCreateParams(int tilex, int tileZ, float cellSize, float cellHeight,
+    private static DtNavMeshCreateParams NavMeshCreateParams(int tilex, int tileZ, float cellSize, float cellHeight,
         DtDynamicNavMeshConfig config, RcBuilderResult rcResult)
     {
         RcPolyMesh m_pmesh = rcResult.Mesh;

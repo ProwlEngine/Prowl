@@ -20,6 +20,7 @@ freely, subject to the following restrictions:
 
 using System.Collections.Generic;
 using System.IO;
+
 using Prowl.Recast.Core;
 using Prowl.Recast.Detour.TileCache.Io;
 using Prowl.Recast.Detour.TileCache.Io.Compress;
@@ -92,7 +93,7 @@ public class TileCacheReaderWriterTest : AbstractTileCacheTest
         Assert.Equal(8, data.polys.Length);
         Assert.Equal(3 * 18, data.verts.Length);
         Assert.Equal(8, data.detailMeshes.Length);
-        Assert.Equal(0, data.detailVerts.Length);
+        Assert.Empty(data.detailVerts);
         Assert.Equal(4 * 14, data.detailTris.Length);
         // Tile8: Tris: 3, Verts: 8 Detail Meshed: 3 Detail Verts: 0 Detail Tris: 6
         tile = tc.GetNavMesh().GetTile(8);
@@ -106,7 +107,7 @@ public class TileCacheReaderWriterTest : AbstractTileCacheTest
         Assert.Equal(3, data.polys.Length);
         Assert.Equal(3 * 8, data.verts.Length);
         Assert.Equal(3, data.detailMeshes.Length);
-        Assert.Equal(0, data.detailVerts.Length);
+        Assert.Empty(data.detailVerts);
         Assert.Equal(4 * 6, data.detailTris.Length);
         // Tile16: Tris: 10, Verts: 20 Detail Meshed: 10 Detail Verts: 0 Detail Tris: 18
         tile = tc.GetNavMesh().GetTile(16);
@@ -120,7 +121,7 @@ public class TileCacheReaderWriterTest : AbstractTileCacheTest
         Assert.Equal(10, data.polys.Length);
         Assert.Equal(3 * 20, data.verts.Length);
         Assert.Equal(10, data.detailMeshes.Length);
-        Assert.Equal(0, data.detailVerts.Length);
+        Assert.Empty(data.detailVerts);
         Assert.Equal(4 * 18, data.detailTris.Length);
         // Tile29: Tris: 1, Verts: 5 Detail Meshed: 1 Detail Verts: 0 Detail Tris: 3
         tile = tc.GetNavMesh().GetTile(29);
@@ -131,10 +132,10 @@ public class TileCacheReaderWriterTest : AbstractTileCacheTest
         Assert.Equal(1, header.detailMeshCount);
         Assert.Equal(0, header.detailVertCount);
         Assert.Equal(3, header.detailTriCount);
-        Assert.Equal(1, data.polys.Length);
+        Assert.Single(data.polys);
         Assert.Equal(3 * 5, data.verts.Length);
-        Assert.Equal(1, data.detailMeshes.Length);
-        Assert.Equal(0, data.detailVerts.Length);
+        Assert.Single(data.detailMeshes);
+        Assert.Empty(data.detailVerts);
         Assert.Equal(4 * 3, data.detailTris.Length);
     }
 }

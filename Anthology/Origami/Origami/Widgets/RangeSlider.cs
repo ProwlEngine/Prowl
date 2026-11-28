@@ -559,6 +559,6 @@ public sealed class RangeSliderBuilder<T> where T : struct, INumber<T>
     private string Format(T v)
     {
         try { return v.ToString(_format, System.Globalization.CultureInfo.CurrentCulture); }
-        catch { return v.ToString(); }
+        catch { return v.ToString() ?? string.Empty; }
     }
 }

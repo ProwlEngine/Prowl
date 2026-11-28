@@ -154,13 +154,13 @@ public sealed class RendererTextures : IMaterialResources, IDisposable
     internal bool Overflowed { get; set; }
 
     /// <summary>Slots in the 2D texture table.</summary>
-    public uint Texture2DCapacity => Textures2D;
+    public static uint Texture2DCapacity => Textures2D;
 
     /// <summary>Slots in each of the 2D array, 3D, cube and cube array tables.</summary>
-    public uint OtherTextureCapacity => OtherTextures;
+    public static uint OtherTextureCapacity => OtherTextures;
 
     /// <summary>Slots in the sampler table.</summary>
-    public uint SamplerCapacity => Samplers;
+    public static uint SamplerCapacity => Samplers;
 
     /// <summary>Makes a named default available to texture properties, like <c>"surface"</c>.</summary>
     public void RegisterDefault(string name, Texture texture)

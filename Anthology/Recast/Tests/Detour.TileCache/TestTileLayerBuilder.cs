@@ -20,10 +20,11 @@ freely, subject to the following restrictions:
 
 using System.Collections.Generic;
 using System.Linq;
+
+using Prowl.Recast;
 using Prowl.Recast.Core;
 using Prowl.Recast.Core.Numerics;
 using Prowl.Recast.Detour.TileCache.Io.Compress;
-using Prowl.Recast;
 using Prowl.Recast.Geom;
 
 namespace Prowl.Recast.Detour.TileCache.Tests;

@@ -70,7 +70,7 @@ public sealed class IcoDecoder : DecoderBase
     /// Reads every size the icon holds, largest first. The entries are independent pictures that
     /// need agree on nothing, so the largest settles the layout and the rest are read into it.
     /// </summary>
-    private bool TryDecodeEveryEntry(ReadOnlySpan<byte> data, List<IcoEntry> entries, IcoEntry best,
+    private static bool TryDecodeEveryEntry(ReadOnlySpan<byte> data, List<IcoEntry> entries, IcoEntry best,
                                      DecodeOptions options, ImageInfo info, out Image? image,
                                      out ApertureError error)
     {
@@ -120,7 +120,7 @@ public sealed class IcoDecoder : DecoderBase
     }
 
     /// <summary>Reads one entry of the directory, whichever of the two encodings it is in.</summary>
-    private bool TryDecodeEntry(ReadOnlySpan<byte> data, IcoEntry entry, DecodeOptions options,
+    private static bool TryDecodeEntry(ReadOnlySpan<byte> data, IcoEntry entry, DecodeOptions options,
                                 ImageInfo info, out Image? image, out ApertureError error)
     {
         image = null;

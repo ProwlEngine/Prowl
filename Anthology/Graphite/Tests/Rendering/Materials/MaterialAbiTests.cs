@@ -229,8 +229,8 @@ public sealed class MaterialAbiTests : IDisposable
 
         Float4[] pixels = DrawAll(program, frame, view, pass, first.Slot, 6);
         for (int y = 0; y < 4; y++)
-        for (int x = 0; x < 4; x++)
-            Assert.Equal(x < 2 ? new Float4(0.25f * 2, 0, 0, 2) : new Float4(0, 0, 0.125f * 2, 2), pixels[y * 4 + x]);
+            for (int x = 0; x < 4; x++)
+                Assert.Equal(x < 2 ? new Float4(0.25f * 2, 0, 0, 2) : new Float4(0, 0, 0.125f * 2, 2), pixels[y * 4 + x]);
     }
 
     private static uint[] Words(GpuTable table)

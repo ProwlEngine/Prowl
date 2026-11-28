@@ -25,7 +25,7 @@ namespace Prowl.Recast.Detour.Extras;
 
 public class DtBVTreeBuilder
 {
-    public void Build(DtMeshData data)
+    public static void Build(DtMeshData data)
     {
         data.bvTree = new DtBVNode[data.header.polyCount * 2];
         data.header.bvNodeCount = data.bvTree.Length == 0

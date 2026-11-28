@@ -18,6 +18,7 @@ freely, subject to the following restrictions:
 */
 
 using System.IO;
+
 using Prowl.Recast.Core;
 using Prowl.Recast.Detour.Io;
 
@@ -58,7 +59,7 @@ public class MeshDataReaderWriterTest
         Test(false, RcByteOrder.LITTLE_ENDIAN);
     }
 
-    public void Test(bool cCompatibility, RcByteOrder order)
+    private void Test(bool cCompatibility, RcByteOrder order)
     {
         using var ms = new MemoryStream();
         using var bw = new BinaryWriter(ms);

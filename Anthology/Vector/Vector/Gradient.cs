@@ -248,8 +248,8 @@ public sealed class Gradient
     /// <summary>Replaces every key. The supplied keys do not need to be sorted.</summary>
     public void SetKeys(IEnumerable<GradientColorKey> colorKeys, IEnumerable<GradientAlphaKey> alphaKeys)
     {
-        if (colorKeys is null) throw new ArgumentNullException(nameof(colorKeys));
-        if (alphaKeys is null) throw new ArgumentNullException(nameof(alphaKeys));
+        ArgumentNullException.ThrowIfNull(colorKeys);
+        ArgumentNullException.ThrowIfNull(alphaKeys);
 
         var color = new List<GradientColorKey>(colorKeys);
         var alpha = new List<GradientAlphaKey>(alphaKeys);

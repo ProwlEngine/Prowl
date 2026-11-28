@@ -100,7 +100,9 @@ public class RobustnessTests
     {
         using KcpTransport transport = new(new KcpTransportOptions
         {
-            Port = 0, MaxPendingReliableBytes = 1024 * 1024, MaxConnectionsPerAddress = 64
+            Port = 0,
+            MaxPendingReliableBytes = 1024 * 1024,
+            MaxConnectionsPerAddress = 64
         });
         using NetSession host = NetSession.Host(transport);
         SessionProbe hostProbe = new(host);

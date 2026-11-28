@@ -4,20 +4,14 @@ using System.Runtime.CompilerServices;
 
 namespace Prowl.Recast.Core.Buffers;
 
-public class RcRentedArray
+public static class RcRentedArray
 {
-    public static readonly RcRentedArray Shared = new RcRentedArray();
-
-    private RcRentedArray()
-    {
-    }
-
-    public RcRentedArray<T> Rent<T>(int minimumLength)
+    public static RcRentedArray<T> Rent<T>(int minimumLength)
     {
         return new RcRentedArray<T>(minimumLength);
     }
 
-    public void Return<T>(RcRentedArray<T> array)
+    public static void Return<T>(RcRentedArray<T> array)
     {
         if (array.IsDisposed)
             return;

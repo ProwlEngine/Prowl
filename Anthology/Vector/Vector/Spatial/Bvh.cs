@@ -76,8 +76,8 @@ public sealed class Bvh<T>
     /// <summary>Builds a hierarchy over <paramref name="items"/>, taking each item's bounds via <paramref name="bounds"/>.</summary>
     public Bvh(IReadOnlyList<T> items, Func<T, AABB> bounds, BvhBuildSettings settings = default)
     {
-        if (items == null) throw new ArgumentNullException(nameof(items));
-        if (bounds == null) throw new ArgumentNullException(nameof(bounds));
+        ArgumentNullException.ThrowIfNull(items);
+        ArgumentNullException.ThrowIfNull(bounds);
 
         _settings = settings.Resolve();
 

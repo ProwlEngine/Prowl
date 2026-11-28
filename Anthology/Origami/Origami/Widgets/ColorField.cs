@@ -105,7 +105,6 @@ public sealed class ColorFieldBuilder
         int ri = Clamp255(_value.R), gi = Clamp255(_value.G), bi = Clamp255(_value.B), ai = Clamp255(_value.A);
         string hexText = $"#{ri:X2}{gi:X2}{bi:X2}";
         string opacityText = $"{(int)MathF.Round(ai / 255f * 100f)}%";
-        Scribe.FontFile? mono = _theme.Mono ?? font;
 
         // Nebula .w2color: glass-in row, 24px swatch + mono hex + muted opacity.
         SysColor glassIn = _theme.Glass;
@@ -150,6 +149,7 @@ public sealed class ColorFieldBuilder
 
             if (font != null)
             {
+                Scribe.FontFile mono = _theme.Mono ?? font;
                 _paper.Box("hex")
                     .Width(UnitValue.Stretch()).Height(_height).Margin(8, 0, 0, 0).IsNotInteractable()
                     .Text(hexText, mono).TextColor(ink.C500)

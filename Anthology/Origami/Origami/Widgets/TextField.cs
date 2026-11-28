@@ -357,7 +357,7 @@ public sealed class TextFieldBuilder
 
                 // Prefix (.pre) ────────────────────────────────────────
                 // Simple padded colored label before the input (channel tag / draggable label).
-                if (!string.IsNullOrEmpty(_prefixText) && font != null)
+                if (!string.IsNullOrEmpty(_prefixText))
                 {
                     ElementBuilder pfx = _paper.Box("pfx")
                         .Height(fieldH).Width(UnitValue.Auto)
@@ -426,7 +426,7 @@ public sealed class TextFieldBuilder
                 bool forcePending = _paper.GetElementStorage(rowHandle, KeyForcePending, false);
                 if (forcePending)
                 {
-                    settings.ForceValue = _paper.GetElementStorage(rowHandle, KeyForceValue, _value ?? string.Empty);
+                    settings.ForceValue = _paper.GetElementStorage(rowHandle, KeyForceValue, _value);
                     settings.ForceSelectAll = true;
                     _paper.SetElementStorage(rowHandle, KeyForcePending, false);
                 }
@@ -479,7 +479,7 @@ public sealed class TextFieldBuilder
                 }
 
                 // Suffix (.suf) — muted mono unit after the input.
-                if (!string.IsNullOrEmpty(_suffixText) && font != null)
+                if (!string.IsNullOrEmpty(_suffixText))
                 {
                     _paper.Box("suf").Width(UnitValue.Auto).Height(fieldH)
                         .Margin(2, 10, 0, 0)
@@ -688,6 +688,7 @@ public sealed class TextFieldBuilder
         float padY = 4f;
         float popH = matches.Count * rowH + padY * 2;
         Scribe.FontFile? font = _theme.Font;
+        if (font == null) return;
 
         ElementHandle capturedRow = rowHandle;
         List<string> capturedMatches = matches;

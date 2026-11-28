@@ -292,9 +292,9 @@ public sealed class TableBuilder
     {
         OrigamiMetrics m = _theme.Metrics;
         Scribe.FontFile? font = _theme.Font;
-        Scribe.FontFile? headerFace = _theme.SemiBold ?? font;
         OrigamiRamp ink = _theme.Ink;
         if (font == null || _columns.Count == 0) return;
+        Scribe.FontFile headerFace = _theme.SemiBold ?? font;
 
         Color glassIn = _theme.Glass;
         Color bdSoft = _theme.BorderSoft;

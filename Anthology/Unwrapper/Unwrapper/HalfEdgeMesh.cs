@@ -23,11 +23,7 @@ internal sealed class HalfEdgeMesh
     /// <summary>Crease threshold cached so derived sub-meshes preserve it.</summary>
     public double CreaseThresholdDegrees;
 
-    // O(1) accessors via the stamped Index field. Never reorder the underlying lists
-    // without re-stamping or these will lie.
-    public int IndexOf(Vertex v) => v.Index;
-    public int IndexOf(MeshFace t) => t.Index;
-    public int IndexOf(HalfEdge e) => e.Index;
+    // Each element keeps its position in its list in Index, so never reorder the lists without re-stamping.
 
     private Vertex Append(Vertex v) { v.Index = Vertices.Count; Vertices.Add(v); return v; }
     private MeshFace Append(MeshFace t) { t.Index = Triangles.Count; Triangles.Add(t); return t; }
@@ -236,10 +232,10 @@ internal sealed class HalfEdgeMesh
             if (EdgeAttributes[heI].IsUvSeam) continue;
 
             HalfEdge twin = edge.Twin!;
-            Double2 fromUv = EdgeUVs[IndexOf(edge.Previous!)];
+            Double2 fromUv = EdgeUVs[edge.Previous!.Index];
             Double2 toUv = EdgeUVs[heI];
-            Double2 twinFromUv = EdgeUVs[IndexOf(twin)];
-            Double2 twinToUv = EdgeUVs[IndexOf(twin.Previous!)];
+            Double2 twinFromUv = EdgeUVs[twin.Index];
+            Double2 twinToUv = EdgeUVs[twin.Previous!.Index];
 
             if (fromUv != twinFromUv || toUv != twinToUv)
             {
@@ -247,7 +243,7 @@ internal sealed class HalfEdgeMesh
                 info.IsUvSeam = true;
                 EdgeAttributes[heI] = info;
 
-                int twinSlot = IndexOf(twin);
+                int twinSlot = twin.Index;
                 EdgeAttribute twinInfo = EdgeAttributes[twinSlot];
                 twinInfo.IsUvSeam = true;
                 EdgeAttributes[twinSlot] = twinInfo;
@@ -268,8 +264,8 @@ internal sealed class HalfEdgeMesh
                 continue;
             }
 
-            Double3 n1 = FaceAttributes[IndexOf(edge.Face!)].Normal;
-            Double3 n2 = FaceAttributes[IndexOf(edge.Twin!.Face!)].Normal;
+            Double3 n1 = FaceAttributes[edge.Face!.Index].Normal;
+            Double3 n2 = FaceAttributes[edge.Twin!.Face!.Index].Normal;
 
             if (NumericHelpers.ApproxGreater(Double3.Dot(n1, n2), creaseCos, 1e-6))
                 info.IsCrease = false;
@@ -326,8 +322,8 @@ internal sealed class HalfEdgeMesh
                 else if (sourceIndex == v1) slot = 3 * triI + 1;
                 else slot = 3 * triI + 2;
 
-                Double2 srcUv = region.Mesh.EdgeUVs[region.Mesh.IndexOf(edge)];
-                tris[slot] = vertexLookup[region.Mesh.IndexOf(edge.Apex!)];
+                Double2 srcUv = region.Mesh.EdgeUVs[edge.Index];
+                tris[slot] = vertexLookup[edge.Apex!.Index];
                 uvs[2 * slot + 0] = srcUv.X;
                 uvs[2 * slot + 1] = srcUv.Y;
 
@@ -444,8 +440,8 @@ internal sealed class HalfEdgeMesh
                 for (int side = 0; side < 3; ++side)
                 {
                     MeshFace? neighbour = edge.Twin!.Face;
-                    if (neighbour is not null && regionId[mesh.IndexOf(neighbour)] == sourceMarker)
-                        stack.Push(mesh.IndexOf(neighbour));
+                    if (neighbour is not null && regionId[neighbour.Index] == sourceMarker)
+                        stack.Push(neighbour.Index);
                     edge = edge.Next!;
                 }
             }

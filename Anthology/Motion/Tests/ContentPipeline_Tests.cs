@@ -1,8 +1,9 @@
-using ClayClip = Prowl.Clay.AnimationClip;
-using Prowl.Clay.Importer;
 using Prowl.Clay;
-using Prowl.Vector.Spatial;
+using Prowl.Clay.Importer;
 using Prowl.Vector;
+using Prowl.Vector.Spatial;
+
+using ClayClip = Prowl.Clay.AnimationClip;
 
 namespace Prowl.Motion.Tests;
 

@@ -14,7 +14,7 @@ public class DtNavMeshGroundSampler : DtAbstractGroundSampler
         SampleGround(acfg, es, (RcVec3f pt, float heightRange, out float height) => GetNavMeshHeight(navMeshQuery, pt, acfg.cellSize, heightRange, out height));
     }
 
-    private DtNavMeshQuery CreateNavMesh(RcBuilderResult r, float agentRadius, float agentHeight, float agentClimb)
+    private static DtNavMeshQuery CreateNavMesh(RcBuilderResult r, float agentRadius, float agentHeight, float agentClimb)
     {
         DtNavMeshCreateParams option = new DtNavMeshCreateParams
         {

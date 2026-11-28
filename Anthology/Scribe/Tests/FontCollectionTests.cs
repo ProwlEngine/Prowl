@@ -58,7 +58,7 @@ public class FontCollectionTests
         var fonts = fs.EnumerateSystemFonts().ToArray();
         foreach (string family in new[] { "microsoft yahei", "microsoft yahei ui" })
         {
-            var font = Assert.Single(fonts.Where(f => f.FamilyName == family && f.Style == FontStyle.Regular));
+            var font = Assert.Single(fonts, f => f.FamilyName == family && f.Style == FontStyle.Regular);
             foreach (char c in "项开")
                 Assert.True(fs.GetOrCreateGlyph(c, font, FontQuality.Normal).IsInAtlas);
         }
