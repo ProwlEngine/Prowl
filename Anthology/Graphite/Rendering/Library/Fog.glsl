@@ -6,9 +6,6 @@
 // How blurred the sky is that fog takes its color from, as a sky probe roughness
 #define GRAPHITE_FOG_SKY_ROUGHNESS 0.35
 
-// The share of a surface's own colour above which fog is left off, so pixels it would not show on skip its colour
-#define GRAPHITE_FOG_CLEAR 0.998
-
 // The fog color seen toward relativePos, either the flat fog color in nits or the sky behind it from the sky probe, so
 // it meets whatever sky is drawn seamlessly, pre-exposed
 vec3 Graphite_FogColor(vec3 relativePos)
@@ -37,7 +34,5 @@ vec3 Graphite_ApplyFog(vec3 color, vec3 relativePos)
     fog += (fogCoord * params.z + params.w) * states.x;
     fog += exp2(-fogCoord * params.y) * states.y;
     fog += exp2(-fogCoord * fogCoord * params.x * params.x) * states.z;
-    if (fog >= GRAPHITE_FOG_CLEAR)
-        return color;
     return mix(Graphite_FogColor(relativePos), color, clamp(fog, 0.0, 1.0));
 }
