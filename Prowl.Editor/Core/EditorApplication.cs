@@ -112,6 +112,13 @@ public partial class EditorApplication : Game
     public override void Initialize()
     {
         Instance = this;
+
+        EditorSettings instance = EditorSettings.Instance;
+        Window.InternalWindow.WindowState = instance.WindowMaximized ? Silk.NET.Windowing.WindowState.Maximized : Silk.NET.Windowing.WindowState.Normal;
+        Window.Position = new Silk.NET.Maths.Vector2D<int>(
+            instance.WindowX > 0 ? instance.WindowX : Window.Position.X,
+            instance.WindowY > 0 ? instance.WindowY : Window.Position.Y);
+
         Application.IsEditor = true;
         Application.IsPlaying = false;
 
@@ -345,9 +352,6 @@ public partial class EditorApplication : Game
             return null;
         };
 
-        // Set Windows title bar to match Darkest theme color
-        ApplyDarkTitleBar();
-
         // Attach to the window events to save the position and state of the window
         Window.InternalWindow.Move += (position) =>
         {
@@ -379,9 +383,6 @@ public partial class EditorApplication : Game
 
         Window.FileDrop += ExternalAssetDrop.Enqueue;
     }
-
-    [LibraryImport("dwmapi.dll")]
-    private static partial int DwmSetWindowAttribute(nint hwnd, int attr, ref int value, int size);
 
     /// <summary>The family name of the bundled UI font. Any other font name is a system font family or a font file path.</summary>
     public const string BundledFontName = "Geist";
@@ -526,19 +527,6 @@ public partial class EditorApplication : Game
         float csFbWin = win.X > 0 ? (float)fb.X / win.X : 1f;
         float us = Math.Max(0.01f, EditorTheme.UserScale);
         return new Float2(p.X * csFbWin / (cs * us), p.Y * csFbWin / (cs * us));
-    }
-
-    private static void ApplyDarkTitleBar()
-    {
-        if (!RuntimeInformation.IsOSPlatform(OSPlatform.Windows)) return;
-
-        INativeWindow? native = Window.InternalWindow.Native;
-        nint hwnd = native?.Win32?.Hwnd ?? 0;
-        if (hwnd == 0) return;
-
-        // DWMWA_USE_IMMERSIVE_DARK_MODE = 20
-        int darkMode = 1;
-        _ = DwmSetWindowAttribute(hwnd, 20, ref darkMode, sizeof(int));
     }
 
     // Panels act inside the world they edit, so Camera.Main, Physics and Debug.Draw reach it rather than Main.

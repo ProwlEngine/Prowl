@@ -173,6 +173,17 @@ public static class Graphics
         CreateRenderer();
     }
 
+    /// <summary>Clears and presents the main swapchain once so a newly shown window starts black rather than unpainted.</summary>
+    internal static void PresentInitialClear()
+    {
+        if (Device?.MainSwapchain?.Framebuffer is not { } framebuffer) return;
+        using FrameGraph clear = new(Device, "Initial Clear");
+        TextureHandle target = clear.ImportTarget(framebuffer);
+        clear.AddPass("Clear", pass => pass.Write(target, firstWrite: new TargetLoadStoreOps(AttachmentOps.Clear(new Color(0f, 0f, 0f, 1f)), AttachmentOps.Discard)), static _ => { });
+        clear.Execute();
+        Device.WaitForIdle();
+    }
+
     /// <summary>Opens a device without a window, for tools and tests that draw offscreen.</summary>
     public static void InitializeOffscreen()
     {
