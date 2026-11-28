@@ -14,7 +14,7 @@ namespace Prowl.Runtime;
 /// A texture's texel format, a subset of Graphite's pixel formats. The numbers are stored in assets, so they never
 /// change. Float formats hold floats of that many bits, plain ones normalized unsigned values. BC and ASTC formats
 /// hold compressed blocks the GPU samples directly: BC1 is RGB with cutout alpha, BC3 RGBA, BC4 red, BC5 red and
-/// green, and ASTC RGBA at the block size its name gives.
+/// green, BC7 is full RGBA and ASTC RGBA at the block size its name gives.
 /// </summary>
 public enum TextureFormat : byte
 {
@@ -45,6 +45,7 @@ public enum TextureFormat : byte
     BC3 = 24,
     BC4 = 25,
     BC5 = 26,
+    BC7 = 33,
     ASTC4x4 = 27,
     ASTC5x5 = 28,
     ASTC6x6 = 29,
@@ -96,6 +97,7 @@ public static class GraphicsFormats
         TextureFormat.BC3 => srgb ? GPixelFormat.BC3_UNorm_SRgb : GPixelFormat.BC3_UNorm,
         TextureFormat.BC4 => GPixelFormat.BC4_UNorm,
         TextureFormat.BC5 => GPixelFormat.BC5_UNorm,
+        TextureFormat.BC7 => srgb ? GPixelFormat.BC7_UNorm_SRgb : GPixelFormat.BC7_UNorm,
         TextureFormat.ASTC4x4 => srgb ? GPixelFormat.ASTC_4x4_UNorm_SRgb : GPixelFormat.ASTC_4x4_UNorm,
         TextureFormat.ASTC5x5 => srgb ? GPixelFormat.ASTC_5x5_UNorm_SRgb : GPixelFormat.ASTC_5x5_UNorm,
         TextureFormat.ASTC6x6 => srgb ? GPixelFormat.ASTC_6x6_UNorm_SRgb : GPixelFormat.ASTC_6x6_UNorm,
@@ -130,11 +132,11 @@ public static class GraphicsFormats
     public static bool IsDepth(TextureFormat format) => format is TextureFormat.Depth16 or TextureFormat.Depth32Float or TextureFormat.Depth24Stencil8;
 
     /// <summary>Whether the format has an sRGB form, so the sRGB flag changes how it samples.</summary>
-    public static bool SupportsSrgb(TextureFormat format) => format is TextureFormat.RGBA8 or TextureFormat.BC1 or TextureFormat.BC3
+    public static bool SupportsSrgb(TextureFormat format) => format is TextureFormat.RGBA8 or TextureFormat.BC1 or TextureFormat.BC3 or TextureFormat.BC7
         or >= TextureFormat.ASTC4x4 and <= TextureFormat.ASTC12x12;
 
     /// <summary>Whether the format holds compressed blocks rather than single texels.</summary>
-    public static bool IsCompressed(TextureFormat format) => format is >= TextureFormat.BC1 and <= TextureFormat.ASTC12x12;
+    public static bool IsCompressed(TextureFormat format) => format is >= TextureFormat.BC1 and <= TextureFormat.ASTC12x12 or TextureFormat.BC7;
 
     /// <summary>The Aperture layout a compressed format encodes and decodes through.</summary>
     public static Aperture.TextureFormat ToAperture(TextureFormat format, bool srgb = false) => format switch
@@ -143,6 +145,7 @@ public static class GraphicsFormats
         TextureFormat.BC3 => srgb ? Aperture.TextureFormat.Bc3UnormSrgb : Aperture.TextureFormat.Bc3Unorm,
         TextureFormat.BC4 => Aperture.TextureFormat.Bc4Unorm,
         TextureFormat.BC5 => Aperture.TextureFormat.Bc5Unorm,
+        TextureFormat.BC7 => srgb ? Aperture.TextureFormat.Bc7UnormSrgb : Aperture.TextureFormat.Bc7Unorm,
         TextureFormat.ASTC4x4 => srgb ? Aperture.TextureFormat.Astc4x4UnormSrgb : Aperture.TextureFormat.Astc4x4Unorm,
         TextureFormat.ASTC5x5 => srgb ? Aperture.TextureFormat.Astc5x5UnormSrgb : Aperture.TextureFormat.Astc5x5Unorm,
         TextureFormat.ASTC6x6 => srgb ? Aperture.TextureFormat.Astc6x6UnormSrgb : Aperture.TextureFormat.Astc6x6Unorm,
@@ -169,6 +172,7 @@ public static class GraphicsFormats
         GPixelFormat.R8_G8_B8_A8_UNorm_SRgb => GPixelFormat.R8_G8_B8_A8_UNorm,
         GPixelFormat.BC1_Rgba_UNorm_SRgb => GPixelFormat.BC1_Rgba_UNorm,
         GPixelFormat.BC3_UNorm_SRgb => GPixelFormat.BC3_UNorm,
+        GPixelFormat.BC7_UNorm_SRgb => GPixelFormat.BC7_UNorm,
         GPixelFormat.ASTC_4x4_UNorm_SRgb => GPixelFormat.ASTC_4x4_UNorm,
         GPixelFormat.ASTC_5x5_UNorm_SRgb => GPixelFormat.ASTC_5x5_UNorm,
         GPixelFormat.ASTC_6x6_UNorm_SRgb => GPixelFormat.ASTC_6x6_UNorm,

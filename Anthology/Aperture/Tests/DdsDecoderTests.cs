@@ -131,7 +131,7 @@ public sealed class DdsDecoderTests
     public void LoadRgb8_HasExpectedProperties()
     {
         // Arrange / Act
-        var image = Image.Load(TestFiles.Dds("Rgb8.dds"));
+        var image = Image.Load(TestFiles.Dds("Rgba8.dds"));
 
         // Assert
         Assert.Equal(ImageFormat.Dds, image.Format);
@@ -152,7 +152,7 @@ public sealed class DdsDecoderTests
     public void LoadRgb8_HasExpectedContent()
     {
         // Arrange
-        var image = Image.Load(TestFiles.Dds("Rgb8.dds"));
+        var image = Image.Load(TestFiles.Dds("Rgba8.dds"));
 
         // Act
         var row = image.RootFrame.GetRow(y: 119);

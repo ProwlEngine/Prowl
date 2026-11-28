@@ -44,6 +44,7 @@ public class TextureTests
     {
         Assert.Equal(Graphite.PixelFormat.R8_G8_B8_A8_UNorm_SRgb, GraphicsFormats.ToPixelFormat(TextureFormat.RGBA8, true));
         Assert.Equal(Graphite.PixelFormat.BC1_Rgba_UNorm_SRgb, GraphicsFormats.ToPixelFormat(TextureFormat.BC1, true));
+        Assert.Equal(Graphite.PixelFormat.BC7_UNorm_SRgb, GraphicsFormats.ToPixelFormat(TextureFormat.BC7, true));
         Assert.Equal(Graphite.PixelFormat.ASTC_6x6_UNorm_SRgb, GraphicsFormats.ToPixelFormat(TextureFormat.ASTC6x6, true));
         Assert.True(new Texture2D(4, 4, TextureFormat.RGBA8, srgb: true).Srgb);
         Assert.True(new Texture2D(4, 4, TextureFormat.BC3, srgb: true).Srgb);
@@ -55,6 +56,7 @@ public class TextureTests
     [InlineData(TextureFormat.RGBA8, 13u, 7u, 13 * 7 * 4)]
     [InlineData(TextureFormat.BC1, 13u, 7u, 4 * 2 * 8)]
     [InlineData(TextureFormat.BC5, 1u, 1u, 16)]
+    [InlineData(TextureFormat.BC7, 13u, 7u, 4 * 2 * 16)]
     [InlineData(TextureFormat.ASTC6x6, 13u, 7u, 3 * 2 * 16)]
     [InlineData(TextureFormat.ASTC12x12, 1u, 1u, 16)]
     public void DataSize_CountsPartialEdgeBlocks(TextureFormat format, uint width, uint height, long expected)
