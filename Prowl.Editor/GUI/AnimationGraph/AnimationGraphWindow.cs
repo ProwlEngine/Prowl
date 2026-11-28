@@ -335,18 +335,60 @@ public class AnimationGraphWindow : GraphWindow<AnimationGraphWindow, GraphNodeR
     /// <summary>A parameter dragged in from the list becomes a node reading it, where it was let go.</summary>
     protected override void Drop(DragPayload payload, Float2 at)
     {
-        if (payload is not AnimationParameterDrag || ReferenceEquals(Canvas, _stateView)) return;
-
-        AnimationParameterDrag? drag = DragDrop.AcceptDrop<AnimationParameterDrag>(true);
-        if (drag == null) return;
-
-        GraphNodeRecord? added = null;
-        Edit($"Add {drag.Name}", () =>
+        
+        if (payload is AssetDragPayload)
         {
-            added = _view.Add(AnimationNodeIds.Parameter, at);
-            if (added != null) added.Properties[ParameterNode.NameSetting.Key] = NodeValue.FromText(drag.Name);
-        });
-        if (added != null) Controller.SelectNodes([added.Id]);
+            var drag = DragDrop.AcceptDrop<AssetDragPayload>(true);
+            if (drag == null || drag.IsMulti) return;
+            GraphNodeRecord? record = null;
+
+            if (drag.AssetType == typeof(AnimationClip))
+            {           
+                Edit($"Add {drag.DisplayName}", () =>
+                {
+                    record = _view.Add(AnimationNodeIds.Clip, at);
+                    if (record == null) return;
+
+                    AnimationClip? clip = AssetDatabase.Load<AnimationClip>(drag.AssetGuid);
+                    if(clip.IsValid() == false) return;
+
+                    record.Properties["Clip"] = NodeValue.FromClip(clip);
+                });          
+            }
+            
+            if (drag.AssetType == typeof(AnimationGraph) && drag.AssetGuid != this.AssetGuid)
+            { 
+                Edit($"Add {drag.DisplayName}", () =>
+                {
+                    record = _view.Add(AnimationNodeIds.SubGraph, at);
+                    if (record == null) return;
+
+                    AnimationGraph? graph = AssetDatabase.Load<AnimationGraph>(drag.AssetGuid);
+                    if (graph.IsValid() == false) return;
+
+                    record.Properties[SubGraphNode.GraphAssetSetting.Key] = NodeValue.FromGraph(graph);
+                    record.Properties[SubGraphNode.Embedded.Key] = NodeValue.FromFlag(false);
+                });
+            }
+
+            return;
+        }
+
+        if (payload is AnimationParameterDrag && !ReferenceEquals(Canvas, _stateView))
+        {
+            AnimationParameterDrag? drag = DragDrop.AcceptDrop<AnimationParameterDrag>(true);
+            if (drag == null) return;
+            GraphNodeRecord? record = null;
+
+            Edit($"Add {drag.Name}", () =>
+            {
+                record = _view.Add(AnimationNodeIds.Parameter, at);
+                if (record != null) record.Properties[ParameterNode.NameSetting.Key] = NodeValue.FromText(drag.Name);
+            });
+            if (record != null) Controller.SelectNodes([record.Id]);
+
+            return;
+        }
     }
 
     // State machines
@@ -972,6 +1014,7 @@ internal sealed class AnimationParameterDrag : DragPayload
 
     public override string Icon => EditorIcons.Sliders;
 }
+
 
 /// <summary>The inspector for a graph asset: a summary and a button to open the graph window.</summary>
 [CustomAssetEditor(typeof(AnimationGraph))]

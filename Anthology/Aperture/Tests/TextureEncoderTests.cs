@@ -13,7 +13,7 @@ public sealed class TextureEncoderTests
     [Fact]
     public void CanEncode_IsTrueForBlockFormats()
     {
-        // BC1,3,4,5 are supported.
+        // BC1,3,4,5,7 are supported.
         Assert.True(TextureEncoder.CanEncode(TextureFormat.Bc1Unorm));
         Assert.True(TextureEncoder.CanEncode(TextureFormat.Bc1UnormSrgb));
         Assert.False(TextureEncoder.CanEncode(TextureFormat.Bc2Unorm));
@@ -22,12 +22,12 @@ public sealed class TextureEncoderTests
         Assert.True(TextureEncoder.CanEncode(TextureFormat.Bc3UnormSrgb));
         Assert.True(TextureEncoder.CanEncode(TextureFormat.Bc4Unorm));
         Assert.True(TextureEncoder.CanEncode(TextureFormat.Bc5Unorm));
+        Assert.True(TextureEncoder.CanEncode(TextureFormat.Bc7Unorm));
+        Assert.True(TextureEncoder.CanEncode(TextureFormat.Bc7UnormSrgb));
 
         // Not supported yet.
         Assert.False(TextureEncoder.CanEncode(TextureFormat.Bc6hSf16));
         Assert.False(TextureEncoder.CanEncode(TextureFormat.Bc6hUf16));
-        Assert.False(TextureEncoder.CanEncode(TextureFormat.Bc7Unorm));
-        Assert.False(TextureEncoder.CanEncode(TextureFormat.Bc7UnormSrgb));
 
         // Not block formats.
         Assert.False(TextureEncoder.CanEncode(TextureFormat.R8G8B8A8Unorm));
@@ -39,7 +39,7 @@ public sealed class TextureEncoderTests
     public void Encode_Bc1_HasExpectedError()
     {
         // Arrange
-        var image = Image.Load(TestFiles.Dds("Rgb8.dds"));
+        var image = Image.Load(TestFiles.Dds("Rgba8.dds"));
         ReadOnlySpan<byte> source = image.RootFrame.AsSpan<byte>();
 
         // Act
@@ -290,6 +290,92 @@ public sealed class TextureEncoderTests
             TextureEncoder.Encode(source, 16, 16, TextureFormat.Bc1UnormSrgb));
     }
 
+    [Fact]
+    public void Encode_Bc7_ErrorDecreasesWithQuality()
+    {
+        var image = Image.Load(TestFiles.Dds("Rgba8.dds"));
+        ReadOnlySpan<byte> source = image.RootFrame.AsSpan<byte>();
+
+        byte[] fast = RoundTrip(source, image.Width, image.Height, TextureEncodeQuality.Fast, TextureFormat.Bc7Unorm);
+        byte[] balanced = RoundTrip(source, image.Width, image.Height, TextureEncodeQuality.Balanced, TextureFormat.Bc7Unorm);
+        byte[] thorough = RoundTrip(source, image.Width, image.Height, TextureEncodeQuality.Thorough, TextureFormat.Bc7Unorm);
+
+        // Note: the error decreases with increasing quality, as expected.
+        Assert.Equal(1885700, SquaredError(source, fast));
+        Assert.Equal(1346155, SquaredError(source, balanced));
+        Assert.Equal(1328731, SquaredError(source, thorough));
+    }
+
+    [Fact]
+    public void Encode_Bc7_SolidColoursAreWithinOneStep()
+    {
+        for (int value = 0; value < 256; value += 3)
+        {
+            byte v = (byte)value;
+            (byte R, byte G, byte B, byte A)[] colours = [(v, v, v, 255), (v, 0, 0, 255), (0, v, 0, v), (10, 200, v, (byte)(255 - v))];
+
+            foreach (var (r, g, b, a) in colours)
+            {
+                byte[] source = Block(_ => (r, g, b, a));
+
+                foreach (TextureEncodeQuality quality in Enum.GetValues<TextureEncodeQuality>())
+                    AssertClose(source, RoundTrip(source, 4, 4, quality, TextureFormat.Bc7Unorm), 1);
+            }
+        }
+    }
+
+    [Fact]
+    public void Encode_Bc7_TwoExtremeColoursAreLossless()
+    {
+        for (int a = 0; a < 16; a++)
+        {
+            for (int b = a + 1; b < 16; b++)
+            {
+                byte[] source = Block(i =>
+                {
+                    int c = ((i % 4) + (i / 4)) % 2 == 0 ? a : b;
+                    return ((byte)((c & 8) != 0 ? 255 : 0), (byte)((c & 4) != 0 ? 255 : 0),
+                        (byte)((c & 2) != 0 ? 255 : 0), (byte)((c & 1) != 0 ? 255 : 0));
+                });
+
+                foreach (TextureEncodeQuality quality in Enum.GetValues<TextureEncodeQuality>())
+                    Assert.Equal(source, RoundTrip(source, 4, 4, quality, TextureFormat.Bc7Unorm));
+            }
+        }
+    }
+
+    [Fact]
+    public void Encode_Bc7_KeepsSmoothAlpha()
+    {
+        byte[] source = Block(i => ((byte)(i * 16), (byte)(255 - (i * 16)), 128, (byte)(i * 17)));
+
+        foreach (TextureEncodeQuality quality in Enum.GetValues<TextureEncodeQuality>())
+            AssertClose(source, RoundTrip(source, 4, 4, quality, TextureFormat.Bc7Unorm), 6);
+    }
+
+    [Fact]
+    public void Encode_Bc7_RandomPixelsBeatBc3()
+    {
+        byte[] source = RandomPixels(64, 64, opaque: false);
+
+        long bc7 = SquaredError(source, RoundTrip(source, 64, 64, TextureEncodeQuality.Balanced, TextureFormat.Bc7Unorm));
+        long bc3 = SquaredError(source, RoundTrip(source, 64, 64, TextureEncodeQuality.Balanced, TextureFormat.Bc3Unorm));
+
+        Assert.True(bc7 < bc3, $"BC7 {bc7}, BC3 {bc3}");
+    }
+
+    [Fact]
+    public void Encode_Bc7_OutputDoesNotDependOnThreadCount()
+    {
+        byte[] source = RandomPixels(64, 64, opaque: false);
+
+        byte[] single = TextureEncoder.Encode(source, 64, 64, TextureFormat.Bc7Unorm,
+            new TextureEncodeOptions { MaxDegreeOfParallelism = 1 });
+        byte[] parallel = TextureEncoder.Encode(source, 64, 64, TextureFormat.Bc7Unorm);
+
+        Assert.Equal(single, parallel);
+    }
+
     // Returns a 4x4 block of pixels filled with the given color.
     private static byte[] Block(Func<int, (byte R, byte G, byte B, byte A)> pixel)
     {
@@ -320,12 +406,13 @@ public sealed class TextureEncoderTests
         => RoundTrip(source, 4, 4, quality);
 
     // Encodes then decodes a block of pixels of the given size.
-    private static byte[] RoundTrip(ReadOnlySpan<byte> source, int width, int height, TextureEncodeQuality quality)
+    private static byte[] RoundTrip(ReadOnlySpan<byte> source, int width, int height, TextureEncodeQuality quality,
+                                    TextureFormat format = TextureFormat.Bc1Unorm)
     {
-        byte[] encoded = TextureEncoder.Encode(source, width, height, TextureFormat.Bc1Unorm,
+        byte[] encoded = TextureEncoder.Encode(source, width, height, format,
             new TextureEncodeOptions { Quality = quality });
 
-        return TextureDecoder.Decode(encoded, width, height, TextureFormat.Bc1Unorm);
+        return TextureDecoder.Decode(encoded, width, height, format);
     }
 
     // Asserts that two images are within a certain tolerance.

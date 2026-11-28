@@ -145,6 +145,7 @@ public class TextureImporter : AssetImporter
             TextureImportFormat.BC3 => TextureFormat.BC3,
             TextureImportFormat.BC4 => TextureFormat.BC4,
             TextureImportFormat.BC5 => TextureFormat.BC5,
+            TextureImportFormat.BC7 => TextureFormat.BC7,
             TextureImportFormat.ASTC4x4 => TextureFormat.ASTC4x4,
             TextureImportFormat.ASTC5x5 => TextureFormat.ASTC5x5,
             TextureImportFormat.ASTC6x6 => TextureFormat.ASTC6x6,
@@ -306,24 +307,27 @@ public enum TextureCompression
 }
 
 /// <summary>The stored format of an imported texture, Automatic choosing one from its type and content.</summary>
+/// <remarks>The enum values are stored in metas so they should not be changed.</remarks>
 public enum TextureImportFormat
 {
-    Automatic,
-    RGBA8,
-    BC1,
-    BC3,
-    BC4,
-    BC5,
-    ASTC4x4,
-    ASTC5x5,
-    ASTC6x6,
-    ASTC8x8,
-    ASTC10x10,
-    ASTC12x12,
-    R8,
+    Automatic = 0,
+    RGBA8 = 1,
+    BC1 = 2,
+    BC3 = 3,
+    BC4 = 4,
+    BC5 = 5,
+    BC7 = 13,
+    ASTC4x4 = 6,
+    ASTC5x5 = 7,
+    ASTC6x6 = 8,
+    ASTC8x8 = 9,
+    ASTC10x10 = 10,
+    ASTC12x12 = 11,
+    R8 = 12,
 }
 
-/// <summary>What a texture holds, which decides how it is processed, stored and sampled. The numbers are stored in metas.</summary>
+/// <summary>What a texture holds, which decides how it is processed, stored and sampled.</summary>
+/// <remarks>The enum values are stored in metas so they should not be changed.</remarks>
 public enum TextureImportType
 {
     /// <summary>Colour or data on a surface, sRGB unless the name says data.</summary>

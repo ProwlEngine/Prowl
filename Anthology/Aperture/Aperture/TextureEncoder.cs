@@ -32,8 +32,8 @@ public sealed class TextureEncodeOptions
 
 /// <summary>
 /// Compresses RGBA8 pixels into the block layouts a GPU samples directly. BC1 keeps alpha as a
-/// one bit cutout below 128, BC3 keeps full alpha, BC4 stores red, BC5 stores red and green, and
-/// ASTC stores all four channels at any of its block sizes.
+/// one bit cutout below 128, BC3 keeps full alpha, BC4 stores red, BC5 stores red and green, BC7 stores
+/// all four channels at higher quality, and ASTC stores all four channels at any of its block sizes.
 /// </summary>
 public static class TextureEncoder
 {
@@ -43,6 +43,7 @@ public static class TextureEncoder
         TextureFormat.Bc1Unorm or TextureFormat.Bc1UnormSrgb => true,
         TextureFormat.Bc3Unorm or TextureFormat.Bc3UnormSrgb => true,
         TextureFormat.Bc4Unorm or TextureFormat.Bc5Unorm => true,
+        TextureFormat.Bc7Unorm or TextureFormat.Bc7UnormSrgb => true,
         _ => AstcBlockSize(format, out _, out _),
     };
 
@@ -154,6 +155,7 @@ public static class TextureEncoder
             TextureFormat.Bc3Unorm or TextureFormat.Bc3UnormSrgb => new Bc3BlockEncoder(options.Quality),
             TextureFormat.Bc4Unorm => new Bc4BlockEncoder(options.Quality, 1),
             TextureFormat.Bc5Unorm => new Bc4BlockEncoder(options.Quality, 2),
+            TextureFormat.Bc7Unorm or TextureFormat.Bc7UnormSrgb => new Bc7BlockEncoder(options.Quality),
             _ => AstcEncoder.For(blockWidth, blockHeight, options.Quality),
         };
 
