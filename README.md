@@ -341,17 +341,17 @@ Check our [Contributing guide](https://github.com/ProwlEngine/Prowl/blob/main/CO
                 </a>
             </td>
             <td align="center">
-                <a href="https://github.com/Kuvrot">
-                    <img src="https://avatars.githubusercontent.com/u/23508114?v=4" width="100;" alt="Kuvrot"/>
-                    <br />
-                    <sub><b>Jaime Arturo</b></sub>
-                </a>
-            </td>
-            <td align="center">
                 <a href="https://github.com/ZedDevStuff">
                     <img src="https://avatars.githubusercontent.com/u/98429642?v=4" width="100;" alt="ZedDevStuff"/>
                     <br />
                     <sub><b>Kouame Benoit Junior Augustin</b></sub>
+                </a>
+            </td>
+            <td align="center">
+                <a href="https://github.com/Kuvrot">
+                    <img src="https://avatars.githubusercontent.com/u/23508114?v=4" width="100;" alt="Kuvrot"/>
+                    <br />
+                    <sub><b>Jaime Arturo</b></sub>
                 </a>
             </td>
             <td align="center">
@@ -406,19 +406,19 @@ Check our [Contributing guide](https://github.com/ProwlEngine/Prowl/blob/main/CO
                 </a>
             </td>
             <td align="center">
-                <a href="https://github.com/Porphyri0n">
-                    <img src="https://avatars.githubusercontent.com/u/119479540?v=4" width="100;" alt="Porphyri0n"/>
+                <a href="https://github.com/ctzcs">
+                    <img src="https://avatars.githubusercontent.com/u/47210521?v=4" width="100;" alt="ctzcs"/>
                     <br />
-                    <sub><b>Erdoğan Başer</b></sub>
+                    <sub><b>tianwen</b></sub>
                 </a>
             </td>
 		</tr>
 		<tr>
             <td align="center">
-                <a href="https://github.com/jihadkhawaja">
-                    <img src="https://avatars.githubusercontent.com/u/47315122?v=4" width="100;" alt="jihadkhawaja"/>
+                <a href="https://github.com/peremunoz">
+                    <img src="https://avatars.githubusercontent.com/u/73690199?v=4" width="100;" alt="peremunoz"/>
                     <br />
-                    <sub><b>Jay Khawaja</b></sub>
+                    <sub><b>Pere Muñoz</b></sub>
                 </a>
             </td>
             <td align="center">
@@ -429,75 +429,31 @@ Check our [Contributing guide](https://github.com/ProwlEngine/Prowl/blob/main/CO
                 </a>
             </td>
             <td align="center">
-                <a href="https://github.com/peremunoz">
-                    <img src="https://avatars.githubusercontent.com/u/73690199?v=4" width="100;" alt="peremunoz"/>
+                <a href="https://github.com/jihadkhawaja">
+                    <img src="https://avatars.githubusercontent.com/u/47315122?v=4" width="100;" alt="jihadkhawaja"/>
                     <br />
-                    <sub><b>Pere Muñoz</b></sub>
+                    <sub><b>Jay Khawaja</b></sub>
                 </a>
             </td>
             <td align="center">
-                <a href="https://github.com/ctzcs">
-                    <img src="https://avatars.githubusercontent.com/u/47210521?v=4" width="100;" alt="ctzcs"/>
+                <a href="https://github.com/Porphyri0n">
+                    <img src="https://avatars.githubusercontent.com/u/119479540?v=4" width="100;" alt="Porphyri0n"/>
                     <br />
-                    <sub><b>tianwen</b></sub>
+                    <sub><b>Erdoğan Başer</b></sub>
                 </a>
             </td>
             <td align="center">
-                <a href="https://github.com/treviasxk">
-                    <img src="https://avatars.githubusercontent.com/u/24716901?v=4" width="100;" alt="treviasxk"/>
+                <a href="https://github.com/BayouBushBaby">
+                    <img src="https://avatars.githubusercontent.com/u/33499280?v=4" width="100;" alt="BayouBushBaby"/>
                     <br />
-                    <sub><b>Trevias Xk</b></sub>
+                    <sub><b>BayouBushBaby</b></sub>
                 </a>
             </td>
             <td align="center">
-                <a href="https://github.com/recore67">
-                    <img src="https://avatars.githubusercontent.com/u/29689492?v=4" width="100;" alt="recore67"/>
+                <a href="https://github.com/CodyDream">
+                    <img src="https://avatars.githubusercontent.com/u/153939536?v=4" width="100;" alt="CodyDream"/>
                     <br />
-                    <sub><b>salman ameeri</b></sub>
-                </a>
-            </td>
-		</tr>
-		<tr>
-            <td align="center">
-                <a href="https://github.com/notgiven688">
-                    <img src="https://avatars.githubusercontent.com/u/37874600?v=4" width="100;" alt="notgiven688"/>
-                    <br />
-                    <sub><b>notgiven688</b></sub>
-                </a>
-            </td>
-            <td align="center">
-                <a href="https://github.com/Ywingpilot2">
-                    <img src="https://avatars.githubusercontent.com/u/136618828?v=4" width="100;" alt="Ywingpilot2"/>
-                    <br />
-                    <sub><b>Y wingpilot2</b></sub>
-                </a>
-            </td>
-            <td align="center">
-                <a href="https://github.com/draxxris">
-                    <img src="https://avatars.githubusercontent.com/u/24984408?v=4" width="100;" alt="draxxris"/>
-                    <br />
-                    <sub><b>draxxris</b></sub>
-                </a>
-            </td>
-            <td align="center">
-                <a href="https://github.com/UBTL">
-                    <img src="https://avatars.githubusercontent.com/u/105142453?v=4" width="100;" alt="UBTL"/>
-                    <br />
-                    <sub><b>Uncle Bane</b></sub>
-                </a>
-            </td>
-            <td align="center">
-                <a href="https://github.com/mberthaud">
-                    <img src="https://avatars.githubusercontent.com/u/26536123?v=4" width="100;" alt="mberthaud"/>
-                    <br />
-                    <sub><b>Michael Berthaud</b></sub>
-                </a>
-            </td>
-            <td align="center">
-                <a href="https://github.com/japsuu">
-                    <img src="https://avatars.githubusercontent.com/u/55388432?v=4" width="100;" alt="japsuu"/>
-                    <br />
-                    <sub><b>Jasper Honkasalo</b></sub>
+                    <sub><b>Cody Dream</b></sub>
                 </a>
             </td>
 		</tr>
@@ -510,17 +466,61 @@ Check our [Contributing guide](https://github.com/ProwlEngine/Prowl/blob/main/CO
                 </a>
             </td>
             <td align="center">
-                <a href="https://github.com/CodyDream">
-                    <img src="https://avatars.githubusercontent.com/u/153939536?v=4" width="100;" alt="CodyDream"/>
+                <a href="https://github.com/japsuu">
+                    <img src="https://avatars.githubusercontent.com/u/55388432?v=4" width="100;" alt="japsuu"/>
                     <br />
-                    <sub><b>Cody Dream</b></sub>
+                    <sub><b>Jasper Honkasalo</b></sub>
                 </a>
             </td>
             <td align="center">
-                <a href="https://github.com/BayouBushBaby">
-                    <img src="https://avatars.githubusercontent.com/u/33499280?v=4" width="100;" alt="BayouBushBaby"/>
+                <a href="https://github.com/mberthaud">
+                    <img src="https://avatars.githubusercontent.com/u/26536123?v=4" width="100;" alt="mberthaud"/>
                     <br />
-                    <sub><b>BayouBushBaby</b></sub>
+                    <sub><b>Michael Berthaud</b></sub>
+                </a>
+            </td>
+            <td align="center">
+                <a href="https://github.com/UBTL">
+                    <img src="https://avatars.githubusercontent.com/u/105142453?v=4" width="100;" alt="UBTL"/>
+                    <br />
+                    <sub><b>Uncle Bane</b></sub>
+                </a>
+            </td>
+            <td align="center">
+                <a href="https://github.com/draxxris">
+                    <img src="https://avatars.githubusercontent.com/u/24984408?v=4" width="100;" alt="draxxris"/>
+                    <br />
+                    <sub><b>draxxris</b></sub>
+                </a>
+            </td>
+            <td align="center">
+                <a href="https://github.com/Ywingpilot2">
+                    <img src="https://avatars.githubusercontent.com/u/136618828?v=4" width="100;" alt="Ywingpilot2"/>
+                    <br />
+                    <sub><b>Y wingpilot2</b></sub>
+                </a>
+            </td>
+		</tr>
+		<tr>
+            <td align="center">
+                <a href="https://github.com/notgiven688">
+                    <img src="https://avatars.githubusercontent.com/u/37874600?v=4" width="100;" alt="notgiven688"/>
+                    <br />
+                    <sub><b>notgiven688</b></sub>
+                </a>
+            </td>
+            <td align="center">
+                <a href="https://github.com/recore67">
+                    <img src="https://avatars.githubusercontent.com/u/29689492?v=4" width="100;" alt="recore67"/>
+                    <br />
+                    <sub><b>salman ameeri</b></sub>
+                </a>
+            </td>
+            <td align="center">
+                <a href="https://github.com/treviasxk">
+                    <img src="https://avatars.githubusercontent.com/u/24716901?v=4" width="100;" alt="treviasxk"/>
+                    <br />
+                    <sub><b>Trevias Xk</b></sub>
                 </a>
             </td>
 		</tr>
