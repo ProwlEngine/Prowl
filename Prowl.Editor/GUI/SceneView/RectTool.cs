@@ -275,10 +275,10 @@ public sealed class RectTool : SceneTool
         Point(Handle.T, 6, new Float2(mid.X, max.Y), PaperCursor.ResizeVertical);
         Point(Handle.L, 7, new Float2(min.X, mid.Y), PaperCursor.ResizeHorizontal);
         Point(Handle.R, 8, new Float2(max.X, mid.Y), PaperCursor.ResizeHorizontal);
-        Point(Handle.BL, 9, corners[0], PaperCursor.ResizeNWSE);
-        Point(Handle.BR, 10, corners[1], PaperCursor.ResizeNESW);
-        Point(Handle.TR, 11, corners[2], PaperCursor.ResizeNWSE);
-        Point(Handle.TL, 12, corners[3], PaperCursor.ResizeNESW);
+        Point(Handle.BL, 9, corners[0], PaperCursor.ResizeNESW);
+        Point(Handle.BR, 10, corners[1], PaperCursor.ResizeNWSE);
+        Point(Handle.TR, 11, corners[2], PaperCursor.ResizeNESW);
+        Point(Handle.TL, 12, corners[3], PaperCursor.ResizeNWSE);
 
         nearestId = nearestControl;
         return nearest;

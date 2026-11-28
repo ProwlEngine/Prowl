@@ -345,8 +345,8 @@ public sealed class UISceneEditor : SceneTool
         Handle.ResizeB or Handle.ResizeT => PaperCursor.ResizeVertical,
         // Screen Y grows downward while the rect's Y grows upward, so the diagonals are swapped
         // relative to the naive reading of the corner names.
-        Handle.ResizeTL or Handle.ResizeBR => PaperCursor.ResizeNESW,
-        Handle.ResizeTR or Handle.ResizeBL => PaperCursor.ResizeNWSE,
+        Handle.ResizeTL or Handle.ResizeBR => PaperCursor.ResizeNWSE,
+        Handle.ResizeTR or Handle.ResizeBL => PaperCursor.ResizeNESW,
         Handle.Pivot => PaperCursor.Crosshair,
         Handle.AnchorBL or Handle.AnchorBR or Handle.AnchorTR or Handle.AnchorTL => PaperCursor.Grab,
         Handle.Move => PaperCursor.ResizeAll,
